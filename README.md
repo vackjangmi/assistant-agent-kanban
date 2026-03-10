@@ -27,6 +27,7 @@ FastAPI dashboard with SSE updates.
 - Review pass is required before human verification can start
 - Target repo patch apply happens only when human verification starts
 - Final commit happens only from `human-verifying -> done`
+- Implementer runs without real workspace changes are sent back to `todos`
 - Each task can override its target repository and base branch via `REQUEST.md` frontmatter
 
 ## Install
