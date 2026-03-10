@@ -24,6 +24,7 @@ def build_ui_router() -> APIRouter:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FS Kanban Agent</title>
+  <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <style>
     :root {{ --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --border: rgba(24,32,38,0.15); --accent: #7c4f2c; --accent-strong: #5f3417; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }}
     * {{ box-sizing: border-box; }}
@@ -38,6 +39,8 @@ def build_ui_router() -> APIRouter:
     .column {{ background: var(--panel); border: 1px solid var(--border); padding: 12px; min-height: 160px; }}
     .column h2 {{ margin-top: 0; }}
     .card {{ background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 10px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }}
+    .card-button {{ width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }}
+    .card:hover {{ transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }}
     .card-meta {{ color: var(--muted); font-size: 0.95rem; }}
     .modal {{ position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }}
     .modal[hidden] {{ display: none; }}
@@ -58,7 +61,26 @@ def build_ui_router() -> APIRouter:
     .form-success {{ margin: 0 20px 20px; padding: 10px 12px; border: 1px solid rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: #217349; }}
     .form-success[hidden] {{ display: none; }}
     .form-actions {{ display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }}
-    @media (max-width: 900px) {{ #board, .composer-grid {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} }}
+    .task-meta-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 10px 16px; margin-bottom: 18px; }}
+    .meta-item span {{ display: block; color: var(--muted); font-size: 0.9rem; }}
+    .meta-item strong {{ display: block; margin-top: 2px; }}
+    .task-tabs {{ display: flex; gap: 8px; margin-bottom: 14px; }}
+    .task-tabs button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
+    .task-panel[hidden] {{ display: none; }}
+    .task-section {{ margin-bottom: 16px; }}
+    .task-section h3 {{ margin-bottom: 8px; }}
+    .task-list {{ margin: 0; padding-left: 18px; color: var(--muted); }}
+    .log-layout {{ display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 14px; }}
+    .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
+    .log-file-list button {{ text-align: left; }}
+    .log-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
+    .log-viewer {{ min-height: 320px; max-height: 50vh; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 12px; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; }}
+    .muted {{ color: var(--muted); }}
+    .editor-toolbar {{ display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }}
+    .editor-textarea {{ width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 12px; font: inherit; }}
+    .editor-host {{ min-height: 420px; border: 1px solid var(--border); background: #fff; }}
+    .editor-host[hidden] {{ display: none; }}
+    @media (max-width: 900px) {{ #board, .composer-grid, .task-meta-grid, .log-layout {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} }}
   </style>
 </head>
 <body>
@@ -155,13 +177,53 @@ def build_ui_router() -> APIRouter:
       </form>
     </div>
   </section>
+  <section id="task-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="task-modal-title">Task details</h2>
+          <p id="task-modal-subtitle">Inspect task metadata and OpenCode logs.</p>
+        </div>
+        <button type="button" id="close-task-modal" aria-label="Close task details">Close</button>
+      </div>
+      <div id="task-modal-error" class="form-error" hidden></div>
+      <div class="task-tabs">
+        <button type="button" id="task-tab-overview" class="active">Overview</button>
+        <button type="button" id="task-tab-editor" hidden>Plan</button>
+        <button type="button" id="task-tab-logs">Logs</button>
+      </div>
+      <section id="task-panel-overview" class="task-panel">
+        <div id="task-overview" class="muted">Select a task to inspect.</div>
+      </section>
+      <section id="task-panel-logs" class="task-panel" hidden>
+        <div class="log-layout">
+          <div id="task-log-files" class="log-file-list"></div>
+          <pre id="task-log-viewer" class="log-viewer">Select a log file.</pre>
+        </div>
+      </section>
+      <section id="task-panel-editor" class="task-panel" hidden>
+        <div class="editor-toolbar">
+          <div id="task-editor-status" class="muted">Editable only in waiting-check-plans.</div>
+          <div>
+            <button type="button" id="save-plan" class="primary" disabled>Save draft</button>
+            <button type="button" id="approve-plan" disabled>Approve plan</button>
+          </div>
+        </div>
+        <div id="task-editor-host" class="editor-host"></div>
+        <textarea id="task-editor" class="editor-textarea" spellcheck="false" hidden disabled></textarea>
+      </section>
+    </div>
+  </section>
   <main id="board"></main>
+  <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
   <script>
     const board = document.getElementById('board');
     const body = document.body;
     const modal = document.getElementById('request-modal');
+    const taskModal = document.getElementById('task-modal');
     const openComposerButton = document.getElementById('open-composer');
     const closeComposerButton = document.getElementById('close-composer');
+    const closeTaskModalButton = document.getElementById('close-task-modal');
     const cancelComposerButton = document.getElementById('cancel-composer');
     const requestForm = document.getElementById('request-form');
     const submitButton = document.getElementById('submit-request');
@@ -174,8 +236,30 @@ def build_ui_router() -> APIRouter:
     const outOfScopeField = document.getElementById('out_of_scope');
     const defaultTargetRepo = {default_target_repo};
     const defaultBaseBranch = {default_base_branch};
+    const taskModalError = document.getElementById('task-modal-error');
+    const taskOverview = document.getElementById('task-overview');
+    const taskTabOverview = document.getElementById('task-tab-overview');
+    const taskTabLogs = document.getElementById('task-tab-logs');
+    const taskTabEditor = document.getElementById('task-tab-editor');
+    const taskPanelOverview = document.getElementById('task-panel-overview');
+    const taskPanelLogs = document.getElementById('task-panel-logs');
+    const taskPanelEditor = document.getElementById('task-panel-editor');
+    const taskLogFiles = document.getElementById('task-log-files');
+    const taskLogViewer = document.getElementById('task-log-viewer');
+    const taskEditorHost = document.getElementById('task-editor-host');
+    const taskEditor = document.getElementById('task-editor');
+    const taskEditorStatus = document.getElementById('task-editor-status');
+    const savePlanButton = document.getElementById('save-plan');
+    const approvePlanButton = document.getElementById('approve-plan');
     let lastAutoScope = '';
     let lastAutoOutOfScope = '';
+    let activeTaskId = null;
+    let activeTaskLogs = [];
+    let activeTaskDetail = null;
+    let activeLogName = null;
+    let logPollHandle = null;
+    let planSourceMarkdown = '';
+    let planEditor = null;
 
     targetRepoInput.value = defaultTargetRepo;
     baseBranchInput.value = defaultBaseBranch;
@@ -186,7 +270,7 @@ def build_ui_router() -> APIRouter:
       board.innerHTML = data.columns.map((column) => `
         <section class="column">
           <h2>${{column.state}}</h2>
-          ${{column.items.map((item) => `<article class="card"><strong>${{item.title}}</strong><div class="card-meta">${{item.task_id}}</div><div class="card-meta">iter ${{item.iteration}}</div></article>`).join('')}}
+          ${{column.items.map((item) => `<article class="card"><button class="card-button" data-task-id="${{item.task_id}}"><strong>${{item.title}}</strong><div class="card-meta">${{item.task_id}}</div><div class="card-meta">iter ${{item.iteration}}</div></button></article>`).join('')}}
         </section>`).join('');
     }}
 
@@ -200,8 +284,18 @@ def build_ui_router() -> APIRouter:
     function setModalOpen(isOpen) {{
       modal.hidden = !isOpen;
       modal.setAttribute('aria-hidden', String(!isOpen));
-      body.classList.toggle('modal-open', isOpen);
+      syncBodyModalState();
       if (isOpen) document.getElementById('title').focus();
+    }}
+
+    function setTaskModalOpen(isOpen) {{
+      taskModal.hidden = !isOpen;
+      taskModal.setAttribute('aria-hidden', String(!isOpen));
+      syncBodyModalState();
+    }}
+
+    function syncBodyModalState() {{
+      body.classList.toggle('modal-open', !modal.hidden || !taskModal.hidden);
     }}
 
     function clearMessages() {{
@@ -276,6 +370,263 @@ def build_ui_router() -> APIRouter:
       applyRepoDefaults();
     }}
 
+    function escapeHtml(value) {{
+      return (value || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }}
+
+    function setTaskTab(tab) {{
+      taskTabOverview.classList.toggle('active', tab === 'overview');
+      taskTabEditor.classList.toggle('active', tab === 'editor');
+      taskTabLogs.classList.toggle('active', tab === 'logs');
+      taskPanelOverview.hidden = tab !== 'overview';
+      taskPanelEditor.hidden = tab !== 'editor';
+      taskPanelLogs.hidden = tab !== 'logs';
+      if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
+      if (tab === 'editor' && activeTaskId) loadPlanArtifact(activeTaskId);
+      maybeStartLogPolling();
+    }}
+
+    function ensurePlanEditor() {{
+      if (planEditor || !window.toastui || !window.toastui.Editor) return planEditor;
+      planEditor = new window.toastui.Editor({{
+        el: taskEditorHost,
+        height: '420px',
+        initialEditType: 'wysiwyg',
+        previewStyle: 'vertical',
+        hideModeSwitch: false,
+        usageStatistics: false,
+      }});
+      taskEditorHost.hidden = false;
+      taskEditor.hidden = true;
+      return planEditor;
+    }}
+
+    function setPlanEditorContent(value) {{
+      const editor = ensurePlanEditor();
+      if (editor) {{
+        editor.setMarkdown(value || '');
+      }} else {{
+        taskEditor.hidden = false;
+        taskEditorHost.hidden = true;
+        taskEditor.value = value || '';
+      }}
+    }}
+
+    function getPlanEditorContent() {{
+      const editor = ensurePlanEditor();
+      if (editor) return editor.getMarkdown();
+      return taskEditor.value;
+    }}
+
+    function setPlanEditorDisabled(disabled) {{
+      const editor = ensurePlanEditor();
+      if (editor) {{
+        if (editor.changeMode) editor.changeMode(disabled ? 'viewer' : 'wysiwyg', true);
+      }}
+      taskEditor.disabled = disabled;
+    }}
+
+    function isPlanDirty() {{
+      return getPlanEditorContent().replace(/\s+$/, '') !== planSourceMarkdown.replace(/\s+$/, '');
+    }}
+
+    function updatePlanActionState() {{
+      const editable = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans');
+      savePlanButton.disabled = !editable;
+      approvePlanButton.disabled = !editable;
+    }}
+
+    function stopLogPolling() {{
+      if (logPollHandle) {{
+        clearInterval(logPollHandle);
+        logPollHandle = null;
+      }}
+    }}
+
+    function maybeStartLogPolling() {{
+      stopLogPolling();
+      if (taskModal.hidden || taskPanelLogs.hidden || !activeTaskId) return;
+      logPollHandle = window.setInterval(() => {{
+        loadTaskLogs(activeTaskId, true);
+      }}, 1500);
+    }}
+
+    function renderTaskOverview(detail) {{
+      const metadata = detail.metadata;
+      activeTaskDetail = detail;
+      const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
+      const planVisible = detail.markdown_files.includes('PLAN.md');
+      const planEditable = metadata.state === 'waiting-check-plans' && planVisible;
+      taskTabEditor.hidden = !planVisible;
+      if (!planVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
+      taskEditorStatus.textContent = planEditable ? 'Edit PLAN.md and approve it when ready.' : 'PLAN.md is read-only outside waiting-check-plans.';
+      updatePlanActionState();
+      taskOverview.innerHTML = `
+        <div class="task-meta-grid">
+          <div class="meta-item"><span>Title</span><strong>${{escapeHtml(metadata.title)}}</strong></div>
+          <div class="meta-item"><span>Task ID</span><strong>${{escapeHtml(metadata.task_id)}}</strong></div>
+          <div class="meta-item"><span>State</span><strong>${{escapeHtml(metadata.state)}}</strong></div>
+          <div class="meta-item"><span>Updated</span><strong>${{escapeHtml(metadata.updated_at)}}</strong></div>
+          <div class="meta-item"><span>Target repo</span><strong>${{escapeHtml(metadata.target.repo_root)}}</strong></div>
+          <div class="meta-item"><span>Base branch</span><strong>${{escapeHtml(metadata.target.base_branch)}}</strong></div>
+        </div>
+        <div class="task-section">
+          <h3>Markdown files</h3>
+          <ul class="task-list">${{detail.markdown_files.length ? detail.markdown_files.map((file) => `<li>${{escapeHtml(file)}}</li>`).join('') : '<li>No markdown files</li>'}}</ul>
+        </div>
+        <div class="task-section">
+          <h3>JSON files</h3>
+          <ul class="task-list">${{detail.json_files.length ? detail.json_files.map((file) => `<li>${{escapeHtml(file)}}</li>`).join('') : '<li>No JSON files</li>'}}</ul>
+        </div>
+        <div class="task-section">
+          <h3>Log files</h3>
+          <ul class="task-list">${{detail.log_files.length ? detail.log_files.map((file) => `<li>${{escapeHtml(file)}}</li>`).join('') : '<li>No logs yet</li>'}}</ul>
+        </div>
+        <div class="task-section">
+          <h3>Latest error</h3>
+          <div class="muted">${{latestError ? escapeHtml(latestError.message) : 'No recorded errors.'}}</div>
+        </div>
+      `;
+      document.getElementById('task-modal-title').textContent = metadata.title;
+      document.getElementById('task-modal-subtitle').textContent = `${{metadata.task_id}} in ${{metadata.state}}`;
+    }}
+
+    function renderTaskLogEntries(entries) {{
+      activeTaskLogs = entries;
+      if (!entries.length) {{
+        activeLogName = null;
+        taskLogFiles.innerHTML = '<div class="muted">No logs yet.</div>';
+        taskLogViewer.textContent = 'No logs yet.';
+        return;
+      }}
+      if (!activeLogName || !entries.some((entry) => entry.name === activeLogName)) activeLogName = entries[0].name;
+      taskLogFiles.innerHTML = entries.map((entry, index) => `<button type="button" class="${{entry.name === activeLogName ? 'active' : ''}}" data-log-index="${{index}}">${{escapeHtml(entry.name)}}</button>`).join('');
+      showLogEntry(entries.findIndex((entry) => entry.name === activeLogName));
+    }}
+
+    function showLogEntry(index) {{
+      const entry = activeTaskLogs[index];
+      if (!entry) return;
+      activeLogName = entry.name;
+      taskLogViewer.textContent = entry.content || '(empty log file)';
+      taskLogFiles.querySelectorAll('button').forEach((button, buttonIndex) => {{
+        button.classList.toggle('active', buttonIndex === index);
+      }});
+    }}
+
+    async function loadTaskDetail(taskId) {{
+      activeTaskId = taskId;
+      activeTaskLogs = [];
+      activeLogName = null;
+      activeTaskDetail = null;
+      taskModalError.hidden = true;
+      taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
+      taskLogFiles.innerHTML = '';
+      taskLogViewer.textContent = 'Select the Logs tab to load OpenCode output.';
+      setPlanEditorContent('');
+      setPlanEditorDisabled(true);
+      savePlanButton.disabled = true;
+      taskEditorStatus.textContent = 'Editable only in waiting-check-plans.';
+      taskTabEditor.hidden = true;
+      setTaskTab('overview');
+      setTaskModalOpen(true);
+      try {{
+        const response = await fetch(`/api/tasks/${{taskId}}`);
+        const detail = await response.json();
+        if (!response.ok) throw new Error(detail.detail || 'Failed to load task details.');
+        renderTaskOverview(detail);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskOverview.innerHTML = '<div class="muted">Unable to load task details.</div>';
+      }}
+    }}
+
+    async function loadTaskLogs(taskId, silent = false) {{
+      if (!silent) {{
+        taskLogFiles.innerHTML = '<div class="muted">Loading logs...</div>';
+        taskLogViewer.textContent = 'Loading logs...';
+      }}
+      try {{
+        const response = await fetch(`/api/tasks/${{taskId}}/logs`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to load task logs.');
+        renderTaskLogEntries(payload.entries);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskLogFiles.innerHTML = '<div class="muted">Failed to load logs.</div>';
+        taskLogViewer.textContent = 'Failed to load logs.';
+      }}
+    }}
+
+    async function loadPlanArtifact(taskId) {{
+      if (!activeTaskDetail || !activeTaskDetail.markdown_files.includes('PLAN.md')) return;
+      taskEditorStatus.textContent = 'Loading PLAN.md...';
+      setPlanEditorDisabled(true);
+      updatePlanActionState();
+      try {{
+        const response = await fetch(`/api/tasks/${{taskId}}/artifacts/PLAN.md`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to load PLAN.md.');
+        planSourceMarkdown = payload.content;
+        setPlanEditorContent(payload.content);
+        const editable = activeTaskDetail.metadata.state === 'waiting-check-plans';
+        setPlanEditorDisabled(!editable);
+        updatePlanActionState();
+        taskEditorStatus.textContent = editable ? (window.toastui && window.toastui.Editor ? 'Edit PLAN.md in WYSIWYG mode before approval.' : 'Rich editor unavailable; using plain Markdown fallback.') : 'PLAN.md is read-only outside waiting-check-plans.';
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskEditorStatus.textContent = 'Unable to load PLAN.md.';
+      }}
+    }}
+
+    async function savePlanArtifact() {{
+      if (!activeTaskId) return;
+      savePlanButton.disabled = true;
+      taskEditorStatus.textContent = 'Saving PLAN.md...';
+      try {{
+        const response = await fetch(`/api/tasks/${{activeTaskId}}/artifacts/PLAN.md`, {{
+          method: 'PUT',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ content: getPlanEditorContent() }}),
+        }});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to save PLAN.md.');
+        planSourceMarkdown = getPlanEditorContent();
+        taskEditorStatus.textContent = 'Saved PLAN.md.';
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskEditorStatus.textContent = 'Save failed.';
+      }} finally {{
+        updatePlanActionState();
+      }}
+    }}
+
+    async function approvePlan() {{
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans') return;
+      savePlanButton.disabled = true;
+      approvePlanButton.disabled = true;
+      taskEditorStatus.textContent = isPlanDirty() ? 'Saving PLAN.md before approval...' : 'Approving plan...';
+      try {{
+        if (isPlanDirty()) await savePlanArtifact();
+        const response = await fetch(`/api/tasks/${{activeTaskId}}/approve-plan`, {{ method: 'POST' }});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to approve plan.');
+        taskEditorStatus.textContent = 'Plan approved.';
+        await loadBoard();
+        await loadTaskDetail(activeTaskId);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskEditorStatus.textContent = 'Approval failed.';
+      }} finally {{
+        updatePlanActionState();
+      }}
+    }}
+
     function validateForm() {{
       const data = new FormData(requestForm);
       const errors = {{}};
@@ -328,8 +679,17 @@ def build_ui_router() -> APIRouter:
     closeComposerButton.addEventListener('click', () => {{ clearMessages(); setModalOpen(false); }});
     cancelComposerButton.addEventListener('click', () => {{ clearMessages(); resetFormState(); setModalOpen(false); }});
     modal.addEventListener('click', (event) => {{ if (event.target === modal) setModalOpen(false); }});
-    document.addEventListener('keydown', (event) => {{ if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); }});
+    closeTaskModalButton.addEventListener('click', () => {{ stopLogPolling(); setTaskModalOpen(false); }});
+    taskModal.addEventListener('click', (event) => {{ if (event.target === taskModal) {{ stopLogPolling(); setTaskModalOpen(false); }} }});
+    document.addEventListener('keydown', (event) => {{ if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !taskModal.hidden) {{ stopLogPolling(); setTaskModalOpen(false); }} }});
     requestForm.addEventListener('submit', submitRequest);
+    board.addEventListener('click', (event) => {{ const button = event.target.closest('[data-task-id]'); if (!button) return; loadTaskDetail(button.dataset.taskId); }});
+    taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
+    taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
+    taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
+    taskLogFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); }});
+    savePlanButton.addEventListener('click', savePlanArtifact);
+    approvePlanButton.addEventListener('click', approvePlan);
     ['title', 'goal', 'target_repo', 'base_branch'].forEach((name) => {{ requestForm.elements[name].addEventListener('blur', validateForm); }});
     targetRepoInput.addEventListener('input', applyRepoDefaults);
     targetRepoInput.addEventListener('change', applyRepoDefaults);

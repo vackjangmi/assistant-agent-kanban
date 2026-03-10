@@ -51,6 +51,10 @@ uvicorn fs_kanban_agent.api.main:app
 This uses `create_default_app()`, which loads default config and injects real
 `SubprocessOpenCodeAdapter` instances.
 
+By default the adapter uses plain `opencode run` without `--attach`. If you want
+to reuse an external OpenCode server, set `opencode.attach_url` explicitly in
+your config.
+
 ## Create a request task
 
 The easiest way to bind a task to a specific target project is the CLI helper:
@@ -66,10 +70,26 @@ This writes a new `REQUEST.md` under `requests/` with frontmatter describing the
 task target. The scanner bootstraps that into task metadata and later workers use
  the task-level target repo for workspace creation, review, integration, and commit.
 
-You can also create requests directly from the dashboard at `/`. The inline form
+You can also create requests directly from the dashboard at `/`. The popup form
 collects the fields needed to generate the same structured `REQUEST.md` template:
 title, goal, background, scope, out of scope, constraints, references,
 acceptance criteria, target repo, and base branch.
+
+Board cards are clickable. Clicking a task opens a detail modal with task
+metadata first and a lazy-loaded log view for planner/implementer/reviewer output.
+The same runtime logs are also available from the CLI:
+
+```bash
+fs-kanban-agent logs TASK-0001 --kanban-root ./ai-kanban
+```
+
+Worker outputs are now dual-written in the task directory:
+
+- Markdown files such as `PLAN.md`, `WORK-001.md`, `REVIEW-001.md` for human review and manual edits
+- JSON companions such as `PLAN.json`, `WORK-001.json`, `REVIEW-001.json` containing the original machine-readable result
+
+Markdown edits do not sync back into the JSON file. JSON stays as the original
+captured worker output, while Markdown acts as the editable working copy.
 
 The target repo field also supports nearby directory suggestions through a
 configurable dropdown. By default it scans sibling directories near the current
@@ -114,6 +134,7 @@ uvicorn mymodule:app
 - `GET /healthz`
 - `GET /api/board`
 - `GET /api/tasks/{task_id}`
+- `GET /api/tasks/{task_id}/logs`
 - `GET /api/events`
 - `POST /api/tasks/{task_id}/approve-plan`
 - `POST /api/tasks/{task_id}/approve-integration`
