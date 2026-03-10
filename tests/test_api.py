@@ -30,11 +30,12 @@ def test_api_exposes_health_board_task_and_events(configured_paths):
         assert "metadata.json" not in detail.json()["json_files"]
         logs = client.get(f"/api/tasks/{task.metadata.task_id}/logs")
         assert logs.status_code == 200
-        assert any(route.path == "/api/events" for route in app.routes)
+        assert any(getattr(route, "path", None) == "/api/events" for route in app.routes)
 
 
 def test_api_returns_runtime_logs_for_task(configured_paths):
     config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
     create_request_task(config, "log-task")
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
     task = KanbanScanner(config).scan()[0]
@@ -49,6 +50,8 @@ def test_api_returns_runtime_logs_for_task(configured_paths):
     payload = response.json()
     assert payload["task_id"] == task.metadata.task_id
     assert payload["entries"][0]["name"] == "planner-001.jsonl"
+    assert payload["entries"][0]["content"].startswith('{"type":"final"')
+    assert payload["entries"][0]["rendered_content"] == "plan"
     assert "plan" in payload["entries"][0]["content"]
 
 
@@ -85,6 +88,7 @@ def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
 
 def test_api_rejects_plan_md_edit_outside_waiting_check_plans(configured_paths):
     config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
     create_request_task(config, "plan-edit-reject-task")
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
     task = KanbanScanner(config).scan()[0]
@@ -170,11 +174,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "target-repo-options" in response.text
     assert "request-modal" in response.text
     assert "task-modal" in response.text
+    assert "Viewer" in response.text
     assert "Approve plan" in response.text
     assert "toastui-editor" in response.text
     assert "buildScopeDefaults" in response.text
     assert "buildOutOfScopeDefaults" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
+    assert "worker_log" in response.text
+    assert "data-active-since" in response.text
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
     assert f'const defaultTargetRepo = "{PROJECT_ROOT.parent}";' in response.text
 

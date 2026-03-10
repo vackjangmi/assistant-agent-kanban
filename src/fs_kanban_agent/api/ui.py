@@ -42,6 +42,7 @@ def build_ui_router() -> APIRouter:
     .card-button {{ width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }}
     .card:hover {{ transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }}
     .card-meta {{ color: var(--muted); font-size: 0.95rem; }}
+    .card-meta.running {{ color: var(--accent-strong); font-variant-numeric: tabular-nums; }}
     .modal {{ position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }}
     .modal[hidden] {{ display: none; }}
     .modal-panel {{ width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }}
@@ -77,10 +78,11 @@ def build_ui_router() -> APIRouter:
     .log-viewer {{ min-height: 320px; max-height: 50vh; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 12px; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; }}
     .muted {{ color: var(--muted); }}
     .editor-toolbar {{ display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }}
+    .artifact-layout {{ display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 14px; }}
     .editor-textarea {{ width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 12px; font: inherit; }}
     .editor-host {{ min-height: 420px; border: 1px solid var(--border); background: #fff; }}
     .editor-host[hidden] {{ display: none; }}
-    @media (max-width: 900px) {{ #board, .composer-grid, .task-meta-grid, .log-layout {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} }}
+    @media (max-width: 900px) {{ #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} }}
   </style>
 </head>
 <body>
@@ -182,14 +184,14 @@ def build_ui_router() -> APIRouter:
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="task-modal-title">Task details</h2>
-          <p id="task-modal-subtitle">Inspect task metadata and OpenCode logs.</p>
+          <p id="task-modal-subtitle">Inspect task metadata, markdown artifacts, and live agent logs.</p>
         </div>
         <button type="button" id="close-task-modal" aria-label="Close task details">Close</button>
       </div>
       <div id="task-modal-error" class="form-error" hidden></div>
       <div class="task-tabs">
         <button type="button" id="task-tab-overview" class="active">Overview</button>
-        <button type="button" id="task-tab-editor" hidden>Plan</button>
+        <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-logs">Logs</button>
       </div>
       <section id="task-panel-overview" class="task-panel">
@@ -203,14 +205,23 @@ def build_ui_router() -> APIRouter:
       </section>
       <section id="task-panel-editor" class="task-panel" hidden>
         <div class="editor-toolbar">
-          <div id="task-editor-status" class="muted">Editable only in waiting-check-plans.</div>
           <div>
-            <button type="button" id="save-plan" class="primary" disabled>Save draft</button>
-            <button type="button" id="approve-plan" disabled>Approve plan</button>
+            <strong id="task-artifact-name">No document selected</strong>
+            <div id="task-editor-status" class="muted">Select a markdown artifact to view.</div>
+          </div>
+          <div>
+            <button type="button" id="toggle-plan-edit" hidden>Edit draft</button>
+            <button type="button" id="save-plan" class="primary" hidden disabled>Save draft</button>
+            <button type="button" id="approve-plan" hidden disabled>Approve plan</button>
           </div>
         </div>
-        <div id="task-editor-host" class="editor-host"></div>
-        <textarea id="task-editor" class="editor-textarea" spellcheck="false" hidden disabled></textarea>
+        <div class="artifact-layout">
+          <div id="task-markdown-files" class="log-file-list"></div>
+          <div>
+            <div id="task-editor-host" class="editor-host"></div>
+            <textarea id="task-editor" class="editor-textarea" spellcheck="false" hidden disabled></textarea>
+          </div>
+        </div>
       </section>
     </div>
   </section>
@@ -246,19 +257,25 @@ def build_ui_router() -> APIRouter:
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const taskLogFiles = document.getElementById('task-log-files');
     const taskLogViewer = document.getElementById('task-log-viewer');
+    const taskMarkdownFiles = document.getElementById('task-markdown-files');
     const taskEditorHost = document.getElementById('task-editor-host');
     const taskEditor = document.getElementById('task-editor');
+    const taskArtifactName = document.getElementById('task-artifact-name');
     const taskEditorStatus = document.getElementById('task-editor-status');
+    const togglePlanEditButton = document.getElementById('toggle-plan-edit');
     const savePlanButton = document.getElementById('save-plan');
     const approvePlanButton = document.getElementById('approve-plan');
     let lastAutoScope = '';
     let lastAutoOutOfScope = '';
     let activeTaskId = null;
+    let activeTaskTab = 'overview';
     let activeTaskLogs = [];
     let activeTaskDetail = null;
+    let activeArtifactName = null;
     let activeLogName = null;
-    let logPollHandle = null;
+    let runningTimerHandle = null;
     let planSourceMarkdown = '';
+    let planEditMode = false;
     let planEditor = null;
 
     targetRepoInput.value = defaultTargetRepo;
@@ -270,8 +287,41 @@ def build_ui_router() -> APIRouter:
       board.innerHTML = data.columns.map((column) => `
         <section class="column">
           <h2>${{column.state}}</h2>
-          ${{column.items.map((item) => `<article class="card"><button class="card-button" data-task-id="${{item.task_id}}"><strong>${{item.title}}</strong><div class="card-meta">${{item.task_id}}</div><div class="card-meta">iter ${{item.iteration}}</div></button></article>`).join('')}}
+          ${{column.items.map((item) => `<article class="card"><button class="card-button" data-task-id="${{item.task_id}}"><strong>${{item.title}}</strong><div class="card-meta">${{item.task_id}}</div><div class="card-meta">iter ${{item.iteration}}</div>${{renderRunningMeta(item)}}</button></article>`).join('')}}
         </section>`).join('');
+      refreshRunningClocks();
+    }}
+
+    function isActiveState(state) {{
+      return ['planning', 'implementing', 'reviewing'].includes(state);
+    }}
+
+    function renderRunningMeta(item) {{
+      if (!isActiveState(item.state) || !item.state_entered_at) return '';
+      return `<div class="card-meta running" data-active-since="${{item.state_entered_at}}">running 00:00:00</div>`;
+    }}
+
+    function formatElapsed(milliseconds) {{
+      const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+      const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const seconds = String(totalSeconds % 60).padStart(2, '0');
+      return `${{hours}}:${{minutes}}:${{seconds}}`;
+    }}
+
+    function updateRunningClocks() {{
+      const now = Date.now();
+      board.querySelectorAll('[data-active-since]').forEach((node) => {{
+        const since = Date.parse(node.dataset.activeSince || '');
+        if (Number.isNaN(since)) return;
+        node.textContent = `running ${{formatElapsed(now - since)}}`;
+      }});
+    }}
+
+    function refreshRunningClocks() {{
+      if (runningTimerHandle) clearInterval(runningTimerHandle);
+      updateRunningClocks();
+      runningTimerHandle = window.setInterval(updateRunningClocks, 1000);
     }}
 
     async function loadTargetRepoOptions() {{
@@ -307,7 +357,7 @@ def build_ui_router() -> APIRouter:
     }}
 
     function normalizeRepoPath(value) {{
-      return (value || '').toString().trim().replace(/\/+$/, '');
+      return (value || '').toString().trim().replace(/\\/+$/, '');
     }}
 
     function deriveRepoContext(path) {{
@@ -321,22 +371,22 @@ def build_ui_router() -> APIRouter:
     function buildScopeDefaults(path) {{
       const context = deriveRepoContext(path);
       const lines = [
-        `Limit code changes to \`${{context.normalized}}\`.`,
-        `Modify only the files under \`${{context.normalized}}\` that are needed for this request.`,
-        `Keep tests and local configuration changes scoped to \`${{context.normalized}}\`.`,
+        `Limit code changes to \\`${{context.normalized}}\\`.`,
+        `Modify only the files under \\`${{context.normalized}}\\` that are needed for this request.`,
+        `Keep tests and local configuration changes scoped to \\`${{context.normalized}}\\`.`,
       ];
-      if (context.repoName && context.repoName !== 'target repo') lines.push(`Focus on the \`${{context.repoName}}\` project or app.`);
+      if (context.repoName && context.repoName !== 'target repo') lines.push(`Focus on the \\`${{context.repoName}}\\` project or app.`);
       return lines.join('\\n');
     }}
 
     function buildOutOfScopeDefaults(path) {{
       const context = deriveRepoContext(path);
       const lines = [
-        `Do not modify files outside \`${{context.normalized}}\`.`,
+        `Do not modify files outside \\`${{context.normalized}}\\`.`,
         'Do not change unrelated apps, packages, or workspace-wide configuration.',
         'Do not add deployment or infrastructure changes unless the request explicitly asks for them.',
       ];
-      if (context.parentName) lines.push(`Do not modify sibling projects under \`${{context.parentName}}/\` unless the request explicitly requires it.`);
+      if (context.parentName) lines.push(`Do not modify sibling projects under \\`${{context.parentName}}/\\` unless the request explicitly requires it.`);
       return lines.join('\\n');
     }}
 
@@ -375,6 +425,7 @@ def build_ui_router() -> APIRouter:
     }}
 
     function setTaskTab(tab) {{
+      activeTaskTab = tab;
       taskTabOverview.classList.toggle('active', tab === 'overview');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskTabLogs.classList.toggle('active', tab === 'logs');
@@ -382,8 +433,7 @@ def build_ui_router() -> APIRouter:
       taskPanelEditor.hidden = tab !== 'editor';
       taskPanelLogs.hidden = tab !== 'logs';
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
-      if (tab === 'editor' && activeTaskId) loadPlanArtifact(activeTaskId);
-      maybeStartLogPolling();
+      if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
     }}
 
     function ensurePlanEditor() {{
@@ -424,48 +474,44 @@ def build_ui_router() -> APIRouter:
         if (editor.changeMode) editor.changeMode(disabled ? 'viewer' : 'wysiwyg', true);
       }}
       taskEditor.disabled = disabled;
+      taskEditor.readOnly = disabled;
     }}
 
     function isPlanDirty() {{
-      return getPlanEditorContent().replace(/\s+$/, '') !== planSourceMarkdown.replace(/\s+$/, '');
+      return getPlanEditorContent().replace(/\\s+$/, '') !== planSourceMarkdown.replace(/\\s+$/, '');
     }}
 
     function updatePlanActionState() {{
-      const editable = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans');
-      savePlanButton.disabled = !editable;
-      approvePlanButton.disabled = !editable;
+      const editableArtifact = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md');
+      togglePlanEditButton.hidden = !editableArtifact;
+      savePlanButton.hidden = !editableArtifact;
+      approvePlanButton.hidden = !editableArtifact;
+      togglePlanEditButton.textContent = planEditMode ? 'Switch to viewer' : 'Edit draft';
+      savePlanButton.disabled = !editableArtifact || !planEditMode;
+      approvePlanButton.disabled = !editableArtifact || !planEditMode;
     }}
 
-    function stopLogPolling() {{
-      if (logPollHandle) {{
-        clearInterval(logPollHandle);
-        logPollHandle = null;
-      }}
-    }}
-
-    function maybeStartLogPolling() {{
-      stopLogPolling();
-      if (taskModal.hidden || taskPanelLogs.hidden || !activeTaskId) return;
-      logPollHandle = window.setInterval(() => {{
-        loadTaskLogs(activeTaskId, true);
-      }}, 1500);
-    }}
+    function stopLogPolling() {{}}
 
     function renderTaskOverview(detail) {{
       const metadata = detail.metadata;
       activeTaskDetail = detail;
       const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
-      const planVisible = detail.markdown_files.includes('PLAN.md');
-      const planEditable = metadata.state === 'waiting-check-plans' && planVisible;
-      taskTabEditor.hidden = !planVisible;
-      if (!planVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
-      taskEditorStatus.textContent = planEditable ? 'Edit PLAN.md and approve it when ready.' : 'PLAN.md is read-only outside waiting-check-plans.';
+      const viewerVisible = detail.markdown_files.length > 0;
+      const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
+      taskTabEditor.hidden = !viewerVisible;
+      if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
+      if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files);
+      planEditMode = false;
+      taskEditorStatus.textContent = planEditable ? 'View markdown artifacts here. Switch to edit mode when PLAN.md is ready for changes.' : 'Viewer mode only for this task state.';
       updatePlanActionState();
+      renderArtifactButtons(detail.markdown_files);
       taskOverview.innerHTML = `
         <div class="task-meta-grid">
           <div class="meta-item"><span>Title</span><strong>${{escapeHtml(metadata.title)}}</strong></div>
           <div class="meta-item"><span>Task ID</span><strong>${{escapeHtml(metadata.task_id)}}</strong></div>
           <div class="meta-item"><span>State</span><strong>${{escapeHtml(metadata.state)}}</strong></div>
+          <div class="meta-item"><span>Request language</span><strong>${{escapeHtml(metadata.request.language || 'en')}}</strong></div>
           <div class="meta-item"><span>Updated</span><strong>${{escapeHtml(metadata.updated_at)}}</strong></div>
           <div class="meta-item"><span>Target repo</span><strong>${{escapeHtml(metadata.target.repo_root)}}</strong></div>
           <div class="meta-item"><span>Base branch</span><strong>${{escapeHtml(metadata.target.base_branch)}}</strong></div>
@@ -491,6 +537,21 @@ def build_ui_router() -> APIRouter:
       document.getElementById('task-modal-subtitle').textContent = `${{metadata.task_id}} in ${{metadata.state}}`;
     }}
 
+    function preferredArtifact(files) {{
+      if (files.includes('PLAN.md')) return 'PLAN.md';
+      return files[files.length - 1] || null;
+    }}
+
+    function renderArtifactButtons(files) {{
+      if (!files.length) {{
+        taskMarkdownFiles.innerHTML = '<div class="muted">No markdown artifacts yet.</div>';
+        taskArtifactName.textContent = 'No document selected';
+        return;
+      }}
+      taskMarkdownFiles.innerHTML = files.map((file, index) => `<button type="button" class="${{file === activeArtifactName ? 'active' : ''}}" data-artifact-index="${{index}}">${{escapeHtml(file)}}</button>`).join('');
+      taskArtifactName.textContent = activeArtifactName || 'No document selected';
+    }}
+
     function renderTaskLogEntries(entries) {{
       activeTaskLogs = entries;
       if (!entries.length) {{
@@ -514,7 +575,21 @@ def build_ui_router() -> APIRouter:
       }});
     }}
 
-    async function loadTaskDetail(taskId) {{
+    function appendRealtimeLog(eventPayload) {{
+      const payload = eventPayload.payload || eventPayload;
+      if (!payload || !payload.log_name || typeof payload.raw_line !== 'string') return;
+      let entry = activeTaskLogs.find((item) => item.name === payload.log_name);
+      if (!entry) {{
+        entry = {{ name: payload.log_name, path: payload.log_name, content: '', rendered_content: '', updated_at: new Date().toISOString() }};
+        activeTaskLogs = [entry, ...activeTaskLogs];
+      }}
+      entry.content = `${{entry.content || ''}}${{payload.raw_line}}\n`;
+      entry.updated_at = new Date().toISOString();
+      renderTaskLogEntries(activeTaskLogs);
+    }}
+
+    async function loadTaskDetail(taskId, preserveTab = false) {{
+      const nextTab = preserveTab ? activeTaskTab : 'editor';
       activeTaskId = taskId;
       activeTaskLogs = [];
       activeLogName = null;
@@ -523,18 +598,24 @@ def build_ui_router() -> APIRouter:
       taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
       taskLogFiles.innerHTML = '';
       taskLogViewer.textContent = 'Select the Logs tab to load OpenCode output.';
+      taskMarkdownFiles.innerHTML = '';
+      taskArtifactName.textContent = 'No document selected';
       setPlanEditorContent('');
       setPlanEditorDisabled(true);
+      activeArtifactName = null;
+      planEditMode = false;
       savePlanButton.disabled = true;
-      taskEditorStatus.textContent = 'Editable only in waiting-check-plans.';
+      taskEditorStatus.textContent = 'Select a markdown artifact to view.';
       taskTabEditor.hidden = true;
-      setTaskTab('overview');
+      setTaskTab(nextTab);
       setTaskModalOpen(true);
       try {{
         const response = await fetch(`/api/tasks/${{taskId}}`);
         const detail = await response.json();
         if (!response.ok) throw new Error(detail.detail || 'Failed to load task details.');
         renderTaskOverview(detail);
+        if (nextTab === 'editor' && detail.markdown_files.length) loadMarkdownArtifact(taskId, activeArtifactName);
+        if (nextTab === 'logs') loadTaskLogs(taskId, true);
       }} catch (error) {{
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -560,26 +641,41 @@ def build_ui_router() -> APIRouter:
       }}
     }}
 
-    async function loadPlanArtifact(taskId) {{
-      if (!activeTaskDetail || !activeTaskDetail.markdown_files.includes('PLAN.md')) return;
-      taskEditorStatus.textContent = 'Loading PLAN.md...';
+    async function loadMarkdownArtifact(taskId, filename = null) {{
+      if (!activeTaskDetail || !activeTaskDetail.markdown_files.length) return;
+      activeArtifactName = filename && activeTaskDetail.markdown_files.includes(filename) ? filename : preferredArtifact(activeTaskDetail.markdown_files);
+      renderArtifactButtons(activeTaskDetail.markdown_files);
+      taskArtifactName.textContent = activeArtifactName || 'No document selected';
+      taskEditorStatus.textContent = activeArtifactName ? `Loading ${{activeArtifactName}}...` : 'No markdown artifact selected.';
       setPlanEditorDisabled(true);
       updatePlanActionState();
       try {{
-        const response = await fetch(`/api/tasks/${{taskId}}/artifacts/PLAN.md`);
+        const response = await fetch(`/api/tasks/${{taskId}}/artifacts/${{activeArtifactName}}`);
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to load PLAN.md.');
+        if (!response.ok) throw new Error(payload.detail || `Failed to load ${{activeArtifactName}}.`);
         planSourceMarkdown = payload.content;
         setPlanEditorContent(payload.content);
-        const editable = activeTaskDetail.metadata.state === 'waiting-check-plans';
+        const editable = activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md' && planEditMode;
         setPlanEditorDisabled(!editable);
         updatePlanActionState();
-        taskEditorStatus.textContent = editable ? (window.toastui && window.toastui.Editor ? 'Edit PLAN.md in WYSIWYG mode before approval.' : 'Rich editor unavailable; using plain Markdown fallback.') : 'PLAN.md is read-only outside waiting-check-plans.';
+        if (activeArtifactName === 'PLAN.md' && activeTaskDetail.metadata.state === 'waiting-check-plans') {{
+          taskEditorStatus.textContent = planEditMode ? 'Editing PLAN.md. Save your draft before approval.' : 'Viewing PLAN.md. Switch to edit mode to change it.';
+        }} else {{
+          taskEditorStatus.textContent = `${{activeArtifactName}} is shown in viewer mode.`;
+        }}
       }} catch (error) {{
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskEditorStatus.textContent = 'Unable to load PLAN.md.';
+        taskEditorStatus.textContent = `Unable to load ${{activeArtifactName || 'artifact'}}.`;
       }}
+    }}
+
+    async function togglePlanEditMode() {{
+      if (!activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans' || activeArtifactName !== 'PLAN.md') return;
+      planEditMode = !planEditMode;
+      setPlanEditorDisabled(!planEditMode);
+      updatePlanActionState();
+      await loadMarkdownArtifact(activeTaskId, activeArtifactName);
     }}
 
     async function savePlanArtifact() {{
@@ -617,7 +713,7 @@ def build_ui_router() -> APIRouter:
         if (!response.ok) throw new Error(payload.detail || 'Failed to approve plan.');
         taskEditorStatus.textContent = 'Plan approved.';
         await loadBoard();
-        await loadTaskDetail(activeTaskId);
+        await loadTaskDetail(activeTaskId, true);
       }} catch (error) {{
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -687,7 +783,9 @@ def build_ui_router() -> APIRouter:
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
+    taskMarkdownFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-artifact-index]'); if (!button || !activeTaskDetail) return; const file = activeTaskDetail.markdown_files[Number(button.dataset.artifactIndex)]; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); }});
     taskLogFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); }});
+    togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
     ['title', 'goal', 'target_repo', 'base_branch'].forEach((name) => {{ requestForm.elements[name].addEventListener('blur', validateForm); }});
@@ -699,6 +797,18 @@ def build_ui_router() -> APIRouter:
     loadTargetRepoOptions();
     const source = new EventSource('/api/events');
     source.addEventListener('board_snapshot', loadBoard);
+    source.addEventListener('task_moved', async (event) => {{
+      await loadBoard();
+      const payload = JSON.parse(event.data);
+      if (taskModal.hidden || activeTaskId !== payload.task_id) return;
+      await loadTaskDetail(activeTaskId, true);
+    }});
+    source.addEventListener('worker_log', (event) => {{
+      if (taskModal.hidden || taskPanelLogs.hidden) return;
+      const payload = JSON.parse(event.data);
+      if (activeTaskId !== payload.task_id) return;
+      appendRealtimeLog(payload);
+    }});
     loadBoard();
   </script>
 </body>
