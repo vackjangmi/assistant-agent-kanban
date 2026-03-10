@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from pathlib import Path
 
 from ..config import AppConfig
 from ..events import EventBus
+from ..language import language_name
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
-from ..models import RunResult, WorkerEvent
+from ..models import RunResult, TaskMetadata, WorkerEvent
 from ..scanner import KanbanScanner
 from ..transitions import TransitionManager
 
@@ -42,6 +44,33 @@ class WorkerBase:
         path = self.config.runs_dir / task_id
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    def build_prompt(self, source_text: str, metadata: TaskMetadata, *, phase: str) -> str:
+        requested_language = language_name(metadata.request.language)
+        instructions = [
+            f"You are the fs-kanban {phase} worker.",
+            f"Return the markdown artifact in {requested_language}.",
+            "Translate headings and narrative content to that language while preserving the required structure and semantics from the agent contract.",
+        ]
+        if phase == "reviewer":
+            instructions.append("Keep one exact machine-readable line: `Verdict: PASS` or `Verdict: NEEDS_CHANGES`.")
+        instructions.extend(["", "<task-document>", source_text.rstrip(), "</task-document>"])
+        return "\n".join(instructions)
+
+    def make_log_callback(self, loop: asyncio.AbstractEventLoop, task_id: str, log_name: str):
+        def callback(raw_line: str, rendered_line: str | None) -> None:
+            loop.call_soon_threadsafe(
+                asyncio.create_task,
+                self.emit(
+                    "worker_log",
+                    task_id,
+                    log_name=log_name,
+                    raw_line=raw_line,
+                    rendered_line=rendered_line,
+                ),
+            )
+
+        return callback
 
     def write_result_artifacts(self, task_dir: Path, stem: str, result: RunResult) -> tuple[str, str]:
         markdown_path = task_dir / f"{stem}.md"

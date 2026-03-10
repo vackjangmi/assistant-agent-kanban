@@ -40,6 +40,12 @@ class KanbanScanner:
                     metadata.state = state
                 normalized_repo_root = str(resolve_repo_root(metadata.target.repo_root, self.config.repo_root))
                 should_save = False
+                request_path = task_dir / metadata.request.path
+                if request_path.exists():
+                    parsed = parse_request_markdown(request_path.read_text())
+                    if metadata.request.language != parsed.language:
+                        metadata.request.language = parsed.language
+                        should_save = True
                 if metadata.target.repo_root != normalized_repo_root:
                     metadata.target.repo_root = normalized_repo_root
                     should_save = True
@@ -65,6 +71,7 @@ class KanbanScanner:
                     state=state,
                     path=str(item.task_dir),
                     updated_at=item.metadata.updated_at,
+                    state_entered_at=self._state_entered_at(item.metadata, state),
                     iteration=max(item.metadata.implementation.iteration, item.metadata.review.iteration),
                     has_error=bool(item.metadata.errors),
                 )
@@ -96,6 +103,7 @@ class KanbanScanner:
         request_path = task_dir / "REQUEST.md"
         target_repo_root = str(self.config.repo_root.expanduser().resolve())
         base_branch = self.config.base_branch
+        request_language = None
         if request_path.exists():
             parsed = parse_request_markdown(request_path.read_text())
             if parsed.title:
@@ -103,6 +111,7 @@ class KanbanScanner:
             target_repo_root = str(resolve_repo_root(parsed.target_repo_root, self.config.repo_root))
             if parsed.base_branch:
                 base_branch = parsed.base_branch
+            request_language = parsed.language
         task_id = task_dir.name if TASK_KEY_PATTERN.fullmatch(task_dir.name) else self.sequence.next_id(existing_ids)
         slug = slugify(title)
         final_task_dir = self._ensure_task_dir_name(task_dir, task_id)
@@ -114,8 +123,15 @@ class KanbanScanner:
             slug,
             target_repo_root=target_repo_root,
             base_branch=base_branch,
+            request_language=request_language,
         )
         return metadata, final_task_dir
+
+    def _state_entered_at(self, metadata: TaskMetadata, state: TaskState):
+        for entry in reversed(metadata.history):
+            if entry.state == state:
+                return entry.entered_at
+        return None
 
     def _ensure_task_dir_name(self, task_dir: Path, task_id: str) -> Path:
         if task_dir.name == task_id:

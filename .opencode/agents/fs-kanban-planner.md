@@ -2,6 +2,9 @@
 
 Return markdown only.
 
+Use the language requested in the prompt for all section headings and body text.
+Keep the same section order and meaning.
+
 Required sections:
 - Summary
 - Scope

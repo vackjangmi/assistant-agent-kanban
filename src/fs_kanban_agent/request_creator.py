@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from .config import AppConfig
 from .enums import TaskState
+from .language import detect_primary_language
 
 
 class RequestTemplateData(BaseModel):
@@ -56,6 +57,7 @@ def create_request(
     lines = [
         "---",
         f"title: {title}",
+        f"language: {detect_primary_language(_build_language_sample(template, title, goal))}",
         "target:",
         f"  repo_root: {resolved_repo}",
         f"  base_branch: {base_branch or config.base_branch}",
@@ -100,3 +102,15 @@ def _generate_task_key(kanban_root: Path) -> str:
         candidate = secrets.token_hex(4)[:7]
         if not any(path.name == candidate for path in kanban_root.glob("*/**")):
             return candidate
+
+
+def _build_language_sample(template: RequestTemplateData, title: str, goal: str) -> str:
+    parts = [title, goal]
+    if template.background:
+        parts.append(template.background)
+    parts.extend(template.scope)
+    parts.extend(template.out_of_scope)
+    parts.extend(template.constraints)
+    parts.extend(template.references)
+    parts.extend(template.acceptance_criteria)
+    return "\n".join(parts)

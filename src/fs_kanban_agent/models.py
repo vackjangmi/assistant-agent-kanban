@@ -66,6 +66,7 @@ class CommitInfo(BaseModel):
 
 class RequestInfo(BaseModel):
     path: str = "REQUEST.md"
+    language: str | None = None
 
 
 class TargetRepoInfo(BaseModel):
@@ -101,6 +102,7 @@ class TaskSnapshot(BaseModel):
     state: TaskState
     path: str
     updated_at: datetime
+    state_entered_at: datetime | None = None
     iteration: int
     has_error: bool
 
@@ -127,6 +129,7 @@ class TaskLogEntry(BaseModel):
     name: str
     path: str
     content: str
+    rendered_content: str | None = None
     updated_at: datetime
 
 

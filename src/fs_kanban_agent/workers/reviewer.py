@@ -28,13 +28,22 @@ class ReviewerWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             reviewing = self.transitions.move(task, TaskState.REVIEWING, by=self.worker_name)
             workspace_repo = reviewing.metadata.implementation.workspace
+            run_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.review.iteration + 1:03d}.jsonl"
+            prompt = self.build_prompt(
+                (reviewing.task_dir / f"WORK-{reviewing.metadata.implementation.iteration:03d}.md").read_text(),
+                reviewing.metadata,
+                phase="reviewer",
+            )
+            await self.emit("task_moved", reviewing.metadata.task_id, state=reviewing.state.value)
+            loop = asyncio.get_running_loop()
             result = await asyncio.to_thread(
                 self.adapter.run,
                 agent=self.config.opencode.reviewer_agent,
-                prompt=(reviewing.task_dir / f"WORK-{reviewing.metadata.implementation.iteration:03d}.md").read_text(),
+                prompt=prompt,
                 cwd=Path(reviewing.metadata.target.repo_root),
-                run_log_path=self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.review.iteration + 1:03d}.jsonl",
+                run_log_path=run_log_path,
                 config=self.config,
+                on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, run_log_path.name),
             )
             reviewing.metadata.review.iteration += 1
             verdict = "PASS" if "Verdict: PASS" in result.assistant_text or "VERDICT: PASS" in result.assistant_text else "NEEDS_CHANGES"

@@ -25,13 +25,18 @@ class ImplementerWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             workspace_repo = await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
             implementing = self.transitions.move(task, TaskState.IMPLEMENTING, by=self.worker_name)
+            run_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.implementation.iteration + 1:03d}.jsonl"
+            prompt = self.build_prompt((implementing.task_dir / "PLAN.md").read_text(), implementing.metadata, phase="implementer")
+            await self.emit("task_moved", implementing.metadata.task_id, state=implementing.state.value)
+            loop = asyncio.get_running_loop()
             result = await asyncio.to_thread(
                 self.adapter.run,
                 agent=self.config.opencode.implementer_agent,
-                prompt=(implementing.task_dir / "PLAN.md").read_text(),
+                prompt=prompt,
                 cwd=workspace_repo,
-                run_log_path=self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.implementation.iteration + 1:03d}.jsonl",
+                run_log_path=run_log_path,
                 config=self.config,
+                on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
             )
             implementing.metadata.implementation.iteration += 1
             implementing.metadata.implementation.last_result = "success" if result.ok else "failure"

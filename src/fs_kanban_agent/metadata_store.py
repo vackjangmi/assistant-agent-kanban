@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from .enums import TaskState
-from .models import HistoryEntry, TargetRepoInfo, TaskErrorInfo, TaskMetadata, utc_now
+from .models import HistoryEntry, IntegrationInfo, RequestInfo, TargetRepoInfo, TaskErrorInfo, TaskMetadata, utc_now
 
 
 def slugify(value: str) -> str:
@@ -38,6 +38,7 @@ class MetadataStore:
         *,
         target_repo_root: str,
         base_branch: str,
+        request_language: str | None = None,
     ) -> TaskMetadata:
         created = utc_now()
         metadata = TaskMetadata(
@@ -47,8 +48,9 @@ class MetadataStore:
             state=state,
             created_at=created,
             updated_at=created,
+            request=RequestInfo(language=request_language),
             target=TargetRepoInfo(repo_root=target_repo_root, base_branch=base_branch),
-            integration={"base_branch": base_branch},
+            integration=IntegrationInfo(base_branch=base_branch),
             history=[HistoryEntry(state=state, entered_at=created, by="human")],
         )
         self.save(task_dir, metadata)

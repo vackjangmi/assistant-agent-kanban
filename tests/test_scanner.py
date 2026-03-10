@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.scanner import KanbanScanner
+from fs_kanban_agent.transitions import TransitionManager
+from fs_kanban_agent.locks import TaskLockManager
 
 from .conftest import create_request_task
 
@@ -42,3 +45,43 @@ def test_scanner_renames_generic_request_directory_to_task_key(configured_paths)
 
     assert task.task_dir.name == task.metadata.task_id
     assert not (config.state_dir(TaskState.REQUESTS) / "task").exists()
+
+
+def test_scanner_detects_request_language_from_request_markdown(configured_paths):
+    config, _, _ = configured_paths
+    task_dir = create_request_task(config, "language-task")
+    (task_dir / "REQUEST.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: 언어 테스트",
+                "target:",
+                f"  repo_root: {config.repo_root}",
+                f"  base_branch: {config.base_branch}",
+                "---",
+                "",
+                "# 언어 테스트",
+                "",
+                "이 요청은 한국어로 작성되었습니다.",
+            ]
+        )
+    )
+
+    task = KanbanScanner(config).scan()[0]
+
+    assert task.metadata.request.language == "ko"
+
+
+def test_board_snapshot_includes_active_state_entered_at(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "active-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+
+    snapshot = scanner.board_snapshot()
+    planning_item = next(item for column in snapshot.columns if column.state == TaskState.PLANNING for item in column.items)
+
+    assert planning_item.task_id == planning.metadata.task_id
+    assert planning_item.state_entered_at is not None

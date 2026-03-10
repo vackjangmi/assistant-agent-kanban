@@ -23,14 +23,18 @@ class PlanningWorker(WorkerBase):
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             planning = self.transitions.move(task, TaskState.PLANNING, by=self.worker_name)
-            prompt = (planning.task_dir / "REQUEST.md").read_text()
+            run_log_path = self.task_log_dir(task.metadata.task_id) / f"planner-{planning.metadata.plan.revision + 1:03d}.jsonl"
+            prompt = self.build_prompt((planning.task_dir / "REQUEST.md").read_text(), planning.metadata, phase="planner")
+            await self.emit("task_moved", planning.metadata.task_id, state=planning.state.value)
+            loop = asyncio.get_running_loop()
             result = await asyncio.to_thread(
                 self.adapter.run,
                 agent=self.config.opencode.planner_agent,
                 prompt=prompt,
                 cwd=planning.task_dir,
-                run_log_path=self.task_log_dir(task.metadata.task_id) / f"planner-{planning.metadata.plan.revision + 1:03d}.jsonl",
+                run_log_path=run_log_path,
                 config=self.config,
+                on_log_line=self.make_log_callback(loop, planning.metadata.task_id, run_log_path.name),
             )
             if not result.ok:
                 self.metadata_store.add_error(

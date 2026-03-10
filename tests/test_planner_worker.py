@@ -98,3 +98,71 @@ def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeyp
 
     assert asyncio.run(worker.run_once()) is True
     assert called["value"] is True
+
+
+def test_planner_worker_includes_request_language_in_prompt(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["## Summary\nplan"])
+            self.prompt = ""
+
+        def run(self, **kwargs):
+            self.prompt = kwargs["prompt"]
+            return super().run(**kwargs)
+
+    config, _, _ = configured_paths
+    task_dir = create_request_task(config, "planner-korean-task")
+    (task_dir / "REQUEST.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: 한국어 계획",
+                "target:",
+                f"  repo_root: {config.repo_root}",
+                f"  base_branch: {config.base_branch}",
+                "---",
+                "",
+                "# 한국어 계획",
+                "",
+                "이 문서는 한국어로 결과를 받아야 합니다.",
+            ]
+        )
+    )
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = PromptCapturingAdapter()
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+    assert "Return the markdown artifact in Korean." in adapter.prompt
+    assert "<task-document>" in adapter.prompt
+
+
+def test_planner_worker_emits_realtime_worker_log_events(configured_paths):
+    async def receive_worker_log(event_bus):
+        async for event in event_bus.subscribe():
+            if event.event == "worker_log":
+                return event
+
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-log-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    event_bus = EventBus()
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(["## Summary\nplan"]))
+
+    async def scenario():
+        event_task = asyncio.create_task(receive_worker_log(event_bus))
+        await worker.run_once()
+        return await asyncio.wait_for(event_task, timeout=1)
+
+    event = asyncio.run(scenario())
+
+    assert event is not None
+    assert event.task_id is not None
+    assert event.payload["log_name"].startswith("planner-")
+    assert event.payload["raw_line"] == "## Summary\nplan"
