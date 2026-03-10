@@ -36,7 +36,7 @@ class TaskService:
             paths = sorted(
                 [path for path in log_dir.glob("*.jsonl") if path.is_file()],
                 key=lambda path: path.stat().st_mtime,
-                reverse=True,
+                reverse=False,
             )
             for path in paths:
                 raw_content = path.read_text()

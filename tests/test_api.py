@@ -175,6 +175,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request-modal" in response.text
     assert "task-modal" in response.text
     assert "Viewer" in response.text
+    assert "Viewer mode" in response.text
+    assert "task-viewer-host" in response.text
     assert "Approve plan" in response.text
     assert "toastui-editor" in response.text
     assert "buildScopeDefaults" in response.text
