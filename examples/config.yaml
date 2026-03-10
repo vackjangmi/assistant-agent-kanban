@@ -1,0 +1,23 @@
+kanban_root: ./ai-kanban
+repo_root: .
+base_branch: main
+
+opencode:
+  binary: opencode
+  attach_url: http://127.0.0.1:4096
+  planner_agent: fs-kanban-planner
+  implementer_agent: fs-kanban-implementer
+  reviewer_agent: fs-kanban-reviewer
+  commit_agent: fs-kanban-committer
+  timeout_seconds: 1800
+
+workspace:
+  strategy: clone-overlay
+  root: ./ai-kanban/_runtime/workspaces
+  overlay_copy:
+    - .env.example
+  overlay_symlink: []
+
+locks:
+  heartbeat_seconds: 10
+  stale_after_seconds: 60
