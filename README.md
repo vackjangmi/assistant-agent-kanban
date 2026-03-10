@@ -36,6 +36,16 @@ source .venv/bin/activate
 pip install -e .[dev]
 ```
 
+Or use the convenience bootstrap script:
+
+```bash
+./init.sh
+```
+
+That script creates `.venv` when needed, installs `.[dev]`, copies
+`examples/config.yaml` to `config.local.yaml` on first run, and bootstraps the
+default kanban directories.
+
 ## Run tests
 
 ```bash
@@ -46,6 +56,18 @@ pytest -q
 
 ```bash
 uvicorn fs_kanban_agent.api.main:app
+```
+
+Or run the local launcher:
+
+```bash
+./run.sh
+```
+
+You can override the config or bind address if needed:
+
+```bash
+./run.sh --config /path/to/config.yaml --host 0.0.0.0 --port 8000
 ```
 
 This uses `create_default_app()`, which loads default config and injects real
