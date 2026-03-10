@@ -6,6 +6,7 @@ from .config import AppConfig
 from .enums import STATE_ORDER, TaskState
 from .metadata_store import MetadataStore, slugify
 from .models import BoardColumn, BoardSnapshot, TaskContext, TaskMetadata, TaskSnapshot
+from .request_parser import parse_request_markdown, resolve_repo_root
 
 
 class TaskIdSequence:
@@ -34,6 +35,18 @@ class KanbanScanner:
                 existing_ids.add(metadata.task_id)
                 if metadata.state != state:
                     metadata.state = state
+                normalized_repo_root = str(resolve_repo_root(metadata.target.repo_root, self.config.repo_root))
+                should_save = False
+                if metadata.target.repo_root != normalized_repo_root:
+                    metadata.target.repo_root = normalized_repo_root
+                    should_save = True
+                if not metadata.target.base_branch:
+                    metadata.target.base_branch = self.config.base_branch
+                    should_save = True
+                if metadata.integration.base_branch != metadata.target.base_branch:
+                    metadata.integration.base_branch = metadata.target.base_branch
+                    should_save = True
+                if metadata.state != state or should_save:
                     self.metadata_store.save(task_dir, metadata)
                 tasks.append(TaskContext(metadata=metadata, task_dir=task_dir, state=state))
         return tasks
@@ -78,10 +91,23 @@ class KanbanScanner:
             return self.metadata_store.load(task_dir)
         title = task_dir.name.split("__", 1)[-1].replace("-", " ").strip() or task_dir.name
         request_path = task_dir / "REQUEST.md"
+        target_repo_root = str(self.config.repo_root.expanduser().resolve())
+        base_branch = self.config.base_branch
         if request_path.exists():
-            first_line = request_path.read_text().splitlines()
-            if first_line:
-                title = first_line[0].lstrip("# ").strip() or title
+            parsed = parse_request_markdown(request_path.read_text())
+            if parsed.title:
+                title = parsed.title
+            target_repo_root = str(resolve_repo_root(parsed.target_repo_root, self.config.repo_root))
+            if parsed.base_branch:
+                base_branch = parsed.base_branch
         task_id = self.sequence.next_id(existing_ids)
         slug = slugify(title)
-        return self.metadata_store.bootstrap(task_dir, state, task_id, title, slug)
+        return self.metadata_store.bootstrap(
+            task_dir,
+            state,
+            task_id,
+            title,
+            slug,
+            target_repo_root=target_repo_root,
+            base_branch=base_branch,
+        )

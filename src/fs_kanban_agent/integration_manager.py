@@ -13,6 +13,7 @@ class IntegrationManager:
         self.config = config
 
     def apply_workspace(self, metadata: TaskMetadata, workspace_repo: Path) -> Path:
+        target_repo_root = Path(metadata.target.repo_root)
         patch_path = self.config.runs_dir / metadata.task_id / f"review-{metadata.review.iteration:03d}.patch"
         patch_path.parent.mkdir(parents=True, exist_ok=True)
         diff = subprocess.run(
@@ -30,7 +31,7 @@ class IntegrationManager:
             metadata.integration.applied_at = utc_now()
             return patch_path
         status = subprocess.run(
-            ["git", "-C", str(self.config.repo_root), "status", "--short"],
+            ["git", "-C", str(target_repo_root), "status", "--short"],
             capture_output=True,
             text=True,
             check=False,
@@ -38,7 +39,7 @@ class IntegrationManager:
         if status.stdout.strip():
             raise IntegrationError("integration repo must be clean before apply")
         apply_result = subprocess.run(
-            ["git", "-C", str(self.config.repo_root), "apply", "--3way", "--index", str(patch_path)],
+            ["git", "-C", str(target_repo_root), "apply", "--3way", "--index", str(patch_path)],
             capture_output=True,
             text=True,
             check=False,
@@ -49,7 +50,7 @@ class IntegrationManager:
         metadata.integration.applied = True
         metadata.integration.applied_at = utc_now()
         head = subprocess.run(
-            ["git", "-C", str(self.config.repo_root), "rev-parse", "HEAD"],
+            ["git", "-C", str(target_repo_root), "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
             check=False,

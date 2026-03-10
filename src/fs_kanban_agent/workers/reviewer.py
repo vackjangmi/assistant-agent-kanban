@@ -30,7 +30,7 @@ class ReviewerWorker(WorkerBase):
             result = self.adapter.run(
                 agent=self.config.opencode.reviewer_agent,
                 prompt=(reviewing.task_dir / f"WORK-{reviewing.metadata.implementation.iteration:03d}.md").read_text(),
-                cwd=self.config.repo_root,
+                cwd=Path(reviewing.metadata.target.repo_root),
                 run_log_path=self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.review.iteration + 1:03d}.jsonl",
                 config=self.config,
             )

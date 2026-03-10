@@ -16,26 +16,32 @@ class WorkspaceManager:
         workspace_root = self.config.workspace.root or (self.config.kanban_root / "_runtime/workspaces")
         workspace_dir = workspace_root / metadata.task_id
         repo_dir = workspace_dir / "repo"
+        target_repo_root = Path(metadata.target.repo_root)
         workspace_dir.mkdir(parents=True, exist_ok=True)
         if not repo_dir.exists():
-            git_dir = self.config.repo_root / ".git"
+            git_dir = target_repo_root / ".git"
             if git_dir.exists():
-                clone = subprocess.run(["git", "clone", str(self.config.repo_root), str(repo_dir)], capture_output=True, text=True, check=False)
+                clone = subprocess.run(["git", "clone", str(target_repo_root), str(repo_dir)], capture_output=True, text=True, check=False)
                 if clone.returncode != 0:
                     raise RuntimeError(clone.stderr.strip() or "git clone failed")
-                checkout = subprocess.run(["git", "-C", str(repo_dir), "checkout", "-b", f"task/{metadata.task_id.lower()}"], capture_output=True, text=True, check=False)
+                checkout = subprocess.run(
+                    ["git", "-C", str(repo_dir), "checkout", "-B", f"task/{metadata.task_id.lower()}", metadata.target.base_branch],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
                 if checkout.returncode != 0:
                     raise RuntimeError(checkout.stderr.strip() or "git checkout failed")
             else:
-                shutil.copytree(self.config.repo_root, repo_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "ai-kanban"))
-        self._apply_overlays(repo_dir)
+                shutil.copytree(target_repo_root, repo_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "ai-kanban"))
+        self._apply_overlays(repo_dir, target_repo_root)
         metadata.implementation.workspace = str(repo_dir)
         metadata.implementation.branch = f"task/{metadata.task_id.lower()}"
         return repo_dir
 
-    def _apply_overlays(self, repo_dir: Path) -> None:
+    def _apply_overlays(self, repo_dir: Path, target_repo_root: Path) -> None:
         for relative in self.config.workspace.overlay_copy:
-            source = self.config.repo_root / relative
+            source = target_repo_root / relative
             target = repo_dir / relative
             if source.exists() and not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)

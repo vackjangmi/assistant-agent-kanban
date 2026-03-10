@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 from ..enums import TaskState
 from ..exceptions import CommitError
@@ -22,17 +23,18 @@ class CommitWorker(WorkerBase):
         task = tasks[0]
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
+            target_repo_root = Path(task.metadata.target.repo_root)
             message = self._build_commit_message(task.metadata)
             commit_path = task.task_dir / "COMMIT.md"
             commit_path.write_text(message + "\n")
             task.metadata.commit.message_path = "COMMIT.md"
-            result = subprocess.run(["git", "-C", str(self.config.repo_root), "status", "--short"], capture_output=True, text=True, check=False)
+            result = subprocess.run(["git", "-C", str(target_repo_root), "status", "--short"], capture_output=True, text=True, check=False)
             if not result.stdout.strip():
                 raise CommitError("no changes to commit")
-            commit = subprocess.run(["git", "-C", str(self.config.repo_root), "commit", "-m", message], capture_output=True, text=True, check=False)
+            commit = subprocess.run(["git", "-C", str(target_repo_root), "commit", "-m", message], capture_output=True, text=True, check=False)
             if commit.returncode != 0:
                 raise CommitError(commit.stderr.strip() or "git commit failed")
-            sha = subprocess.run(["git", "-C", str(self.config.repo_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
+            sha = subprocess.run(["git", "-C", str(target_repo_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
             task.metadata.commit.status = "committed"
             task.metadata.commit.sha = sha.stdout.strip()
             self.metadata_store.save(task.task_dir, task.metadata)

@@ -13,9 +13,20 @@ from fs_kanban_agent.opencode_adapter import OpenCodeAdapter
 
 
 class FakeAdapter(OpenCodeAdapter):
-    def __init__(self, responses: list[str] | None = None, side_effect: Callable[[Path], None] | None = None) -> None:
+    def __init__(
+        self,
+        responses: list[str] | None = None,
+        side_effect: Callable[[Path], None] | None = None,
+        *,
+        ok: bool = True,
+        returncode: int = 0,
+        stderr: str = "",
+    ) -> None:
         self.responses = responses or []
         self.side_effect = side_effect
+        self.ok = ok
+        self.returncode = returncode
+        self.stderr = stderr
 
     def run(self, *, agent: str, prompt: str, cwd: Path, run_log_path: Path, config: AppConfig) -> RunResult:
         if self.side_effect is not None:
@@ -23,7 +34,15 @@ class FakeAdapter(OpenCodeAdapter):
         content = self.responses.pop(0) if self.responses else f"{agent}: ok"
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         run_log_path.write_text(content + "\n")
-        return RunResult(ok=True, returncode=0, assistant_text=content, stdout=content, stderr="", raw_events_path=str(run_log_path), command=[agent])
+        return RunResult(
+            ok=self.ok,
+            returncode=self.returncode,
+            assistant_text=content,
+            stdout=content,
+            stderr=self.stderr,
+            raw_events_path=str(run_log_path),
+            command=[agent],
+        )
 
 
 def init_git_repo(path: Path) -> None:
@@ -46,8 +65,32 @@ def configured_paths(tmp_path: Path) -> tuple[AppConfig, Path, Path]:
     return config, repo_root, kanban_root
 
 
-def create_request_task(config: AppConfig, name: str = "sample-task") -> Path:
+def create_request_task(
+    config: AppConfig,
+    name: str = "sample-task",
+    *,
+    target_repo_root: Path | None = None,
+    base_branch: str | None = None,
+) -> Path:
     task_dir = config.state_dir(TaskState.REQUESTS) / name
     task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "REQUEST.md").write_text(f"# {name}\n\nImplement {name}.\n")
+    repo_root = (target_repo_root or config.repo_root).expanduser().resolve()
+    branch = base_branch or config.base_branch
+    (task_dir / "REQUEST.md").write_text(
+        "\n".join(
+            [
+                "---",
+                f"title: {name}",
+                "target:",
+                f"  repo_root: {repo_root}",
+                f"  base_branch: {branch}",
+                "---",
+                "",
+                f"# {name}",
+                "",
+                f"Implement {name}.",
+                "",
+            ]
+        )
+    )
     return task_dir

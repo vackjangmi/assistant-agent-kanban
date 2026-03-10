@@ -68,6 +68,11 @@ class RequestInfo(BaseModel):
     path: str = "REQUEST.md"
 
 
+class TargetRepoInfo(BaseModel):
+    repo_root: str = "."
+    base_branch: str = "main"
+
+
 class TaskMetadata(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
@@ -79,6 +84,7 @@ class TaskMetadata(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     request: RequestInfo = Field(default_factory=RequestInfo)
+    target: TargetRepoInfo = Field(default_factory=TargetRepoInfo)
     plan: PlanInfo = Field(default_factory=PlanInfo)
     implementation: ImplementationInfo = Field(default_factory=ImplementationInfo)
     review: ReviewInfo = Field(default_factory=ReviewInfo)

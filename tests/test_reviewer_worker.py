@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
 from fs_kanban_agent.integration_manager import IntegrationManager
@@ -13,7 +14,7 @@ from fs_kanban_agent.workspace_manager import WorkspaceManager
 from fs_kanban_agent.workers.implementer import ImplementerWorker
 from fs_kanban_agent.workers.reviewer import ReviewerWorker
 
-from .conftest import FakeAdapter, create_request_task
+from .conftest import FakeAdapter, create_request_task, init_git_repo
 
 
 def _task_ready_for_review(config):
@@ -82,3 +83,27 @@ def test_reviewer_worker_applies_patch_on_pass(configured_paths):
     assert asyncio.run(worker.run_once()) is True
     assert scanner.scan()[0].state == TaskState.COMPLETED_REVIEWS
     assert (repo_root / "app.txt").read_text() == "review me\n"
+
+
+def test_reviewer_worker_applies_patch_to_task_target_repo(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "review-target-task", target_repo_root=target_repo)
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["Verdict: PASS\nReady"]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    assert scanner.scan()[0].state == TaskState.COMPLETED_REVIEWS
+    assert (target_repo / "app.txt").read_text() == "review me\n"

@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from .enums import TaskState
-from .models import HistoryEntry, TaskErrorInfo, TaskMetadata, utc_now
+from .models import HistoryEntry, TargetRepoInfo, TaskErrorInfo, TaskMetadata, utc_now
 
 
 def slugify(value: str) -> str:
@@ -28,7 +28,17 @@ class MetadataStore:
         tmp_path.write_text(json.dumps(metadata.model_dump(mode="json"), indent=2) + "\n")
         os.replace(tmp_path, path)
 
-    def bootstrap(self, task_dir: Path, state: TaskState, task_id: str, title: str, slug: str) -> TaskMetadata:
+    def bootstrap(
+        self,
+        task_dir: Path,
+        state: TaskState,
+        task_id: str,
+        title: str,
+        slug: str,
+        *,
+        target_repo_root: str,
+        base_branch: str,
+    ) -> TaskMetadata:
         created = utc_now()
         metadata = TaskMetadata(
             task_id=task_id,
@@ -37,6 +47,8 @@ class MetadataStore:
             state=state,
             created_at=created,
             updated_at=created,
+            target=TargetRepoInfo(repo_root=target_repo_root, base_branch=base_branch),
+            integration={"base_branch": base_branch},
             history=[HistoryEntry(state=state, entered_at=created, by="human")],
         )
         self.save(task_dir, metadata)
