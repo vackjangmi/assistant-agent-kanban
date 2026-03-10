@@ -149,6 +149,7 @@ tests/
 - planning -> waiting-check-plans
 - waiting-check-plans -> todos
 - todos -> implementing
+- implementing -> todos
 - implementing -> waiting-reviews
 - waiting-reviews -> reviewing
 - reviewing -> todos
@@ -255,7 +256,8 @@ git clone --reference-if-able <repo_root> --dissociate <repo_root> <workspace_re
 5. implementer prompt 실행 (cwd=workspace repo)
 6. focused validation 명령 실행
 7. 결과 요약을 `WORK-{n}.md` 저장
-8. `waiting-reviews` 이동
+8. 실제 workspace git 변경이 있으면 `waiting-reviews` 이동
+9. 변경이 없거나 구현 실패면 `todos` 복귀 + error 기록
 
 ### implementer prompt 계약
 최종 응답에는 아래가 있어야 한다.

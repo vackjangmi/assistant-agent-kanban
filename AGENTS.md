@@ -53,6 +53,7 @@
 - `planning -> waiting-check-plans`
 - `waiting-check-plans -> todos`
 - `todos -> implementing`
+- `implementing -> todos`
 - `implementing -> waiting-reviews`
 - `waiting-reviews -> reviewing`
 - `reviewing -> todos`

@@ -116,7 +116,8 @@ stateDiagram-v2
     waiting-check-plans --> todos: 사람이 PLAN 검토 후 이동 (manual)
 
     todos --> implementing: Implementer Worker (auto)
-    implementing --> waiting-reviews: 구현 완료 + WORK-N.md 기록 (auto)
+    implementing --> waiting-reviews: 구현 완료 + 실제 workspace 변경 확인 (auto)
+    implementing --> todos: 구현 실패 또는 workspace 변경 없음 (auto)
 
     waiting-reviews --> reviewing: Reviewer Worker (auto)
     reviewing --> todos: 리뷰 실패 / 수정 필요 (auto)
@@ -133,6 +134,7 @@ stateDiagram-v2
 - `requests -> planning`
 - `planning -> waiting-check-plans`
 - `todos -> implementing`
+- `implementing -> todos`
 - `implementing -> waiting-reviews`
 - `waiting-reviews -> reviewing`
 - `reviewing -> todos`
