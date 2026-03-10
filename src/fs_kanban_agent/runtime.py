@@ -9,6 +9,7 @@ from .metadata_store import MetadataStore
 from .recovery import RecoveryService
 from .scanner import KanbanScanner
 from .services.board_service import BoardService
+from .services.human_verification_service import HumanVerificationService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
 from .workers.committer import CommitWorker
@@ -28,6 +29,7 @@ class RuntimeSupervisor:
         committer: CommitWorker,
         scanner: KanbanScanner,
         board_service: BoardService,
+        verification_service: HumanVerificationService,
         task_service: TaskService,
         recovery: RecoveryService,
         events: EventBus,
@@ -39,6 +41,7 @@ class RuntimeSupervisor:
         self.committer = committer
         self.scanner = scanner
         self.board_service = board_service
+        self.verification_service = verification_service
         self.task_service = task_service
         self.recovery = recovery
         self.events = events
@@ -68,7 +71,7 @@ class RuntimeSupervisor:
         await self.events.publish(board_to_event(board))
 
     async def dispatch_once(self) -> bool:
-        for worker in [self.planner, self.implementer, self.reviewer, self.committer]:
+        for worker in [self.planner, self.implementer, self.reviewer]:
             if await worker.run_once():
                 await self.rescan_and_publish()
                 return True
@@ -104,15 +107,18 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     events = EventBus()
     from .workspace_manager import WorkspaceManager
+    from .commit_manager import CommitManager
     from .integration_manager import IntegrationManager
 
     workspace_manager = WorkspaceManager(config)
     integration_manager = IntegrationManager(config)
+    commit_manager = CommitManager()
     planner = PlanningWorker(config, scanner, metadata_store, locks, transitions, events, adapter=planner_adapter)
     implementer = ImplementerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=implementer_adapter, workspace_manager=workspace_manager)
     reviewer = ReviewerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=reviewer_adapter, integration_manager=integration_manager)
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
+    verification_service = HumanVerificationService(scanner, metadata_store, locks, transitions, integration_manager, commit_manager)
     task_service = TaskService(scanner, config.runs_dir)
     recovery = RecoveryService(config, scanner, transitions, locks)
-    return RuntimeSupervisor(config, planner, implementer, reviewer, committer, scanner, board_service, task_service, recovery, events)
+    return RuntimeSupervisor(config, planner, implementer, reviewer, committer, scanner, board_service, verification_service, task_service, recovery, events)

@@ -12,7 +12,7 @@ class TaskState(StrEnum):
     WAITING_REVIEWS = "waiting-reviews"
     REVIEWING = "reviewing"
     COMPLETED_REVIEWS = "completed-reviews"
-    INTEGRATION_TEST_COMPLETED = "integration-test-completed"
+    HUMAN_VERIFYING = "human-verifying"
     DONE = "done"
 
 
@@ -25,7 +25,7 @@ STATE_ORDER = [
     TaskState.WAITING_REVIEWS,
     TaskState.REVIEWING,
     TaskState.COMPLETED_REVIEWS,
-    TaskState.INTEGRATION_TEST_COMPLETED,
+    TaskState.HUMAN_VERIFYING,
     TaskState.DONE,
 ]
 
@@ -37,18 +37,21 @@ ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.IMPLEMENTING: {TaskState.WAITING_REVIEWS},
     TaskState.WAITING_REVIEWS: {TaskState.REVIEWING},
     TaskState.REVIEWING: {TaskState.TODOS, TaskState.COMPLETED_REVIEWS},
-    TaskState.COMPLETED_REVIEWS: {TaskState.INTEGRATION_TEST_COMPLETED},
-    TaskState.INTEGRATION_TEST_COMPLETED: {TaskState.DONE},
+    TaskState.COMPLETED_REVIEWS: {TaskState.HUMAN_VERIFYING},
+    TaskState.HUMAN_VERIFYING: {TaskState.TODOS, TaskState.DONE},
     TaskState.DONE: set(),
 }
 
 MANUAL_TRANSITIONS = {
     (TaskState.WAITING_CHECK_PLANS, TaskState.TODOS),
-    (TaskState.COMPLETED_REVIEWS, TaskState.INTEGRATION_TEST_COMPLETED),
+    (TaskState.COMPLETED_REVIEWS, TaskState.HUMAN_VERIFYING),
+    (TaskState.HUMAN_VERIFYING, TaskState.TODOS),
+    (TaskState.HUMAN_VERIFYING, TaskState.DONE),
 }
 
 ACTIVE_STATES = {
     TaskState.PLANNING,
     TaskState.IMPLEMENTING,
     TaskState.REVIEWING,
+    TaskState.HUMAN_VERIFYING,
 }
