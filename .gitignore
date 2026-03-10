@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 ai-kanban/
 .sisyphus/
+*.egg-info/
