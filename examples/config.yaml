@@ -6,9 +6,13 @@ opencode:
   binary: opencode
   attach_url: null
   planner_agent: fs-kanban-planner
+  planner_model: null
   implementer_agent: fs-kanban-implementer
+  implementer_model: null
   reviewer_agent: fs-kanban-reviewer
+  reviewer_model: null
   commit_agent: fs-kanban-committer
+  commit_model: null
   timeout_seconds: 1800
 
 workspace:

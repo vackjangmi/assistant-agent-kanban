@@ -402,9 +402,13 @@ opencode:
   binary: opencode
   attach_url: http://127.0.0.1:4096
   planner_agent: fs-kanban-planner
+  planner_model: null
   implementer_agent: fs-kanban-implementer
+  implementer_model: null
   reviewer_agent: fs-kanban-reviewer
+  reviewer_model: null
   commit_agent: plan
+  commit_model: null
   timeout_seconds: 1800
 
 workspace:

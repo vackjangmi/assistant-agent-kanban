@@ -175,6 +175,7 @@ Use `examples/config.yaml` as a starting point. Important settings:
 - `repo_root` - default target repository when a task does not override its target
 - `base_branch` - base branch for isolated workspaces
 - `opencode.*` - adapter binary, agent names, attach URL, timeout
+- `opencode.planner_model` / `implementer_model` / `reviewer_model` - optional per-role model overrides injected into runtime custom agents
 - `workspace.*` - clone-overlay root plus overlay copy/symlink entries
 - `locks.*` - heartbeat, stale timeout, lock timeout
 - `repo_discovery.root` - root directory to scan for target repo suggestions in the dashboard
