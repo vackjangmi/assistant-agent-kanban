@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..enums import TaskState
+from ..exceptions import AdapterRunError
 from ..opencode_adapter import OpenCodeAdapter
 from .base import WorkerBase
 
@@ -28,6 +29,14 @@ class PlanningWorker(WorkerBase):
                 run_log_path=self.task_log_dir(task.metadata.task_id) / f"planner-{planning.metadata.plan.revision + 1:03d}.jsonl",
                 config=self.config,
             )
+            if not result.ok:
+                self.metadata_store.add_error(
+                    planning.task_dir,
+                    planning.metadata,
+                    code="planner-run-failed",
+                    message=result.stderr.strip() or result.assistant_text.strip() or "planner run failed",
+                )
+                raise AdapterRunError(result.stderr.strip() or "planner run failed")
             planning.metadata.plan.revision += 1
             planning.metadata.plan.path = "PLAN.md"
             (planning.task_dir / "PLAN.md").write_text(result.assistant_text.strip() + "\n")

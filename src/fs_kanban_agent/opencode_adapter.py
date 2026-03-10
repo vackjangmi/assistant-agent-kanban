@@ -19,7 +19,7 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         command = [config.opencode.binary, "run"]
         if config.opencode.attach_url:
             command.extend(["--attach", config.opencode.attach_url])
-        command.extend(["--agent", agent, "--format", "json", prompt])
+        command.extend(["--agent", agent, "--format", "json", "--", prompt])
         try:
             completed = subprocess.run(
                 command,
