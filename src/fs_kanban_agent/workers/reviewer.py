@@ -4,9 +4,7 @@ import asyncio
 from pathlib import Path
 
 from ..enums import TaskState
-from ..exceptions import IntegrationError
 from ..integration_manager import IntegrationManager
-from ..models import TaskErrorInfo
 from ..opencode_adapter import OpenCodeAdapter
 from .base import WorkerBase
 
@@ -27,7 +25,6 @@ class ReviewerWorker(WorkerBase):
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             reviewing = self.transitions.move(task, TaskState.REVIEWING, by=self.worker_name)
-            workspace_repo = reviewing.metadata.implementation.workspace
             run_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.review.iteration + 1:03d}.jsonl"
             prompt = self.build_prompt(
                 (reviewing.task_dir / f"WORK-{reviewing.metadata.implementation.iteration:03d}.md").read_text(),
@@ -54,15 +51,6 @@ class ReviewerWorker(WorkerBase):
             if verdict != "PASS":
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review needs changes")
             else:
-                try:
-                    if workspace_repo is None:
-                        raise IntegrationError("workspace path missing")
-                    await asyncio.to_thread(self.integration_manager.apply_workspace, reviewing.metadata, Path(workspace_repo))
-                    self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                    done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
-                except IntegrationError as exc:
-                    reviewing.metadata.errors.append(TaskErrorInfo(code="integration-conflict", message=str(exc)))
-                    self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                    done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="integration failed")
+                done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True

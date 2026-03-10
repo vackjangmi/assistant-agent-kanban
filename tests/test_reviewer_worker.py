@@ -66,7 +66,7 @@ def test_reviewer_worker_returns_to_todos_on_needs_changes(configured_paths):
     assert scanner.scan()[0].state == TaskState.TODOS
 
 
-def test_reviewer_worker_applies_patch_on_pass(configured_paths):
+def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "review-pass-task")
     metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
@@ -83,12 +83,12 @@ def test_reviewer_worker_applies_patch_on_pass(configured_paths):
 
     assert asyncio.run(worker.run_once()) is True
     assert scanner.scan()[0].state == TaskState.COMPLETED_REVIEWS
-    assert (repo_root / "app.txt").read_text() == "review me\n"
+    assert (repo_root / "app.txt").read_text() == "hello\n"
     review_json = json.loads((scanner.scan()[0].task_dir / "REVIEW-001.json").read_text())
     assert "Verdict: PASS" in review_json["assistant_text"]
 
 
-def test_reviewer_worker_applies_patch_to_task_target_repo(tmp_path):
+def test_reviewer_worker_leaves_target_repo_clean_until_human_verification(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
@@ -109,4 +109,4 @@ def test_reviewer_worker_applies_patch_to_task_target_repo(tmp_path):
 
     assert asyncio.run(worker.run_once()) is True
     assert scanner.scan()[0].state == TaskState.COMPLETED_REVIEWS
-    assert (target_repo / "app.txt").read_text() == "review me\n"
+    assert (target_repo / "app.txt").read_text() == "hello\n"
