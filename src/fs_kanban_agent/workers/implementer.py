@@ -26,7 +26,7 @@ class ImplementerWorker(WorkerBase):
             workspace_repo = await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
             implementing = self.transitions.move(task, TaskState.IMPLEMENTING, by=self.worker_name)
             run_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.implementation.iteration + 1:03d}.jsonl"
-            prompt = self.build_prompt((implementing.task_dir / "PLAN.md").read_text(), implementing.metadata, phase="implementer")
+            prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
             await self.emit("task_moved", implementing.metadata.task_id, state=implementing.state.value)
             loop = asyncio.get_running_loop()
             result = await asyncio.to_thread(
@@ -46,3 +46,13 @@ class ImplementerWorker(WorkerBase):
             done = self.transitions.move(implementing, TaskState.WAITING_REVIEWS, by=self.worker_name)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
+
+    def _build_implementer_source(self, task_dir):
+        sections = ["# Plan", "", (task_dir / "PLAN.md").read_text().rstrip()]
+        latest_review = sorted(task_dir.glob("REVIEW-*.md"))
+        if latest_review:
+            sections.extend(["", "# Latest AI Review", "", latest_review[-1].read_text().rstrip()])
+        latest_human_verify = sorted(task_dir.glob("HUMAN-VERIFY-*.md"))
+        if latest_human_verify:
+            sections.extend(["", "# Latest Human Verification", "", latest_human_verify[-1].read_text().rstrip()])
+        return "\n".join(section for section in sections if section is not None)
