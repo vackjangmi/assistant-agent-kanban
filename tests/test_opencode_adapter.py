@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import subprocess
 
@@ -50,6 +51,7 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
 
     def fake_popen(command, **kwargs):
         recorded["command"] = command
+        recorded["env"] = kwargs.get("env")
         return FakeProcess(command)
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
@@ -65,6 +67,12 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
         config=config,
     )
 
-    command = recorded["command"]
+    command = cast(list[str], recorded["command"])
     assert "--" in command
     assert command[-1] == "---\ntitle: sample\n---\n"
+    env = cast(dict[str, str], recorded["env"])
+    xdg_config_home = env["XDG_CONFIG_HOME"]
+    assert xdg_config_home.endswith("ai-kanban/_runtime/opencode-config")
+    agent_file = tmp_path / "ai-kanban" / "_runtime" / "opencode-config" / "opencode" / "agents" / "fs-kanban-planner.md"
+    assert agent_file.exists()
+    assert "FS Kanban Planner" in agent_file.read_text()

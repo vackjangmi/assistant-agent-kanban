@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import threading
 from pathlib import Path
 from typing import Callable
 
+from .agent_materializer import ensure_runtime_agent, runtime_config_home
 from .config import AppConfig
 from .exceptions import AdapterRunError
 from .log_parser import render_opencode_event_line
@@ -38,14 +40,18 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> RunResult:
         command = [config.opencode.binary, "run"]
+        ensure_runtime_agent(config, agent)
         if config.opencode.attach_url:
             command.extend(["--attach", config.opencode.attach_url])
         command.extend(["--agent", agent, "--format", "json", "--", prompt])
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
+        env = os.environ.copy()
+        env["XDG_CONFIG_HOME"] = str(runtime_config_home(config))
         try:
             process = subprocess.Popen(
                 command,
                 cwd=str(cwd),
+                env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
