@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import asyncio
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..enums import TaskState
-from ..exceptions import TaskNotFoundError, TransitionError
+from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..repo_discovery import discover_target_repos
 from ..request_creator import RequestTemplateData, build_default_scope_sections, create_request, split_lines
 
@@ -26,6 +27,10 @@ class CreateRequestPayload(BaseModel):
 
 class UpdateMarkdownPayload(BaseModel):
     content: str
+
+
+class HumanVerificationPayload(BaseModel):
+    note: str = ""
 
 
 def build_router() -> APIRouter:
@@ -120,12 +125,32 @@ def build_router() -> APIRouter:
         await runtime.rescan_and_publish()
         return moved.metadata
 
-    @router.post("/api/tasks/{task_id}/approve-integration")
-    async def approve_integration(task_id: str, request: Request):
+    @router.post("/api/tasks/{task_id}/start-verification")
+    async def start_verification(task_id: str, request: Request):
         runtime = request.app.state.runtime
         try:
-            moved = runtime.planner.transitions.manual_move(task_id, TaskState.INTEGRATION_TEST_COMPLETED, by="human")
-        except TransitionError as exc:
+            moved = await asyncio.to_thread(runtime.verification_service.start, task_id, by="human")
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
+    @router.post("/api/tasks/{task_id}/reject-verification")
+    async def reject_verification(task_id: str, payload: HumanVerificationPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            moved = await asyncio.to_thread(runtime.verification_service.reject, task_id, by="human", note=payload.note)
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
+    @router.post("/api/tasks/{task_id}/approve-verification")
+    async def approve_verification(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            moved = await asyncio.to_thread(runtime.verification_service.approve, task_id, by="human")
+        except (TransitionError, TaskNotFoundError, CommitError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return moved.metadata

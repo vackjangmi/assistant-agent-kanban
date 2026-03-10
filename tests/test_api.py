@@ -8,9 +8,49 @@ from fastapi.testclient import TestClient
 from fs_kanban_agent.api.app import create_app
 from fs_kanban_agent.config import PROJECT_ROOT
 from fs_kanban_agent.enums import TaskState
+from fs_kanban_agent.events import EventBus
+from fs_kanban_agent.locks import TaskLockManager
+from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.scanner import KanbanScanner
+from fs_kanban_agent.transitions import TransitionManager
+from fs_kanban_agent.workspace_manager import WorkspaceManager
+from fs_kanban_agent.workers.implementer import ImplementerWorker
 
 from .conftest import FakeAdapter, create_request_task
+
+
+def _task_ready_for_completed_reviews(config, task_name: str):
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = next(task for task in scanner.scan() if task.metadata.title == task_name)
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd: Path):
+        (cwd / "app.txt").write_text("review me\n")
+
+    implementer = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        workspace_manager=WorkspaceManager(config),
+    )
+    import asyncio
+
+    asyncio.run(implementer.run_once())
+    waiting_reviews = next(task for task in scanner.scan() if task.metadata.title == task_name and task.state == TaskState.WAITING_REVIEWS)
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    return scanner, completed
 
 
 def test_api_exposes_health_board_task_and_events(configured_paths):
@@ -99,6 +139,42 @@ def test_api_rejects_plan_md_edit_outside_waiting_check_plans(configured_paths):
     assert response.status_code == 409
 
 
+def test_api_supports_human_verification_start_and_reject(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-api-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-api-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+        assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
+        assert (repo_root / "app.txt").read_text() == "review me\n"
+
+        reject = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/reject-verification",
+            json={"note": "Need another pass."},
+        )
+        assert reject.status_code == 200
+        assert reject.json()["state"] == TaskState.TODOS.value
+        assert (repo_root / "app.txt").read_text() == "hello\n"
+
+
+def test_api_supports_human_verification_approve(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-approve-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-approve-task")
+
+    with TestClient(app) as client:
+        client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+        assert approve.status_code == 200
+        assert approve.json()["state"] == TaskState.DONE.value
+
+
 def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):
     config, _, _ = configured_paths
     target_repo = tmp_path / "target-repo"
@@ -185,6 +261,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "worker_log" in response.text
     assert "data-active-since" in response.text
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
+    assert "/api/tasks/${activeTaskId}/start-verification" in response.text
+    assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
+    assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
+    assert "Approve &amp; commit" in response.text
     assert f'const defaultTargetRepo = "{PROJECT_ROOT.parent}";' in response.text
 
 

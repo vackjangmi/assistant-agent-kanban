@@ -71,6 +71,9 @@ def build_ui_router() -> APIRouter:
     .task-section {{ margin-bottom: 16px; }}
     .task-section h3 {{ margin-bottom: 8px; }}
     .task-list {{ margin: 0; padding-left: 18px; color: var(--muted); }}
+    .verification-actions {{ border: 1px solid var(--border); background: rgba(255,249,239,0.9); padding: 14px; margin-bottom: 14px; }}
+    .verification-actions[hidden] {{ display: none; }}
+    .verification-actions textarea {{ width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
     .log-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; }}
     .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
     .log-file-list button {{ text-align: left; }}
@@ -201,6 +204,23 @@ def build_ui_router() -> APIRouter:
         <button type="button" id="task-tab-logs">Logs</button>
       </div>
       <section id="task-panel-overview" class="task-panel">
+        <section id="task-verification-actions" class="verification-actions" hidden>
+          <div class="editor-toolbar">
+            <div>
+              <strong id="task-verification-title">Human verification</strong>
+              <div id="task-verification-status" class="muted">Manual verification actions appear here.</div>
+            </div>
+            <div>
+              <button type="button" id="start-verification" hidden>Start verification</button>
+              <button type="button" id="reject-verification" hidden>Reject to TODO</button>
+              <button type="button" id="approve-verification" class="primary" hidden>Approve &amp; commit</button>
+            </div>
+          </div>
+          <div id="task-verification-note-wrap" hidden>
+            <label for="task-verification-note"><strong>Follow-up requirements</strong></label>
+            <textarea id="task-verification-note" placeholder="Explain what must change before the task returns to TODO."></textarea>
+          </div>
+        </section>
         <div id="task-overview" class="muted">Select a task to inspect.</div>
       </section>
       <section id="task-panel-logs" class="task-panel" hidden>
@@ -262,6 +282,13 @@ def build_ui_router() -> APIRouter:
     const taskPanelOverview = document.getElementById('task-panel-overview');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelEditor = document.getElementById('task-panel-editor');
+    const taskVerificationActions = document.getElementById('task-verification-actions');
+    const taskVerificationStatus = document.getElementById('task-verification-status');
+    const taskVerificationNoteWrap = document.getElementById('task-verification-note-wrap');
+    const taskVerificationNote = document.getElementById('task-verification-note');
+    const startVerificationButton = document.getElementById('start-verification');
+    const rejectVerificationButton = document.getElementById('reject-verification');
+    const approveVerificationButton = document.getElementById('approve-verification');
     const taskLogFiles = document.getElementById('task-log-files');
     const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
@@ -304,7 +331,7 @@ def build_ui_router() -> APIRouter:
     }}
 
     function isActiveState(state) {{
-      return ['planning', 'implementing', 'reviewing'].includes(state);
+      return ['planning', 'implementing', 'reviewing', 'human-verifying'].includes(state);
     }}
 
     function renderRunningMeta(item) {{
@@ -531,6 +558,26 @@ def build_ui_router() -> APIRouter:
       approvePlanButton.disabled = !editableArtifact;
     }}
 
+    function updateHumanVerificationState() {{
+      const state = activeTaskDetail?.metadata?.state;
+      const canStart = state === 'completed-reviews';
+      const canVerify = state === 'human-verifying';
+      taskVerificationActions.hidden = !(canStart || canVerify);
+      startVerificationButton.hidden = !canStart;
+      rejectVerificationButton.hidden = !canVerify;
+      approveVerificationButton.hidden = !canVerify;
+      taskVerificationNoteWrap.hidden = !canVerify;
+      rejectVerificationButton.disabled = !canVerify || !taskVerificationNote.value.trim();
+      approveVerificationButton.disabled = !canVerify;
+      if (canStart) {{
+        taskVerificationStatus.textContent = 'AI review passed. Start verification to apply the workspace patch to the target repo for manual checking.';
+      }} else if (canVerify) {{
+        taskVerificationStatus.textContent = 'Patch is applied in the target repo. Reject rolls it back and sends the task back to TODO; approve commits and completes the task.';
+      }} else {{
+        taskVerificationStatus.textContent = 'Manual verification actions appear here.';
+      }}
+    }}
+
     function stopLogPolling() {{
       if (logPollHandle) {{
         clearInterval(logPollHandle);
@@ -559,6 +606,7 @@ def build_ui_router() -> APIRouter:
       taskModeBadge.textContent = 'Viewer mode';
       taskEditorStatus.textContent = planEditable ? 'Rendered markdown preview. Use Edit PLAN.md only when you want to change the document.' : 'Rendered markdown preview only for this task state.';
       updatePlanActionState();
+      updateHumanVerificationState();
       renderArtifactButtons(detail.markdown_files);
       taskOverview.innerHTML = `
         <div class="task-meta-grid">
@@ -665,6 +713,8 @@ def build_ui_router() -> APIRouter:
       savePlanButton.disabled = true;
       taskModeBadge.textContent = 'Viewer mode';
       taskEditorStatus.textContent = 'Select a markdown artifact to view.';
+      taskVerificationNote.value = '';
+      updateHumanVerificationState();
       taskTabEditor.hidden = true;
       setTaskTab(nextTab);
       setTaskModalOpen(true);
@@ -782,6 +832,73 @@ def build_ui_router() -> APIRouter:
       }}
     }}
 
+    async function startVerification() {{
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'completed-reviews') return;
+      startVerificationButton.disabled = true;
+      taskVerificationStatus.textContent = 'Applying patch to target repo and starting human verification...';
+      try {{
+        const response = await fetch(`/api/tasks/${{activeTaskId}}/start-verification`, {{ method: 'POST' }});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to start verification.');
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskVerificationStatus.textContent = 'Failed to start verification.';
+      }} finally {{
+        updateHumanVerificationState();
+      }}
+    }}
+
+    async function rejectVerification() {{
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
+      const note = taskVerificationNote.value.trim();
+      if (!note) return;
+      rejectVerificationButton.disabled = true;
+      approveVerificationButton.disabled = true;
+      taskVerificationStatus.textContent = 'Rolling back patch and sending task back to TODO...';
+      try {{
+        const response = await fetch(`/api/tasks/${{activeTaskId}}/reject-verification`, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ note }}),
+        }});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to reject verification.');
+        taskVerificationNote.value = '';
+        await loadBoard();
+        setTaskModalOpen(false);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskVerificationStatus.textContent = 'Failed to reject verification.';
+      }} finally {{
+        updateHumanVerificationState();
+      }}
+    }}
+
+    async function approveVerification() {{
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
+      rejectVerificationButton.disabled = true;
+      approveVerificationButton.disabled = true;
+      taskVerificationStatus.textContent = 'Creating commit in target repo...';
+      try {{
+        const response = await fetch(`/api/tasks/${{activeTaskId}}/approve-verification`, {{ method: 'POST' }});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to approve verification.');
+        taskVerificationNote.value = '';
+        await loadBoard();
+        setTaskModalOpen(false);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskVerificationStatus.textContent = 'Failed to approve verification.';
+      }} finally {{
+        updateHumanVerificationState();
+      }}
+    }}
+
     function validateForm() {{
       const data = new FormData(requestForm);
       const errors = {{}};
@@ -847,6 +964,10 @@ def build_ui_router() -> APIRouter:
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
+    taskVerificationNote.addEventListener('input', updateHumanVerificationState);
+    startVerificationButton.addEventListener('click', startVerification);
+    rejectVerificationButton.addEventListener('click', rejectVerification);
+    approveVerificationButton.addEventListener('click', approveVerification);
     ['title', 'goal', 'target_repo', 'base_branch'].forEach((name) => {{ requestForm.elements[name].addEventListener('blur', validateForm); }});
     targetRepoInput.addEventListener('input', applyRepoDefaults);
     targetRepoInput.addEventListener('change', applyRepoDefaults);
