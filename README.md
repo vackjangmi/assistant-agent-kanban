@@ -26,6 +26,7 @@ exposes a small FastAPI dashboard with SSE updates.
 - Workspaces are created outside task directories under `_runtime/workspaces`
 - Review pass is required before integration patch apply
 - Final commit happens only from `integration-test-completed -> done`
+- Each task can override its target repository and base branch via `REQUEST.md` frontmatter
 
 ## Install
 
@@ -49,6 +50,46 @@ uvicorn fs_kanban_agent.api.main:app
 
 This uses `create_default_app()`, which loads default config and injects real
 `SubprocessOpenCodeAdapter` instances.
+
+## Create a request task
+
+The easiest way to bind a task to a specific target project is the CLI helper:
+
+```bash
+fs-kanban-agent request "Refactor login flow" \
+  --target-repo /path/to/target-project \
+  --kanban-root ./ai-kanban \
+  --base-branch main
+```
+
+This writes a new `REQUEST.md` under `requests/` with frontmatter describing the
+task target. The scanner bootstraps that into task metadata and later workers use
+ the task-level target repo for workspace creation, review, integration, and commit.
+
+You can also create requests directly from the dashboard at `/`. The inline form
+collects the fields needed to generate the same structured `REQUEST.md` template:
+title, goal, background, scope, out of scope, constraints, references,
+acceptance criteria, target repo, and base branch.
+
+The target repo field also supports nearby directory suggestions through a
+configurable dropdown. By default it scans sibling directories near the current
+repo, and you can control that with `repo_discovery.root` and
+`repo_discovery.max_depth`.
+
+You can also author the request file manually:
+
+```md
+---
+title: Refactor login flow
+target:
+  repo_root: /path/to/target-project
+  base_branch: main
+---
+
+# Refactor login flow
+
+Implement the requested refactor.
+```
 
 ## Minimal Python bootstrap
 
@@ -83,11 +124,13 @@ uvicorn mymodule:app
 Use `examples/config.yaml` as a starting point. Important settings:
 
 - `kanban_root` - filesystem kanban state root
-- `repo_root` - clean integration repository
+- `repo_root` - default integration repository when a task does not override its target
 - `base_branch` - base branch for isolated workspaces
 - `opencode.*` - adapter binary, agent names, attach URL, timeout
 - `workspace.*` - clone-overlay root plus overlay copy/symlink entries
 - `locks.*` - heartbeat, stale timeout, lock timeout
+- `repo_discovery.root` - root directory to scan for target repo suggestions in the dashboard
+- `repo_discovery.max_depth` - how many nested directory levels to include in those suggestions
 
 ## Testing strategy
 

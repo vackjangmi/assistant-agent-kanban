@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fs_kanban_agent.config import AppConfig
+from fs_kanban_agent.config import PROJECT_ROOT, AppConfig
 from fs_kanban_agent.enums import STATE_ORDER
 
 
@@ -16,3 +16,4 @@ def test_app_config_bootstrap_creates_state_and_runtime_dirs(tmp_path):
     assert config.events_dir.is_dir()
     assert config.workspace.root is not None
     assert config.workspace.root.is_dir()
+    assert config.repo_discovery.root == PROJECT_ROOT.parent

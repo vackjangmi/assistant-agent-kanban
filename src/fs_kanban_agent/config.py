@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 from .enums import STATE_ORDER, TaskState
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
 class OpenCodeConfig(BaseModel):
     binary: str = "opencode"
     attach_url: str | None = "http://127.0.0.1:4096"
@@ -36,6 +39,11 @@ class RuntimeConfig(BaseModel):
     auto_dispatch: bool = True
 
 
+class RepoDiscoveryConfig(BaseModel):
+    root: Path | None = None
+    max_depth: int = 2
+
+
 class AppConfig(BaseModel):
     kanban_root: Path = Path("./ai-kanban")
     repo_root: Path = Path(".")
@@ -44,6 +52,7 @@ class AppConfig(BaseModel):
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     locks: LocksConfig = Field(default_factory=LocksConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    repo_discovery: RepoDiscoveryConfig = Field(default_factory=RepoDiscoveryConfig)
 
     def bootstrap(self) -> None:
         self.kanban_root.mkdir(parents=True, exist_ok=True)
@@ -59,6 +68,8 @@ class AppConfig(BaseModel):
             (self.kanban_root / relative).mkdir(parents=True, exist_ok=True)
         if self.workspace.root is None:
             self.workspace.root = self.kanban_root / "_runtime/workspaces"
+        if self.repo_discovery.root is None:
+            self.repo_discovery.root = PROJECT_ROOT.parent
 
     def state_dir(self, state: TaskState) -> Path:
         return self.kanban_root / state.value
