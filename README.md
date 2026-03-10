@@ -1,16 +1,16 @@
 # FS Kanban Agent
 
 `fs-kanban-agent` is a filesystem-backed orchestration service for OpenCode-based
-planner, implementer, reviewer, and committer workers. It keeps workflow state in
-task directories plus `metadata.json`, runs implementation in isolated
-workspaces, applies reviewed patches back to an integration repository, and
-exposes a small FastAPI dashboard with SSE updates.
+planner, implementer, and reviewer workers. It keeps workflow state in task
+directories plus `metadata.json`, runs implementation in isolated workspaces,
+supports human verification against the target repository, and exposes a small
+FastAPI dashboard with SSE updates.
 
 ## What is included
 
 - `src/fs_kanban_agent/` - domain models, workers, runtime supervisor, FastAPI app
 - `tests/` - scanner, locks, transitions, workers, recovery, and API coverage
-- `.opencode/agents/` - prompt contracts for planner, implementer, reviewer, committer
+- `.opencode/agents/` - prompt contracts for planner, implementer, and reviewer
 - `examples/config.yaml` - sample configuration
 - `examples/bootstrap/README.md` - bootstrap guidance for a kanban root
 - `docs/` - source design and planning documents used for the implementation
@@ -20,12 +20,13 @@ exposes a small FastAPI dashboard with SSE updates.
 - Filesystem state plus `metadata.json` is the source of truth
 - Allowed states are `requests`, `planning`, `waiting-check-plans`, `todos`,
   `implementing`, `waiting-reviews`, `reviewing`, `completed-reviews`,
-  `integration-test-completed`, and `done`
+  `human-verifying`, and `done`
 - Only documented transitions are allowed
 - Human approvals remain explicit through lock-safe manual transitions
 - Workspaces are created outside task directories under `_runtime/workspaces`
-- Review pass is required before integration patch apply
-- Final commit happens only from `integration-test-completed -> done`
+- Review pass is required before human verification can start
+- Target repo patch apply happens only when human verification starts
+- Final commit happens only from `human-verifying -> done`
 - Each task can override its target repository and base branch via `REQUEST.md` frontmatter
 
 ## Install
@@ -90,7 +91,8 @@ fs-kanban-agent request "Refactor login flow" \
 
 This writes a new `REQUEST.md` under `requests/` with frontmatter describing the
 task target. The scanner bootstraps that into task metadata and later workers use
- the task-level target repo for workspace creation, review, integration, and commit.
+the task-level target repo for workspace creation, review, human verification,
+and commit.
 
 You can also create requests directly from the dashboard at `/`. The popup form
 collects the fields needed to generate the same structured `REQUEST.md` template:
@@ -159,7 +161,9 @@ uvicorn mymodule:app
 - `GET /api/tasks/{task_id}/logs`
 - `GET /api/events`
 - `POST /api/tasks/{task_id}/approve-plan`
-- `POST /api/tasks/{task_id}/approve-integration`
+- `POST /api/tasks/{task_id}/start-verification`
+- `POST /api/tasks/{task_id}/reject-verification`
+- `POST /api/tasks/{task_id}/approve-verification`
 - `GET /`
 
 ## Configuration
@@ -167,7 +171,7 @@ uvicorn mymodule:app
 Use `examples/config.yaml` as a starting point. Important settings:
 
 - `kanban_root` - filesystem kanban state root
-- `repo_root` - default integration repository when a task does not override its target
+- `repo_root` - default target repository when a task does not override its target
 - `base_branch` - base branch for isolated workspaces
 - `opencode.*` - adapter binary, agent names, attach URL, timeout
 - `workspace.*` - clone-overlay root plus overlay copy/symlink entries
@@ -180,7 +184,7 @@ Use `examples/config.yaml` as a starting point. Important settings:
 The suite uses:
 
 - temporary kanban roots
-- temporary git repositories for workspace/integration behavior
+- temporary git repositories for workspace and human-verification behavior
 - fake OpenCode adapters for deterministic planner/implementer/reviewer runs
 - FastAPI `TestClient` for API coverage
 
