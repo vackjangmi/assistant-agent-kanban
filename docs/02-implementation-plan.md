@@ -153,8 +153,9 @@ tests/
 - waiting-reviews -> reviewing
 - reviewing -> todos
 - reviewing -> completed-reviews
-- completed-reviews -> integration-test-completed
-- integration-test-completed -> done
+- completed-reviews -> human-verifying
+- human-verifying -> todos
+- human-verifying -> done
 
 ### acceptance criteria
 - 동시에 두 worker가 같은 task를 잡지 못함
@@ -289,9 +290,7 @@ git clone --reference-if-able <repo_root> --dissociate <repo_root> <workspace_re
 - `todos` 이동
 
 #### verdict = PASS
-- IntegrationManager 실행
-- integration 성공 시 `completed-reviews`
-- integration conflict 시 `todos` 복귀 + error 기록
+- `completed-reviews` 이동
 
 ### reviewer prompt 계약
 최종 응답에는 아래가 있어야 한다.
@@ -303,27 +302,27 @@ git clone --reference-if-able <repo_root> --dissociate <repo_root> <workspace_re
 - Integration Readiness
 - Required Follow-ups
 
-### IntegrationManager 할 일
+### Human verification 시작 시 할 일
 1. workspace diff 생성
-2. integration repo clean 확인
+2. target repo clean 확인
 3. patch 생성
 4. patch apply (`git apply --3way --index`)
 5. metadata.integration 갱신
 
 ### acceptance criteria
 - review pass/fail이 분기됨
-- pass인데 integration conflict가 나면 `todos` 로 되돌아감
-- `completed-reviews` 시점에는 integration repo에서 사람이 실행 가능
+- `completed-reviews` 시점에는 아직 target repo를 건드리지 않음
+- `human-verifying` 시점에는 target repo에서 사람이 실행 가능
 
 ---
 
 ## Phase 7 — CommitWorker
 
 ### 입력 상태
-- `integration-test-completed`
+- `human-verifying`
 
 ### 흐름
-1. integration repo 상태 검증
+1. target repo 상태 검증
 2. commit prompt 또는 규칙 기반 commit message 생성
 3. `COMMIT.md` 저장
 4. `git commit`
@@ -331,7 +330,7 @@ git clone --reference-if-able <repo_root> --dissociate <repo_root> <workspace_re
 6. `done` 이동
 
 ### acceptance criteria
-- 사람이 `completed-reviews -> integration-test-completed` 로 옮기면 자동 commit
+- 사람이 `human-verifying -> done` 승인 시 commit 수행
 - commit sha가 metadata와 `COMMIT.md`에 기록됨
 - commit 실패 시 done으로 이동하지 않음
 
@@ -457,8 +456,8 @@ locks:
 - request 생성 -> plan 생성
 - todos 이동 -> implementation -> review
 - review fail -> todos 복귀
-- review pass -> integration apply
-- integration-test-completed -> done
+- review pass -> completed-reviews
+- completed-reviews -> human-verifying -> done
 - server restart recovery
 
 ### e2e smoke
@@ -475,9 +474,9 @@ locks:
 
 1. 상태 디렉토리만으로 workflow가 추적된다
 2. metadata/lock/recovery가 동작한다
-3. planner/implementer/reviewer/committer가 자동 실행된다
+3. planner/implementer/reviewer가 자동 실행된다
 4. 구현은 isolated workspace에서 수행된다
-5. review pass 후 integration repo에서 사람이 실제로 실행 가능하다
+5. human verification 시작 후 target repo에서 사람이 실제로 실행 가능하다
 6. FastAPI board에서 상태가 실시간 반영된다
 7. 테스트가 작성되어 있다
 

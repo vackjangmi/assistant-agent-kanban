@@ -72,7 +72,7 @@ repo-root/
 │  ├─ waiting-reviews/
 │  ├─ reviewing/
 │  ├─ completed-reviews/
-│  ├─ integration-test-completed/
+│  ├─ human-verifying/
 │  ├─ done/
 │  └─ _runtime/
 │     ├─ locks/
@@ -103,7 +103,7 @@ repo-root/
 - `waiting-reviews`
 - `reviewing`
 - `completed-reviews`
-- `integration-test-completed`
+- `human-verifying`
 - `done`
 
 ### 전이 규칙
@@ -120,10 +120,11 @@ stateDiagram-v2
 
     waiting-reviews --> reviewing: Reviewer Worker (auto)
     reviewing --> todos: 리뷰 실패 / 수정 필요 (auto)
-    reviewing --> completed-reviews: 리뷰 통과 + integration apply 성공 (auto)
+    reviewing --> completed-reviews: 리뷰 통과 (auto)
 
-    completed-reviews --> integration-test-completed: 사람이 실제 실행 확인 후 이동 (manual)
-    integration-test-completed --> done: Commit Worker가 commit 생성 (auto)
+    completed-reviews --> human-verifying: 사람이 verification 시작 + patch apply (manual)
+    human-verifying --> todos: 사람이 reject + rollback (manual)
+    human-verifying --> done: 사람이 approve + commit (manual)
 ```
 
 ### 전이 정책
@@ -136,19 +137,19 @@ stateDiagram-v2
 - `waiting-reviews -> reviewing`
 - `reviewing -> todos`
 - `reviewing -> completed-reviews`
-- `integration-test-completed -> done`
+- `human-verifying -> todos`
+- `human-verifying -> done`
 
 #### 수동 전이
 - `waiting-check-plans -> todos`
-- `completed-reviews -> integration-test-completed`
+- `completed-reviews -> human-verifying`
 
 ### 중요한 보강 규칙
 
 1. **허용되지 않은 수동 전이**는 UI/로그에 경고하고 worker가 집지 않게 한다.
-2. `completed-reviews`는 단순 “리뷰 통과”가 아니라  
-   **integration repo에 코드가 적용되어 사람이 돌려볼 수 있는 상태**여야 한다.
-3. `done`으로 가는 순간에만 최종 commit을 만든다.  
-   그 전까지는 integration repo에 **커밋되지 않은 적용 상태**를 유지하는 것이 좋다.
+2. `completed-reviews`는 **AI review 통과 후 사람이 verification 시작을 대기하는 상태**다.
+3. `human-verifying`에 들어갈 때만 target repo에 patch를 적용한다.
+4. `done`으로 가는 순간에만 최종 commit을 만든다.
 
 ---
 
@@ -504,21 +505,20 @@ Planner agent는 파일을 직접 수정하지 말고 **markdown 결과만 stdou
 3. review prompt 실행
 4. `REVIEW-{n}.md` 생성
 5. verdict가 `NEEDS_CHANGES` 이면 `todos` 로 이동
-6. verdict가 `PASS` 이면 integration repo에 patch 적용 시도
-7. integration 성공 시 `completed-reviews` 로 이동
-8. integration conflict 시 `todos` 로 되돌리고 error 기록
+6. verdict가 `PASS` 이면 `completed-reviews` 로 이동
 
-### 4) CommitWorker
+### 4) Human Verification
 
 #### 입력 상태
-- `integration-test-completed`
+- `completed-reviews`
 
 #### 동작
-1. integration repo가 현재 task의 변경만 가진 상태인지 확인
-2. AI 또는 규칙 기반으로 commit message 생성
-3. `git commit`
-4. `COMMIT.md` 기록
-5. `done` 이동
+1. 사람이 verification 시작
+2. target repo clean 확인
+3. workspace patch apply
+4. `human-verifying` 이동
+5. reject면 rollback 후 `todos`
+6. approve면 commit 후 `done`
 
 ---
 
@@ -600,16 +600,16 @@ workspace:
 ## integration 전략
 
 리뷰 통과 후 사람이 “원본 코드에서 실제 실행” 해볼 수 있어야 한다.  
-즉, review success 뒤에는 **integration repo에 아직 commit되지 않은 형태로 변경이 반영**되어 있어야 한다.
+즉, human verification 중에는 **target repo에 아직 commit되지 않은 형태로 변경이 반영**되어 있어야 한다.
 
 ### 권장 흐름
 
 1. workspace repo에서 base branch 대비 patch 생성
-2. integration repo가 clean한지 확인
-3. integration repo에서 patch 적용
-4. 성공하면 `completed-reviews`
-5. 사람이 테스트 후 `integration-test-completed` 로 수동 이동
-6. CommitWorker가 commit하고 `done`
+2. 사람이 verification 시작을 누를 때 target repo가 clean한지 확인
+3. target repo에서 patch 적용
+4. 성공하면 `human-verifying`
+5. 사람이 reject하면 rollback 후 `todos`
+6. 사람이 approve하면 commit 후 `done`
 
 ### patch 적용 방법
 
@@ -622,12 +622,12 @@ git apply --3way --index patch.diff
 `git apply --3way` 는 blob identity가 있는 patch를 바탕으로 3-way merge를 시도할 수 있다.  
 충돌이 나면 implement 단계로 되돌려 rebase/재적용하게 하는 것이 낫다.
 
-### integration repo clean rule
+### target repo clean rule
 
 반드시 전제 조건을 둔다.
 
-- integration repo에는 **이 시스템이 관리하지 않는 미완료 변경이 없어야 한다**
-- 사람이 integration 테스트를 하는 기준 작업 트리는 **전용/청결 상태**여야 한다
+- target repo에는 **이 시스템이 관리하지 않는 미완료 변경이 없어야 한다**
+- 사람이 verification 하는 기준 작업 트리는 **전용/청결 상태**여야 한다
 
 이 규칙이 없으면 rollback이 매우 복잡해진다.
 
@@ -646,12 +646,11 @@ integration apply 실패 시:
 
 ### 권장 운영 규칙
 
-1. `repo_root` = 사람이 테스트하는 integration 작업 트리
+1. `repo_root` = 사람이 verification 하는 target 작업 트리
 2. 이 작업 트리는 항상 clean 상태로 유지
 3. 실제 구현은 `_runtime/workspaces/{task_id}/repo` 에서만 수행
-4. review 통과 시에만 `repo_root` 에 patch 반영
-5. 사람이 테스트 끝나면 `integration-test-completed` 로 이동
-6. CommitWorker가 commit 후 clean 상태로 회복
+4. 사람이 verification 시작 시에만 `repo_root` 에 patch 반영
+5. reject면 rollback 후 `todos`, approve면 commit 후 `done`
 
 이렇게 하면:
 
@@ -795,7 +794,7 @@ task 폴더 안에는 **요약 로그만** 두고, 상세 로그는 `_runtime/ru
 ### 1) task 디렉토리 안에 workspace를 두지 말 것
 상태 이동이 너무 비싸진다.
 
-### 2) integration repo는 clean 유지 규칙이 꼭 필요
+### 2) target repo는 clean 유지 규칙이 꼭 필요
 사람이 동시에 다른 수동 작업을 하면 rollback이 꼬인다.
 
 ### 3) planner/reviewer는 read-only 출력형으로 만드는 것이 안전

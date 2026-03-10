@@ -55,7 +55,7 @@
 ### 5. Integration
 구현할 것:
 - workspace diff 생성
-- integration repo clean 검사
+- target repo clean 검사
 - patch apply (`git apply --3way --index`)
 - conflict 시 `todos` 복귀
 
@@ -77,7 +77,7 @@
 4. planner/reviewer는 read-only output 중심으로 설계하라.
 5. oh-my-opencode 내부 state 파일을 state source로 사용하지 마라.
 6. 구현 격리는 clone-overlay를 기본값으로 하라.
-7. review 통과 후에만 integration repo에 patch를 반영하라.
+7. review 통과 후에만 human verification 시작을 허용하라.
 
 ---
 
@@ -108,15 +108,16 @@
 ### reviewing
 - review 진행
 - fail이면 `todos`
-- pass이면 integration apply 후 `completed-reviews`
+- pass이면 `completed-reviews`
 
 ### completed-reviews
-- integration repo에 코드 반영 완료
-- 사람이 실제 실행 확인 가능
+- AI review 통과
+- 사람이 verification 시작을 대기
 
-### integration-test-completed
-- 사람이 테스트 완료 후 이동
-- commit worker가 최종 commit 수행
+### human-verifying
+- 사람이 verification 시작 시 target repo에 patch 적용
+- reject면 rollback 후 `todos`
+- approve면 commit 후 `done`
 
 ### done
 - 완료
@@ -145,7 +146,7 @@
 4. workspace manager
 5. implementer worker
 6. reviewer worker + integration manager
-7. committer worker
+7. human verification flow
 8. FastAPI + SSE
 9. recovery
 10. 테스트 보강
@@ -160,7 +161,7 @@
 - 사람이 `todos` 로 옮기면 implementer가 workspace에서 작업한다
 - implement 완료 시 review 대기 상태로 이동한다
 - reviewer가 fail/pass를 분기한다
-- pass 시 integration repo에 patch가 반영된다
-- 사람이 테스트 후 `integration-test-completed` 로 옮기면 commit 후 done으로 이동한다
+- 사람이 verification 시작 시 target repo에 patch가 반영된다
+- reject면 rollback 후 `todos`, approve면 commit 후 `done` 으로 이동한다
 - board API와 SSE UI에서 전체 상태가 보인다
 - 테스트가 있다

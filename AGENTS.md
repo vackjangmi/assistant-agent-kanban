@@ -16,7 +16,7 @@
 
 - 상태 디렉토리 기반 workflow
 - `opencode run` 으로 각 단계 수행
-- planner / implementer / reviewer / committer worker
+- planner / implementer / reviewer worker
 - isolated workspace (`clone-overlay`)
 - metadata / lock / recovery
 - FastAPI + SSE 칸반 대시보드
@@ -27,9 +27,10 @@
 2. `oh-my-opencode` 내부 state 파일에 의존하지 않는다.
 3. **task 디렉토리와 코드 workspace는 분리**한다.
 4. 구현은 workspace에서만 한다.
-5. review 통과 후에만 integration repo에 patch를 반영한다.
-6. 최종 commit은 `integration-test-completed -> done` 에서만 수행한다.
-7. lock 없이 task state를 바꾸지 않는다.
+5. review 통과 후에만 human verification 을 시작할 수 있다.
+6. target repo patch apply 는 `completed-reviews -> human-verifying` 에서만 수행한다.
+7. 최종 commit은 `human-verifying -> done` 에서만 수행한다.
+8. lock 없이 task state를 바꾸지 않는다.
 
 ## 상태 디렉토리
 
@@ -43,7 +44,7 @@
 - `waiting-reviews`
 - `reviewing`
 - `completed-reviews`
-- `integration-test-completed`
+- `human-verifying`
 - `done`
 
 ## 허용 전이
@@ -56,8 +57,9 @@
 - `waiting-reviews -> reviewing`
 - `reviewing -> todos`
 - `reviewing -> completed-reviews`
-- `completed-reviews -> integration-test-completed`
-- `integration-test-completed -> done`
+- `completed-reviews -> human-verifying`
+- `human-verifying -> todos`
+- `human-verifying -> done`
 
 허용되지 않은 전이는 코드로 막아라.
 
@@ -129,7 +131,6 @@
 - planner worker
 - implementer worker
 - reviewer worker
-- committer worker
 - recovery
 - board API
 
