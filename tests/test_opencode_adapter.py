@@ -57,6 +57,7 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     adapter = SubprocessOpenCodeAdapter()
     config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config.opencode.planner_model = "openai/gpt-5.4"
     config.bootstrap()
 
     adapter.run(
@@ -75,4 +76,5 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     assert xdg_config_home.endswith("ai-kanban/_runtime/opencode-config")
     agent_file = tmp_path / "ai-kanban" / "_runtime" / "opencode-config" / "opencode" / "agents" / "fs-kanban-planner.md"
     assert agent_file.exists()
+    assert agent_file.read_text().startswith("---\nmodel: openai/gpt-5.4\n---\n")
     assert "FS Kanban Planner" in agent_file.read_text()

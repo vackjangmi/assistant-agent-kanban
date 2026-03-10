@@ -15,9 +15,13 @@ class OpenCodeConfig(BaseModel):
     binary: str = "opencode"
     attach_url: str | None = None
     planner_agent: str = "fs-kanban-planner"
+    planner_model: str | None = None
     implementer_agent: str = "fs-kanban-implementer"
+    implementer_model: str | None = None
     reviewer_agent: str = "fs-kanban-reviewer"
+    reviewer_model: str | None = None
     commit_agent: str = "fs-kanban-committer"
+    commit_model: str | None = None
     timeout_seconds: int = 1800
 
 
