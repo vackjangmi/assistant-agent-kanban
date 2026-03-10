@@ -28,12 +28,23 @@ class FakeAdapter(OpenCodeAdapter):
         self.returncode = returncode
         self.stderr = stderr
 
-    def run(self, *, agent: str, prompt: str, cwd: Path, run_log_path: Path, config: AppConfig) -> RunResult:
+    def run(
+        self,
+        *,
+        agent: str,
+        prompt: str,
+        cwd: Path,
+        run_log_path: Path,
+        config: AppConfig,
+        on_log_line: Callable[[str, str | None], None] | None = None,
+    ) -> RunResult:
         if self.side_effect is not None:
             self.side_effect(cwd)
         content = self.responses.pop(0) if self.responses else f"{agent}: ok"
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         run_log_path.write_text(content + "\n")
+        if on_log_line is not None:
+            on_log_line(content, content)
         return RunResult(
             ok=self.ok,
             returncode=self.returncode,

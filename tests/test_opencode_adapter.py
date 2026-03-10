@@ -36,11 +36,23 @@ def test_extract_assistant_text_reads_text_part_event():
 def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path):
     recorded: dict[str, object] = {}
 
-    def fake_run(command, **kwargs):
-        recorded["command"] = command
-        return subprocess.CompletedProcess(command, 0, stdout='{"type":"final","content":"ok"}\n', stderr="")
+    class FakeProcess:
+        def __init__(self, command):
+            self.command = command
+            self.stdout = ['{"type":"final","content":"ok"}\n']
+            self.stderr = []
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
     adapter = SubprocessOpenCodeAdapter()
     config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
     config.bootstrap()
