@@ -34,7 +34,7 @@ ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.PLANNING: {TaskState.WAITING_CHECK_PLANS},
     TaskState.WAITING_CHECK_PLANS: {TaskState.TODOS},
     TaskState.TODOS: {TaskState.IMPLEMENTING},
-    TaskState.IMPLEMENTING: {TaskState.WAITING_REVIEWS},
+    TaskState.IMPLEMENTING: {TaskState.TODOS, TaskState.WAITING_REVIEWS},
     TaskState.WAITING_REVIEWS: {TaskState.REVIEWING},
     TaskState.REVIEWING: {TaskState.TODOS, TaskState.COMPLETED_REVIEWS},
     TaskState.COMPLETED_REVIEWS: {TaskState.HUMAN_VERIFYING},

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -52,10 +53,37 @@ class WorkerBase:
             f"Return the markdown artifact in {requested_language}.",
             "Translate headings and narrative content to that language while preserving the required structure and semantics from the agent contract.",
         ]
+        if phase == "implementer":
+            instructions.append("You must edit files in the current workspace before returning. Do not return a markdown summary unless you made real workspace file changes.")
         if phase == "reviewer":
             instructions.append("Keep one exact machine-readable line: `Verdict: PASS` or `Verdict: NEEDS_CHANGES`.")
         instructions.extend(["", "<task-document>", source_text.rstrip(), "</task-document>"])
         return "\n".join(instructions)
+
+    def workspace_has_changes(self, workspace_repo: Path) -> bool:
+        result = subprocess.run(
+            ["git", "-C", str(workspace_repo), "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return False
+        return bool(result.stdout.strip())
+
+    def workspace_has_local_commits(self, workspace_repo: Path, base_branch: str) -> bool:
+        result = subprocess.run(
+            ["git", "-C", str(workspace_repo), "rev-list", "--count", f"{base_branch}..HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return False
+        try:
+            return int(result.stdout.strip() or "0") > 0
+        except ValueError:
+            return False
 
     def make_log_callback(self, loop: asyncio.AbstractEventLoop, task_id: str, log_name: str):
         def callback(raw_line: str, rendered_line: str | None) -> None:

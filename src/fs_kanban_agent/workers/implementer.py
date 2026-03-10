@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from ..enums import TaskState
+from ..models import TaskErrorInfo
 from ..opencode_adapter import OpenCodeAdapter
 from ..workspace_manager import WorkspaceManager
 from .base import WorkerBase
@@ -39,11 +40,35 @@ class ImplementerWorker(WorkerBase):
                 on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
             )
             implementing.metadata.implementation.iteration += 1
-            implementing.metadata.implementation.last_result = "success" if result.ok else "failure"
+            has_changes = self.workspace_has_changes(workspace_repo)
+            has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
+            success = result.ok and has_changes and not has_local_commits
+            implementing.metadata.implementation.last_result = "success" if success else "failure"
             work_name = f"WORK-{implementing.metadata.implementation.iteration:03d}"
             self.write_result_artifacts(implementing.task_dir, work_name, result)
+            if not has_changes:
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-no-changes", message="implementer produced no workspace changes")
+                )
+            if has_local_commits:
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-local-commits", message="implementer must not create local git commits")
+                )
+            if not result.ok:
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-failed", message=result.stderr.strip() or "implementer run failed")
+                )
             self.metadata_store.save(implementing.task_dir, implementing.metadata)
-            done = self.transitions.move(implementing, TaskState.WAITING_REVIEWS, by=self.worker_name)
+            if success:
+                done = self.transitions.move(implementing, TaskState.WAITING_REVIEWS, by=self.worker_name)
+            else:
+                if not has_changes:
+                    note = "implementation produced no workspace changes"
+                elif has_local_commits:
+                    note = "implementation created local commits"
+                else:
+                    note = "implementation failed"
+                done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=note)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
 
