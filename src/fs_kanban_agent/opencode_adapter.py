@@ -56,4 +56,8 @@ def _extract_assistant_text(stdout: str) -> str:
             return payload.get("content", "")
         if payload.get("type") == "final":
             return payload.get("content", "")
+        if payload.get("type") == "text":
+            part = payload.get("part") or {}
+            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                return part["text"]
     return stdout.strip()

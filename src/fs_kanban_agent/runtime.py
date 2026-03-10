@@ -113,6 +113,6 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     reviewer = ReviewerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=reviewer_adapter, integration_manager=integration_manager)
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
-    task_service = TaskService(scanner)
+    task_service = TaskService(scanner, config.runs_dir)
     recovery = RecoveryService(config, scanner, transitions, locks)
     return RuntimeSupervisor(config, planner, implementer, reviewer, committer, scanner, board_service, task_service, recovery, events)

@@ -21,6 +21,18 @@ def test_extract_assistant_text_prefers_final_event():
     assert _extract_assistant_text(stdout) == "final answer"
 
 
+def test_extract_assistant_text_reads_text_part_event():
+    stdout = "\n".join(
+        [
+            '{"type":"step_start"}',
+            '{"type":"text","part":{"type":"text","text":"## Summary\\n\\nreal markdown"}}',
+            '{"type":"step_finish"}',
+        ]
+    )
+
+    assert _extract_assistant_text(stdout) == "## Summary\n\nreal markdown"
+
+
 def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path):
     recorded: dict[str, object] = {}
 

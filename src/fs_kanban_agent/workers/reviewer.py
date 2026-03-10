@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from ..enums import TaskState
@@ -27,7 +28,8 @@ class ReviewerWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             reviewing = self.transitions.move(task, TaskState.REVIEWING, by=self.worker_name)
             workspace_repo = reviewing.metadata.implementation.workspace
-            result = self.adapter.run(
+            result = await asyncio.to_thread(
+                self.adapter.run,
                 agent=self.config.opencode.reviewer_agent,
                 prompt=(reviewing.task_dir / f"WORK-{reviewing.metadata.implementation.iteration:03d}.md").read_text(),
                 cwd=Path(reviewing.metadata.target.repo_root),
@@ -37,8 +39,8 @@ class ReviewerWorker(WorkerBase):
             reviewing.metadata.review.iteration += 1
             verdict = "PASS" if "Verdict: PASS" in result.assistant_text or "VERDICT: PASS" in result.assistant_text else "NEEDS_CHANGES"
             reviewing.metadata.review.last_verdict = verdict
-            review_name = f"REVIEW-{reviewing.metadata.review.iteration:03d}.md"
-            (reviewing.task_dir / review_name).write_text(result.assistant_text.strip() + "\n")
+            review_name = f"REVIEW-{reviewing.metadata.review.iteration:03d}"
+            self.write_result_artifacts(reviewing.task_dir, review_name, result)
             self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
             if verdict != "PASS":
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review needs changes")
@@ -46,7 +48,7 @@ class ReviewerWorker(WorkerBase):
                 try:
                     if workspace_repo is None:
                         raise IntegrationError("workspace path missing")
-                    self.integration_manager.apply_workspace(reviewing.metadata, workspace_repo=Path(workspace_repo))
+                    await asyncio.to_thread(self.integration_manager.apply_workspace, reviewing.metadata, Path(workspace_repo))
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                     done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
                 except IntegrationError as exc:

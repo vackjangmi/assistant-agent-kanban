@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 class OpenCodeConfig(BaseModel):
     binary: str = "opencode"
-    attach_url: str | None = "http://127.0.0.1:4096"
+    attach_url: str | None = None
     planner_agent: str = "fs-kanban-planner"
     implementer_agent: str = "fs-kanban-implementer"
     reviewer_agent: str = "fs-kanban-reviewer"

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from ..enums import TaskState
 from ..exceptions import AdapterRunError
 from ..opencode_adapter import OpenCodeAdapter
@@ -22,7 +24,8 @@ class PlanningWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             planning = self.transitions.move(task, TaskState.PLANNING, by=self.worker_name)
             prompt = (planning.task_dir / "REQUEST.md").read_text()
-            result = self.adapter.run(
+            result = await asyncio.to_thread(
+                self.adapter.run,
                 agent=self.config.opencode.planner_agent,
                 prompt=prompt,
                 cwd=planning.task_dir,
@@ -38,8 +41,8 @@ class PlanningWorker(WorkerBase):
                 )
                 raise AdapterRunError(result.stderr.strip() or "planner run failed")
             planning.metadata.plan.revision += 1
-            planning.metadata.plan.path = "PLAN.md"
-            (planning.task_dir / "PLAN.md").write_text(result.assistant_text.strip() + "\n")
+            plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", result)
+            planning.metadata.plan.path = plan_path
             self.metadata_store.save(planning.task_dir, planning.metadata)
             done = self.transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by=self.worker_name)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)

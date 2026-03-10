@@ -4,7 +4,7 @@ base_branch: main
 
 opencode:
   binary: opencode
-  attach_url: http://127.0.0.1:4096
+  attach_url: null
   planner_agent: fs-kanban-planner
   implementer_agent: fs-kanban-implementer
   reviewer_agent: fs-kanban-reviewer

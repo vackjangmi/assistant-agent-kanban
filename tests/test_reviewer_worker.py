@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
@@ -83,6 +84,8 @@ def test_reviewer_worker_applies_patch_on_pass(configured_paths):
     assert asyncio.run(worker.run_once()) is True
     assert scanner.scan()[0].state == TaskState.COMPLETED_REVIEWS
     assert (repo_root / "app.txt").read_text() == "review me\n"
+    review_json = json.loads((scanner.scan()[0].task_dir / "REVIEW-001.json").read_text())
+    assert "Verdict: PASS" in review_json["assistant_text"]
 
 
 def test_reviewer_worker_applies_patch_to_task_target_repo(tmp_path):

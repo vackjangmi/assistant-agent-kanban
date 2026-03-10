@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import subprocess
 from pathlib import Path
 
@@ -51,6 +52,8 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert updated.metadata.implementation.workspace is not None
     assert str(task_dir) not in updated.metadata.implementation.workspace
     assert (updated.task_dir / "WORK-001.md").exists()
+    work_json = json.loads((updated.task_dir / "WORK-001.json").read_text())
+    assert work_json["assistant_text"] == "## Summary\nimplemented"
 
 
 def test_implementer_worker_clones_task_target_repo(tmp_path):

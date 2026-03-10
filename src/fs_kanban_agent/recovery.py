@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from .config import AppConfig
 from .enums import TaskState
+from .exceptions import LockError
 from .locks import TaskLockManager
 from .models import WorkerEvent, utc_now
 from .scanner import KanbanScanner
@@ -32,7 +33,10 @@ class RecoveryService:
                 continue
             if task.metadata.lease.heartbeat_at and task.metadata.lease.heartbeat_at > cutoff:
                 continue
-            with self.locks.acquire(task.task_dir, task.metadata, owner="recovery", run_id="recovery"):
-                moved = self.transitions.recover_move(task, RECOVERY_TARGETS[task.state], by="recovery", note="stale lease recovery")
+            try:
+                with self.locks.acquire(task.task_dir, task.metadata, owner="recovery", run_id="recovery"):
+                    moved = self.transitions.recover_move(task, RECOVERY_TARGETS[task.state], by="recovery", note="stale lease recovery")
+            except LockError:
+                continue
             events.append(WorkerEvent(event="recovery_event", task_id=moved.metadata.task_id, payload={"state": moved.state.value}))
         return events

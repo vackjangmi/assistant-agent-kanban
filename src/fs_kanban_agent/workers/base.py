@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from ..config import AppConfig
 from ..events import EventBus
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
-from ..models import WorkerEvent
+from ..models import RunResult, WorkerEvent
 from ..scanner import KanbanScanner
 from ..transitions import TransitionManager
 
@@ -41,3 +42,27 @@ class WorkerBase:
         path = self.config.runs_dir / task_id
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    def write_result_artifacts(self, task_dir: Path, stem: str, result: RunResult) -> tuple[str, str]:
+        markdown_path = task_dir / f"{stem}.md"
+        json_path = task_dir / f"{stem}.json"
+        markdown_path.write_text(result.assistant_text.strip() + "\n")
+        json_path.write_text(
+            json.dumps(
+                {
+                    "ok": result.ok,
+                    "returncode": result.returncode,
+                    "assistant_text": result.assistant_text,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "raw_events_path": result.raw_events_path,
+                    "command": result.command,
+                    "markdown_path": markdown_path.name,
+                    "editable_markdown": True,
+                    "sync_policy": "markdown_edits_do_not_modify_json",
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        return markdown_path.name, json_path.name

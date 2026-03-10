@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import pytest
 
 from fs_kanban_agent.exceptions import AdapterRunError
@@ -28,11 +29,33 @@ def test_planner_worker_generates_plan(configured_paths):
     task = scanner.scan()[0]
     assert task.state == TaskState.WAITING_CHECK_PLANS
     assert (task.task_dir / "PLAN.md").exists()
+    plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
+    assert plan_json["assistant_text"] == "## Summary\nplan"
+    assert plan_json["markdown_path"] == "PLAN.md"
+    assert plan_json["sync_policy"] == "markdown_edits_do_not_modify_json"
+
+
+def test_planner_markdown_edits_do_not_modify_plan_json(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-edit-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(["## Summary\noriginal plan"]))
+
+    assert asyncio.run(worker.run_once()) is True
+    task = scanner.scan()[0]
+    plan_md = task.task_dir / "PLAN.md"
+    plan_md.write_text("## Summary\nmanual edit\n")
+
+    plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
+    assert plan_json["assistant_text"] == "## Summary\noriginal plan"
 
 
 def test_planner_worker_does_not_advance_on_failed_adapter(configured_paths):
     config, _, _ = configured_paths
-    task_dir = create_request_task(config, "planner-failure-task")
+    create_request_task(config, "planner-failure-task")
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
@@ -53,4 +76,25 @@ def test_planner_worker_does_not_advance_on_failed_adapter(configured_paths):
     planning_task = scanner.scan()[0]
     assert planning_task.state == TaskState.PLANNING
     assert not (planning_task.task_dir / "PLAN.md").exists()
+    assert not (planning_task.task_dir / "PLAN.json").exists()
     assert planning_task.metadata.errors[-1].code == "planner-run-failed"
+
+
+def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-thread-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(["## Summary\nplan"]))
+    called = {"value": False}
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        called["value"] = True
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("fs_kanban_agent.workers.planner.asyncio.to_thread", fake_to_thread)
+
+    assert asyncio.run(worker.run_once()) is True
+    assert called["value"] is True
