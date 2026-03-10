@@ -119,7 +119,20 @@ class TaskDetail(BaseModel):
     metadata: TaskMetadata
     task_path: str
     markdown_files: list[str]
+    json_files: list[str]
     log_files: list[str]
+
+
+class TaskLogEntry(BaseModel):
+    name: str
+    path: str
+    content: str
+    updated_at: datetime
+
+
+class TaskLogs(BaseModel):
+    task_id: str
+    entries: list[TaskLogEntry]
 
 
 class RunResult(BaseModel):

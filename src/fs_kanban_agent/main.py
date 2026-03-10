@@ -7,6 +7,8 @@ from pathlib import Path
 from .config import AppConfig, load_config
 from .api.app import create_default_app
 from .request_creator import RequestTemplateData, create_request
+from .scanner import KanbanScanner
+from .services.task_service import TaskService
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -26,6 +28,11 @@ def main(argv: list[str] | None = None) -> None:
     request_parser.add_argument("--config")
     request_parser.add_argument("--kanban-root")
 
+    logs_parser = subparsers.add_parser("logs")
+    logs_parser.add_argument("task_id")
+    logs_parser.add_argument("--config")
+    logs_parser.add_argument("--kanban-root")
+
     args = parser.parse_args(argv)
     if args.command in {None, "serve"}:
         app = create_default_app(getattr(args, "config", None))
@@ -41,6 +48,18 @@ def main(argv: list[str] | None = None) -> None:
             base_branch=args.base_branch,
         )
         print(task_dir)
+        return
+
+    if args.command == "logs":
+        config = _load_request_config(args.config, args.kanban_root)
+        logs = TaskService(KanbanScanner(config), config.runs_dir).get_logs(args.task_id)
+        if not logs.entries:
+            print(f"No logs found for {args.task_id}")
+            return
+        for entry in logs.entries:
+            print(f"== {entry.name} ==")
+            print(entry.content.rstrip())
+            print()
 
 
 def _load_request_config(config_path: str | None, kanban_root: str | None) -> AppConfig:

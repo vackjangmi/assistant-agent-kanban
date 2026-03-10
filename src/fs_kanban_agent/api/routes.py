@@ -24,6 +24,10 @@ class CreateRequestPayload(BaseModel):
     base_branch: str = Field(default="main")
 
 
+class UpdateMarkdownPayload(BaseModel):
+    content: str
+
+
 def build_router() -> APIRouter:
     router = APIRouter()
 
@@ -43,6 +47,34 @@ def build_router() -> APIRouter:
             return runtime.task_service.get_task(task_id)
         except TaskNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get("/api/tasks/{task_id}/logs")
+    async def task_logs(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            return runtime.task_service.get_logs(task_id)
+        except TaskNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get("/api/tasks/{task_id}/artifacts/{filename}")
+    async def task_markdown_artifact(task_id: str, filename: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            return {"filename": filename, "content": runtime.task_service.get_markdown_artifact(task_id, filename)}
+        except (TaskNotFoundError, TransitionError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+    @router.put("/api/tasks/{task_id}/artifacts/{filename}")
+    async def update_task_markdown_artifact(task_id: str, filename: str, payload: UpdateMarkdownPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            runtime.task_service.update_markdown_artifact(task_id, filename, payload.content)
+        except (TaskNotFoundError, TransitionError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return {"saved": True, "filename": filename}
 
     @router.get("/api/target-repos")
     async def target_repos(request: Request):
