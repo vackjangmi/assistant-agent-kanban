@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import secrets
 from pathlib import Path
 
 from .config import AppConfig
@@ -11,12 +13,13 @@ from .request_parser import parse_request_markdown, resolve_repo_root
 
 class TaskIdSequence:
     def next_id(self, existing_ids: set[str]) -> str:
-        counter = 1
         while True:
-            candidate = f"TASK-{counter:04d}"
+            candidate = secrets.token_hex(4)[:7]
             if candidate not in existing_ids:
                 return candidate
-            counter += 1
+
+
+TASK_KEY_PATTERN = re.compile(r"^[0-9a-f]{7}$")
 
 
 class KanbanScanner:
@@ -31,7 +34,7 @@ class KanbanScanner:
         for state in STATE_ORDER:
             state_dir = self.config.state_dir(state)
             for task_dir in sorted([path for path in state_dir.iterdir() if path.is_dir()]):
-                metadata = self._ensure_metadata(task_dir, state, existing_ids)
+                metadata, task_dir = self._ensure_metadata(task_dir, state, existing_ids)
                 existing_ids.add(metadata.task_id)
                 if metadata.state != state:
                     metadata.state = state
@@ -85,10 +88,10 @@ class KanbanScanner:
             existing.add(TaskMetadata.model_validate_json(metadata_path.read_text()).task_id)
         return existing
 
-    def _ensure_metadata(self, task_dir: Path, state: TaskState, existing_ids: set[str]) -> TaskMetadata:
+    def _ensure_metadata(self, task_dir: Path, state: TaskState, existing_ids: set[str]) -> tuple[TaskMetadata, Path]:
         path = self.metadata_store.metadata_path(task_dir)
         if path.exists():
-            return self.metadata_store.load(task_dir)
+            return self.metadata_store.load(task_dir), task_dir
         title = task_dir.name.split("__", 1)[-1].replace("-", " ").strip() or task_dir.name
         request_path = task_dir / "REQUEST.md"
         target_repo_root = str(self.config.repo_root.expanduser().resolve())
@@ -100,10 +103,11 @@ class KanbanScanner:
             target_repo_root = str(resolve_repo_root(parsed.target_repo_root, self.config.repo_root))
             if parsed.base_branch:
                 base_branch = parsed.base_branch
-        task_id = self.sequence.next_id(existing_ids)
+        task_id = task_dir.name if TASK_KEY_PATTERN.fullmatch(task_dir.name) else self.sequence.next_id(existing_ids)
         slug = slugify(title)
-        return self.metadata_store.bootstrap(
-            task_dir,
+        final_task_dir = self._ensure_task_dir_name(task_dir, task_id)
+        metadata = self.metadata_store.bootstrap(
+            final_task_dir,
             state,
             task_id,
             title,
@@ -111,3 +115,13 @@ class KanbanScanner:
             target_repo_root=target_repo_root,
             base_branch=base_branch,
         )
+        return metadata, final_task_dir
+
+    def _ensure_task_dir_name(self, task_dir: Path, task_id: str) -> Path:
+        if task_dir.name == task_id:
+            return task_dir
+        target = task_dir.parent / task_id
+        if target.exists():
+            return task_dir
+        task_dir.rename(target)
+        return target

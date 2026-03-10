@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from .config import AppConfig
 from .enums import TaskState
-from .metadata_store import slugify
 
 
 class RequestTemplateData(BaseModel):
@@ -49,8 +49,7 @@ def create_request(
     if not goal:
         raise ValueError("goal is required")
     requests_dir = config.state_dir(TaskState.REQUESTS)
-    slug = slugify(title)
-    task_dir = _next_request_dir(requests_dir, slug)
+    task_dir = requests_dir / _generate_task_key(config.kanban_root)
     task_dir.mkdir(parents=True, exist_ok=False)
     request_path = task_dir / "REQUEST.md"
     resolved_repo = target_repo_root.expanduser().resolve()
@@ -96,13 +95,8 @@ def _render_list_section(title: str, items: list[str]) -> list[str]:
     return lines
 
 
-def _next_request_dir(requests_dir: Path, slug: str) -> Path:
-    candidate = requests_dir / slug
-    if not candidate.exists():
-        return candidate
-    counter = 2
+def _generate_task_key(kanban_root: Path) -> str:
     while True:
-        candidate = requests_dir / f"{slug}-{counter}"
-        if not candidate.exists():
+        candidate = secrets.token_hex(4)[:7]
+        if not any(path.name == candidate for path in kanban_root.glob("*/**")):
             return candidate
-        counter += 1

@@ -16,7 +16,8 @@ def test_scanner_bootstraps_metadata(configured_paths):
     assert len(tasks) == 1
     task = tasks[0]
     assert task.state == TaskState.REQUESTS
-    assert task.metadata.task_id.startswith("TASK-")
+    assert len(task.metadata.task_id) == 7
+    assert task.task_dir.name == task.metadata.task_id
     assert (task.task_dir / "metadata.json").exists()
 
 
@@ -31,3 +32,13 @@ def test_scanner_bootstraps_target_repo_from_request(configured_paths, tmp_path)
     assert task.metadata.target.repo_root == str(target_repo.resolve())
     assert task.metadata.target.base_branch == "develop"
     assert task.metadata.integration.base_branch == "develop"
+
+
+def test_scanner_renames_generic_request_directory_to_task_key(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "task")
+
+    task = KanbanScanner(config).scan()[0]
+
+    assert task.task_dir.name == task.metadata.task_id
+    assert not (config.state_dir(TaskState.REQUESTS) / "task").exists()
