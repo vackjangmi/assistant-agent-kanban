@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..enums import TaskState
 from ..integration_manager import IntegrationManager
+from ..models import TaskErrorInfo
 from ..opencode_adapter import OpenCodeAdapter
 from .base import WorkerBase
 
@@ -25,6 +26,32 @@ class ReviewerWorker(WorkerBase):
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             reviewing = self.transitions.move(task, TaskState.REVIEWING, by=self.worker_name)
+            workspace_repo = reviewing.metadata.implementation.workspace
+            if workspace_repo is None:
+                reviewing.metadata.errors.append(
+                    TaskErrorInfo(code="review-no-workspace", message="review skipped because implementation workspace is missing")
+                )
+                self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review skipped: missing workspace")
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
+            workspace_path = Path(workspace_repo)
+            if self.workspace_has_local_commits(workspace_path, task.metadata.target.base_branch):
+                reviewing.metadata.errors.append(
+                    TaskErrorInfo(code="review-local-commits", message="review skipped because workspace contains local commits")
+                )
+                self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review skipped: workspace has local commits")
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
+            if not self.workspace_has_changes(workspace_path):
+                reviewing.metadata.errors.append(
+                    TaskErrorInfo(code="review-no-changes", message="review skipped because workspace has no file changes")
+                )
+                self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review skipped: no workspace changes")
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
             run_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.review.iteration + 1:03d}.jsonl"
             prompt = self.build_prompt(
                 (reviewing.task_dir / f"WORK-{reviewing.metadata.implementation.iteration:03d}.md").read_text(),

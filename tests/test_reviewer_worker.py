@@ -12,6 +12,7 @@ from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workspace_manager import WorkspaceManager
+from fs_kanban_agent.workspace_manager import WorkspaceManager
 from fs_kanban_agent.workers.implementer import ImplementerWorker
 from fs_kanban_agent.workers.reviewer import ReviewerWorker
 
@@ -110,3 +111,39 @@ def test_reviewer_worker_leaves_target_repo_clean_until_human_verification(tmp_p
     assert asyncio.run(worker.run_once()) is True
     assert scanner.scan()[0].state == TaskState.COMPLETED_REVIEWS
     assert (target_repo / "app.txt").read_text() == "hello\n"
+
+
+def test_reviewer_worker_rejects_tasks_with_no_workspace_changes(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-noop-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    workspace_repo = WorkspaceManager(config).prepare(implementing.metadata)
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["Verdict: PASS\nlooks good"]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert any(error.code == "review-no-changes" for error in updated.metadata.errors)
