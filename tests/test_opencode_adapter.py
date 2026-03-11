@@ -32,6 +32,18 @@ def test_extract_assistant_text_reads_text_part_event():
     assert _extract_assistant_text(stdout) == "## Summary\n\nreal markdown"
 
 
+def test_extract_assistant_text_ignores_tool_only_json_stream():
+    stdout = "\n".join(
+        [
+            '{"type":"step_start"}',
+            '{"type":"tool_use","part":{"tool":"glob","state":{"status":"error","error":"rejected"}}}',
+            '{"type":"step_finish","part":{"reason":"tool-calls"}}',
+        ]
+    )
+
+    assert _extract_assistant_text(stdout) == ""
+
+
 def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path):
     recorded: dict[str, object] = {}
 
@@ -70,6 +82,10 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     )
 
     command = cast(list[str], recorded["command"])
+    assert "--model" in command
+    assert command[command.index("--model") + 1] == "openai/gpt-5.4"
+    assert "--agent" in command
+    assert command[command.index("--agent") + 1] == "fs-kanban-planner"
     assert "--" in command
     assert command[-1] == "---\ntitle: sample\n---\n"
     env = cast(dict[str, str], recorded["env"])
@@ -139,3 +155,40 @@ def test_subprocess_adapter_reports_resolved_model_from_materialized_agent(monke
     )
 
     assert result.resolved_model == "openai/gpt-5.4"
+
+
+def test_subprocess_adapter_skips_model_flag_when_no_override(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = ['{"type":"final","content":"ok"}\n']
+            self.stderr = []
+            self.command = command
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessOpenCodeAdapter()
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-planner",
+        prompt="sample",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "planner.jsonl",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert "--model" not in command
+    assert result.resolved_model is None

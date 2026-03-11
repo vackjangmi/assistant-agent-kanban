@@ -138,6 +138,8 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         resolved_model = _read_agent_model(agent_path)
         if config.opencode.attach_url:
             command.extend(["--attach", config.opencode.attach_url])
+        if resolved_model:
+            command.extend(["--model", resolved_model])
         command.extend(["--agent", agent, "--format", "json", "--", prompt])
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
@@ -218,7 +220,7 @@ def _extract_assistant_text(stdout: str) -> str:
             part = payload.get("part") or {}
             if isinstance(part, dict) and isinstance(part.get("text"), str):
                 return part["text"]
-    return stdout.strip()
+    return ""
 
 
 def _utc_timestamp() -> str:
