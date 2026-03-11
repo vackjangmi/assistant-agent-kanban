@@ -268,14 +268,6 @@ def build_ui_router() -> APIRouter:
           </label>
         </div>
         <datalist id="opencode-model-options"></datalist>
-        <section class="settings-readonly" aria-labelledby="delegated-models-title">
-          <div class="settings-readonly-head">
-            <strong id="delegated-models-title">OMO-managed delegated helpers</strong>
-            <p>These mappings come from your detected OMO configuration and are shown here for visibility only. fs-kanban does not edit them.</p>
-          </div>
-          <div id="delegated-models-source" class="settings-readonly-source">Delegated helper source: checking…</div>
-          <div id="delegated-models-grid" class="settings-readonly-grid"></div>
-        </section>
         <div id="settings-config-path" class="settings-path">Config path: loading...</div>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
         <div class="form-actions">
@@ -393,8 +385,6 @@ def build_ui_router() -> APIRouter:
     const settingsConfigPath = document.getElementById('settings-config-path');
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
     const settingsStatus = document.getElementById('settings-status');
-    const delegatedModelsSource = document.getElementById('delegated-models-source');
-    const delegatedModelsGrid = document.getElementById('delegated-models-grid');
     const refreshModelOptionsButton = document.getElementById('refresh-model-options');
     const scopeField = document.getElementById('scope');
     const outOfScopeField = document.getElementById('out_of_scope');
@@ -518,35 +508,6 @@ def build_ui_router() -> APIRouter:
       modelOptions.innerHTML = items.map((item) => `<option value="${{escapeHtml(item)}}"></option>`).join('');
     }}
 
-    function renderDelegatedModels(data) {{
-      const labels = {{
-        quick: 'Quick helper',
-        explore: 'Explore helper',
-        librarian: 'Librarian helper',
-      }};
-      const descriptions = {{
-        quick: 'Used for tiny delegated tasks and trivial helper work.',
-        explore: 'Used for delegated repository and codebase exploration.',
-        librarian: 'Used for delegated documentation and external reference lookups.',
-      }};
-      const items = Array.isArray(data.delegated_models) ? data.delegated_models : [];
-      if (data.delegated_model_source_path) {{
-        delegatedModelsSource.textContent = `Delegated helper source: ${{data.delegated_model_source_path}}`;
-      }} else if (data.delegated_model_status === 'missing') {{
-        delegatedModelsSource.textContent = 'Delegated helper source: no global OMO config was detected.';
-      }} else if (data.delegated_model_error) {{
-        delegatedModelsSource.textContent = `Delegated helper source error: ${{data.delegated_model_error}}`;
-      }} else {{
-        delegatedModelsSource.textContent = 'Delegated helper source: detected, but no quick/explore/librarian mapping was found.';
-      }}
-      delegatedModelsGrid.innerHTML = ['quick', 'explore', 'librarian'].map((key) => {{
-        const item = items.find((entry) => entry.key === key);
-        const model = item && item.model ? item.model : 'Not configured';
-        const variant = item && item.variant ? item.variant : 'variant not set';
-        return `<article class="settings-readonly-card"><strong>${{escapeHtml(labels[key])}}</strong><span>${{escapeHtml(descriptions[key])}}</span><code>${{escapeHtml(model)}}</code><span>${{escapeHtml(variant)}}</span></article>`;
-      }}).join('');
-    }}
-
     function updateModelDiscoverySummary(data) {{
       const count = data.available_models.length;
       if (count) {{
@@ -583,7 +544,6 @@ def build_ui_router() -> APIRouter:
         reviewerModelInput.value = data.reviewer_model || '';
         commitModelInput.value = data.commit_model || '';
         renderModelOptions(data.available_models || []);
-        renderDelegatedModels(data);
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
         updateModelDiscoverySummary(data);
       }} finally {{

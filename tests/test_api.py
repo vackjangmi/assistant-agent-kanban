@@ -100,6 +100,32 @@ def test_api_returns_runtime_logs_for_task(configured_paths):
     assert "plan" in payload["entries"][0]["content"]
 
 
+def test_api_renders_tool_only_runtime_logs_for_task(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "tool-log-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+    log_dir = config.runs_dir / task.metadata.task_id
+    log_dir.mkdir(parents=True)
+    (log_dir / "planner-001.jsonl").write_text(
+        '\n'.join(
+            [
+                '{"type":"step_start"}',
+                '{"type":"tool_use","part":{"tool":"read","state":{"status":"error","error":"Error: File not found"}}}',
+            ]
+        )
+        + '\n'
+    )
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{task.metadata.task_id}/logs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entries"][0]["rendered_content"] == "Started agent step\n\nTool `read` failed: Error: File not found"
+
+
 def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-edit-task")
@@ -428,8 +454,8 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert "model: openai/gpt-5.4" in planner_agent_path.read_text()
         assert "model: openai/gpt-5.4-mini" in implementer_agent_path.read_text()
         assert "model: github-copilot/gpt-5" in reviewer_agent_path.read_text()
-        assert "task(subagent_type=\"explore\"" in planner_agent_path.read_text()
-        assert "task(category=\"quick\", load_skills=[], ...)" in planner_agent_path.read_text()
+        assert "Do not call `task()` or delegate helper subtasks." in planner_agent_path.read_text()
+        assert "Write the plan directly in this response." in planner_agent_path.read_text()
         assert "Do not delegate the final file edits" in implementer_agent_path.read_text()
         assert "Do not delegate the final verdict" in reviewer_agent_path.read_text()
 
@@ -499,10 +525,6 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert response.status_code == 200
     assert "Create request" in response.text
     assert "Model settings" in response.text
-    assert "OMO-managed delegated helpers" in response.text
-    assert "Quick helper" in response.text
-    assert "Explore helper" in response.text
-    assert "Librarian helper" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
     assert "/api/requests" in response.text
