@@ -272,8 +272,19 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     done = scanner.find_task(completed.metadata.task_id)
     assert done.state == TaskState.DONE
     assert done.metadata.commit.sha
-    assert done.metadata.commit.prepared_message == f"feat: {done.metadata.title}"
-    assert (done.task_dir / "COMMIT.md").read_text().strip() == f"feat: {done.metadata.title}"
+    expected_message = "\n".join(
+        [
+            f"feat: {done.metadata.title}",
+            "",
+            f"Goal: Implement {done.metadata.title}.",
+            "Plan: plan",
+            f"Task: {done.metadata.task_id}",
+        ]
+    )
+    assert done.metadata.commit.prepared_message == expected_message
+    assert (done.task_dir / "COMMIT.md").read_text().strip() == expected_message
+    git_message = subprocess.run(["git", "-C", str(target_repo), "log", "-1", "--pretty=%B"], check=True, capture_output=True, text=True).stdout.strip()
+    assert git_message == expected_message
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == f"review/{done.metadata.task_id.lower()}"
 
