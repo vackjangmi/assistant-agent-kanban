@@ -7,6 +7,7 @@ from ..config import PROJECT_ROOT
 from ..enums import TaskState
 from ..exceptions import AdapterRunError
 from ..opencode_adapter import OpenCodeAdapter
+from ..request_parser import has_required_request_fields
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from .base import WorkerBase
 
@@ -24,7 +25,7 @@ class PlanningWorker(WorkerBase):
         self.adapter = adapter
 
     async def run_once(self) -> bool:
-        tasks = [task for task in self.scanner.scan() if task.state == TaskState.REQUESTS and can_auto_dispatch(task.metadata)]
+        tasks = [task for task in self.scanner.scan() if task.state == TaskState.REQUESTS and can_auto_dispatch(task.metadata) and self._request_ready_for_planning(task.task_dir)]
         if not tasks:
             return False
         task = tasks[0]
@@ -73,6 +74,12 @@ class PlanningWorker(WorkerBase):
             done = self.transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by=self.worker_name)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
+
+    def _request_ready_for_planning(self, task_dir: Path) -> bool:
+        request_path = task_dir / "REQUEST.md"
+        if not request_path.exists():
+            return False
+        return has_required_request_fields(request_path.read_text())
 
     def _planner_source_text(self, request_text: str) -> str:
         context_blocks: list[str] = []

@@ -13,7 +13,7 @@ from .target_repo_guard import resolve_safe_target_repo_root
 
 class RequestTemplateData(BaseModel):
     title: str
-    goal: str
+    goal: str | None = None
     background: str | None = None
     scope: list[str] = Field(default_factory=list)
     out_of_scope: list[str] = Field(default_factory=list)
@@ -45,11 +45,9 @@ def create_request(
     base_branch: str | None = None,
 ) -> Path:
     title = template.title.strip()
-    goal = template.goal.strip()
+    goal = (template.goal or "").strip()
     if not title:
         raise ValueError("title is required")
-    if not goal:
-        raise ValueError("goal is required")
     requests_dir = config.state_dir(TaskState.REQUESTS)
     task_dir = requests_dir / _generate_task_key(config.kanban_root)
     task_dir.mkdir(parents=True, exist_ok=False)
@@ -66,7 +64,7 @@ def create_request(
         "",
         f"# {title}",
     ]
-    lines.extend(_render_request_sections(template.model_copy(update={"title": title, "goal": goal})))
+    lines.extend(_render_request_sections(template.model_copy(update={"title": title, "goal": goal or None})))
     request_path.write_text("\n".join(lines))
     return task_dir
 
@@ -78,7 +76,9 @@ def split_lines(value: str | None) -> list[str]:
 
 
 def _render_request_sections(template: RequestTemplateData) -> list[str]:
-    lines = ["", "## Goal", template.goal.strip(), ""]
+    lines = [""]
+    if template.goal and template.goal.strip():
+        lines.extend(["## Goal", template.goal.strip(), ""])
     if template.background and template.background.strip():
         lines.extend(["## Background", template.background.strip(), ""])
     lines.extend(_render_list_section("Scope", template.scope))
@@ -106,7 +106,9 @@ def _generate_task_key(kanban_root: Path) -> str:
 
 
 def _build_language_sample(template: RequestTemplateData, title: str, goal: str) -> str:
-    parts = [title, goal]
+    parts = [title]
+    if goal:
+        parts.append(goal)
     if template.background:
         parts.append(template.background)
     parts.extend(template.scope)

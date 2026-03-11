@@ -72,6 +72,46 @@ def test_scanner_detects_request_language_from_request_markdown(configured_paths
     assert task.metadata.request.language == "ko"
 
 
+def test_scanner_refreshes_request_metadata_after_initial_bootstrap(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    initial_repo = tmp_path / "initial-repo"
+    updated_repo = tmp_path / "updated-repo"
+    initial_repo.mkdir()
+    updated_repo.mkdir()
+    create_request_task(config, "refresh-task", target_repo_root=initial_repo, base_branch="main")
+    scanner = KanbanScanner(config)
+
+    first_task = scanner.scan()[0]
+    assert first_task.metadata.target.repo_root == str(initial_repo.resolve())
+
+    (first_task.task_dir / "REQUEST.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: refresh-task-updated",
+                "target:",
+                f"  repo_root: {updated_repo}",
+                "  base_branch: feature/rescanned",
+                "---",
+                "",
+                "# refresh-task-updated",
+                "",
+                "## Goal",
+                "Apply the updated request metadata.",
+                "",
+            ]
+        )
+    )
+
+    refreshed_task = scanner.scan()[0]
+
+    assert refreshed_task.metadata.title == "refresh-task-updated"
+    assert refreshed_task.metadata.slug == "refresh-task-updated"
+    assert refreshed_task.metadata.target.repo_root == str(updated_repo.resolve())
+    assert refreshed_task.metadata.target.base_branch == "feature/rescanned"
+    assert refreshed_task.metadata.integration.base_branch == "feature/rescanned"
+
+
 def test_board_snapshot_includes_active_state_entered_at(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "active-task")

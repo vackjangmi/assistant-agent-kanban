@@ -16,6 +16,9 @@ class ParsedRequest(BaseModel):
     language: str = "en"
 
 
+REQUIRED_REQUEST_FIELDS = ("title", "goal", "target.repo_root", "target.base_branch")
+
+
 def parse_request_markdown(content: str) -> ParsedRequest:
     metadata: dict[str, object] = {}
     body = content
@@ -49,6 +52,59 @@ def resolve_repo_root(raw_path: str | None, fallback: Path) -> Path:
     if not raw_path:
         return fallback.expanduser().resolve()
     return Path(raw_path).expanduser().resolve()
+
+
+def has_required_request_fields(content: str) -> bool:
+    parsed = parse_request_markdown(content)
+    return bool(
+        parsed.title
+        and parsed.target_repo_root
+        and parsed.base_branch
+        and extract_goal_text(parsed.body)
+    )
+
+
+def extract_goal_text(body: str) -> str | None:
+    goal_section = _extract_markdown_section(body, "Goal")
+    if goal_section:
+        return goal_section
+
+    lines = body.splitlines()
+    started = False
+    collected: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not started:
+            if not stripped:
+                continue
+            started = True
+            if stripped.startswith("#"):
+                continue
+        if not stripped and not collected:
+            continue
+        if stripped.startswith("## "):
+            break
+        collected.append(line.rstrip())
+    candidate = "\n".join(collected).strip()
+    return candidate or None
+
+
+def _extract_markdown_section(body: str, title: str) -> str | None:
+    heading = f"## {title}".casefold()
+    lines = body.splitlines()
+    inside = False
+    collected: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not inside:
+            if stripped.casefold() == heading:
+                inside = True
+            continue
+        if stripped.startswith("## "):
+            break
+        collected.append(line.rstrip())
+    candidate = "\n".join(collected).strip()
+    return candidate or None
 
 
 def _extract_title(body: str) -> str | None:

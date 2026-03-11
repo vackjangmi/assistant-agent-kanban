@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import uvicorn
 from pathlib import Path
 
@@ -22,7 +23,7 @@ def main(argv: list[str] | None = None) -> None:
 
     request_parser = subparsers.add_parser("request")
     request_parser.add_argument("title")
-    request_parser.add_argument("--target-repo", required=True)
+    request_parser.add_argument("--target-repo")
     request_parser.add_argument("--body")
     request_parser.add_argument("--base-branch")
     request_parser.add_argument("--config")
@@ -41,11 +42,13 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "request":
         config = _load_request_config(args.config, args.kanban_root)
+        target_repo = Path(args.target_repo).expanduser().resolve() if args.target_repo else Path.cwd().resolve()
+        base_branch = args.base_branch or _detect_current_branch(target_repo) or config.base_branch
         task_dir = create_request(
             config,
-            template=RequestTemplateData(title=args.title, goal=args.body or f"Implement {args.title}."),
-            target_repo_root=Path(args.target_repo),
-            base_branch=args.base_branch,
+            template=RequestTemplateData(title=args.title, goal=args.body),
+            target_repo_root=target_repo,
+            base_branch=base_branch,
         )
         print(task_dir)
         return
@@ -68,6 +71,19 @@ def _load_request_config(config_path: str | None, kanban_root: str | None) -> Ap
         config.kanban_root = Path(kanban_root).expanduser().resolve()
         config.bootstrap()
     return config
+
+
+def _detect_current_branch(repo_root: Path) -> str | None:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "symbolic-ref", "--quiet", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    branch = result.stdout.strip()
+    return branch or None
 
 
 if __name__ == "__main__":

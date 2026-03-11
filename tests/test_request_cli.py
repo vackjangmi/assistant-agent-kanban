@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.main import main
+
+from .conftest import init_git_repo
 
 
 def test_request_cli_creates_request_with_target_repo(tmp_path, capsys):
@@ -37,6 +40,32 @@ def test_request_cli_creates_request_with_target_repo(tmp_path, capsys):
     assert "base_branch: develop" in content
     assert "## Goal" in content
     assert "Do the thing." in content
+
+
+def test_request_cli_defaults_target_repo_and_branch_from_current_directory(tmp_path, capsys, monkeypatch):
+    kanban_root = tmp_path / "ai-kanban"
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    subprocess.run(["git", "-C", str(target_repo), "checkout", "-b", "feature/manual-request"], check=True, capture_output=True, text=True)
+    monkeypatch.chdir(target_repo)
+
+    main([
+        "request",
+        "manual task",
+        "--kanban-root",
+        str(kanban_root),
+    ])
+
+    output = capsys.readouterr().out.strip()
+    request_path = Path(output) / "REQUEST.md"
+    content = request_path.read_text()
+
+    assert request_path.exists()
+    assert f"repo_root: {target_repo.resolve()}" in content
+    assert "base_branch: feature/manual-request" in content
+    assert "# manual task" in content
+    assert "## Goal" not in content
 
 
 def test_logs_cli_prints_task_logs(tmp_path, capsys):

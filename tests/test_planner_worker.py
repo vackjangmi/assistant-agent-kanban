@@ -139,6 +139,37 @@ def test_planner_worker_skips_retry_gated_requests(configured_paths):
     assert adapter.responses == ["## Summary\nplan"]
 
 
+def test_planner_worker_skips_incomplete_requests_without_goal(configured_paths):
+    config, _, _ = configured_paths
+    task_dir = create_request_task(config, "planner-incomplete-task")
+    (task_dir / "REQUEST.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: planner-incomplete-task",
+                "target:",
+                f"  repo_root: {config.repo_root}",
+                f"  base_branch: {config.base_branch}",
+                "---",
+                "",
+                "# planner-incomplete-task",
+                "",
+            ]
+        )
+    )
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(["## Summary\nplan"])
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is False
+    pending_task = scanner.scan()[0]
+    assert pending_task.state == TaskState.REQUESTS
+    assert adapter.responses == ["## Summary\nplan"]
+
+
 def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     create_request_task(config, "planner-thread-task")
@@ -226,6 +257,55 @@ def test_planner_worker_runs_from_target_repo(configured_paths):
 
     assert asyncio.run(worker.run_once()) is True
     assert adapter.cwd == target_repo.resolve()
+
+
+def test_planner_worker_uses_updated_request_metadata_after_request_completion(configured_paths, tmp_path):
+    class CwdCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["## Summary\nplan"])
+            self.cwd = None
+
+        def run(self, **kwargs):
+            self.cwd = kwargs["cwd"]
+            return super().run(**kwargs)
+
+    config, _, _ = configured_paths
+    updated_repo = tmp_path / "completed-target-repo"
+    updated_repo.mkdir()
+    task_dir = create_request_task(config, "planner-refresh-task")
+    (task_dir / "REQUEST.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: planner-refresh-task-updated",
+                "target:",
+                f"  repo_root: {updated_repo}",
+                "  base_branch: feature/late-goal",
+                "---",
+                "",
+                "# planner-refresh-task-updated",
+                "",
+                "## Goal",
+                "Finish the task after manual completion.",
+                "",
+            ]
+        )
+    )
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = CwdCapturingAdapter()
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+    task = scanner.scan()[0]
+    assert task.metadata.title == "planner-refresh-task-updated"
+    assert task.metadata.slug == "planner-refresh-task-updated"
+    assert task.metadata.target.repo_root == str(updated_repo.resolve())
+    assert task.metadata.target.base_branch == "feature/late-goal"
+    assert task.metadata.integration.base_branch == "feature/late-goal"
+    assert adapter.cwd == updated_repo.resolve()
 
 
 def test_planner_worker_emits_realtime_worker_log_events(configured_paths):

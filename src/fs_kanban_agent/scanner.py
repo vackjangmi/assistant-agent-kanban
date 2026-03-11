@@ -38,14 +38,27 @@ class KanbanScanner:
                 existing_ids.add(metadata.task_id)
                 if metadata.state != state:
                     metadata.state = state
-                normalized_repo_root = str(resolve_repo_root(metadata.target.repo_root, self.config.repo_root))
                 should_save = False
                 request_path = task_dir / metadata.request.path
                 if request_path.exists():
                     parsed = parse_request_markdown(request_path.read_text())
+                    if state == TaskState.REQUESTS:
+                        if parsed.title and metadata.title != parsed.title:
+                            metadata.title = parsed.title
+                            metadata.slug = slugify(parsed.title)
+                            should_save = True
+                        parsed_repo_root = str(resolve_repo_root(parsed.target_repo_root, self.config.repo_root))
+                        if metadata.target.repo_root != parsed_repo_root:
+                            metadata.target.repo_root = parsed_repo_root
+                            should_save = True
+                        parsed_base_branch = parsed.base_branch or self.config.base_branch
+                        if metadata.target.base_branch != parsed_base_branch:
+                            metadata.target.base_branch = parsed_base_branch
+                            should_save = True
                     if metadata.request.language != parsed.language:
                         metadata.request.language = parsed.language
                         should_save = True
+                normalized_repo_root = str(resolve_repo_root(metadata.target.repo_root, self.config.repo_root))
                 if metadata.target.repo_root != normalized_repo_root:
                     metadata.target.repo_root = normalized_repo_root
                     should_save = True
