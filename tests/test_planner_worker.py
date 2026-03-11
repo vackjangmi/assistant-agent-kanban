@@ -4,7 +4,6 @@ import asyncio
 import json
 import pytest
 
-from fs_kanban_agent.config import PROJECT_ROOT
 from fs_kanban_agent.exceptions import AdapterRunError
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
@@ -91,6 +90,33 @@ def test_planner_worker_does_not_advance_on_failed_adapter(configured_paths):
     assert planning_task.metadata.errors[-1].code == "planner-run-failed"
 
 
+def test_planner_worker_does_not_write_tool_only_json_as_plan(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-empty-artifact-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter([""], ok=True, returncode=0),
+    )
+
+    with pytest.raises(AdapterRunError, match="markdown artifact"):
+        asyncio.run(worker.run_once())
+
+    planning_task = scanner.scan()[0]
+    assert planning_task.state == TaskState.PLANNING
+    assert not (planning_task.task_dir / "PLAN.md").exists()
+    assert not (planning_task.task_dir / "PLAN.json").exists()
+    assert planning_task.metadata.errors[-1].code == "planner-empty-artifact"
+
+
 def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     create_request_task(config, "planner-thread-task")
@@ -149,9 +175,13 @@ def test_planner_worker_includes_request_language_in_prompt(configured_paths):
     assert asyncio.run(worker.run_once()) is True
     assert "Return the markdown artifact in Korean." in adapter.prompt
     assert "<task-document>" in adapter.prompt
+    assert "## Planner Context Docs" in adapter.prompt
+    assert "## docs/01-architecture-review.md" in adapter.prompt
+    assert "## docs/02-implementation-plan.md" in adapter.prompt
+    assert "## docs/03-agent-task.md" in adapter.prompt
 
 
-def test_planner_worker_runs_from_project_root(configured_paths):
+def test_planner_worker_runs_from_target_repo(configured_paths):
     class CwdCapturingAdapter(FakeAdapter):
         def __init__(self):
             super().__init__(["## Summary\nplan"])
@@ -162,7 +192,9 @@ def test_planner_worker_runs_from_project_root(configured_paths):
             return super().run(**kwargs)
 
     config, _, _ = configured_paths
-    create_request_task(config, "planner-cwd-task")
+    target_repo = config.repo_root.parent / "planner-target-repo"
+    target_repo.mkdir()
+    create_request_task(config, "planner-cwd-task", target_repo_root=target_repo)
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
@@ -171,7 +203,7 @@ def test_planner_worker_runs_from_project_root(configured_paths):
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
-    assert adapter.cwd == PROJECT_ROOT
+    assert adapter.cwd == target_repo.resolve()
 
 
 def test_planner_worker_emits_realtime_worker_log_events(configured_paths):

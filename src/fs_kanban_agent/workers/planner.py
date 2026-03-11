@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from ..config import PROJECT_ROOT
 from ..enums import TaskState
@@ -11,6 +12,11 @@ from .base import WorkerBase
 
 class PlanningWorker(WorkerBase):
     worker_name = "planner"
+    planner_context_docs = (
+        "docs/01-architecture-review.md",
+        "docs/02-implementation-plan.md",
+        "docs/03-agent-task.md",
+    )
 
     def __init__(self, *args, adapter: OpenCodeAdapter, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -25,14 +31,16 @@ class PlanningWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             planning = self.transitions.move(task, TaskState.PLANNING, by=self.worker_name)
             run_log_path = self.task_log_dir(task.metadata.task_id) / f"planner-{planning.metadata.plan.revision + 1:03d}.jsonl"
-            prompt = self.build_prompt((planning.task_dir / "REQUEST.md").read_text(), planning.metadata, phase="planner")
+            request_text = (planning.task_dir / "REQUEST.md").read_text()
+            prompt = self.build_prompt(self._planner_source_text(request_text), planning.metadata, phase="planner")
+            planner_cwd = Path(planning.metadata.target.repo_root).expanduser().resolve()
             await self.emit("task_moved", planning.metadata.task_id, state=planning.state.value)
             loop = asyncio.get_running_loop()
             result = await asyncio.to_thread(
                 self.adapter.run,
                 agent=self.config.opencode.planner_agent,
                 prompt=prompt,
-                cwd=PROJECT_ROOT,
+                cwd=planner_cwd,
                 run_log_path=run_log_path,
                 config=self.config,
                 on_log_line=self.make_log_callback(loop, planning.metadata.task_id, run_log_path.name),
@@ -46,6 +54,14 @@ class PlanningWorker(WorkerBase):
                     message=result.stderr.strip() or result.assistant_text.strip() or "planner run failed",
                 )
                 raise AdapterRunError(result.stderr.strip() or "planner run failed")
+            if not result.assistant_text.strip():
+                self.metadata_store.add_error(
+                    planning.task_dir,
+                    planning.metadata,
+                    code="planner-empty-artifact",
+                    message="planner did not return a markdown artifact",
+                )
+                raise AdapterRunError("planner did not return a markdown artifact")
             planning.metadata.plan.revision += 1
             plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", result)
             planning.metadata.plan.path = plan_path
@@ -53,3 +69,15 @@ class PlanningWorker(WorkerBase):
             done = self.transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by=self.worker_name)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
+
+    def _planner_source_text(self, request_text: str) -> str:
+        context_blocks: list[str] = []
+        for relative_path in self.planner_context_docs:
+            doc_path = PROJECT_ROOT / relative_path
+            context_blocks.extend(
+                [
+                    f"## {relative_path}",
+                    doc_path.read_text().rstrip(),
+                ]
+            )
+        return "\n\n".join([request_text.rstrip(), "## Planner Context Docs", *context_blocks])
