@@ -18,7 +18,7 @@ class IntegrationManager:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
-        patch_path = self.config.runs_dir / metadata.task_id / f"review-{metadata.review.iteration:03d}.patch"
+        patch_path = self._patch_path(metadata.task_id, metadata.review.iteration)
         patch_path.parent.mkdir(parents=True, exist_ok=True)
         head = subprocess.run(
             ["git", "-C", str(target_repo_root), "rev-parse", "HEAD"],
@@ -75,7 +75,7 @@ class IntegrationManager:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
-        patch_path = Path(metadata.integration.patch_path) if metadata.integration.patch_path else None
+        patch_path = self._stored_patch_path(metadata)
         if patch_path is None or not patch_path.exists():
             metadata.integration.applied = False
             metadata.integration.applied_at = None
@@ -91,3 +91,14 @@ class IntegrationManager:
                 raise IntegrationError(rollback.stderr.strip() or "failed to rollback patch")
         metadata.integration.applied = False
         metadata.integration.applied_at = None
+
+    def _patch_path(self, task_id: str, review_iteration: int) -> Path:
+        return (self.config.runs_dir / task_id / f"review-{review_iteration:03d}.patch").expanduser().resolve()
+
+    def _stored_patch_path(self, metadata: TaskMetadata) -> Path | None:
+        if not metadata.integration.patch_path:
+            return None
+        patch_path = Path(metadata.integration.patch_path).expanduser()
+        if patch_path.is_absolute():
+            return patch_path
+        return (self.config.kanban_root.expanduser().resolve().parent / patch_path).resolve()

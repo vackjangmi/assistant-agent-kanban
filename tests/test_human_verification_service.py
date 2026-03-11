@@ -81,6 +81,26 @@ def test_human_verification_start_includes_untracked_files(configured_paths):
     assert (repo_root / "new-file.txt").read_text() == "brand new\n"
 
 
+def test_human_verification_start_uses_absolute_patch_path_from_relative_config(monkeypatch, tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    monkeypatch.chdir(tmp_path)
+    config = AppConfig(kanban_root=Path("ai-kanban"), repo_root=target_repo)
+    config.bootstrap()
+    create_request_task(config, "verify-relative-patch-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    moved = service.start(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    updated = scanner.find_task(completed.metadata.task_id)
+    assert updated.metadata.integration.patch_path == str(
+        (tmp_path / "ai-kanban" / "_runtime" / "runs" / updated.metadata.task_id / "review-000.patch").resolve()
+    )
+    assert (target_repo / "app.txt").read_text() == "review me\n"
+
+
 def test_human_verification_reject_rolls_back_and_records_note(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-reject-task")
