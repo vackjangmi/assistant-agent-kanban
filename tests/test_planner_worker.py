@@ -4,6 +4,7 @@ import asyncio
 import json
 import pytest
 
+from fs_kanban_agent.config import PROJECT_ROOT
 from fs_kanban_agent.exceptions import AdapterRunError
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
@@ -148,6 +149,29 @@ def test_planner_worker_includes_request_language_in_prompt(configured_paths):
     assert asyncio.run(worker.run_once()) is True
     assert "Return the markdown artifact in Korean." in adapter.prompt
     assert "<task-document>" in adapter.prompt
+
+
+def test_planner_worker_runs_from_project_root(configured_paths):
+    class CwdCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["## Summary\nplan"])
+            self.cwd = None
+
+        def run(self, **kwargs):
+            self.cwd = kwargs["cwd"]
+            return super().run(**kwargs)
+
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-cwd-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = CwdCapturingAdapter()
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+    assert adapter.cwd == PROJECT_ROOT
 
 
 def test_planner_worker_emits_realtime_worker_log_events(configured_paths):

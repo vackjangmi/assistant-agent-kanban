@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+from ..config import PROJECT_ROOT
 from ..enums import TaskState
 from ..exceptions import AdapterRunError
 from ..opencode_adapter import OpenCodeAdapter
@@ -31,7 +32,7 @@ class PlanningWorker(WorkerBase):
                 self.adapter.run,
                 agent=self.config.opencode.planner_agent,
                 prompt=prompt,
-                cwd=planning.task_dir,
+                cwd=PROJECT_ROOT,
                 run_log_path=run_log_path,
                 config=self.config,
                 on_log_line=self.make_log_callback(loop, planning.metadata.task_id, run_log_path.name),
