@@ -30,11 +30,19 @@ class TransitionManager:
     def _move(self, context: TaskContext, target: TaskState, by: str, note: str | None = None) -> TaskContext:
         source_dir = context.task_dir
         target_dir = self.config.state_dir(target) / source_dir.name
-        shutil.move(str(source_dir), str(target_dir))
         metadata = context.metadata
+        previous_state = metadata.state
+        previous_history_len = len(metadata.history)
+        shutil.move(str(source_dir), str(target_dir))
         metadata.state = target
         metadata.history.append(HistoryEntry(state=target, entered_at=utc_now(), by=by, note=note))
-        self.metadata_store.save(target_dir, metadata)
+        try:
+            self.metadata_store.save(target_dir, metadata)
+        except Exception:
+            metadata.state = previous_state
+            del metadata.history[previous_history_len:]
+            shutil.move(str(target_dir), str(source_dir))
+            raise
         return TaskContext(metadata=metadata, task_dir=target_dir, state=target)
 
     def manual_move(self, task_id: str, target: TaskState, by: str) -> TaskContext:
