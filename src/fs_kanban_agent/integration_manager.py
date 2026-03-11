@@ -57,6 +57,11 @@ class IntegrationManager:
         )
         if status.stdout.strip():
             raise IntegrationError("target repo must be clean before apply")
+        original_branch = self._current_branch(target_repo_root) or metadata.target.base_branch
+        review_branch = metadata.integration.review_branch or self._review_branch_name(metadata)
+        self._switch_to_review_branch(target_repo_root, original_branch, review_branch)
+        metadata.integration.original_branch = original_branch
+        metadata.integration.review_branch = review_branch
         apply_result = subprocess.run(
             ["git", "-C", str(target_repo_root), "apply", "--3way", "--index", str(patch_path)],
             capture_output=True,
@@ -64,6 +69,10 @@ class IntegrationManager:
             check=False,
         )
         if apply_result.returncode != 0:
+            self._restore_original_branch(target_repo_root, original_branch)
+            self._delete_branch(target_repo_root, review_branch)
+            metadata.integration.original_branch = None
+            metadata.integration.review_branch = None
             raise IntegrationError(apply_result.stderr.strip() or "failed to apply patch")
         metadata.integration.patch_path = str(patch_path)
         metadata.integration.applied = True
@@ -77,8 +86,13 @@ class IntegrationManager:
             raise IntegrationError(str(exc)) from exc
         patch_path = self._stored_patch_path(metadata)
         if patch_path is None or not patch_path.exists():
+            if self._repo_has_changes(target_repo_root):
+                raise IntegrationError("cannot rollback applied changes because the patch artifact is missing")
             metadata.integration.applied = False
             metadata.integration.applied_at = None
+            self._cleanup_review_branch(target_repo_root, metadata)
+            metadata.integration.original_branch = None
+            metadata.integration.review_branch = None
             return
         if patch_path.read_text().strip():
             rollback = subprocess.run(
@@ -89,8 +103,11 @@ class IntegrationManager:
             )
             if rollback.returncode != 0:
                 raise IntegrationError(rollback.stderr.strip() or "failed to rollback patch")
+        self._cleanup_review_branch(target_repo_root, metadata)
         metadata.integration.applied = False
         metadata.integration.applied_at = None
+        metadata.integration.original_branch = None
+        metadata.integration.review_branch = None
 
     def _patch_path(self, task_id: str, review_iteration: int) -> Path:
         return (self.config.runs_dir / task_id / f"review-{review_iteration:03d}.patch").expanduser().resolve()
@@ -102,3 +119,67 @@ class IntegrationManager:
         if patch_path.is_absolute():
             return patch_path
         return (self.config.kanban_root.expanduser().resolve().parent / patch_path).resolve()
+
+    def _current_branch(self, repo_root: Path) -> str | None:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "symbolic-ref", "--quiet", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        branch = result.stdout.strip()
+        return branch or None
+
+    def _review_branch_name(self, metadata: TaskMetadata) -> str:
+        return f"review/{metadata.task_id.lower()}"
+
+    def _switch_to_review_branch(self, repo_root: Path, original_branch: str, review_branch: str) -> None:
+        checkout = subprocess.run(
+            ["git", "-C", str(repo_root), "switch", "-C", review_branch, original_branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if checkout.returncode != 0:
+            raise IntegrationError(checkout.stderr.strip() or "failed to create review branch")
+
+    def _restore_original_branch(self, repo_root: Path, original_branch: str) -> None:
+        switched = subprocess.run(
+            ["git", "-C", str(repo_root), "switch", original_branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if switched.returncode != 0:
+            raise IntegrationError(switched.stderr.strip() or "failed to restore original branch")
+
+    def _delete_branch(self, repo_root: Path, review_branch: str) -> None:
+        deleted = subprocess.run(
+            ["git", "-C", str(repo_root), "branch", "-D", review_branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if deleted.returncode != 0:
+            raise IntegrationError(deleted.stderr.strip() or "failed to delete review branch")
+
+    def _cleanup_review_branch(self, repo_root: Path, metadata: TaskMetadata) -> None:
+        original_branch = metadata.integration.original_branch
+        review_branch = metadata.integration.review_branch
+        if original_branch:
+            self._restore_original_branch(repo_root, original_branch)
+        if review_branch:
+            self._delete_branch(repo_root, review_branch)
+
+    def _repo_has_changes(self, repo_root: Path) -> bool:
+        status = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if status.returncode != 0:
+            raise IntegrationError(status.stderr.strip() or "failed to inspect target repo status")
+        return bool(status.stdout.strip())

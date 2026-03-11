@@ -39,8 +39,17 @@ class HumanVerificationService:
             if workspace_repo is None:
                 raise IntegrationError("workspace path missing")
             self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
-            self.metadata_store.save(context.task_dir, context.metadata)
-            return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
+            try:
+                self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
+                self.metadata_store.save(context.task_dir, context.metadata)
+                return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
+            except Exception as exc:
+                try:
+                    self.integration_manager.rollback_workspace(context.metadata)
+                except Exception as cleanup_exc:
+                    raise IntegrationError(f"{exc}; cleanup failed: {cleanup_exc}") from exc
+                self.metadata_store.save(context.task_dir, context.metadata)
+                raise
 
     def reject(self, task_id: str, *, by: str, note: str) -> TaskContext:
         context = self._find_task(task_id)

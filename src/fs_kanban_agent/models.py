@@ -67,12 +67,15 @@ class IntegrationInfo(BaseModel):
     base_commit: str | None = None
     patch_path: str | None = None
     applied_at: datetime | None = None
+    original_branch: str | None = None
+    review_branch: str | None = None
 
 
 class CommitInfo(BaseModel):
     status: str = "pending"
     sha: str | None = None
     message_path: str | None = None
+    prepared_message: str | None = None
 
 
 class RequestInfo(BaseModel):
