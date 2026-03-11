@@ -26,6 +26,7 @@ class OpenCodeAdapter:
         cwd: Path,
         run_log_path: Path,
         config: AppConfig,
+        session_id: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> RunResult:
         raise NotImplementedError
@@ -131,6 +132,7 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         cwd: Path,
         run_log_path: Path,
         config: AppConfig,
+        session_id: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> RunResult:
         command = [config.opencode.binary, "run"]
@@ -138,6 +140,8 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         resolved_model = _read_agent_model(agent_path)
         if config.opencode.attach_url:
             command.extend(["--attach", config.opencode.attach_url])
+        if session_id:
+            command.extend(["--session", session_id])
         if resolved_model:
             command.extend(["--model", resolved_model])
         command.extend(["--agent", agent, "--format", "json", "--", prompt])
@@ -193,6 +197,7 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         stdout = "".join(stdout_chunks)
         stderr = "".join(stderr_chunks)
         assistant_text = _extract_assistant_text(stdout)
+        resolved_session_id = _extract_session_id(stdout) or session_id
         return RunResult(
             ok=returncode == 0,
             returncode=returncode,
@@ -202,6 +207,7 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
             raw_events_path=str(run_log_path),
             command=command,
             resolved_model=resolved_model,
+            session_id=resolved_session_id,
         )
 
 
@@ -221,6 +227,24 @@ def _extract_assistant_text(stdout: str) -> str:
             if isinstance(part, dict) and isinstance(part.get("text"), str):
                 return part["text"]
     return ""
+
+
+def _extract_session_id(stdout: str) -> str | None:
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    for line in lines:
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        session_id = payload.get("sessionID")
+        if isinstance(session_id, str) and session_id.strip():
+            return session_id
+        part = payload.get("part")
+        if isinstance(part, dict):
+            nested_session_id = part.get("sessionID")
+            if isinstance(nested_session_id, str) and nested_session_id.strip():
+                return nested_session_id
+    return None
 
 
 def _utc_timestamp() -> str:

@@ -25,6 +25,7 @@ class FakeAdapter(OpenCodeAdapter):
         stderr: str = "",
         discovery_responses: list[list[str] | Exception] | None = None,
         resolved_models: list[str | None] | None = None,
+        session_ids: list[str | None] | None = None,
     ) -> None:
         self.responses = responses or []
         self.side_effect = side_effect
@@ -34,6 +35,8 @@ class FakeAdapter(OpenCodeAdapter):
         self.discovery_responses = discovery_responses or []
         self.discovery_calls: list[bool] = []
         self.resolved_models = resolved_models or []
+        self.session_ids = session_ids or []
+        self.run_calls: list[dict[str, object]] = []
 
     def run(
         self,
@@ -43,8 +46,18 @@ class FakeAdapter(OpenCodeAdapter):
         cwd: Path,
         run_log_path: Path,
         config: AppConfig,
+        session_id: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> RunResult:
+        self.run_calls.append(
+            {
+                "agent": agent,
+                "prompt": prompt,
+                "cwd": cwd,
+                "run_log_path": run_log_path,
+                "session_id": session_id,
+            }
+        )
         if self.side_effect is not None:
             self.side_effect(cwd)
         content = self.responses.pop(0) if self.responses else f"{agent}: ok"
@@ -53,6 +66,7 @@ class FakeAdapter(OpenCodeAdapter):
         if on_log_line is not None:
             on_log_line(content, content)
         resolved_model = self.resolved_models.pop(0) if self.resolved_models else None
+        returned_session_id = self.session_ids.pop(0) if self.session_ids else session_id
         return RunResult(
             ok=self.ok,
             returncode=self.returncode,
@@ -62,6 +76,7 @@ class FakeAdapter(OpenCodeAdapter):
             raw_events_path=str(run_log_path),
             command=[agent],
             resolved_model=resolved_model,
+            session_id=returned_session_id,
         )
 
     def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:

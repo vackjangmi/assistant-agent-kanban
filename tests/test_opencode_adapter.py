@@ -6,7 +6,7 @@ from typing import cast
 import subprocess
 
 from fs_kanban_agent.config import AppConfig
-from fs_kanban_agent.opencode_adapter import SubprocessOpenCodeAdapter, _extract_assistant_text
+from fs_kanban_agent.opencode_adapter import SubprocessOpenCodeAdapter, _extract_assistant_text, _extract_session_id
 
 
 def test_extract_assistant_text_prefers_final_event():
@@ -42,6 +42,17 @@ def test_extract_assistant_text_ignores_tool_only_json_stream():
     )
 
     assert _extract_assistant_text(stdout) == ""
+
+
+def test_extract_session_id_reads_first_event_session():
+    stdout = "\n".join(
+        [
+            '{"type":"step_start","sessionID":"ses_123"}',
+            '{"type":"final","content":"ok"}',
+        ]
+    )
+
+    assert _extract_session_id(stdout) == "ses_123"
 
 
 def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path):
@@ -155,6 +166,7 @@ def test_subprocess_adapter_reports_resolved_model_from_materialized_agent(monke
     )
 
     assert result.resolved_model == "openai/gpt-5.4"
+    assert result.session_id is None
 
 
 def test_subprocess_adapter_skips_model_flag_when_no_override(monkeypatch, tmp_path):
@@ -192,3 +204,42 @@ def test_subprocess_adapter_skips_model_flag_when_no_override(monkeypatch, tmp_p
     command = cast(list[str], recorded["command"])
     assert "--model" not in command
     assert result.resolved_model is None
+
+
+def test_subprocess_adapter_reuses_explicit_session_id(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = ['{"type":"final","content":"ok"}\n']
+            self.stderr = []
+            self.command = command
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessOpenCodeAdapter()
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-implementer",
+        prompt="sample",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "implementer.jsonl",
+        config=config,
+        session_id="ses_existing",
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert "--session" in command
+    assert command[command.index("--session") + 1] == "ses_existing"
+    assert result.session_id == "ses_existing"

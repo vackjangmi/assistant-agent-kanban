@@ -45,12 +45,20 @@ class ImplementationInfo(BaseModel):
     branch: str | None = None
     last_result: str | None = None
     resolved_model: str | None = None
+    session_id: str | None = None
 
 
 class ReviewInfo(BaseModel):
     iteration: int = 0
     last_verdict: Literal["PASS", "NEEDS_CHANGES"] | None = None
     resolved_model: str | None = None
+    session_id: str | None = None
+
+
+class RetryGateInfo(BaseModel):
+    reason: str | None = None
+    consecutive_count: int = 0
+    not_before: datetime | None = None
 
 
 class IntegrationInfo(BaseModel):
@@ -94,6 +102,7 @@ class TaskMetadata(BaseModel):
     review: ReviewInfo = Field(default_factory=ReviewInfo)
     integration: IntegrationInfo = Field(default_factory=IntegrationInfo)
     commit: CommitInfo = Field(default_factory=CommitInfo)
+    retry_gate: RetryGateInfo = Field(default_factory=RetryGateInfo)
     lease: WorkerLease = Field(default_factory=WorkerLease)
     history: list[HistoryEntry] = Field(default_factory=list)
     errors: list[TaskErrorInfo] = Field(default_factory=list)
@@ -152,6 +161,7 @@ class RunResult(BaseModel):
     raw_events_path: str | None = None
     command: list[str] = Field(default_factory=list)
     resolved_model: str | None = None
+    session_id: str | None = None
 
 
 class TaskContext(BaseModel):
