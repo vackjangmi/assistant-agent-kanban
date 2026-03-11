@@ -1,4 +1,4 @@
-kanban_root: ./ai-kanban
+kanban_root: ai-kanban
 repo_root: .
 base_branch: main
 opencode:
@@ -26,5 +26,5 @@ runtime:
   poll_interval_seconds: 0.2
   auto_dispatch: true
 repo_discovery:
-  root: ../
+  root: /Users/sooyeol24/git/opencode
   max_depth: 2
