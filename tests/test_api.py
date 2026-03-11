@@ -457,7 +457,8 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert "Do not call `task()` or delegate helper subtasks." in planner_agent_path.read_text()
         assert "Write the plan directly in this response." in planner_agent_path.read_text()
         assert "Do not delegate the final file edits" in implementer_agent_path.read_text()
-        assert "Do not delegate the final verdict" in reviewer_agent_path.read_text()
+        assert "Write the review directly in this response." in reviewer_agent_path.read_text()
+        assert "Prefer `Verdict: PASS` when only minor follow-up notes remain" in reviewer_agent_path.read_text()
 
         second_save = client.put(
             "/api/settings/models",
