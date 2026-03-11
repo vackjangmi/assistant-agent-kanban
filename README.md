@@ -79,6 +79,15 @@ By default the adapter uses plain `opencode run` without `--attach`. If you want
 to reuse an external OpenCode server, set `opencode.attach_url` explicitly in
 your config.
 
+The fs-kanban worker prompts are still role-specific custom agents, but they now
+use prompt-driven OMO delegation for lightweight helper work. The planner can
+delegate bounded repository exploration or docs lookup to smaller specialists,
+the implementer can delegate lightweight search and trivial helper subtasks, and
+the reviewer can delegate evidence gathering. Final plans, file edits, review
+verdicts, and other role-critical judgments stay with the main worker prompt.
+This is prompt-driven behavior in `.opencode/agents/`, not adapter-level
+orchestration inside `src/fs_kanban_agent/opencode_adapter.py`.
+
 ## Create a request task
 
 The easiest way to bind a task to a specific target project is the CLI helper:

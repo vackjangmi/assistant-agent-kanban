@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -69,6 +70,8 @@ def test_api_exposes_health_board_task_and_events(configured_paths):
         assert board.json()["columns"][0]["state"] == "requests"
         detail = client.get(f"/api/tasks/{task.metadata.task_id}")
         assert detail.status_code == 200
+        detail_payload = detail.json()
+        assert detail_payload["request_markdown_path"] == str((Path(detail_payload["task_path"]) / "REQUEST.md").resolve())
         assert "metadata.json" not in detail.json()["json_files"]
         logs = client.get(f"/api/tasks/{task.metadata.task_id}/logs")
         assert logs.status_code == 200
@@ -177,6 +180,47 @@ def test_api_supports_human_verification_approve(configured_paths):
         assert approve.json()["state"] == TaskState.DONE.value
 
 
+def test_api_deletes_task_and_owned_runtime_artifacts(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "delete-api-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+    workspace_root = config.workspace.root / task.metadata.task_id
+    workspace_root.mkdir(parents=True)
+    (workspace_root / "repo").mkdir()
+    run_dir = config.runs_dir / task.metadata.task_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "planner-001.jsonl").write_text("log\n")
+
+    with TestClient(app) as client:
+        response = client.delete(f"/api/tasks/{task.metadata.task_id}")
+        assert response.status_code == 200
+        assert response.json() == {"deleted": True, "task_id": task.metadata.task_id}
+        assert client.get(f"/api/tasks/{task.metadata.task_id}").status_code == 404
+
+    assert not workspace_root.exists()
+    assert not run_dir.exists()
+    board = KanbanScanner(config).board_snapshot().model_dump(mode="json")
+    assert all(item["task_id"] != task.metadata.task_id for column in board["columns"] for item in column["items"])
+
+
+def test_api_rejects_delete_for_active_task_state(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    task_dir = config.state_dir(TaskState.HUMAN_VERIFYING) / "delete-blocked-task"
+    task_dir.mkdir(parents=True)
+    (task_dir / "REQUEST.md").write_text("# blocked task\n")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+
+    with TestClient(app) as client:
+        response = client.delete(f"/api/tasks/{task.metadata.task_id}")
+
+    assert response.status_code == 409
+    assert "blocked while state is human-verifying" in response.json()["detail"]
+
+
 def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):
     config, _, _ = configured_paths
     target_repo = tmp_path / "target-repo"
@@ -237,10 +281,27 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
 
 
-def test_api_reads_and_updates_model_settings(configured_paths, tmp_path):
+def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkeypatch):
     config, _, _ = configured_paths
     config_path = tmp_path / "dashboard-config.yaml"
     config.persist(config_path)
+    omo_root = tmp_path / "xdg-config"
+    omo_config_dir = omo_root / "opencode"
+    omo_config_dir.mkdir(parents=True)
+    (omo_config_dir / "oh-my-opencode.json").write_text(
+        json.dumps(
+            {
+                "agents": {
+                    "explore": {"model": "openai/gpt-5-mini", "variant": "low"},
+                    "librarian": {"model": "openai/gpt-5-mini", "variant": "low"},
+                },
+                "categories": {
+                    "quick": {"model": "openai/gpt-5-nano", "variant": "low"},
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(omo_root))
     planner_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
     app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -252,6 +313,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path):
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["discovery_status"] == "ready"
         assert get_response.json()["discovery_error"] is None
+        assert get_response.json()["delegated_model_status"] == "ready"
+        assert get_response.json()["delegated_model_source_path"] == str((omo_config_dir / "oh-my-opencode.json").resolve())
+        assert get_response.json()["delegated_models"] == [
+            {"key": "quick", "source_type": "category", "model": "openai/gpt-5-nano", "variant": "low"},
+            {"key": "explore", "source_type": "agent", "model": "openai/gpt-5-mini", "variant": "low"},
+            {"key": "librarian", "source_type": "agent", "model": "openai/gpt-5-mini", "variant": "low"},
+        ]
         assert planner_adapter.discovery_calls == [False]
 
         put_response = client.put(
@@ -340,6 +408,7 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
     runtime_agents_dir = config.kanban_root / "_runtime" / "opencode-config" / "opencode" / "agents"
     planner_agent_path = runtime_agents_dir / f"{config.opencode.planner_agent}.md"
+    implementer_agent_path = runtime_agents_dir / f"{config.opencode.implementer_agent}.md"
     reviewer_agent_path = runtime_agents_dir / f"{config.opencode.reviewer_agent}.md"
 
     with TestClient(app) as client:
@@ -347,16 +416,22 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
             "/api/settings/models",
             json={
                 "planner_model": "openai/gpt-5.4",
-                "implementer_model": None,
+                "implementer_model": "openai/gpt-5.4-mini",
                 "reviewer_model": "github-copilot/gpt-5",
                 "commit_model": None,
             },
         )
         assert first_save.status_code == 200
         assert planner_agent_path.exists()
+        assert implementer_agent_path.exists()
         assert reviewer_agent_path.exists()
         assert "model: openai/gpt-5.4" in planner_agent_path.read_text()
+        assert "model: openai/gpt-5.4-mini" in implementer_agent_path.read_text()
         assert "model: github-copilot/gpt-5" in reviewer_agent_path.read_text()
+        assert "task(subagent_type=\"explore\"" in planner_agent_path.read_text()
+        assert "task(category=\"quick\", load_skills=[], ...)" in planner_agent_path.read_text()
+        assert "Do not delegate the final file edits" in implementer_agent_path.read_text()
+        assert "Do not delegate the final verdict" in reviewer_agent_path.read_text()
 
         second_save = client.put(
             "/api/settings/models",
@@ -370,6 +445,7 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert second_save.status_code == 200
 
     assert planner_agent_path.read_text() == (PROJECT_ROOT / ".opencode" / "agents" / f"{config.opencode.planner_agent}.md").read_text()
+    assert implementer_agent_path.read_text() == (PROJECT_ROOT / ".opencode" / "agents" / f"{config.opencode.implementer_agent}.md").read_text()
     assert reviewer_agent_path.read_text() == (PROJECT_ROOT / ".opencode" / "agents" / f"{config.opencode.reviewer_agent}.md").read_text()
 
 
@@ -423,6 +499,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert response.status_code == 200
     assert "Create request" in response.text
     assert "Model settings" in response.text
+    assert "OMO-managed delegated helpers" in response.text
+    assert "Quick helper" in response.text
+    assert "Explore helper" in response.text
+    assert "Librarian helper" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
     assert "/api/requests" in response.text
@@ -446,7 +526,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "buildScopeDefaults" in response.text
     assert "buildOutOfScopeDefaults" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
+    assert "typeof payload.content !== 'string'" in response.text
     assert "worker_log" in response.text
+    assert "loadTaskLogs(activeTaskId, true)" not in response.text
+    assert "maybeStartLogPolling" not in response.text
+    assert "setInterval(() => {" not in response.text
     assert "data-active-since" in response.text
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
@@ -458,6 +542,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Planner model used" in response.text
     assert "Implementer model used" in response.text
     assert "Reviewer model used" in response.text
+    assert "REQUEST.md path" in response.text
+    assert "Delete task" in response.text
+    assert "This permanently removes the task directory and any managed workspace artifacts created for it." in response.text
+    assert "method: 'DELETE'" in response.text
     assert f'const defaultTargetRepo = "{PROJECT_ROOT.parent}";' in response.text
 
 

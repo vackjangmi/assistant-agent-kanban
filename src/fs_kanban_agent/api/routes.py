@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from ..agent_materializer import ensure_runtime_agents
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
+from ..omo_config import read_omo_delegation_snapshot
 from ..repo_discovery import discover_target_repos
 from ..request_creator import RequestTemplateData, build_default_scope_sections, create_request, split_lines
 
@@ -61,9 +62,10 @@ def build_router() -> APIRouter:
         return runtime.board_service.get_board()
 
     @router.get("/api/settings/models")
-    async def get_model_settings(request: Request, refresh: bool = False) -> dict[str, str | list[str] | bool | None]:
+    async def get_model_settings(request: Request, refresh: bool = False) -> dict[str, object]:
         runtime = request.app.state.runtime
         snapshot = await asyncio.to_thread(runtime.model_registry.get, refresh=refresh)
+        omo_snapshot = read_omo_delegation_snapshot()
         return {
             "planner_model": runtime.config.opencode.planner_model,
             "implementer_model": runtime.config.opencode.implementer_model,
@@ -75,6 +77,18 @@ def build_router() -> APIRouter:
             "discovered_at": snapshot.discovered_at,
             "discovery_error": snapshot.error,
             "discovery_attempted": snapshot.attempted,
+            "delegated_model_source_path": str(omo_snapshot.source_path) if omo_snapshot.source_path else None,
+            "delegated_model_status": omo_snapshot.status,
+            "delegated_model_error": omo_snapshot.error,
+            "delegated_models": [
+                {
+                    "key": target.key,
+                    "source_type": target.source_type,
+                    "model": target.model,
+                    "variant": target.variant,
+                }
+                for target in omo_snapshot.targets
+            ],
         }
 
     @router.put("/api/settings/models")
@@ -205,5 +219,16 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return moved.metadata
+
+    @router.delete("/api/tasks/{task_id}")
+    async def delete_task(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            await asyncio.to_thread(runtime.deletion_service.delete, task_id, by="human")
+        except (TransitionError, TaskNotFoundError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return {"deleted": True, "task_id": task_id}
 
     return router

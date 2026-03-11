@@ -19,11 +19,19 @@ class TaskService:
             task = self.scanner.find_task(task_id)
         except FileNotFoundError as exc:
             raise TaskNotFoundError(task_id) from exc
+        request_markdown_path = str((task.task_dir / task.metadata.request.path).resolve())
         markdown_files = sorted(path.name for path in task.task_dir.glob("*.md"))
         json_files = sorted(path.name for path in task.task_dir.glob("*.json") if path.name != "metadata.json")
         log_dir = self.runs_root / task.metadata.task_id
         log_files = sorted(path.name for path in log_dir.glob("*")) if log_dir.exists() else []
-        return TaskDetail(metadata=task.metadata, task_path=str(task.task_dir), markdown_files=markdown_files, json_files=json_files, log_files=log_files)
+        return TaskDetail(
+            metadata=task.metadata,
+            task_path=str(task.task_dir),
+            request_markdown_path=request_markdown_path,
+            markdown_files=markdown_files,
+            json_files=json_files,
+            log_files=log_files,
+        )
 
     def get_logs(self, task_id: str) -> TaskLogs:
         try:

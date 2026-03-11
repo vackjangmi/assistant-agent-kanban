@@ -10,6 +10,7 @@ from ..config import AppConfig
 from ..events import EventBus
 from ..language import language_name
 from ..locks import TaskLockManager
+from ..log_parser import render_opencode_log
 from ..metadata_store import MetadataStore
 from ..models import RunResult, TaskMetadata, WorkerEvent
 from ..scanner import KanbanScanner
@@ -86,7 +87,12 @@ class WorkerBase:
             return False
 
     def make_log_callback(self, loop: asyncio.AbstractEventLoop, task_id: str, log_name: str):
+        content = ""
+
         def callback(raw_line: str, rendered_line: str | None) -> None:
+            nonlocal content
+            next_chunk = raw_line if raw_line.endswith("\n") else f"{raw_line}\n"
+            content = f"{content}{next_chunk}"
             loop.call_soon_threadsafe(
                 asyncio.create_task,
                 self.emit(
@@ -95,6 +101,8 @@ class WorkerBase:
                     log_name=log_name,
                     raw_line=raw_line,
                     rendered_line=rendered_line,
+                    content=content,
+                    rendered_content=render_opencode_log(content) or None,
                 ),
             )
 

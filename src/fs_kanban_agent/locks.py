@@ -21,11 +21,7 @@ class TaskLockManager:
 
     @contextmanager
     def acquire(self, task_dir: Path, metadata: TaskMetadata, owner: str, run_id: str):
-        lock = FileLock(str(self.path_for(metadata.task_id)))
-        try:
-            lock.acquire(timeout=self.config.locks.timeout_seconds)
-        except Timeout as exc:
-            raise LockError(f"could not acquire lock for {metadata.task_id}") from exc
+        lock = self._acquire_file_lock(metadata.task_id)
         try:
             metadata.lease.owner = owner
             metadata.lease.run_id = run_id
@@ -37,6 +33,14 @@ class TaskLockManager:
             metadata.lease.run_id = None
             metadata.lease.heartbeat_at = None
             self.metadata_store.save(self._resolve_task_dir(task_dir, metadata.task_id), metadata)
+            lock.release()
+
+    @contextmanager
+    def acquire_by_task_id(self, task_id: str, owner: str, run_id: str):
+        lock = self._acquire_file_lock(task_id)
+        try:
+            yield
+        finally:
             lock.release()
 
     def heartbeat(self, task_dir: Path, metadata: TaskMetadata, owner: str, run_id: str) -> None:
@@ -56,3 +60,11 @@ class TaskLockManager:
             if metadata_path.exists() and task_id in metadata_path.read_text():
                 return candidate
         return original_task_dir
+
+    def _acquire_file_lock(self, task_id: str):
+        lock = FileLock(str(self.path_for(task_id)))
+        try:
+            lock.acquire(timeout=self.config.locks.timeout_seconds)
+        except Timeout as exc:
+            raise LockError(f"could not acquire lock for {task_id}") from exc
+        return lock

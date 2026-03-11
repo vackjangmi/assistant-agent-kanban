@@ -176,3 +176,5 @@ def test_planner_worker_emits_realtime_worker_log_events(configured_paths):
     assert event.task_id is not None
     assert event.payload["log_name"].startswith("planner-")
     assert event.payload["raw_line"] == "## Summary\nplan"
+    assert event.payload["content"] == "## Summary\nplan\n"
+    assert event.payload["rendered_content"] == "## Summary\n\nplan"

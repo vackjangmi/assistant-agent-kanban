@@ -79,6 +79,14 @@ def build_ui_router() -> APIRouter:
     .settings-status {{ padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }}
     .settings-status[data-tone="success"] {{ border-color: rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: var(--success); }}
     .settings-status[data-tone="error"] {{ border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }}
+    .settings-readonly {{ display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); background: rgba(24,32,38,0.03); }}
+    .settings-readonly-head p {{ margin: 8px 0 0; color: var(--muted); }}
+    .settings-readonly-grid {{ display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 12px; }}
+    .settings-readonly-card {{ padding: 14px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); }}
+    .settings-readonly-card strong {{ display: block; }}
+    .settings-readonly-card span {{ display: block; margin-top: 4px; color: var(--muted); font-size: 0.92rem; }}
+    .settings-readonly-card code {{ display: block; margin-top: 8px; overflow-wrap: anywhere; font-size: 0.92rem; }}
+    .settings-readonly-source {{ color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }}
     .form-actions {{ display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }}
     .task-meta-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 10px 16px; margin-bottom: 18px; }}
     .meta-item span {{ display: block; color: var(--muted); font-size: 0.9rem; }}
@@ -96,6 +104,9 @@ def build_ui_router() -> APIRouter:
     .task-list {{ margin: 0; padding-left: 18px; color: var(--muted); }}
     .verification-actions {{ border: 1px solid var(--border); background: rgba(255,249,239,0.9); padding: 14px; margin-bottom: 14px; }}
     .verification-actions[hidden] {{ display: none; }}
+    .task-danger-actions {{ border: 1px solid rgba(163,58,42,0.24); background: rgba(163,58,42,0.08); padding: 14px; margin-bottom: 14px; }}
+    .task-danger-actions[hidden] {{ display: none; }}
+    .danger-button {{ background: var(--danger); border-color: var(--danger); color: #fff; }}
     .verification-actions textarea {{ width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
     .log-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; }}
     .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
@@ -257,6 +268,14 @@ def build_ui_router() -> APIRouter:
           </label>
         </div>
         <datalist id="opencode-model-options"></datalist>
+        <section class="settings-readonly" aria-labelledby="delegated-models-title">
+          <div class="settings-readonly-head">
+            <strong id="delegated-models-title">OMO-managed delegated helpers</strong>
+            <p>These mappings come from your detected OMO configuration and are shown here for visibility only. fs-kanban does not edit them.</p>
+          </div>
+          <div id="delegated-models-source" class="settings-readonly-source">Delegated helper source: checking…</div>
+          <div id="delegated-models-grid" class="settings-readonly-grid"></div>
+        </section>
         <div id="settings-config-path" class="settings-path">Config path: loading...</div>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
         <div class="form-actions">
@@ -298,6 +317,18 @@ def build_ui_router() -> APIRouter:
             <label for="task-verification-note"><strong>Follow-up requirements</strong></label>
             <textarea id="task-verification-note" placeholder="Explain what must change before the task returns to TODO."></textarea>
           </div>
+        </section>
+        <section id="task-delete-actions" class="task-danger-actions" hidden>
+          <div class="editor-toolbar">
+            <div>
+              <strong>Delete task</strong>
+              <div id="task-delete-status" class="muted">Deletion is only available when the task is not actively running.</div>
+            </div>
+            <div>
+              <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
+            </div>
+          </div>
+          <div class="muted">This permanently removes the task directory and any managed workspace artifacts created for it.</div>
         </section>
         <div id="task-overview" class="muted">Select a task to inspect.</div>
       </section>
@@ -362,6 +393,8 @@ def build_ui_router() -> APIRouter:
     const settingsConfigPath = document.getElementById('settings-config-path');
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
     const settingsStatus = document.getElementById('settings-status');
+    const delegatedModelsSource = document.getElementById('delegated-models-source');
+    const delegatedModelsGrid = document.getElementById('delegated-models-grid');
     const refreshModelOptionsButton = document.getElementById('refresh-model-options');
     const scopeField = document.getElementById('scope');
     const outOfScopeField = document.getElementById('out_of_scope');
@@ -382,6 +415,9 @@ def build_ui_router() -> APIRouter:
     const startVerificationButton = document.getElementById('start-verification');
     const rejectVerificationButton = document.getElementById('reject-verification');
     const approveVerificationButton = document.getElementById('approve-verification');
+    const taskDeleteActions = document.getElementById('task-delete-actions');
+    const taskDeleteStatus = document.getElementById('task-delete-status');
+    const deleteTaskButton = document.getElementById('delete-task');
     const taskLogFiles = document.getElementById('task-log-files');
     const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
@@ -402,7 +438,6 @@ def build_ui_router() -> APIRouter:
     let activeTaskDetail = null;
     let activeArtifactName = null;
     let activeLogName = null;
-    let logPollHandle = null;
     let runningTimerHandle = null;
     let planSourceMarkdown = '';
     let planEditMode = false;
@@ -483,6 +518,35 @@ def build_ui_router() -> APIRouter:
       modelOptions.innerHTML = items.map((item) => `<option value="${{escapeHtml(item)}}"></option>`).join('');
     }}
 
+    function renderDelegatedModels(data) {{
+      const labels = {{
+        quick: 'Quick helper',
+        explore: 'Explore helper',
+        librarian: 'Librarian helper',
+      }};
+      const descriptions = {{
+        quick: 'Used for tiny delegated tasks and trivial helper work.',
+        explore: 'Used for delegated repository and codebase exploration.',
+        librarian: 'Used for delegated documentation and external reference lookups.',
+      }};
+      const items = Array.isArray(data.delegated_models) ? data.delegated_models : [];
+      if (data.delegated_model_source_path) {{
+        delegatedModelsSource.textContent = `Delegated helper source: ${{data.delegated_model_source_path}}`;
+      }} else if (data.delegated_model_status === 'missing') {{
+        delegatedModelsSource.textContent = 'Delegated helper source: no global OMO config was detected.';
+      }} else if (data.delegated_model_error) {{
+        delegatedModelsSource.textContent = `Delegated helper source error: ${{data.delegated_model_error}}`;
+      }} else {{
+        delegatedModelsSource.textContent = 'Delegated helper source: detected, but no quick/explore/librarian mapping was found.';
+      }}
+      delegatedModelsGrid.innerHTML = ['quick', 'explore', 'librarian'].map((key) => {{
+        const item = items.find((entry) => entry.key === key);
+        const model = item && item.model ? item.model : 'Not configured';
+        const variant = item && item.variant ? item.variant : 'variant not set';
+        return `<article class="settings-readonly-card"><strong>${{escapeHtml(labels[key])}}</strong><span>${{escapeHtml(descriptions[key])}}</span><code>${{escapeHtml(model)}}</code><span>${{escapeHtml(variant)}}</span></article>`;
+      }}).join('');
+    }}
+
     function updateModelDiscoverySummary(data) {{
       const count = data.available_models.length;
       if (count) {{
@@ -519,6 +583,7 @@ def build_ui_router() -> APIRouter:
         reviewerModelInput.value = data.reviewer_model || '';
         commitModelInput.value = data.commit_model || '';
         renderModelOptions(data.available_models || []);
+        renderDelegatedModels(data);
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
         updateModelDiscoverySummary(data);
       }} finally {{
@@ -576,8 +641,6 @@ def build_ui_router() -> APIRouter:
       taskModal.hidden = !isOpen;
       taskModal.setAttribute('aria-hidden', String(!isOpen));
       syncBodyModalState();
-      if (isOpen) maybeStartLogPolling();
-      else stopLogPolling();
     }}
 
     function syncBodyModalState() {{
@@ -670,7 +733,6 @@ def build_ui_router() -> APIRouter:
       taskPanelLogs.hidden = tab !== 'logs';
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
-      maybeStartLogPolling();
     }}
 
     function ensureMarkdownViewer(value) {{
@@ -774,19 +836,22 @@ def build_ui_router() -> APIRouter:
       }}
     }}
 
-    function stopLogPolling() {{
-      if (logPollHandle) {{
-        clearInterval(logPollHandle);
-        logPollHandle = null;
+    function updateTaskDeleteState() {{
+      const state = activeTaskDetail?.metadata?.state;
+      const blocked = Boolean(state && isActiveState(state));
+      const available = Boolean(state);
+      taskDeleteActions.hidden = !available;
+      deleteTaskButton.hidden = !available;
+      deleteTaskButton.disabled = !available || blocked;
+      if (!available) {{
+        taskDeleteStatus.textContent = 'Deletion is only available when the task details finish loading.';
+        return;
       }}
-    }}
-
-    function maybeStartLogPolling() {{
-      stopLogPolling();
-      if (taskModal.hidden || taskPanelLogs.hidden || !activeTaskId) return;
-      logPollHandle = window.setInterval(() => {{
-        loadTaskLogs(activeTaskId, true);
-      }}, 500);
+      if (blocked) {{
+        taskDeleteStatus.textContent = 'Delete is blocked while this task is actively running. Wait for it to leave planning, implementing, reviewing, or human-verifying.';
+        return;
+      }}
+      taskDeleteStatus.textContent = 'This removes the task from the board and deletes its managed workspace artifacts.';
     }}
 
     function renderTaskOverview(detail) {{
@@ -808,6 +873,7 @@ def build_ui_router() -> APIRouter:
       taskEditorStatus.textContent = planEditable ? 'Rendered markdown preview. Use Edit PLAN.md only when you want to change the document.' : 'Rendered markdown preview only for this task state.';
       updatePlanActionState();
       updateHumanVerificationState();
+      updateTaskDeleteState();
       renderArtifactButtons(detail.markdown_files);
       taskOverview.innerHTML = `
         <div class="task-meta-grid">
@@ -818,6 +884,7 @@ def build_ui_router() -> APIRouter:
           <div class="meta-item"><span>Updated</span><strong>${{escapeHtml(metadata.updated_at)}}</strong></div>
           <div class="meta-item"><span>Target repo</span><strong>${{escapeHtml(metadata.target.repo_root)}}</strong></div>
           <div class="meta-item"><span>Base branch</span><strong>${{escapeHtml(metadata.target.base_branch)}}</strong></div>
+          <div class="meta-item"><span>REQUEST.md path</span><strong>${{escapeHtml(detail.request_markdown_path)}}</strong></div>
         </div>
         <div class="task-section">
           <h3>Captured stage models</h3>
@@ -885,16 +952,14 @@ def build_ui_router() -> APIRouter:
 
     function appendRealtimeLog(eventPayload) {{
       const payload = eventPayload.payload || eventPayload;
-      if (!payload || !payload.log_name || typeof payload.raw_line !== 'string') return;
+      if (!payload || !payload.log_name || typeof payload.content !== 'string') return;
       let entry = activeTaskLogs.find((item) => item.name === payload.log_name);
       if (!entry) {{
         entry = {{ name: payload.log_name, path: payload.log_name, content: '', rendered_content: '', updated_at: new Date().toISOString() }};
         activeTaskLogs = [...activeTaskLogs, entry];
       }}
-      entry.content = `${{entry.content || ''}}${{payload.raw_line}}\n`;
-      if (typeof payload.rendered_line === 'string' && payload.rendered_line.trim()) {{
-        entry.rendered_content = `${{entry.rendered_content || ''}}${{payload.rendered_line}}\n\n`;
-      }}
+      entry.content = payload.content;
+      entry.rendered_content = typeof payload.rendered_content === 'string' ? payload.rendered_content : '';
       entry.updated_at = new Date().toISOString();
       renderTaskLogEntries(activeTaskLogs);
     }}
@@ -920,6 +985,7 @@ def build_ui_router() -> APIRouter:
       taskEditorStatus.textContent = 'Select a markdown artifact to view.';
       taskVerificationNote.value = '';
       updateHumanVerificationState();
+      updateTaskDeleteState();
       taskTabEditor.hidden = true;
       setTaskTab(nextTab);
       setTaskModalOpen(true);
@@ -934,6 +1000,33 @@ def build_ui_router() -> APIRouter:
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
         taskOverview.innerHTML = '<div class="muted">Unable to load task details.</div>';
+        updateTaskDeleteState();
+      }}
+    }}
+
+    async function deleteTask() {{
+      if (!activeTaskId || !activeTaskDetail) return;
+      if (isActiveState(activeTaskDetail.metadata.state)) return;
+      const confirmed = window.confirm(`Delete task ${{activeTaskDetail.metadata.title}}? This also removes managed workspace artifacts for ${{activeTaskId}}.`);
+      if (!confirmed) return;
+      deleteTaskButton.disabled = true;
+      taskDeleteStatus.textContent = 'Deleting task and managed workspace artifacts...';
+      try {{
+        const response = await fetch(`/api/tasks/${{activeTaskId}}`, {{ method: 'DELETE' }});
+        let payload = null;
+        try {{
+          payload = await response.json();
+        }} catch (_error) {{
+          payload = null;
+        }}
+        if (!response.ok) throw new Error(payload && payload.detail ? payload.detail : 'Failed to delete task.');
+        await loadBoard();
+        setTaskModalOpen(false);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskDeleteStatus.textContent = 'Delete failed. The task stays open so you can review the error.';
+        updateTaskDeleteState();
       }}
     }}
 
@@ -1160,9 +1253,9 @@ def build_ui_router() -> APIRouter:
     cancelSettingsButton.addEventListener('click', () => setSettingsModalOpen(false));
     modal.addEventListener('click', (event) => {{ if (event.target === modal) setModalOpen(false); }});
     settingsModal.addEventListener('click', (event) => {{ if (event.target === settingsModal) setSettingsModalOpen(false); }});
-    closeTaskModalButton.addEventListener('click', () => {{ stopLogPolling(); setTaskModalOpen(false); }});
-    taskModal.addEventListener('click', (event) => {{ if (event.target === taskModal) {{ stopLogPolling(); setTaskModalOpen(false); }} }});
-    document.addEventListener('keydown', (event) => {{ if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) setSettingsModalOpen(false); if (event.key === 'Escape' && !taskModal.hidden) {{ stopLogPolling(); setTaskModalOpen(false); }} }});
+    closeTaskModalButton.addEventListener('click', () => {{ setTaskModalOpen(false); }});
+    taskModal.addEventListener('click', (event) => {{ if (event.target === taskModal) {{ setTaskModalOpen(false); }} }});
+    document.addEventListener('keydown', (event) => {{ if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) setSettingsModalOpen(false); if (event.key === 'Escape' && !taskModal.hidden) {{ setTaskModalOpen(false); }} }});
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
@@ -1179,6 +1272,7 @@ def build_ui_router() -> APIRouter:
     startVerificationButton.addEventListener('click', startVerification);
     rejectVerificationButton.addEventListener('click', rejectVerification);
     approveVerificationButton.addEventListener('click', approveVerification);
+    deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'goal', 'target_repo', 'base_branch'].forEach((name) => {{ requestForm.elements[name].addEventListener('blur', validateForm); }});
     targetRepoInput.addEventListener('input', applyRepoDefaults);
     targetRepoInput.addEventListener('change', applyRepoDefaults);

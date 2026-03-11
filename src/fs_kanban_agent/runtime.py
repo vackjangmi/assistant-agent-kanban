@@ -10,6 +10,7 @@ from .recovery import RecoveryService
 from .scanner import KanbanScanner
 from .services.board_service import BoardService
 from .services.human_verification_service import HumanVerificationService
+from .services.task_deletion_service import TaskDeletionService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
 from .opencode_adapter import OpenCodeModelRegistry, SubprocessOpenCodeAdapter
@@ -31,6 +32,7 @@ class RuntimeSupervisor:
         scanner: KanbanScanner,
         board_service: BoardService,
         verification_service: HumanVerificationService,
+        deletion_service: TaskDeletionService,
         task_service: TaskService,
         recovery: RecoveryService,
         events: EventBus,
@@ -44,6 +46,7 @@ class RuntimeSupervisor:
         self.scanner = scanner
         self.board_service = board_service
         self.verification_service = verification_service
+        self.deletion_service = deletion_service
         self.task_service = task_service
         self.recovery = recovery
         self.events = events
@@ -130,6 +133,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
     verification_service = HumanVerificationService(scanner, metadata_store, locks, transitions, integration_manager, commit_manager)
+    deletion_service = TaskDeletionService(config, scanner, locks)
     task_service = TaskService(scanner, config.runs_dir)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = OpenCodeModelRegistry(adapter=planner_adapter, config=config)
@@ -142,6 +146,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
         scanner,
         board_service,
         verification_service,
+        deletion_service,
         task_service,
         recovery,
         events,

@@ -124,6 +124,7 @@ class BoardSnapshot(BaseModel):
 class TaskDetail(BaseModel):
     metadata: TaskMetadata
     task_path: str
+    request_markdown_path: str
     markdown_files: list[str]
     json_files: list[str]
     log_files: list[str]

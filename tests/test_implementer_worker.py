@@ -130,3 +130,52 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
     assert updated.state == TaskState.TODOS
     assert updated.metadata.implementation.last_result == "failure"
     assert any(error.code == "implementation-no-changes" for error in updated.metadata.errors)
+
+
+def test_implementer_worker_emits_realtime_worker_log_events(configured_paths):
+    async def receive_worker_log(event_bus):
+        async for event in event_bus.subscribe():
+            if event.event == "worker_log":
+                return event
+
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-log-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed\n")
+
+    event_bus = EventBus()
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        event_bus,
+        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    async def scenario():
+        event_task = asyncio.create_task(receive_worker_log(event_bus))
+        await worker.run_once()
+        return await asyncio.wait_for(event_task, timeout=1)
+
+    event = asyncio.run(scenario())
+
+    assert event is not None
+    assert event.task_id is not None
+    assert event.payload["log_name"].startswith("implementer-")
+    assert event.payload["raw_line"] == "## Summary\nimplemented"
+    assert event.payload["content"] == "## Summary\nimplemented\n"
+    assert event.payload["rendered_content"] == "## Summary\n\nimplemented"
