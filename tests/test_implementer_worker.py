@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+from datetime import timedelta
 from pathlib import Path
 
 from fs_kanban_agent.config import AppConfig
@@ -10,6 +11,7 @@ from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
+from fs_kanban_agent.models import utc_now
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workspace_manager import WorkspaceManager
@@ -56,6 +58,56 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert work_json["assistant_text"] == "## Summary\nimplemented"
     assert work_json["resolved_model"] == "openai/gpt-5.4"
     assert updated.metadata.implementation.resolved_model == "openai/gpt-5.4"
+
+
+def test_implementer_worker_persists_and_reuses_session_id(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-session-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed\n")
+
+    adapter = FakeAdapter(
+        ["## Summary\nimplemented once", "## Summary\nimplemented twice"],
+        side_effect=modify_workspace,
+        session_ids=["ses_impl_1", "ses_impl_1"],
+    )
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    first_pass = scanner.scan()[0]
+    assert first_pass.metadata.implementation.session_id == "ses_impl_1"
+    assert adapter.run_calls[0]["session_id"] is None
+
+    waiting_review = first_pass
+    assert waiting_review.state == TaskState.WAITING_REVIEWS
+    reviewing = transitions.move(waiting_review, TaskState.REVIEWING, by="reviewer")
+    back_to_todos = transitions.move(reviewing, TaskState.TODOS, by="reviewer", note="review needs changes")
+    metadata_store.save(back_to_todos.task_dir, back_to_todos.metadata)
+
+    assert asyncio.run(worker.run_once()) is True
+    second_pass = scanner.scan()[0]
+    assert second_pass.metadata.implementation.session_id == "ses_impl_1"
+    assert adapter.run_calls[1]["session_id"] == "ses_impl_1"
 
 
 def test_implementer_worker_clones_task_target_repo(tmp_path):
@@ -130,6 +182,42 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
     assert updated.state == TaskState.TODOS
     assert updated.metadata.implementation.last_result == "failure"
     assert any(error.code == "implementation-no-changes" for error in updated.metadata.errors)
+    assert updated.metadata.retry_gate.reason == "implementation-no-changes"
+    assert updated.metadata.retry_gate.not_before is not None
+
+
+def test_implementer_worker_skips_retry_gated_todos(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-gated-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    todo.metadata.retry_gate.reason = "implementation-no-changes"
+    todo.metadata.retry_gate.consecutive_count = 1
+    todo.metadata.retry_gate.not_before = utc_now() + timedelta(minutes=5)
+    metadata_store.save(todo.task_dir, todo.metadata)
+
+    adapter = FakeAdapter(["## Summary\nimplemented"])
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is False
+    assert adapter.responses == ["## Summary\nimplemented"]
 
 
 def test_implementer_worker_emits_realtime_worker_log_events(configured_paths):

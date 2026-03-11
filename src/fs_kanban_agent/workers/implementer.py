@@ -5,6 +5,7 @@ import asyncio
 from ..enums import TaskState
 from ..models import TaskErrorInfo
 from ..opencode_adapter import OpenCodeAdapter
+from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from ..workspace_manager import WorkspaceManager
 from .base import WorkerBase
 
@@ -18,7 +19,7 @@ class ImplementerWorker(WorkerBase):
         self.workspace_manager = workspace_manager
 
     async def run_once(self) -> bool:
-        tasks = [task for task in self.scanner.scan() if task.state == TaskState.TODOS]
+        tasks = [task for task in self.scanner.scan() if task.state == TaskState.TODOS and can_auto_dispatch(task.metadata)]
         if not tasks:
             return False
         task = tasks[0]
@@ -37,9 +38,11 @@ class ImplementerWorker(WorkerBase):
                 cwd=workspace_repo,
                 run_log_path=run_log_path,
                 config=self.config,
+                session_id=implementing.metadata.implementation.session_id,
                 on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
             )
             implementing.metadata.implementation.resolved_model = result.resolved_model
+            implementing.metadata.implementation.session_id = result.session_id
             implementing.metadata.implementation.iteration += 1
             has_changes = self.workspace_has_changes(workspace_repo)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
@@ -61,14 +64,20 @@ class ImplementerWorker(WorkerBase):
                 )
             self.metadata_store.save(implementing.task_dir, implementing.metadata)
             if success:
+                clear_retry_gate(implementing.metadata)
+                self.metadata_store.save(implementing.task_dir, implementing.metadata)
                 done = self.transitions.move(implementing, TaskState.WAITING_REVIEWS, by=self.worker_name)
             else:
                 if not has_changes:
+                    apply_retry_gate(implementing.metadata, reason="implementation-no-changes")
                     note = "implementation produced no workspace changes"
                 elif has_local_commits:
+                    apply_retry_gate(implementing.metadata, reason="implementation-local-commits")
                     note = "implementation created local commits"
                 else:
+                    apply_retry_gate(implementing.metadata, reason="implementation-failed")
                     note = "implementation failed"
+                self.metadata_store.save(implementing.task_dir, implementing.metadata)
                 done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=note)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
