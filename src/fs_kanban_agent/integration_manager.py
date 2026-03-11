@@ -6,6 +6,7 @@ from pathlib import Path
 from .config import AppConfig
 from .exceptions import IntegrationError
 from .models import TaskMetadata, utc_now
+from .target_repo_guard import resolve_safe_target_repo_root
 
 
 class IntegrationManager:
@@ -13,7 +14,10 @@ class IntegrationManager:
         self.config = config
 
     def apply_workspace(self, metadata: TaskMetadata, workspace_repo: Path) -> Path:
-        target_repo_root = Path(metadata.target.repo_root)
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
         patch_path = self.config.runs_dir / metadata.task_id / f"review-{metadata.review.iteration:03d}.patch"
         patch_path.parent.mkdir(parents=True, exist_ok=True)
         head = subprocess.run(
@@ -67,7 +71,10 @@ class IntegrationManager:
         return patch_path
 
     def rollback_workspace(self, metadata: TaskMetadata) -> None:
-        target_repo_root = Path(metadata.target.repo_root)
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
         patch_path = Path(metadata.integration.patch_path) if metadata.integration.patch_path else None
         if patch_path is None or not patch_path.exists():
             metadata.integration.applied = False

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from .config import AppConfig
 from .enums import TaskState
 from .language import detect_primary_language
+from .target_repo_guard import resolve_safe_target_repo_root
 
 
 class RequestTemplateData(BaseModel):
@@ -53,7 +54,7 @@ def create_request(
     task_dir = requests_dir / _generate_task_key(config.kanban_root)
     task_dir.mkdir(parents=True, exist_ok=False)
     request_path = task_dir / "REQUEST.md"
-    resolved_repo = target_repo_root.expanduser().resolve()
+    resolved_repo = resolve_safe_target_repo_root(target_repo_root)
     lines = [
         "---",
         f"title: {title}",

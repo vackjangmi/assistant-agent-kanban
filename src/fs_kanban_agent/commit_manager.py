@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .exceptions import CommitError
 from .models import TaskMetadata
+from .target_repo_guard import resolve_safe_target_repo_root
 
 
 class CommitManager:
@@ -12,7 +13,10 @@ class CommitManager:
         return f"feat: complete {metadata.slug} task"
 
     def commit_task(self, task_dir: Path, metadata: TaskMetadata) -> str:
-        target_repo_root = Path(metadata.target.repo_root)
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise CommitError(str(exc)) from exc
         message = self.build_commit_message(metadata)
         commit_path = task_dir / "COMMIT.md"
         commit_path.write_text(message + "\n")
