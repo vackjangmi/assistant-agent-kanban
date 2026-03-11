@@ -7,9 +7,11 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..agent_materializer import ensure_runtime_agents
+from ..config import DEFAULT_REPO_DISCOVERY_ROOT
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..omo_config import read_omo_delegation_snapshot
+from ..repo_branches import describe_target_repo_branches
 from ..repo_discovery import discover_target_repos
 from ..request_creator import RequestTemplateData, build_default_scope_sections, create_request, split_lines
 
@@ -24,7 +26,7 @@ class CreateRequestPayload(BaseModel):
     references: str | None = None
     acceptance_criteria: str | None = None
     target_repo: str
-    base_branch: str = Field(default="main")
+    base_branch: str | None = None
 
 
 class UpdateMarkdownPayload(BaseModel):
@@ -40,6 +42,8 @@ class ModelSettingsPayload(BaseModel):
     implementer_model: str | None = None
     reviewer_model: str | None = None
     commit_model: str | None = None
+    repo_discovery_root: str | None = None
+    repo_discovery_max_depth: int | None = Field(default=None, ge=1)
 
 
 def _normalize_model_override(value: str | None) -> str | None:
@@ -47,6 +51,11 @@ def _normalize_model_override(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _normalize_repo_discovery_root(value: str | None) -> str:
+    normalized = (value or "").strip()
+    return normalized or DEFAULT_REPO_DISCOVERY_ROOT
 
 
 def build_router() -> APIRouter:
@@ -71,6 +80,8 @@ def build_router() -> APIRouter:
             "implementer_model": runtime.config.opencode.implementer_model,
             "reviewer_model": runtime.config.opencode.reviewer_model,
             "commit_model": runtime.config.opencode.commit_model,
+            "repo_discovery_root": runtime.config.repo_discovery_root_value(),
+            "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
             "config_path": str(runtime.config.config_path_for_persistence()),
             "available_models": snapshot.models,
             "discovery_status": snapshot.status,
@@ -92,12 +103,16 @@ def build_router() -> APIRouter:
         }
 
     @router.put("/api/settings/models")
-    async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, str | bool | None]:
+    async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, str | int | bool | None]:
         runtime = request.app.state.runtime
         runtime.config.opencode.planner_model = _normalize_model_override(payload.planner_model)
         runtime.config.opencode.implementer_model = _normalize_model_override(payload.implementer_model)
         runtime.config.opencode.reviewer_model = _normalize_model_override(payload.reviewer_model)
         runtime.config.opencode.commit_model = _normalize_model_override(payload.commit_model)
+        if payload.repo_discovery_root is not None:
+            runtime.config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
+        if payload.repo_discovery_max_depth is not None:
+            runtime.config.repo_discovery.max_depth = payload.repo_discovery_max_depth
         config_path = runtime.config.persist()
         ensure_runtime_agents(runtime.config)
         await runtime.rescan_and_publish()
@@ -106,6 +121,8 @@ def build_router() -> APIRouter:
             "implementer_model": runtime.config.opencode.implementer_model,
             "reviewer_model": runtime.config.opencode.reviewer_model,
             "commit_model": runtime.config.opencode.commit_model,
+            "repo_discovery_root": runtime.config.repo_discovery_root_value(),
+            "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
             "config_path": str(config_path),
             "saved": True,
         }
@@ -149,15 +166,30 @@ def build_router() -> APIRouter:
     @router.get("/api/target-repos")
     async def target_repos(request: Request):
         runtime = request.app.state.runtime
+        try:
+            items = discover_target_repos(runtime.config)
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {
-            "root": str(runtime.config.repo_discovery.root),
+            "root": runtime.config.repo_discovery_root_value(),
+            "resolved_root": str(runtime.config.resolve_repo_discovery_root()),
             "max_depth": runtime.config.repo_discovery.max_depth,
-            "items": discover_target_repos(runtime.config),
+            "items": items,
         }
+
+    @router.get("/api/target-repo-branches")
+    async def target_repo_branches(target_repo: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            snapshot = describe_target_repo_branches(runtime.config, Path(target_repo))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return snapshot.model_dump(mode="json")
 
     @router.post("/api/requests")
     async def create_request_task(payload: CreateRequestPayload, request: Request):
         runtime = request.app.state.runtime
+        normalized_base_branch = payload.base_branch.strip() if payload.base_branch else runtime.config.base_branch
         try:
             default_scope, default_out_of_scope = build_default_scope_sections(payload.target_repo)
             task_dir = create_request(
@@ -173,7 +205,7 @@ def build_router() -> APIRouter:
                     acceptance_criteria=split_lines(payload.acceptance_criteria),
                 ),
                 target_repo_root=Path(payload.target_repo),
-                base_branch=payload.base_branch.strip() or runtime.config.base_branch,
+                base_branch=normalized_base_branch,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

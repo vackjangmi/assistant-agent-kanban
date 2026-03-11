@@ -5,16 +5,13 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from ..config import PROJECT_ROOT
-
-
 def build_ui_router() -> APIRouter:
     router = APIRouter()
 
     @router.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> str:
         runtime = request.app.state.runtime
-        default_target_repo_value = str((runtime.config.repo_discovery.root or PROJECT_ROOT.parent).expanduser().resolve())
+        default_target_repo_value = ""
         default_target_repo = json.dumps(default_target_repo_value)
         default_base_branch = json.dumps(runtime.config.base_branch)
         return f"""
@@ -133,7 +130,7 @@ def build_ui_router() -> APIRouter:
     <h1>Filesystem Kanban Agent</h1>
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
-      <button id="open-settings" class="ghost-button">Model settings</button>
+    <button id="open-settings" class="ghost-button">Runtime settings</button>
       <button id="refresh">Refresh</button>
     </div>
   </header>
@@ -178,10 +175,11 @@ def build_ui_router() -> APIRouter:
             <datalist id="target-repo-options"></datalist>
             <div class="error-text" data-error-for="target_repo"></div>
             </div>
-            <div class="field">
+          <div class="field">
             <label for="base_branch">Base branch</label>
-            <span>Branch used when preparing the isolated workspace.</span>
-            <input id="base_branch" name="base_branch" required>
+            <span id="base-branch-help">Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.</span>
+            <input id="base_branch" name="base_branch" list="base-branch-options" required>
+            <datalist id="base-branch-options"></datalist>
             <div class="error-text" data-error-for="base_branch"></div>
           </div>
           <div class="field compact">
@@ -227,21 +225,33 @@ def build_ui_router() -> APIRouter:
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
       <div class="modal-head">
         <div class="modal-copy">
-          <h2 id="settings-modal-title">Model settings</h2>
+          <h2 id="settings-modal-title">Runtime settings</h2>
           <p>Adjust runtime overrides for the planner, implementer, reviewer, and commit worker without leaving the board.</p>
         </div>
-        <button type="button" id="close-settings" aria-label="Close model settings">Close</button>
+          <button type="button" id="close-settings" aria-label="Close runtime settings">Close</button>
       </div>
       <form id="settings-form" class="settings-shell">
         <div class="settings-copy">
           <strong>Runtime overrides</strong>
-          <p>Leave a field blank to fall back to the configured agent default. Saving updates the in-memory runtime immediately and writes a local config file for future runs.</p>
+          <p>Leave a model field blank to fall back to the configured agent default. Repo discovery root supports relative paths like <code>../</code> or any absolute path you want to scan. Saving updates the in-memory runtime immediately and writes a local config file for future runs.</p>
         </div>
         <div class="settings-toolbar">
           <p id="settings-discovery-summary">Open the panel to load current model options.</p>
           <button type="button" id="refresh-model-options" class="ghost-button">Refresh discovered models</button>
         </div>
         <div class="settings-grid">
+          <label class="settings-card" for="repo_discovery_root">
+            <strong>Repo discovery root</strong>
+            <span>Base path scanned for target repo suggestions and request defaults.</span>
+            <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
+            <small>Keep <code>../</code> for the default relative scan root, or enter any absolute path manually.</small>
+          </label>
+          <label class="settings-card" for="repo_discovery_max_depth">
+            <strong>Repo discovery depth</strong>
+            <span>How many directory levels to scan when building target repo suggestions.</span>
+            <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
+            <small>Use larger values only when you need deeper nested repos to appear in the list.</small>
+          </label>
           <label class="settings-card" for="planner_model">
             <strong>Planner model</strong>
             <span>Used for plan generation and plan revisions.</span>
@@ -272,7 +282,7 @@ def build_ui_router() -> APIRouter:
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
         <div class="form-actions">
           <button type="button" id="cancel-settings">Cancel</button>
-          <button type="submit" id="save-settings" class="primary">Save model settings</button>
+          <button type="submit" id="save-settings" class="primary">Save runtime settings</button>
         </div>
       </form>
     </div>
@@ -377,6 +387,10 @@ def build_ui_router() -> APIRouter:
     const targetRepoInput = document.getElementById('target_repo');
     const targetRepoOptions = document.getElementById('target-repo-options');
     const baseBranchInput = document.getElementById('base_branch');
+    const baseBranchOptions = document.getElementById('base-branch-options');
+    const baseBranchHelp = document.getElementById('base-branch-help');
+    const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
+    const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
     const plannerModelInput = document.getElementById('planner_model');
     const implementerModelInput = document.getElementById('implementer_model');
     const reviewerModelInput = document.getElementById('reviewer_model');
@@ -390,6 +404,7 @@ def build_ui_router() -> APIRouter:
     const outOfScopeField = document.getElementById('out_of_scope');
     const defaultTargetRepo = {default_target_repo};
     const defaultBaseBranch = {default_base_branch};
+    const lastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
@@ -422,6 +437,7 @@ def build_ui_router() -> APIRouter:
     const approvePlanButton = document.getElementById('approve-plan');
     let lastAutoScope = '';
     let lastAutoOutOfScope = '';
+    let lastAutoBaseBranch = '';
     let activeTaskId = null;
     let activeTaskTab = 'overview';
     let activeTaskLogs = [];
@@ -433,9 +449,13 @@ def build_ui_router() -> APIRouter:
     let planEditMode = false;
     let planEditor = null;
     let markdownViewer = null;
+    let branchLookupTimer = null;
+    let latestBranchLookupToken = 0;
 
     targetRepoInput.value = defaultTargetRepo;
     baseBranchInput.value = defaultBaseBranch;
+    baseBranchInput.dataset.autofilled = 'true';
+    lastAutoBaseBranch = defaultBaseBranch;
 
     async function loadBoard() {{
       const res = await fetch('/api/board');
@@ -490,6 +510,112 @@ def build_ui_router() -> APIRouter:
       if (!response.ok) return;
       const data = await response.json();
       targetRepoOptions.innerHTML = data.items.map((item) => `<option value="${{item}}"></option>`).join('');
+      applyTargetRepoAutofill(data.items || []);
+    }}
+
+    function updateBaseBranchHelp(message) {{
+      baseBranchHelp.textContent = message;
+    }}
+
+    function replaceBaseBranchSuggestions(items) {{
+      baseBranchOptions.innerHTML = items.map((item) => `<option value="${{escapeHtml(item)}}"></option>`).join('');
+    }}
+
+    function readLastTargetRepo() {{
+      try {{
+        return normalizeRepoPath(window.localStorage.getItem(lastTargetRepoStorageKey));
+      }} catch (_error) {{
+        return '';
+      }}
+    }}
+
+    function persistLastTargetRepo(value) {{
+      const normalized = normalizeRepoPath(value);
+      if (!normalized) return;
+      try {{
+        window.localStorage.setItem(lastTargetRepoStorageKey, normalized);
+      }} catch (_error) {{
+      }}
+    }}
+
+    function currentTargetRepoOptions() {{
+      return Array.from(targetRepoOptions.querySelectorAll('option')).map((option) => option.value).filter(Boolean);
+    }}
+
+    function applyTargetRepoAutofill(items) {{
+      const options = Array.isArray(items) ? items : [];
+      const currentValue = normalizeRepoPath(targetRepoInput.value);
+      const canAutofill = !currentValue || targetRepoInput.dataset.autofilled === 'true';
+      if (!canAutofill) return;
+      const storedTargetRepo = readLastTargetRepo();
+      const nextValue = storedTargetRepo || options[0] || defaultTargetRepo;
+      targetRepoInput.value = nextValue;
+      targetRepoInput.dataset.autofilled = nextValue ? 'true' : 'false';
+      if (!nextValue) {{
+        invalidateBranchLookup();
+        replaceBaseBranchSuggestions([]);
+        updateBaseBranchHelp('Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.');
+        return;
+      }}
+      applyRepoDefaults();
+      queueTargetRepoBranchLookup();
+    }}
+
+    function invalidateBranchLookup() {{
+      latestBranchLookupToken += 1;
+      if (branchLookupTimer) {{
+        clearTimeout(branchLookupTimer);
+        branchLookupTimer = null;
+      }}
+    }}
+
+    function maybeAutofillBaseBranch(nextValue) {{
+      if (!nextValue) return;
+      if (canReplaceAutofill(baseBranchInput, nextValue, lastAutoBaseBranch)) {{
+        baseBranchInput.value = nextValue;
+        baseBranchInput.dataset.autofilled = 'true';
+      }}
+      lastAutoBaseBranch = nextValue;
+    }}
+
+    async function loadTargetRepoBranches() {{
+      invalidateBranchLookup();
+      const repoPath = normalizeRepoPath(targetRepoInput.value);
+      const lookupToken = latestBranchLookupToken;
+      replaceBaseBranchSuggestions([]);
+      if (!repoPath) {{
+        updateBaseBranchHelp('Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.');
+        maybeAutofillBaseBranch(defaultBaseBranch);
+        return;
+      }}
+      updateBaseBranchHelp('Loading branch suggestions from the selected target repo...');
+      try {{
+        const response = await fetch(`/api/target-repo-branches?target_repo=${{encodeURIComponent(repoPath)}}`);
+        const data = await response.json();
+        if (lookupToken !== latestBranchLookupToken) return;
+        if (!response.ok) throw new Error(data.detail || 'Failed to load branch suggestions.');
+        replaceBaseBranchSuggestions(data.branches || []);
+        maybeAutofillBaseBranch(data.suggested_base_branch || defaultBaseBranch);
+        if (!data.git_repository) {{
+          updateBaseBranchHelp('The selected path is not a git repo. You can still type a base branch manually.');
+          return;
+        }}
+        if (!data.branches || !data.branches.length) {{
+          updateBaseBranchHelp('This git repo has no local branch suggestions yet. Type a base branch manually.');
+          return;
+        }}
+        const currentNote = data.current_branch ? ` Current branch: ${{data.current_branch}}.` : '';
+        updateBaseBranchHelp(`Loaded ${{data.branches.length}} branch suggestion${{data.branches.length === 1 ? '' : 's'}} from the selected repo.${{currentNote}}`);
+      }} catch (error) {{
+        if (lookupToken !== latestBranchLookupToken) return;
+        replaceBaseBranchSuggestions([]);
+        updateBaseBranchHelp(error.message || 'Failed to load branch suggestions. You can still type a base branch manually.');
+      }}
+    }}
+
+    function queueTargetRepoBranchLookup() {{
+      if (branchLookupTimer) clearTimeout(branchLookupTimer);
+      branchLookupTimer = window.setTimeout(loadTargetRepoBranches, 250);
     }}
 
     function setSettingsModalOpen(isOpen) {{
@@ -533,18 +659,21 @@ def build_ui_router() -> APIRouter:
     }}
 
     async function loadModelSettings(refresh = false) {{
-      setSettingsStatus(refresh ? 'Refreshing discovered model options...' : 'Loading current model overrides...');
+      setSettingsStatus(refresh ? 'Refreshing discovered model options...' : 'Loading current runtime settings...');
       refreshModelOptionsButton.disabled = true;
       try {{
         const response = await fetch(`/api/settings/models${{refresh ? '?refresh=true' : ''}}`);
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Failed to load model settings.');
+        if (!response.ok) throw new Error(data.detail || 'Failed to load runtime settings.');
+        repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
+        repoDiscoveryMaxDepthInput.value = String(data.repo_discovery_max_depth || 2);
         plannerModelInput.value = data.planner_model || '';
         implementerModelInput.value = data.implementer_model || '';
         reviewerModelInput.value = data.reviewer_model || '';
         commitModelInput.value = data.commit_model || '';
         renderModelOptions(data.available_models || []);
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
+        await loadTargetRepoOptions();
         updateModelDiscoverySummary(data);
       }} finally {{
         refreshModelOptionsButton.disabled = false;
@@ -563,12 +692,14 @@ def build_ui_router() -> APIRouter:
     async function saveModelSettings(event) {{
       event.preventDefault();
       saveSettingsButton.disabled = true;
-      setSettingsStatus('Saving model overrides...');
+      setSettingsStatus('Saving runtime settings...');
       try {{
         const response = await fetch('/api/settings/models', {{
           method: 'PUT',
           headers: {{ 'Content-Type': 'application/json' }},
           body: JSON.stringify({{
+            repo_discovery_root: repoDiscoveryRootInput.value,
+            repo_discovery_max_depth: Number.parseInt(repoDiscoveryMaxDepthInput.value || '0', 10) || 1,
             planner_model: plannerModelInput.value,
             implementer_model: implementerModelInput.value,
             reviewer_model: reviewerModelInput.value,
@@ -576,12 +707,15 @@ def build_ui_router() -> APIRouter:
           }}),
         }});
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Failed to save model settings.');
+        if (!response.ok) throw new Error(data.detail || 'Failed to save runtime settings.');
+        repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
+        repoDiscoveryMaxDepthInput.value = String(data.repo_discovery_max_depth || 2);
         plannerModelInput.value = data.planner_model || '';
         implementerModelInput.value = data.implementer_model || '';
         reviewerModelInput.value = data.reviewer_model || '';
         commitModelInput.value = data.commit_model || '';
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
+        await loadTargetRepoOptions();
         setSettingsStatus(`Saved runtime config to ${{data.config_path}}.`, 'success');
       }} catch (error) {{
         setSettingsStatus(error.message, 'error');
@@ -671,11 +805,18 @@ def build_ui_router() -> APIRouter:
     }}
 
     function resetFormState() {{
+      invalidateBranchLookup();
       requestForm.reset();
       targetRepoInput.value = defaultTargetRepo;
+      targetRepoInput.dataset.autofilled = defaultTargetRepo ? 'true' : 'false';
       baseBranchInput.value = defaultBaseBranch;
+      baseBranchInput.dataset.autofilled = 'true';
+      lastAutoBaseBranch = defaultBaseBranch;
+      replaceBaseBranchSuggestions([]);
+      updateBaseBranchHelp('Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.');
       scopeField.dataset.autofilled = 'true';
       outOfScopeField.dataset.autofilled = 'true';
+      applyTargetRepoAutofill(currentTargetRepoOptions());
       applyRepoDefaults();
     }}
 
@@ -1190,6 +1331,7 @@ def build_ui_router() -> APIRouter:
         }});
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Request creation failed.');
+        persistLastTargetRepo(payload.target_repo);
         formSuccess.hidden = false;
         formSuccess.textContent = `Created request at ${{data.task_path}}`;
         resetFormState();
@@ -1205,7 +1347,7 @@ def build_ui_router() -> APIRouter:
     }}
 
     document.getElementById('refresh').addEventListener('click', loadBoard);
-    openComposerButton.addEventListener('click', () => {{ clearMessages(); setModalOpen(true); }});
+    openComposerButton.addEventListener('click', async () => {{ clearMessages(); resetFormState(); setModalOpen(true); await loadTargetRepoBranches(); }});
     openSettingsButton.addEventListener('click', openSettingsModal);
     closeComposerButton.addEventListener('click', () => {{ clearMessages(); setModalOpen(false); }});
     closeSettingsButton.addEventListener('click', () => setSettingsModalOpen(false));
@@ -1234,8 +1376,13 @@ def build_ui_router() -> APIRouter:
     approveVerificationButton.addEventListener('click', approveVerification);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'goal', 'target_repo', 'base_branch'].forEach((name) => {{ requestForm.elements[name].addEventListener('blur', validateForm); }});
+    targetRepoInput.addEventListener('input', () => {{ targetRepoInput.dataset.autofilled = 'false'; }});
     targetRepoInput.addEventListener('input', applyRepoDefaults);
+    targetRepoInput.addEventListener('input', queueTargetRepoBranchLookup);
     targetRepoInput.addEventListener('change', applyRepoDefaults);
+    targetRepoInput.addEventListener('change', loadTargetRepoBranches);
+    targetRepoInput.addEventListener('blur', loadTargetRepoBranches);
+    baseBranchInput.addEventListener('input', () => {{ baseBranchInput.dataset.autofilled = 'false'; }});
     scopeField.addEventListener('input', () => {{ scopeField.dataset.autofilled = 'false'; }});
     outOfScopeField.addEventListener('input', () => {{ outOfScopeField.dataset.autofilled = 'false'; }});
     resetFormState();

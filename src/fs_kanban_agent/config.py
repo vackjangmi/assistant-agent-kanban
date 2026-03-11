@@ -10,6 +10,7 @@ from .enums import STATE_ORDER, TaskState
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
+DEFAULT_REPO_DISCOVERY_ROOT = "../"
 
 
 class OpenCodeConfig(BaseModel):
@@ -45,7 +46,7 @@ class RuntimeConfig(BaseModel):
 
 
 class RepoDiscoveryConfig(BaseModel):
-    root: Path | None = None
+    root: str | Path | None = DEFAULT_REPO_DISCOVERY_ROOT
     max_depth: int = 2
 
 
@@ -75,7 +76,17 @@ class AppConfig(BaseModel):
         if self.workspace.root is None:
             self.workspace.root = self.kanban_root / "_runtime/workspaces"
         if self.repo_discovery.root is None:
-            self.repo_discovery.root = PROJECT_ROOT.parent
+            self.repo_discovery.root = DEFAULT_REPO_DISCOVERY_ROOT
+
+    def repo_discovery_root_value(self) -> str:
+        return str(self.repo_discovery.root or DEFAULT_REPO_DISCOVERY_ROOT)
+
+    def resolve_repo_discovery_root(self) -> Path:
+        configured_root = Path(self.repo_discovery_root_value()).expanduser()
+        if configured_root.is_absolute():
+            return configured_root.resolve()
+        anchor = self.loaded_from.parent if self.loaded_from is not None else PROJECT_ROOT
+        return (anchor / configured_root).resolve()
 
     def state_dir(self, state: TaskState) -> Path:
         return self.kanban_root / state.value

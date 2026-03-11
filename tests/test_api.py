@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import shutil
 from pathlib import Path
 
@@ -307,6 +308,29 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
 
 
+def test_api_uses_runtime_default_base_branch_when_request_omits_it(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    config.base_branch = "develop"
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Default branch task",
+                "goal": "Use the runtime default branch.",
+                "target_repo": str(target_repo),
+            },
+        )
+
+    assert response.status_code == 200
+    task_dir = _locate_task_dir(config, Path(response.json()["task_path"]).name)
+    request_markdown = (task_dir / "REQUEST.md").read_text()
+    assert "base_branch: develop" in request_markdown
+
+
 def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkeypatch):
     config, _, _ = configured_paths
     config_path = tmp_path / "dashboard-config.yaml"
@@ -335,6 +359,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         get_response = client.get("/api/settings/models")
         assert get_response.status_code == 200
         assert get_response.json()["planner_model"] is None
+        assert get_response.json()["repo_discovery_root"] == str(config.repo_discovery.root)
+        assert get_response.json()["repo_discovery_max_depth"] == config.repo_discovery.max_depth
         assert get_response.json()["config_path"] == str(config_path.resolve())
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["discovery_status"] == "ready"
@@ -355,6 +381,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
                 "implementer_model": " gpt-5-implementer ",
                 "reviewer_model": "",
                 "commit_model": "gpt-5-commit",
+                "repo_discovery_root": "../",
+                "repo_discovery_max_depth": 4,
             },
         )
 
@@ -365,10 +393,16 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["implementer_model"] == "gpt-5-implementer"
     assert payload["reviewer_model"] is None
     assert payload["commit_model"] == "gpt-5-commit"
+    assert payload["repo_discovery_root"] == "../"
+    assert payload["repo_discovery_max_depth"] == 4
     assert app.state.runtime.config.opencode.planner_model == "gpt-5-planner"
     assert app.state.runtime.config.opencode.implementer_model == "gpt-5-implementer"
     assert app.state.runtime.config.opencode.reviewer_model is None
+    assert app.state.runtime.config.repo_discovery.root == "../"
+    assert app.state.runtime.config.repo_discovery.max_depth == 4
     assert load_config(config_path).opencode.commit_model == "gpt-5-commit"
+    assert load_config(config_path).repo_discovery.root == "../"
+    assert load_config(config_path).repo_discovery.max_depth == 4
 
 
 def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_paths):
@@ -412,21 +446,48 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
             response = client.put(
                 "/api/settings/models",
                 json={
-                    "planner_model": "planner-x",
-                    "implementer_model": None,
-                    "reviewer_model": "reviewer-y",
-                    "commit_model": None,
-                },
-            )
+                "planner_model": "planner-x",
+                "implementer_model": None,
+                "reviewer_model": "reviewer-y",
+                "commit_model": None,
+                "repo_discovery_root": "/tmp/scan-root",
+                "repo_discovery_max_depth": 3,
+            },
+        )
 
         assert response.status_code == 200
         assert default_local_path.exists()
         persisted = load_config(default_local_path)
         assert persisted.opencode.planner_model == "planner-x"
         assert persisted.opencode.reviewer_model == "reviewer-y"
+        assert persisted.repo_discovery.root == "/tmp/scan-root"
+        assert persisted.repo_discovery.max_depth == 3
         assert response.json()["config_path"] == str(default_local_path.resolve())
     finally:
         config_module.DEFAULT_LOCAL_CONFIG_PATH = original_default_local_path
+
+
+def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_paths):
+    config, _, _ = configured_paths
+    config.repo_discovery.root = "../custom-root"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "planner_model": "planner-x",
+                "implementer_model": None,
+                "reviewer_model": None,
+                "commit_model": None,
+                "repo_discovery_max_depth": 5,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["repo_discovery_root"] == "../custom-root"
+    assert response.json()["repo_discovery_max_depth"] == 5
+    assert app.state.runtime.config.repo_discovery.root == "../custom-root"
 
 
 def test_api_save_materializes_runtime_agents_immediately(configured_paths):
@@ -525,12 +586,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
 
     assert response.status_code == 200
     assert "Create request" in response.text
-    assert "Model settings" in response.text
+    assert "Runtime settings" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
     assert "/api/requests" in response.text
     assert "/api/settings/models" in response.text
     assert "target-repo-options" in response.text
+    assert "base-branch-options" in response.text
     assert "request-modal" in response.text
     assert "settings-modal" in response.text
     assert "task-modal" in response.text
@@ -540,14 +602,23 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "implementer_model" in response.text
     assert "reviewer_model" in response.text
     assert "commit_model" in response.text
+    assert "repo_discovery_root" in response.text
+    assert "repo_discovery_max_depth" in response.text
     assert "opencode-model-options" in response.text
     assert "Refresh discovered models" in response.text
-    assert "Save model settings" in response.text
+    assert "Save runtime settings" in response.text
+    assert "Repo discovery root" in response.text
+    assert "Repo discovery depth" in response.text
     assert "task-viewer-host" in response.text
     assert "Approve plan" in response.text
     assert "toastui-editor" in response.text
     assert "buildScopeDefaults" in response.text
     assert "buildOutOfScopeDefaults" in response.text
+    assert "fs-kanban-agent.last-target-repo" in response.text
+    assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
+    assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
+    assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
+    assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
     assert "typeof payload.content !== 'string'" in response.text
     assert "worker_log" in response.text
@@ -569,20 +640,20 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Delete task" in response.text
     assert "This permanently removes the task directory and any managed workspace artifacts created for it." in response.text
     assert "method: 'DELETE'" in response.text
-    assert f'const defaultTargetRepo = "{PROJECT_ROOT.parent}";' in response.text
+    assert 'const defaultTargetRepo = "";' in response.text
 
 
 def test_dashboard_page_uses_custom_discovery_root_as_default_target(configured_paths, tmp_path):
     config, _, _ = configured_paths
-    config.repo_discovery.root = tmp_path / "custom-root"
-    config.repo_discovery.root.mkdir()
+    config.repo_discovery.root = str(tmp_path / "custom-root")
+    Path(config.repo_discovery.root).mkdir()
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     with TestClient(app) as client:
         response = client.get("/")
 
     assert response.status_code == 200
-    assert f'const defaultTargetRepo = "{config.repo_discovery.root}";' in response.text
+    assert 'const defaultTargetRepo = "";' in response.text
 
 
 def test_api_lists_target_repo_suggestions_by_configured_depth(configured_paths, tmp_path):
@@ -592,7 +663,7 @@ def test_api_lists_target_repo_suggestions_by_configured_depth(configured_paths,
     nested = scan_root / "app" / "sudoku"
     alpha.mkdir(parents=True)
     nested.mkdir(parents=True)
-    config.repo_discovery.root = scan_root
+    config.repo_discovery.root = str(scan_root)
     config.repo_discovery.max_depth = 2
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -602,9 +673,71 @@ def test_api_lists_target_repo_suggestions_by_configured_depth(configured_paths,
     assert response.status_code == 200
     payload = response.json()
     assert payload["root"] == str(scan_root)
+    assert payload["resolved_root"] == str(scan_root.resolve())
     assert payload["max_depth"] == 2
     assert str(alpha.resolve()) in payload["items"]
     assert str(nested.resolve()) in payload["items"]
+
+
+def test_api_lists_branches_for_selected_target_repo(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    target_repo = tmp_path / "branch-target"
+    target_repo.mkdir()
+    from .conftest import init_git_repo
+
+    init_git_repo(target_repo)
+    subprocess.run(["git", "-C", str(target_repo), "checkout", "-b", "develop"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "checkout", "main"], check=True, capture_output=True, text=True)
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get("/api/target-repo-branches", params={"target_repo": str(target_repo)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["repo_root"] == str(target_repo.resolve())
+    assert payload["git_repository"] is True
+    assert payload["current_branch"] == "main"
+    assert payload["suggested_base_branch"] == "main"
+    assert "main" in payload["branches"]
+    assert "develop" in payload["branches"]
+
+
+def test_api_reports_non_git_target_repo_without_branch_options(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    target_repo = tmp_path / "plain-dir"
+    target_repo.mkdir()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get("/api/target-repo-branches", params={"target_repo": str(target_repo)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["repo_root"] == str(target_repo.resolve())
+    assert payload["git_repository"] is False
+    assert payload["branches"] == []
+    assert payload["suggested_base_branch"] == config.base_branch
+
+
+def test_api_suggests_current_feature_branch_when_selected_repo_is_on_it(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    target_repo = tmp_path / "feature-branch-target"
+    target_repo.mkdir()
+    from .conftest import init_git_repo
+
+    init_git_repo(target_repo)
+    subprocess.run(["git", "-C", str(target_repo), "checkout", "-b", "feature/request-form"], check=True, capture_output=True, text=True)
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get("/api/target-repo-branches", params={"target_repo": str(target_repo)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_branch"] == "feature/request-form"
+    assert payload["suggested_base_branch"] == "feature/request-form"
+    assert payload["branches"][0] == "feature/request-form"
 
 
 def test_api_target_repo_suggestions_respect_depth_limit(configured_paths, tmp_path):
@@ -614,7 +747,7 @@ def test_api_target_repo_suggestions_respect_depth_limit(configured_paths, tmp_p
     blocked = scan_root / "app" / "games" / "sudoku-deep"
     allowed.mkdir(parents=True)
     blocked.mkdir(parents=True)
-    config.repo_discovery.root = scan_root
+    config.repo_discovery.root = str(scan_root)
     config.repo_discovery.max_depth = 2
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -632,7 +765,7 @@ def test_api_target_repo_suggestions_default_to_workboard_parent(configured_path
     child = PROJECT_ROOT.parent / "tmp-target-root-child"
     child.mkdir(exist_ok=True)
     try:
-        config.repo_discovery.root = PROJECT_ROOT.parent
+        config.repo_discovery.root = str(PROJECT_ROOT.parent)
         config.repo_discovery.max_depth = 2
         app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -657,7 +790,7 @@ def test_api_target_repo_suggestions_include_second_depth_from_parent_root(confi
     nested = parent / "sudoku"
     nested.mkdir(parents=True, exist_ok=True)
     try:
-        config.repo_discovery.root = PROJECT_ROOT.parent
+        config.repo_discovery.root = str(PROJECT_ROOT.parent)
         config.repo_discovery.max_depth = 2
         app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 

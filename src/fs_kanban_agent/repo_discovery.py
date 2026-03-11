@@ -6,7 +6,7 @@ from .config import PROJECT_ROOT, AppConfig
 
 
 def discover_target_repos(config: AppConfig) -> list[str]:
-    root = (config.repo_discovery.root or config.repo_root.expanduser().resolve().parent).expanduser().resolve()
+    root = config.resolve_repo_discovery_root()
     kanban_root = config.kanban_root.expanduser().resolve()
     max_depth = max(config.repo_discovery.max_depth, 1)
     results: list[str] = []
