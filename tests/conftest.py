@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from fs_kanban_agent import config as config_module
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.models import RunResult
@@ -93,6 +94,13 @@ def configured_paths(tmp_path: Path) -> tuple[AppConfig, Path, Path]:
     config = AppConfig(kanban_root=kanban_root, repo_root=repo_root)
     config.bootstrap()
     return config, repo_root, kanban_root
+
+
+@pytest.fixture(autouse=True)
+def isolate_default_local_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    default_local_path = tmp_path / "config.local.yaml"
+    monkeypatch.setattr(config_module, "DEFAULT_LOCAL_CONFIG_PATH", default_local_path)
+    return default_local_path
 
 
 def create_request_task(
