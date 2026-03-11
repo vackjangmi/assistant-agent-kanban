@@ -36,11 +36,15 @@ def ensure_runtime_agents(config: AppConfig) -> list[Path]:
 
 
 def runtime_agents_dir(config: AppConfig) -> Path:
-    return config.kanban_root / "_runtime" / "opencode-config" / "opencode" / "agents"
+    return _resolved_kanban_root(config) / "_runtime" / "opencode-config" / "opencode" / "agents"
 
 
 def runtime_config_home(config: AppConfig) -> Path:
-    return config.kanban_root / "_runtime" / "opencode-config"
+    return _resolved_kanban_root(config) / "_runtime" / "opencode-config"
+
+
+def _resolved_kanban_root(config: AppConfig) -> Path:
+    return config.kanban_root.expanduser().resolve()
 
 
 def _model_for_agent(config: AppConfig, agent_name: str) -> str | None:
