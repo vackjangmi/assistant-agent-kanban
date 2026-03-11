@@ -7,6 +7,7 @@ from ..config import PROJECT_ROOT
 from ..enums import TaskState
 from ..exceptions import AdapterRunError
 from ..opencode_adapter import OpenCodeAdapter
+from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from .base import WorkerBase
 
 
@@ -23,7 +24,7 @@ class PlanningWorker(WorkerBase):
         self.adapter = adapter
 
     async def run_once(self) -> bool:
-        tasks = [task for task in self.scanner.scan() if task.state == TaskState.REQUESTS]
+        tasks = [task for task in self.scanner.scan() if task.state == TaskState.REQUESTS and can_auto_dispatch(task.metadata)]
         if not tasks:
             return False
         task = tasks[0]
@@ -47,6 +48,7 @@ class PlanningWorker(WorkerBase):
             )
             planning.metadata.plan.resolved_model = result.resolved_model
             if not result.ok:
+                apply_retry_gate(planning.metadata, reason="planner-run-failed")
                 self.metadata_store.add_error(
                     planning.task_dir,
                     planning.metadata,
@@ -55,6 +57,7 @@ class PlanningWorker(WorkerBase):
                 )
                 raise AdapterRunError(result.stderr.strip() or "planner run failed")
             if not result.assistant_text.strip():
+                apply_retry_gate(planning.metadata, reason="planner-empty-artifact")
                 self.metadata_store.add_error(
                     planning.task_dir,
                     planning.metadata,
@@ -62,6 +65,7 @@ class PlanningWorker(WorkerBase):
                     message="planner did not return a markdown artifact",
                 )
                 raise AdapterRunError("planner did not return a markdown artifact")
+            clear_retry_gate(planning.metadata)
             planning.metadata.plan.revision += 1
             plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", result)
             planning.metadata.plan.path = plan_path

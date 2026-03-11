@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timedelta
 import pytest
 
 from fs_kanban_agent.exceptions import AdapterRunError
@@ -12,6 +13,7 @@ from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workers.planner import PlanningWorker
+from fs_kanban_agent.models import utc_now
 
 from .conftest import FakeAdapter, create_request_task
 
@@ -115,6 +117,26 @@ def test_planner_worker_does_not_write_tool_only_json_as_plan(configured_paths):
     assert not (planning_task.task_dir / "PLAN.md").exists()
     assert not (planning_task.task_dir / "PLAN.json").exists()
     assert planning_task.metadata.errors[-1].code == "planner-empty-artifact"
+
+
+def test_planner_worker_skips_retry_gated_requests(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-gated-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task_dir = scanner.scan()[0].task_dir
+    metadata = metadata_store.load(task_dir)
+    metadata.retry_gate.reason = "planner-empty-artifact"
+    metadata.retry_gate.consecutive_count = 1
+    metadata.retry_gate.not_before = utc_now() + timedelta(minutes=5)
+    metadata_store.save(task_dir, metadata)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(["## Summary\nplan"])
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is False
+    assert adapter.responses == ["## Summary\nplan"]
 
 
 def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeypatch):

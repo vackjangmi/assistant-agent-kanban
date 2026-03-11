@@ -8,6 +8,7 @@ from .exceptions import TransitionError
 from .locks import TaskLockManager
 from .metadata_store import MetadataStore
 from .models import HistoryEntry, TaskContext, utc_now
+from .retry_policy import clear_retry_gate
 from .scanner import KanbanScanner
 
 
@@ -45,4 +46,5 @@ class TransitionManager:
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id=f"manual-{target.value}"):
             if target == TaskState.TODOS:
                 context.metadata.plan.approved = True
+            clear_retry_gate(context.metadata)
             return self.move(context, target=target, by=by, note="manual approval")
