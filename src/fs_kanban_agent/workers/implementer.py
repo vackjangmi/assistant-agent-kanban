@@ -39,6 +39,7 @@ class ImplementerWorker(WorkerBase):
                 config=self.config,
                 on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
             )
+            implementing.metadata.implementation.resolved_model = result.resolved_model
             implementing.metadata.implementation.iteration += 1
             has_changes = self.workspace_has_changes(workspace_repo)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)

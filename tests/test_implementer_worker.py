@@ -42,7 +42,7 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace, resolved_models=["openai/gpt-5.4"]),
         workspace_manager=WorkspaceManager(config),
     )
 
@@ -54,6 +54,8 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert (updated.task_dir / "WORK-001.md").exists()
     work_json = json.loads((updated.task_dir / "WORK-001.json").read_text())
     assert work_json["assistant_text"] == "## Summary\nimplemented"
+    assert work_json["resolved_model"] == "openai/gpt-5.4"
+    assert updated.metadata.implementation.resolved_model == "openai/gpt-5.4"
 
 
 def test_implementer_worker_clones_task_target_repo(tmp_path):

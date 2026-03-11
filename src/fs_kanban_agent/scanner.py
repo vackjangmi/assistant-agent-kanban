@@ -74,6 +74,7 @@ class KanbanScanner:
                     state_entered_at=self._state_entered_at(item.metadata, state),
                     iteration=max(item.metadata.implementation.iteration, item.metadata.review.iteration),
                     has_error=bool(item.metadata.errors),
+                    active_model=self._active_model(item.metadata, state),
                 )
                 for item in tasks
                 if item.state == state
@@ -131,6 +132,15 @@ class KanbanScanner:
         for entry in reversed(metadata.history):
             if entry.state == state:
                 return entry.entered_at
+        return None
+
+    def _active_model(self, metadata: TaskMetadata, state: TaskState) -> str | None:
+        if state == TaskState.PLANNING:
+            return metadata.plan.resolved_model
+        if state == TaskState.IMPLEMENTING:
+            return metadata.implementation.resolved_model
+        if state == TaskState.REVIEWING:
+            return metadata.review.resolved_model
         return None
 
     def _ensure_task_dir_name(self, task_dir: Path, task_id: str) -> Path:

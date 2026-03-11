@@ -114,6 +114,7 @@ class WorkerBase:
                     "stderr": result.stderr,
                     "raw_events_path": result.raw_events_path,
                     "command": result.command,
+                    "resolved_model": result.resolved_model,
                     "markdown_path": markdown_path.name,
                     "editable_markdown": True,
                     "sync_policy": "markdown_edits_do_not_modify_json",

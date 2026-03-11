@@ -6,6 +6,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from ..agent_materializer import ensure_runtime_agents
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..repo_discovery import discover_target_repos
@@ -33,6 +34,20 @@ class HumanVerificationPayload(BaseModel):
     note: str = ""
 
 
+class ModelSettingsPayload(BaseModel):
+    planner_model: str | None = None
+    implementer_model: str | None = None
+    reviewer_model: str | None = None
+    commit_model: str | None = None
+
+
+def _normalize_model_override(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def build_router() -> APIRouter:
     router = APIRouter()
 
@@ -44,6 +59,42 @@ def build_router() -> APIRouter:
     async def board(request: Request):
         runtime = request.app.state.runtime
         return runtime.board_service.get_board()
+
+    @router.get("/api/settings/models")
+    async def get_model_settings(request: Request, refresh: bool = False) -> dict[str, str | list[str] | bool | None]:
+        runtime = request.app.state.runtime
+        snapshot = await asyncio.to_thread(runtime.model_registry.get, refresh=refresh)
+        return {
+            "planner_model": runtime.config.opencode.planner_model,
+            "implementer_model": runtime.config.opencode.implementer_model,
+            "reviewer_model": runtime.config.opencode.reviewer_model,
+            "commit_model": runtime.config.opencode.commit_model,
+            "config_path": str(runtime.config.config_path_for_persistence()),
+            "available_models": snapshot.models,
+            "discovery_status": snapshot.status,
+            "discovered_at": snapshot.discovered_at,
+            "discovery_error": snapshot.error,
+            "discovery_attempted": snapshot.attempted,
+        }
+
+    @router.put("/api/settings/models")
+    async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, str | bool | None]:
+        runtime = request.app.state.runtime
+        runtime.config.opencode.planner_model = _normalize_model_override(payload.planner_model)
+        runtime.config.opencode.implementer_model = _normalize_model_override(payload.implementer_model)
+        runtime.config.opencode.reviewer_model = _normalize_model_override(payload.reviewer_model)
+        runtime.config.opencode.commit_model = _normalize_model_override(payload.commit_model)
+        config_path = runtime.config.persist()
+        ensure_runtime_agents(runtime.config)
+        await runtime.rescan_and_publish()
+        return {
+            "planner_model": runtime.config.opencode.planner_model,
+            "implementer_model": runtime.config.opencode.implementer_model,
+            "reviewer_model": runtime.config.opencode.reviewer_model,
+            "commit_model": runtime.config.opencode.commit_model,
+            "config_path": str(config_path),
+            "saved": True,
+        }
 
     @router.get("/api/tasks/{task_id}")
     async def task_detail(task_id: str, request: Request):

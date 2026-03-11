@@ -12,7 +12,6 @@ from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workspace_manager import WorkspaceManager
-from fs_kanban_agent.workspace_manager import WorkspaceManager
 from fs_kanban_agent.workers.implementer import ImplementerWorker
 from fs_kanban_agent.workers.reviewer import ReviewerWorker
 
@@ -78,7 +77,7 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["Verdict: PASS\nReady"]),
+        adapter=FakeAdapter(["Verdict: PASS\nReady"], resolved_models=["github-copilot/gpt-5"]),
         integration_manager=IntegrationManager(config),
     )
 
@@ -87,6 +86,8 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert (repo_root / "app.txt").read_text() == "hello\n"
     review_json = json.loads((scanner.scan()[0].task_dir / "REVIEW-001.json").read_text())
     assert "Verdict: PASS" in review_json["assistant_text"]
+    assert review_json["resolved_model"] == "github-copilot/gpt-5"
+    assert scanner.scan()[0].metadata.review.resolved_model == "github-copilot/gpt-5"
 
 
 def test_reviewer_worker_leaves_target_repo_clean_until_human_verification(tmp_path):
@@ -128,9 +129,9 @@ def test_reviewer_worker_rejects_tasks_with_no_workspace_changes(configured_path
     todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
     implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
     metadata_store.save(implementing.task_dir, implementing.metadata)
-    workspace_repo = WorkspaceManager(config).prepare(implementing.metadata)
+    WorkspaceManager(config).prepare(implementing.metadata)
     metadata_store.save(implementing.task_dir, implementing.metadata)
-    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
 
     worker = ReviewerWorker(
         config,

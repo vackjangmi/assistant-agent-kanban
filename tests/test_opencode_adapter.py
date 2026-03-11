@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import cast
 
 import subprocess
-
-import pytest
 
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.opencode_adapter import SubprocessOpenCodeAdapter, _extract_assistant_text
@@ -61,6 +58,7 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     config.bootstrap()
 
     adapter.run(
+        
         agent="fs-kanban-planner",
         prompt="---\ntitle: sample\n---\n",
         cwd=tmp_path,
@@ -78,3 +76,35 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     assert agent_file.exists()
     assert agent_file.read_text().startswith("---\nmodel: openai/gpt-5.4\n---\n")
     assert "FS Kanban Planner" in agent_file.read_text()
+
+
+def test_subprocess_adapter_reports_resolved_model_from_materialized_agent(monkeypatch, tmp_path):
+    class FakeProcess:
+        def __init__(self):
+            self.stdout = ['{"type":"final","content":"ok"}\n']
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        return FakeProcess()
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessOpenCodeAdapter()
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config.opencode.planner_model = "openai/gpt-5.4"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-planner",
+        prompt="sample",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "planner.jsonl",
+        config=config,
+    )
+
+    assert result.resolved_model == "openai/gpt-5.4"

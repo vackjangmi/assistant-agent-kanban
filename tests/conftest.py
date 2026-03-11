@@ -10,6 +10,7 @@ from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.models import RunResult
 from fs_kanban_agent.opencode_adapter import OpenCodeAdapter
+from fs_kanban_agent.exceptions import AdapterRunError
 
 
 class FakeAdapter(OpenCodeAdapter):
@@ -21,12 +22,17 @@ class FakeAdapter(OpenCodeAdapter):
         ok: bool = True,
         returncode: int = 0,
         stderr: str = "",
+        discovery_responses: list[list[str] | Exception] | None = None,
+        resolved_models: list[str | None] | None = None,
     ) -> None:
         self.responses = responses or []
         self.side_effect = side_effect
         self.ok = ok
         self.returncode = returncode
         self.stderr = stderr
+        self.discovery_responses = discovery_responses or []
+        self.discovery_calls: list[bool] = []
+        self.resolved_models = resolved_models or []
 
     def run(
         self,
@@ -45,6 +51,7 @@ class FakeAdapter(OpenCodeAdapter):
         run_log_path.write_text(content + "\n")
         if on_log_line is not None:
             on_log_line(content, content)
+        resolved_model = self.resolved_models.pop(0) if self.resolved_models else None
         return RunResult(
             ok=self.ok,
             returncode=self.returncode,
@@ -53,7 +60,19 @@ class FakeAdapter(OpenCodeAdapter):
             stderr=self.stderr,
             raw_events_path=str(run_log_path),
             command=[agent],
+            resolved_model=resolved_model,
         )
+
+    def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:
+        self.discovery_calls.append(refresh)
+        if not self.discovery_responses:
+            return []
+        response = self.discovery_responses[0]
+        if len(self.discovery_responses) > 1:
+            response = self.discovery_responses.pop(0)
+        if isinstance(response, Exception):
+            raise AdapterRunError(str(response)) from response
+        return list(response)
 
 
 def init_git_repo(path: Path) -> None:

@@ -36,6 +36,7 @@ class PlanningWorker(WorkerBase):
                 config=self.config,
                 on_log_line=self.make_log_callback(loop, planning.metadata.task_id, run_log_path.name),
             )
+            planning.metadata.plan.resolved_model = result.resolved_model
             if not result.ok:
                 self.metadata_store.add_error(
                     planning.task_dir,

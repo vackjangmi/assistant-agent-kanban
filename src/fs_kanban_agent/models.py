@@ -36,6 +36,7 @@ class PlanInfo(BaseModel):
     revision: int = 0
     approved: bool = False
     path: str | None = None
+    resolved_model: str | None = None
 
 
 class ImplementationInfo(BaseModel):
@@ -43,11 +44,13 @@ class ImplementationInfo(BaseModel):
     workspace: str | None = None
     branch: str | None = None
     last_result: str | None = None
+    resolved_model: str | None = None
 
 
 class ReviewInfo(BaseModel):
     iteration: int = 0
     last_verdict: Literal["PASS", "NEEDS_CHANGES"] | None = None
+    resolved_model: str | None = None
 
 
 class IntegrationInfo(BaseModel):
@@ -105,6 +108,7 @@ class TaskSnapshot(BaseModel):
     state_entered_at: datetime | None = None
     iteration: int
     has_error: bool
+    active_model: str | None = None
 
 
 class BoardColumn(BaseModel):
@@ -146,6 +150,7 @@ class RunResult(BaseModel):
     stderr: str = ""
     raw_events_path: str | None = None
     command: list[str] = Field(default_factory=list)
+    resolved_model: str | None = None
 
 
 class TaskContext(BaseModel):

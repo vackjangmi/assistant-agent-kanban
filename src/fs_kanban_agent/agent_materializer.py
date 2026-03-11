@@ -17,6 +17,24 @@ def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
     return target
 
 
+def ensure_runtime_agents(config: AppConfig) -> list[Path]:
+    materialized: list[Path] = []
+    seen: set[str] = set()
+    for agent_name in (
+        config.opencode.planner_agent,
+        config.opencode.implementer_agent,
+        config.opencode.reviewer_agent,
+        config.opencode.commit_agent,
+    ):
+        if agent_name in seen:
+            continue
+        seen.add(agent_name)
+        path = ensure_runtime_agent(config, agent_name)
+        if path is not None:
+            materialized.append(path)
+    return materialized
+
+
 def runtime_agents_dir(config: AppConfig) -> Path:
     return config.kanban_root / "_runtime" / "opencode-config" / "opencode" / "agents"
 

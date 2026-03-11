@@ -9,6 +9,7 @@ from .enums import STATE_ORDER, TaskState
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 
 
 class OpenCodeConfig(BaseModel):
@@ -57,6 +58,7 @@ class AppConfig(BaseModel):
     locks: LocksConfig = Field(default_factory=LocksConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     repo_discovery: RepoDiscoveryConfig = Field(default_factory=RepoDiscoveryConfig)
+    loaded_from: Path | None = Field(default=None, exclude=True)
 
     def bootstrap(self) -> None:
         self.kanban_root.mkdir(parents=True, exist_ok=True)
@@ -78,6 +80,22 @@ class AppConfig(BaseModel):
     def state_dir(self, state: TaskState) -> Path:
         return self.kanban_root / state.value
 
+    def config_path_for_persistence(self) -> Path:
+        if self.loaded_from is not None:
+            return self.loaded_from
+        return DEFAULT_LOCAL_CONFIG_PATH
+
+    def persist(self, path: Path | None = None) -> Path:
+        target_path = (path or self.config_path_for_persistence()).expanduser().resolve()
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = self.model_dump(mode="json", exclude={"loaded_from"})
+        serialized = yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
+        tmp_path = target_path.with_suffix(target_path.suffix + ".tmp")
+        tmp_path.write_text(serialized)
+        tmp_path.replace(target_path)
+        self.loaded_from = target_path
+        return target_path
+
     @property
     def locks_dir(self) -> Path:
         return self.kanban_root / "_runtime/locks"
@@ -92,10 +110,17 @@ class AppConfig(BaseModel):
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
-    if path is None:
+    loaded_from: Path | None = None
+    if path is None and DEFAULT_LOCAL_CONFIG_PATH.exists():
+        loaded_from = DEFAULT_LOCAL_CONFIG_PATH
+    elif path is not None:
+        loaded_from = Path(path)
+    if loaded_from is None:
         config = AppConfig()
     else:
-        raw = yaml.safe_load(Path(path).read_text()) or {}
+        resolved_path = loaded_from.expanduser().resolve()
+        raw = yaml.safe_load(resolved_path.read_text()) or {}
         config = AppConfig.model_validate(raw)
+        config.loaded_from = resolved_path
     config.bootstrap()
     return config

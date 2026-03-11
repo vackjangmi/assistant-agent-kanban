@@ -26,7 +26,7 @@ def build_ui_router() -> APIRouter:
   <title>FS Kanban Agent</title>
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <style>
-    :root {{ --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --border: rgba(24,32,38,0.15); --accent: #7c4f2c; --accent-strong: #5f3417; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }}
+    :root {{ --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --panel-strong: rgba(255,252,247,0.95); --border: rgba(24,32,38,0.15); --accent: #7c4f2c; --accent-strong: #5f3417; --accent-soft: rgba(124,79,44,0.12); --success: #217349; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }}
     * {{ box-sizing: border-box; }}
     body {{ font-family: Georgia, serif; margin: 0; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }}
     body.modal-open {{ overflow: hidden; }}
@@ -34,6 +34,7 @@ def build_ui_router() -> APIRouter:
     .header-actions {{ display: flex; gap: 10px; flex-wrap: wrap; }}
     button {{ padding: 9px 14px; border: 1px solid var(--text); background: #fff9ef; cursor: pointer; font: inherit; }}
     button.primary {{ background: var(--accent); border-color: var(--accent-strong); color: #fff; }}
+    .ghost-button {{ background: transparent; border-color: var(--border); }}
     button:disabled {{ opacity: 0.7; cursor: progress; }}
     #board {{ display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 20px; }}
     .column {{ background: var(--panel); border: 1px solid var(--border); padding: 12px; min-height: 160px; }}
@@ -43,6 +44,8 @@ def build_ui_router() -> APIRouter:
     .card:hover {{ transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }}
     .card-meta {{ color: var(--muted); font-size: 0.95rem; }}
     .card-meta.running {{ color: var(--accent-strong); font-variant-numeric: tabular-nums; }}
+    .card-model {{ margin-top: 8px; padding: 7px 8px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.86rem; line-height: 1.35; }}
+    .card-model strong {{ display: block; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }}
     .modal {{ position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }}
     .modal[hidden] {{ display: none; }}
     .modal-panel {{ width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }}
@@ -61,10 +64,30 @@ def build_ui_router() -> APIRouter:
     .form-error[hidden] {{ display: none; }}
     .form-success {{ margin: 0 20px 20px; padding: 10px 12px; border: 1px solid rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: #217349; }}
     .form-success[hidden] {{ display: none; }}
+    .settings-shell {{ display: grid; gap: 18px; }}
+    .settings-copy {{ padding: 16px 18px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,249,239,0.96), rgba(247,242,232,0.82)); }}
+    .settings-copy p {{ margin: 8px 0 0; color: var(--muted); }}
+    .settings-toolbar {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }}
+    .settings-toolbar p {{ margin: 0; color: var(--muted); }}
+    .settings-grid {{ display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; }}
+    .settings-card {{ display: grid; gap: 6px; padding: 16px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }}
+    .settings-card strong {{ font-size: 1rem; }}
+    .settings-card span {{ color: var(--muted); font-size: 0.95rem; }}
+    .settings-card input {{ width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
+    .settings-card small {{ color: var(--muted); font-size: 0.88rem; }}
+    .settings-path {{ padding: 12px 14px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--muted); }}
+    .settings-status {{ padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }}
+    .settings-status[data-tone="success"] {{ border-color: rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: var(--success); }}
+    .settings-status[data-tone="error"] {{ border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }}
     .form-actions {{ display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }}
     .task-meta-grid {{ display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 10px 16px; margin-bottom: 18px; }}
     .meta-item span {{ display: block; color: var(--muted); font-size: 0.9rem; }}
     .meta-item strong {{ display: block; margin-top: 2px; }}
+    .task-model-grid {{ display: grid; gap: 10px; }}
+    .task-model-row {{ display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr); gap: 10px 14px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); background: rgba(124,79,44,0.06); }}
+    .task-model-row span {{ color: var(--accent-strong); font-size: 0.84rem; letter-spacing: 0.04em; text-transform: uppercase; }}
+    .task-model-row strong {{ display: block; font-size: 0.98rem; overflow-wrap: anywhere; }}
+    .task-model-row small {{ display: block; margin-top: 3px; color: var(--muted); font-size: 0.86rem; }}
     .task-tabs {{ display: flex; gap: 8px; margin-bottom: 14px; }}
     .task-tabs button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
     .task-panel[hidden] {{ display: none; }}
@@ -91,7 +114,7 @@ def build_ui_router() -> APIRouter:
     .mode-pill {{ display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }}
     .toastui-editor-defaultUI, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .toastui-editor-contents {{ max-width: 100%; min-width: 0; }}
     .viewer-host .toastui-editor-contents {{ overflow-wrap: anywhere; word-break: break-word; }}
-    @media (max-width: 900px) {{ #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} }}
+    @media (max-width: 900px) {{ #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .task-model-row {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} }}
   </style>
 </head>
 <body>
@@ -99,6 +122,7 @@ def build_ui_router() -> APIRouter:
     <h1>Filesystem Kanban Agent</h1>
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
+      <button id="open-settings" class="ghost-button">Model settings</button>
       <button id="refresh">Refresh</button>
     </div>
   </header>
@@ -188,6 +212,60 @@ def build_ui_router() -> APIRouter:
       </form>
     </div>
   </section>
+  <section id="settings-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="settings-modal-title">Model settings</h2>
+          <p>Adjust runtime overrides for the planner, implementer, reviewer, and commit worker without leaving the board.</p>
+        </div>
+        <button type="button" id="close-settings" aria-label="Close model settings">Close</button>
+      </div>
+      <form id="settings-form" class="settings-shell">
+        <div class="settings-copy">
+          <strong>Runtime overrides</strong>
+          <p>Leave a field blank to fall back to the configured agent default. Saving updates the in-memory runtime immediately and writes a local config file for future runs.</p>
+        </div>
+        <div class="settings-toolbar">
+          <p id="settings-discovery-summary">Open the panel to load current model options.</p>
+          <button type="button" id="refresh-model-options" class="ghost-button">Refresh discovered models</button>
+        </div>
+        <div class="settings-grid">
+          <label class="settings-card" for="planner_model">
+            <strong>Planner model</strong>
+            <span>Used for plan generation and plan revisions.</span>
+            <input id="planner_model" name="planner_model" list="opencode-model-options" placeholder="inherit default model">
+            <small>Pick from discovered options or type any custom model value.</small>
+          </label>
+          <label class="settings-card" for="implementer_model">
+            <strong>Implementer model</strong>
+            <span>Used when coding inside the isolated workspace.</span>
+            <input id="implementer_model" name="implementer_model" list="opencode-model-options" placeholder="inherit default model">
+            <small>Pick from discovered options or type any custom model value.</small>
+          </label>
+          <label class="settings-card" for="reviewer_model">
+            <strong>Reviewer model</strong>
+            <span>Used for review verdicts before human verification.</span>
+            <input id="reviewer_model" name="reviewer_model" list="opencode-model-options" placeholder="inherit default model">
+            <small>Pick from discovered options or type any custom model value.</small>
+          </label>
+          <label class="settings-card" for="commit_model">
+            <strong>Commit model</strong>
+            <span>Used when generating the final commit message.</span>
+            <input id="commit_model" name="commit_model" list="opencode-model-options" placeholder="inherit default model">
+            <small>Pick from discovered options or type any custom model value.</small>
+          </label>
+        </div>
+        <datalist id="opencode-model-options"></datalist>
+        <div id="settings-config-path" class="settings-path">Config path: loading...</div>
+        <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
+        <div class="form-actions">
+          <button type="button" id="cancel-settings">Cancel</button>
+          <button type="submit" id="save-settings" class="primary">Save model settings</button>
+        </div>
+      </form>
+    </div>
+  </section>
   <section id="task-modal" class="modal" hidden aria-hidden="true">
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
       <div class="modal-head">
@@ -258,18 +336,33 @@ def build_ui_router() -> APIRouter:
     const board = document.getElementById('board');
     const body = document.body;
     const modal = document.getElementById('request-modal');
+    const settingsModal = document.getElementById('settings-modal');
     const taskModal = document.getElementById('task-modal');
     const openComposerButton = document.getElementById('open-composer');
+    const openSettingsButton = document.getElementById('open-settings');
     const closeComposerButton = document.getElementById('close-composer');
+    const closeSettingsButton = document.getElementById('close-settings');
     const closeTaskModalButton = document.getElementById('close-task-modal');
     const cancelComposerButton = document.getElementById('cancel-composer');
+    const cancelSettingsButton = document.getElementById('cancel-settings');
     const requestForm = document.getElementById('request-form');
+    const settingsForm = document.getElementById('settings-form');
     const submitButton = document.getElementById('submit-request');
+    const saveSettingsButton = document.getElementById('save-settings');
     const formError = document.getElementById('form-error');
     const formSuccess = document.getElementById('form-success');
     const targetRepoInput = document.getElementById('target_repo');
     const targetRepoOptions = document.getElementById('target-repo-options');
     const baseBranchInput = document.getElementById('base_branch');
+    const plannerModelInput = document.getElementById('planner_model');
+    const implementerModelInput = document.getElementById('implementer_model');
+    const reviewerModelInput = document.getElementById('reviewer_model');
+    const commitModelInput = document.getElementById('commit_model');
+    const modelOptions = document.getElementById('opencode-model-options');
+    const settingsConfigPath = document.getElementById('settings-config-path');
+    const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
+    const settingsStatus = document.getElementById('settings-status');
+    const refreshModelOptionsButton = document.getElementById('refresh-model-options');
     const scopeField = document.getElementById('scope');
     const outOfScopeField = document.getElementById('out_of_scope');
     const defaultTargetRepo = {default_target_repo};
@@ -325,7 +418,7 @@ def build_ui_router() -> APIRouter:
       board.innerHTML = data.columns.map((column) => `
         <section class="column">
           <h2>${{column.state}}</h2>
-          ${{column.items.map((item) => `<article class="card"><button class="card-button" data-task-id="${{item.task_id}}"><strong>${{item.title}}</strong><div class="card-meta">${{item.task_id}}</div><div class="card-meta">iter ${{item.iteration}}</div>${{renderRunningMeta(item)}}</button></article>`).join('')}}
+          ${{column.items.map((item) => `<article class="card"><button class="card-button" data-task-id="${{item.task_id}}"><strong>${{item.title}}</strong><div class="card-meta">${{item.task_id}}</div><div class="card-meta">iter ${{item.iteration}}</div>${{renderRunningMeta(item)}}${{renderCardModelMeta(item)}}</button></article>`).join('')}}
         </section>`).join('');
       refreshRunningClocks();
     }}
@@ -337,6 +430,11 @@ def build_ui_router() -> APIRouter:
     function renderRunningMeta(item) {{
       if (!isActiveState(item.state) || !item.state_entered_at) return '';
       return `<div class="card-meta running" data-active-since="${{item.state_entered_at}}">running 00:00:00</div>`;
+    }}
+
+    function renderCardModelMeta(item) {{
+      if (!item.active_model) return '';
+      return `<div class="card-model"><strong>Current stage model used</strong>${{escapeHtml(item.active_model)}}</div>`;
     }}
 
     function formatElapsed(milliseconds) {{
@@ -369,6 +467,104 @@ def build_ui_router() -> APIRouter:
       targetRepoOptions.innerHTML = data.items.map((item) => `<option value="${{item}}"></option>`).join('');
     }}
 
+    function setSettingsModalOpen(isOpen) {{
+      settingsModal.hidden = !isOpen;
+      settingsModal.setAttribute('aria-hidden', String(!isOpen));
+      syncBodyModalState();
+      if (isOpen) plannerModelInput.focus();
+    }}
+
+    function setSettingsStatus(message, tone = 'neutral') {{
+      settingsStatus.textContent = message;
+      settingsStatus.dataset.tone = tone;
+    }}
+
+    function renderModelOptions(items) {{
+      modelOptions.innerHTML = items.map((item) => `<option value="${{escapeHtml(item)}}"></option>`).join('');
+    }}
+
+    function updateModelDiscoverySummary(data) {{
+      const count = data.available_models.length;
+      if (count) {{
+        const refreshedAt = data.discovered_at ? new Date(data.discovered_at).toLocaleString() : 'just now';
+        settingsDiscoverySummary.textContent = `${{count}} discovered model${{count === 1 ? '' : 's'}} available. Suggestions stay editable, so you can still type any custom value. Last update: ${{refreshedAt}}.`;
+        if (data.discovery_status === 'fallback' && data.discovery_error) {{
+          setSettingsStatus(`Using cached model suggestions. Refresh failed: ${{data.discovery_error}}`, 'error');
+        }} else {{
+          setSettingsStatus('Current runtime overrides and discovered model suggestions are loaded.', 'success');
+        }}
+        return;
+      }}
+      settingsDiscoverySummary.textContent = 'No models are cached yet. You can still leave a field blank or type any custom model value manually.';
+      if (data.discovery_status === 'error' && data.discovery_error) {{
+        setSettingsStatus(`Model discovery failed: ${{data.discovery_error}}. Manual entry still works.`, 'error');
+        return;
+      }}
+      if (data.discovery_status === 'empty') {{
+        setSettingsStatus('OpenCode responded, but no model options were returned. Manual entry still works.');
+        return;
+      }}
+      setSettingsStatus('Current runtime overrides are loaded. Refresh discovery when you want fresh model suggestions.');
+    }}
+
+    async function loadModelSettings(refresh = false) {{
+      setSettingsStatus(refresh ? 'Refreshing discovered model options...' : 'Loading current model overrides...');
+      refreshModelOptionsButton.disabled = true;
+      try {{
+        const response = await fetch(`/api/settings/models${{refresh ? '?refresh=true' : ''}}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Failed to load model settings.');
+        plannerModelInput.value = data.planner_model || '';
+        implementerModelInput.value = data.implementer_model || '';
+        reviewerModelInput.value = data.reviewer_model || '';
+        commitModelInput.value = data.commit_model || '';
+        renderModelOptions(data.available_models || []);
+        settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
+        updateModelDiscoverySummary(data);
+      }} finally {{
+        refreshModelOptionsButton.disabled = false;
+      }}
+    }}
+
+    async function openSettingsModal() {{
+      setSettingsModalOpen(true);
+      try {{
+        await loadModelSettings();
+      }} catch (error) {{
+        setSettingsStatus(error.message, 'error');
+      }}
+    }}
+
+    async function saveModelSettings(event) {{
+      event.preventDefault();
+      saveSettingsButton.disabled = true;
+      setSettingsStatus('Saving model overrides...');
+      try {{
+        const response = await fetch('/api/settings/models', {{
+          method: 'PUT',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            planner_model: plannerModelInput.value,
+            implementer_model: implementerModelInput.value,
+            reviewer_model: reviewerModelInput.value,
+            commit_model: commitModelInput.value,
+          }}),
+        }});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Failed to save model settings.');
+        plannerModelInput.value = data.planner_model || '';
+        implementerModelInput.value = data.implementer_model || '';
+        reviewerModelInput.value = data.reviewer_model || '';
+        commitModelInput.value = data.commit_model || '';
+        settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
+        setSettingsStatus(`Saved runtime config to ${{data.config_path}}.`, 'success');
+      }} catch (error) {{
+        setSettingsStatus(error.message, 'error');
+      }} finally {{
+        saveSettingsButton.disabled = false;
+      }}
+    }}
+
     function setModalOpen(isOpen) {{
       modal.hidden = !isOpen;
       modal.setAttribute('aria-hidden', String(!isOpen));
@@ -385,7 +581,7 @@ def build_ui_router() -> APIRouter:
     }}
 
     function syncBodyModalState() {{
-      body.classList.toggle('modal-open', !modal.hidden || !taskModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden);
     }}
 
     function clearMessages() {{
@@ -461,7 +657,7 @@ def build_ui_router() -> APIRouter:
     }}
 
     function escapeHtml(value) {{
-      return (value || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+      return (value || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
     }}
 
     function setTaskTab(tab) {{
@@ -599,6 +795,11 @@ def build_ui_router() -> APIRouter:
       const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
       const viewerVisible = detail.markdown_files.length > 0;
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
+      const stageModels = [
+        {{ label: 'Planner model used', value: metadata.plan.resolved_model, note: 'Captured from the plan run output.' }},
+        {{ label: 'Implementer model used', value: metadata.implementation.resolved_model, note: 'Captured from the workspace implementation run.' }},
+        {{ label: 'Reviewer model used', value: metadata.review.resolved_model, note: 'Captured from the AI review run.' }},
+      ];
       taskTabEditor.hidden = !viewerVisible;
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
       if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files);
@@ -617,6 +818,10 @@ def build_ui_router() -> APIRouter:
           <div class="meta-item"><span>Updated</span><strong>${{escapeHtml(metadata.updated_at)}}</strong></div>
           <div class="meta-item"><span>Target repo</span><strong>${{escapeHtml(metadata.target.repo_root)}}</strong></div>
           <div class="meta-item"><span>Base branch</span><strong>${{escapeHtml(metadata.target.base_branch)}}</strong></div>
+        </div>
+        <div class="task-section">
+          <h3>Captured stage models</h3>
+          <div class="task-model-grid">${{stageModels.map((item) => `<div class="task-model-row"><span>${{escapeHtml(item.label)}}</span><div><strong>${{escapeHtml(item.value || 'Not captured yet')}}</strong><small>${{escapeHtml(item.note)}} This is the actual model used, separate from runtime override settings.</small></div></div>`).join('')}}</div>
         </div>
         <div class="task-section">
           <h3>Markdown files</h3>
@@ -948,13 +1153,19 @@ def build_ui_router() -> APIRouter:
 
     document.getElementById('refresh').addEventListener('click', loadBoard);
     openComposerButton.addEventListener('click', () => {{ clearMessages(); setModalOpen(true); }});
+    openSettingsButton.addEventListener('click', openSettingsModal);
     closeComposerButton.addEventListener('click', () => {{ clearMessages(); setModalOpen(false); }});
+    closeSettingsButton.addEventListener('click', () => setSettingsModalOpen(false));
     cancelComposerButton.addEventListener('click', () => {{ clearMessages(); resetFormState(); setModalOpen(false); }});
+    cancelSettingsButton.addEventListener('click', () => setSettingsModalOpen(false));
     modal.addEventListener('click', (event) => {{ if (event.target === modal) setModalOpen(false); }});
+    settingsModal.addEventListener('click', (event) => {{ if (event.target === settingsModal) setSettingsModalOpen(false); }});
     closeTaskModalButton.addEventListener('click', () => {{ stopLogPolling(); setTaskModalOpen(false); }});
     taskModal.addEventListener('click', (event) => {{ if (event.target === taskModal) {{ stopLogPolling(); setTaskModalOpen(false); }} }});
-    document.addEventListener('keydown', (event) => {{ if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !taskModal.hidden) {{ stopLogPolling(); setTaskModalOpen(false); }} }});
+    document.addEventListener('keydown', (event) => {{ if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) setSettingsModalOpen(false); if (event.key === 'Escape' && !taskModal.hidden) {{ stopLogPolling(); setTaskModalOpen(false); }} }});
     requestForm.addEventListener('submit', submitRequest);
+    settingsForm.addEventListener('submit', saveModelSettings);
+    refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
     board.addEventListener('click', (event) => {{ const button = event.target.closest('[data-task-id]'); if (!button) return; loadTaskDetail(button.dataset.taskId); }});
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));

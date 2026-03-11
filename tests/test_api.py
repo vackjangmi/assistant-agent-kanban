@@ -6,11 +6,13 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from fs_kanban_agent.api.app import create_app
-from fs_kanban_agent.config import PROJECT_ROOT
+from fs_kanban_agent import config as config_module
+from fs_kanban_agent.config import PROJECT_ROOT, load_config
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
+from fs_kanban_agent.opencode_adapter import _parse_discovered_models
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workspace_manager import WorkspaceManager
@@ -235,6 +237,182 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
 
 
+def test_api_reads_and_updates_model_settings(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    config_path = tmp_path / "dashboard-config.yaml"
+    config.persist(config_path)
+    planner_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        get_response = client.get("/api/settings/models")
+        assert get_response.status_code == 200
+        assert get_response.json()["planner_model"] is None
+        assert get_response.json()["config_path"] == str(config_path.resolve())
+        assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
+        assert get_response.json()["discovery_status"] == "ready"
+        assert get_response.json()["discovery_error"] is None
+        assert planner_adapter.discovery_calls == [False]
+
+        put_response = client.put(
+            "/api/settings/models",
+            json={
+                "planner_model": "gpt-5-planner",
+                "implementer_model": " gpt-5-implementer ",
+                "reviewer_model": "",
+                "commit_model": "gpt-5-commit",
+            },
+        )
+
+    assert put_response.status_code == 200
+    payload = put_response.json()
+    assert payload["saved"] is True
+    assert payload["planner_model"] == "gpt-5-planner"
+    assert payload["implementer_model"] == "gpt-5-implementer"
+    assert payload["reviewer_model"] is None
+    assert payload["commit_model"] == "gpt-5-commit"
+    assert app.state.runtime.config.opencode.planner_model == "gpt-5-planner"
+    assert app.state.runtime.config.opencode.implementer_model == "gpt-5-implementer"
+    assert app.state.runtime.config.opencode.reviewer_model is None
+    assert load_config(config_path).opencode.commit_model == "gpt-5-commit"
+
+
+def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "stage-model-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    planning.metadata.plan.revision = 1
+    planning.metadata.plan.resolved_model = "openai/gpt-5.4"
+    planning.metadata.implementation.resolved_model = "github-copilot/gpt-5"
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    board_snapshot = scanner.board_snapshot()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        detail = client.get(f"/api/tasks/{planning.metadata.task_id}")
+
+    planning_column = next(column for column in board_snapshot.model_dump(mode="json")["columns"] if column["state"] == TaskState.PLANNING.value)
+    assert planning_column["items"][0]["active_model"] == "openai/gpt-5.4"
+    assert detail.status_code == 200
+    assert detail.json()["metadata"]["plan"]["resolved_model"] == "openai/gpt-5.4"
+    assert detail.json()["metadata"]["implementation"]["resolved_model"] == "github-copilot/gpt-5"
+    assert detail.json()["metadata"]["review"]["resolved_model"] is None
+
+
+def test_api_persists_model_settings_to_default_local_config_when_unloaded(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    default_local_path = tmp_path / "config.local.yaml"
+    original_default_local_path = config_module.DEFAULT_LOCAL_CONFIG_PATH
+    config_module.DEFAULT_LOCAL_CONFIG_PATH = default_local_path
+    try:
+        app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+        with TestClient(app) as client:
+            response = client.put(
+                "/api/settings/models",
+                json={
+                    "planner_model": "planner-x",
+                    "implementer_model": None,
+                    "reviewer_model": "reviewer-y",
+                    "commit_model": None,
+                },
+            )
+
+        assert response.status_code == 200
+        assert default_local_path.exists()
+        persisted = load_config(default_local_path)
+        assert persisted.opencode.planner_model == "planner-x"
+        assert persisted.opencode.reviewer_model == "reviewer-y"
+        assert response.json()["config_path"] == str(default_local_path.resolve())
+    finally:
+        config_module.DEFAULT_LOCAL_CONFIG_PATH = original_default_local_path
+
+
+def test_api_save_materializes_runtime_agents_immediately(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime_agents_dir = config.kanban_root / "_runtime" / "opencode-config" / "opencode" / "agents"
+    planner_agent_path = runtime_agents_dir / f"{config.opencode.planner_agent}.md"
+    reviewer_agent_path = runtime_agents_dir / f"{config.opencode.reviewer_agent}.md"
+
+    with TestClient(app) as client:
+        first_save = client.put(
+            "/api/settings/models",
+            json={
+                "planner_model": "openai/gpt-5.4",
+                "implementer_model": None,
+                "reviewer_model": "github-copilot/gpt-5",
+                "commit_model": None,
+            },
+        )
+        assert first_save.status_code == 200
+        assert planner_agent_path.exists()
+        assert reviewer_agent_path.exists()
+        assert "model: openai/gpt-5.4" in planner_agent_path.read_text()
+        assert "model: github-copilot/gpt-5" in reviewer_agent_path.read_text()
+
+        second_save = client.put(
+            "/api/settings/models",
+            json={
+                "planner_model": None,
+                "implementer_model": None,
+                "reviewer_model": None,
+                "commit_model": None,
+            },
+        )
+        assert second_save.status_code == 200
+
+    assert planner_agent_path.read_text() == (PROJECT_ROOT / ".opencode" / "agents" / f"{config.opencode.planner_agent}.md").read_text()
+    assert reviewer_agent_path.read_text() == (PROJECT_ROOT / ".opencode" / "agents" / f"{config.opencode.reviewer_agent}.md").read_text()
+
+
+def test_api_refreshes_model_discovery_and_keeps_cached_options_on_failure(configured_paths):
+    config, _, _ = configured_paths
+    planner_adapter = FakeAdapter(
+        ["plan"],
+        discovery_responses=[["gpt-5", "claude-3.7-sonnet"], RuntimeError("opencode models failed")],
+    )
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        initial = client.get("/api/settings/models")
+        assert initial.status_code == 200
+        assert initial.json()["available_models"] == ["gpt-5", "claude-3.7-sonnet"]
+        refreshed = client.get("/api/settings/models?refresh=true")
+
+    assert refreshed.status_code == 200
+    payload = refreshed.json()
+    assert payload["available_models"] == ["gpt-5", "claude-3.7-sonnet"]
+    assert payload["discovery_status"] == "fallback"
+    assert payload["discovery_error"] == "opencode models failed"
+    assert planner_adapter.discovery_calls == [False, True]
+
+
+def test_parse_discovered_models_ignores_verbose_json_metadata():
+    verbose_output = """openai/gpt-5.4
+{
+  \"id\": \"gpt-5.4\",
+  \"providerID\": \"openai\",
+  \"name\": \"GPT-5.4\"
+}
+github-copilot/gpt-5
+{
+  \"id\": \"gpt-5\",
+  \"providerID\": \"github-copilot\",
+  \"name\": \"GPT-5\"
+}
+"""
+
+    assert _parse_discovered_models(verbose_output) == ["openai/gpt-5.4", "github-copilot/gpt-5"]
+
+
 def test_dashboard_page_includes_request_form(configured_paths):
     config, _, _ = configured_paths
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
@@ -244,14 +422,24 @@ def test_dashboard_page_includes_request_form(configured_paths):
 
     assert response.status_code == 200
     assert "Create request" in response.text
+    assert "Model settings" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
     assert "/api/requests" in response.text
+    assert "/api/settings/models" in response.text
     assert "target-repo-options" in response.text
     assert "request-modal" in response.text
+    assert "settings-modal" in response.text
     assert "task-modal" in response.text
     assert "Viewer" in response.text
     assert "Viewer mode" in response.text
+    assert "planner_model" in response.text
+    assert "implementer_model" in response.text
+    assert "reviewer_model" in response.text
+    assert "commit_model" in response.text
+    assert "opencode-model-options" in response.text
+    assert "Refresh discovered models" in response.text
+    assert "Save model settings" in response.text
     assert "task-viewer-host" in response.text
     assert "Approve plan" in response.text
     assert "toastui-editor" in response.text
@@ -265,6 +453,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert "Approve &amp; commit" in response.text
+    assert "Captured stage models" in response.text
+    assert "Current stage model used" in response.text
+    assert "Planner model used" in response.text
+    assert "Implementer model used" in response.text
+    assert "Reviewer model used" in response.text
     assert f'const defaultTargetRepo = "{PROJECT_ROOT.parent}";' in response.text
 
 

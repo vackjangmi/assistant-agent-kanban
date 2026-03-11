@@ -69,6 +69,7 @@ class ReviewerWorker(WorkerBase):
                 config=self.config,
                 on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, run_log_path.name),
             )
+            reviewing.metadata.review.resolved_model = result.resolved_model
             reviewing.metadata.review.iteration += 1
             verdict = "PASS" if "Verdict: PASS" in result.assistant_text or "VERDICT: PASS" in result.assistant_text else "NEEDS_CHANGES"
             reviewing.metadata.review.last_verdict = verdict
