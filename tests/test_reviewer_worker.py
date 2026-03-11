@@ -63,7 +63,11 @@ def test_reviewer_worker_returns_to_todos_on_needs_changes(configured_paths):
     )
 
     assert asyncio.run(worker.run_once()) is True
-    assert scanner.scan()[0].state == TaskState.TODOS
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.retry_gate.reason == "review-needs-changes"
+    assert updated.metadata.retry_gate.consecutive_count == 1
+    assert updated.metadata.retry_gate.not_before is None
 
 
 def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
@@ -88,6 +92,7 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert "Verdict: PASS" in review_json["assistant_text"]
     assert review_json["resolved_model"] == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.review.resolved_model == "github-copilot/gpt-5"
+    assert scanner.scan()[0].metadata.retry_gate.reason is None
 
 
 def test_reviewer_worker_leaves_target_repo_clean_until_human_verification(tmp_path):
@@ -148,3 +153,79 @@ def test_reviewer_worker_rejects_tasks_with_no_workspace_changes(configured_path
     updated = scanner.scan()[0]
     assert updated.state == TaskState.TODOS
     assert any(error.code == "review-no-changes" for error in updated.metadata.errors)
+    assert updated.metadata.retry_gate.reason == "review-no-changes"
+    assert updated.metadata.retry_gate.not_before is not None
+
+
+def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["Verdict: NEEDS_CHANGES\n- revise", "Verdict: PASS\nReady"], session_ids=["ses_rev_1", "ses_rev_1"])
+            self.prompts: list[str] = []
+
+        def run(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            return super().run(**kwargs)
+
+    config, _, _ = configured_paths
+    create_request_task(config, "review-context-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    first_task = scanner.scan()[0]
+    (first_task.task_dir / "REVIEW-001.md").write_text("Verdict: NEEDS_CHANGES\n- prior issue\n")
+    (first_task.task_dir / "HUMAN-VERIFY-001.md").write_text("Please re-check replay flow.\n")
+    (first_task.task_dir / "WORK-000.md").write_text("older work\n")
+    first_task.metadata.review.session_id = "ses_rev_1"
+    first_task.metadata.review.iteration = 1
+    metadata_store.save(first_task.task_dir, first_task.metadata)
+
+    adapter = PromptCapturingAdapter()
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.metadata.review.session_id == "ses_rev_1"
+    assert adapter.run_calls[0]["session_id"] == "ses_rev_1"
+    prompt = adapter.prompts[0]
+    assert "# Work History" in prompt
+    assert "WORK-000.md" in prompt
+    assert "WORK-001.md" in prompt
+    assert "# Previous AI Reviews" in prompt
+    assert "REVIEW-001.md" in prompt
+    assert "# Human Verification History" in prompt
+    assert "HUMAN-VERIFY-001.md" in prompt
+    assert "Do not repeat earlier findings unless they still apply" in prompt
+
+
+def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-gated-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    task = scanner.scan()[0]
+    task.metadata.retry_gate.reason = "review-needs-changes"
+    task.metadata.retry_gate.consecutive_count = 1
+    metadata_store.save(task.task_dir, task.metadata)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["Verdict: NEEDS_CHANGES\n- still broken"]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.metadata.retry_gate.reason == "review-needs-changes"
+    assert updated.metadata.retry_gate.consecutive_count == 2
+    assert updated.metadata.retry_gate.not_before is not None
