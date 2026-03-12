@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -198,8 +199,119 @@ class CommitManager:
         return branch
 
     def _preferred_final_branch(self, metadata: TaskMetadata) -> str:
-        slug = metadata.slug.strip("-") if metadata.slug else ""
-        return f"feature/{slug or f'task-{metadata.task_id.lower()}'}"
+        summary = self.sanitize_branch_summary(metadata.integration.final_branch_summary, fallback_title=metadata.title)
+        return f"feature/{metadata.task_id.lower()}-{summary}"
+
+    def sanitize_branch_summary(self, summary: str | None, *, fallback_title: str) -> str:
+        if summary:
+            ascii_slug = self._slugify_ascii(summary)
+            if ascii_slug and ascii_slug != "task":
+                return ascii_slug
+        return self._branch_summary_slug(fallback_title)
+
+    def _branch_summary_slug(self, title: str) -> str:
+        ascii_slug = self._slugify_ascii(title)
+        if ascii_slug and ascii_slug != "task":
+            return ascii_slug
+        romanized = self._romanize_korean(title)
+        romanized_slug = self._slugify_ascii(romanized)
+        if romanized_slug and romanized_slug != "task":
+            return romanized_slug
+        return "task"
+
+    def _slugify_ascii(self, value: str) -> str:
+        normalized = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
+        return normalized or "task"
+
+    def _romanize_korean(self, value: str) -> str:
+        choseong = [
+            "g",
+            "kk",
+            "n",
+            "d",
+            "tt",
+            "r",
+            "m",
+            "b",
+            "pp",
+            "s",
+            "ss",
+            "",
+            "j",
+            "jj",
+            "ch",
+            "k",
+            "t",
+            "p",
+            "h",
+        ]
+        jungseong = [
+            "a",
+            "ae",
+            "ya",
+            "yae",
+            "eo",
+            "e",
+            "yeo",
+            "ye",
+            "o",
+            "wa",
+            "wae",
+            "oe",
+            "yo",
+            "u",
+            "wo",
+            "we",
+            "wi",
+            "yu",
+            "eu",
+            "ui",
+            "i",
+        ]
+        jongseong = [
+            "",
+            "k",
+            "k",
+            "ks",
+            "n",
+            "nj",
+            "nh",
+            "t",
+            "l",
+            "lk",
+            "lm",
+            "lb",
+            "ls",
+            "lt",
+            "lp",
+            "lh",
+            "m",
+            "p",
+            "ps",
+            "t",
+            "t",
+            "ng",
+            "t",
+            "t",
+            "k",
+            "t",
+            "p",
+            "t",
+        ]
+        pieces: list[str] = []
+        for char in value:
+            code = ord(char)
+            if 0xAC00 <= code <= 0xD7A3:
+                syllable_index = code - 0xAC00
+                lead = syllable_index // 588
+                vowel = (syllable_index % 588) // 28
+                tail = syllable_index % 28
+                pieces.append(choseong[lead] + jungseong[vowel] + jongseong[tail])
+            elif char.isascii() and (char.isalnum() or char in {" ", "-"}):
+                pieces.append(char)
+            else:
+                pieces.append(" ")
+        return "".join(pieces)
 
     def _branch_exists(self, repo_root: Path, branch: str) -> bool:
         result = subprocess.run(

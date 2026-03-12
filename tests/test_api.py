@@ -246,7 +246,7 @@ def test_api_supports_human_verification_approve(configured_paths):
         assert approve.json()["state"] == TaskState.DONE.value
         detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
         assert detail.status_code == 200
-        assert detail.json()["metadata"]["integration"]["final_branch"] == f"feature/{completed.metadata.slug}"
+        assert detail.json()["metadata"]["integration"]["final_branch"] == f"feature/{completed.metadata.task_id.lower()}-{completed.metadata.slug}"
 
 
 def test_api_returns_todos_when_human_verification_rebase_fails(configured_paths):
