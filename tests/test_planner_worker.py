@@ -42,9 +42,56 @@ def test_planner_worker_generates_plan(configured_paths):
     plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
     assert plan_json["assistant_text"] == "## Summary\nplan"
     assert plan_json["resolved_model"] == "openai/gpt-5.4"
+    assert plan_json["total_tokens"] == 0
     assert plan_json["markdown_path"] == "PLAN.md"
     assert plan_json["sync_policy"] == "markdown_edits_do_not_modify_json"
     assert task.metadata.plan.resolved_model == "openai/gpt-5.4"
+
+
+def test_planner_worker_reuses_session_under_budget_and_tracks_tokens(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.planner_session_token_budget = 250000
+    create_request_task(config, "planner-session-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    task.metadata.plan.session_id = "ses_plan_1"
+    task.metadata.plan.session_tokens = 90000
+    metadata_store.save(task.task_dir, task.metadata)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(["## Summary\nplan"], session_ids=["ses_plan_1"], total_tokens=[4200])
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert adapter.run_calls[0]["session_id"] == "ses_plan_1"
+    assert updated.metadata.plan.session_id == "ses_plan_1"
+    assert updated.metadata.plan.last_run_tokens == 4200
+    assert updated.metadata.plan.session_tokens == 94200
+
+
+def test_planner_worker_rolls_over_session_after_budget_is_exceeded(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.planner_session_token_budget = 100000
+    create_request_task(config, "planner-session-budget-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    task.metadata.plan.session_id = "ses_plan_1"
+    task.metadata.plan.session_tokens = 120000
+    metadata_store.save(task.task_dir, task.metadata)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(["## Summary\nplan"], session_ids=["ses_plan_2"], total_tokens=[3200])
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert adapter.run_calls[0]["session_id"] is None
+    assert updated.metadata.plan.session_id == "ses_plan_2"
+    assert updated.metadata.plan.last_run_tokens == 3200
+    assert updated.metadata.plan.session_tokens == 3200
 
 
 def test_planner_markdown_edits_do_not_modify_plan_json(configured_paths):

@@ -38,6 +38,12 @@ class PlanningWorker(WorkerBase):
             planner_cwd = Path(planning.metadata.target.repo_root).expanduser().resolve()
             await self.emit("task_moved", planning.metadata.task_id, state=planning.state.value)
             loop = asyncio.get_running_loop()
+            session_id = self.reuse_session_id(
+                session_id=planning.metadata.plan.session_id,
+                session_tokens=planning.metadata.plan.session_tokens,
+                budget=self.config.opencode.planner_session_token_budget,
+            )
+            prior_session_tokens = planning.metadata.plan.session_tokens if session_id else 0
             result = await asyncio.to_thread(
                 self.adapter.run,
                 agent=self.config.opencode.planner_agent,
@@ -45,9 +51,18 @@ class PlanningWorker(WorkerBase):
                 cwd=planner_cwd,
                 run_log_path=run_log_path,
                 config=self.config,
+                session_id=session_id,
                 on_log_line=self.make_log_callback(loop, planning.metadata.task_id, run_log_path.name),
             )
             planning.metadata.plan.resolved_model = result.resolved_model
+            planning.metadata.plan.session_id = result.session_id
+            planning.metadata.plan.last_run_tokens = result.total_tokens
+            planning.metadata.plan.session_tokens = self.next_session_token_total(
+                reused_session_id=session_id,
+                returned_session_id=result.session_id,
+                prior_session_tokens=prior_session_tokens,
+                run_tokens=result.total_tokens,
+            )
             if not result.ok:
                 apply_retry_gate(planning.metadata, reason="planner-run-failed")
                 self.metadata_store.add_error(
