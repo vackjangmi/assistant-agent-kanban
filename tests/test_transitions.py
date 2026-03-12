@@ -60,3 +60,22 @@ def test_invalid_transition_is_blocked(configured_paths):
 
     with pytest.raises(TransitionError):
         transitions.move(scanner.scan()[0], TaskState.DONE, by="tester")
+
+
+def test_completed_reviews_can_return_to_todos(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "completed-review-conflict-task")
+    scanner = KanbanScanner(config)
+    transitions = TransitionManager(config, MetadataStore(), scanner, TaskLockManager(config))
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+
+    moved = transitions.move(completed, TaskState.TODOS, by="human", note="integration conflict")
+
+    assert moved.state == TaskState.TODOS

@@ -22,5 +22,13 @@ class IntegrationError(FsKanbanError):
     pass
 
 
+class IntegrationConflictError(IntegrationError):
+    pass
+
+
 class CommitError(FsKanbanError):
+    pass
+
+
+class WorkspaceSyncError(FsKanbanError):
     pass
