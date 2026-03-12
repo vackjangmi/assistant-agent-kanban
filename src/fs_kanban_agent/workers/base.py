@@ -99,10 +99,8 @@ class WorkerBase:
                     "worker_log",
                     task_id,
                     log_name=log_name,
-                    raw_line=raw_line,
-                    rendered_line=rendered_line,
-                    content=content,
                     rendered_content=render_opencode_log(content) or None,
+                    debug_rendered_content=render_opencode_log(content, debug=True) or None,
                 ),
             )
 
