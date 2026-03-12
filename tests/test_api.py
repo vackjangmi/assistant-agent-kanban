@@ -210,6 +210,60 @@ def test_api_rejects_plan_md_edit_outside_waiting_check_plans(configured_paths):
     assert response.status_code == 409
 
 
+def test_api_uploads_and_serves_plan_attachments(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-attachment-task")
+    app = create_app(config, FakeAdapter(["## Summary\nplan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    runtime = app.state.runtime
+    metadata_store = runtime.planner.metadata_store
+    scanner = runtime.planner.scanner
+    transitions = runtime.planner.transitions
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("original plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    with TestClient(app) as client:
+        upload = client.post(
+            f"/api/tasks/{waiting.metadata.task_id}/attachments?artifact=PLAN.md",
+            files={"file": ("diagram.png", b"pngdata", "image/png")},
+        )
+        assert upload.status_code == 200
+        payload = upload.json()
+        assert payload["filename"].endswith(".png")
+        assert payload["relative_path"].startswith("_attachments/")
+        assert payload["url"].endswith(payload["filename"])
+
+        save = client.put(
+            f"/api/tasks/{waiting.metadata.task_id}/artifacts/PLAN.md",
+            json={"content": f"![diagram]({payload['relative_path']})"},
+        )
+        assert save.status_code == 200
+        assert (waiting.task_dir / "PLAN.md").read_text() == f"![diagram]({payload['relative_path']})\n"
+
+        download = client.get(payload["url"])
+        assert download.status_code == 200
+        assert download.content == b"pngdata"
+        assert download.headers["content-type"] == "image/png"
+
+
+def test_api_rejects_plan_attachment_upload_outside_waiting_check_plans(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "plan-attachment-reject-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/tasks/{task.metadata.task_id}/attachments?artifact=PLAN.md",
+            files={"file": ("diagram.png", b"pngdata", "image/png")},
+        )
+
+    assert response.status_code == 409
+
+
 def test_api_supports_human_verification_start_and_reject(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -873,6 +927,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Implement&Review-${cycle}" in response.text
     assert "function renderArtifactSubtabs(entries)" in response.text
     assert "artifactDisplayLabel(file)" in response.text
+    assert "addImageBlobHook" in response.text
+    assert "/api/tasks/${activeTaskId}/attachments?artifact=PLAN.md" in response.text
+    assert "callback(uploaded.relative_path, uploaded.filename);" in response.text
+    assert "function rewriteAttachmentPaths(markdown, taskId)" in response.text
     assert "const defaultTab = preserveTab ? activeTaskTab : 'overview';" in response.text
     assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text

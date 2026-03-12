@@ -1125,17 +1125,23 @@ def build_ui_router() -> APIRouter:
     }}
 
     function ensureMarkdownViewer(value) {{
+      const renderedValue = activeTaskId ? rewriteAttachmentPaths(value || '', activeTaskId) : (value || '');
       if (window.toastui && window.toastui.Editor && window.toastui.Editor.factory) {{
         taskViewerHost.innerHTML = '';
         markdownViewer = window.toastui.Editor.factory({{
           el: taskViewerHost,
           viewer: true,
-          initialValue: value || '',
+          initialValue: renderedValue,
         }});
         return markdownViewer;
       }}
-      taskViewerHost.innerHTML = `<pre class="log-viewer">${{escapeHtml(value || '')}}</pre>`;
+      taskViewerHost.innerHTML = `<pre class="log-viewer">${{escapeHtml(renderedValue)}}</pre>`;
       return null;
+    }}
+
+    function rewriteAttachmentPaths(markdown, taskId) {{
+      return markdown.replace(/(!\[[^\]]*\]\()(_attachments\/[^)]+)(\))/g, `$1/api/tasks/${{taskId}}/attachments/$2$3`)
+        .replace(/\/api\/tasks\/([^/]+)\/attachments\/_attachments\//g, '/api/tasks/$1/attachments/');
     }}
 
     function ensurePlanEditor() {{
@@ -1149,11 +1155,42 @@ def build_ui_router() -> APIRouter:
         toolbarItems: [
           ['heading', 'bold', 'italic'],
           ['ul', 'ol', 'task'],
-          ['link', 'quote', 'code'],
+          ['link', 'quote', 'code', 'image'],
         ],
+        hooks: {{
+          addImageBlobHook: async (blob, callback) => {{
+            try {{
+              const uploaded = await uploadPlanAttachment(blob);
+              callback(uploaded.relative_path, uploaded.filename);
+              taskEditorStatus.textContent = `Attached ${{uploaded.filename}} to PLAN.md.`;
+            }} catch (error) {{
+              taskModalError.hidden = false;
+              taskModalError.textContent = error.message;
+              taskEditorStatus.textContent = 'Image upload failed.';
+            }}
+          }},
+        }},
         usageStatistics: false,
       }});
       return planEditor;
+    }}
+
+    async function uploadPlanAttachment(blob) {{
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans' || activeArtifactName !== 'PLAN.md') {{
+        throw new Error('Image attachments are only available while editing PLAN.md in waiting-check-plans.');
+      }}
+      const formData = new FormData();
+      const fallbackExtension = blob.type === 'image/jpeg' ? '.jpg' : blob.type === 'image/gif' ? '.gif' : blob.type === 'image/webp' ? '.webp' : '.png';
+      const fallbackName = blob.name && /\.[a-zA-Z0-9]+$/.test(blob.name) ? blob.name : `image${{fallbackExtension}}`;
+      formData.append('file', blob, fallbackName);
+      taskEditorStatus.textContent = 'Uploading image attachment...';
+      const response = await fetch(`/api/tasks/${{activeTaskId}}/attachments?artifact=PLAN.md`, {{
+        method: 'POST',
+        body: formData,
+      }});
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Failed to upload image attachment.');
+      return payload;
     }}
 
     function setPlanEditorContent(value) {{
