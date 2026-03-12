@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import asyncio
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse
 
 from ..agent_materializer import ensure_runtime_agents
 from ..config import DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET
@@ -206,6 +207,27 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return {"saved": True, "filename": filename}
+
+    @router.post("/api/tasks/{task_id}/attachments")
+    async def upload_task_attachment(task_id: str, request: Request, artifact: str, file: UploadFile = File(...)):
+        runtime = request.app.state.runtime
+        data = await file.read()
+        try:
+            saved = runtime.task_service.save_attachment(task_id, artifact, file.filename or "image", file.content_type, data)
+        except (TaskNotFoundError, TransitionError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return saved
+
+    @router.get("/api/tasks/{task_id}/attachments/{filename}")
+    async def task_attachment(task_id: str, filename: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            path, media_type = runtime.task_service.get_attachment(task_id, filename)
+        except TaskNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return FileResponse(path, media_type=media_type)
 
     @router.get("/api/target-repos")
     async def target_repos(request: Request):

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import mimetypes
 from pathlib import Path
 import re
+import uuid
 
 from ..exceptions import TaskNotFoundError, TransitionError
 from ..log_parser import render_opencode_log
@@ -22,6 +24,8 @@ from ..scanner import KanbanScanner
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
 ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
+ATTACHMENT_NAME_RE = re.compile(r"[^a-zA-Z0-9]+")
+ALLOWED_ATTACHMENT_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
 PatchFileState = dict[str, str | int | bool | list[ChangedFileHunk] | None]
@@ -98,6 +102,33 @@ class TaskService:
         path = self._validate_writable_markdown_artifact(task.task_dir, filename)
         path.write_text(content.rstrip() + "\n")
 
+    def save_attachment(self, task_id: str, artifact_filename: str, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
+        task = self._find_task(task_id)
+        if task.state != "waiting-check-plans":
+            raise TransitionError("attachments are only allowed in waiting-check-plans")
+        self._validate_writable_markdown_artifact(task.task_dir, artifact_filename)
+        suffix = Path(upload_name).suffix.lower()
+        if suffix not in ALLOWED_ATTACHMENT_SUFFIXES:
+            raise TransitionError("only png, jpg, jpeg, gif, and webp attachments are supported")
+        if content_type and not content_type.startswith("image/"):
+            raise TransitionError("only image attachments are supported")
+        attachments_dir = self._attachments_dir(task.task_dir, create=True)
+        stem = ATTACHMENT_NAME_RE.sub("-", Path(upload_name).stem.lower()).strip("-") or "image"
+        stored_name = f"{stem}-{uuid.uuid4().hex[:8]}{suffix}"
+        path = attachments_dir / stored_name
+        path.write_bytes(data)
+        return {
+            "filename": stored_name,
+            "content_type": content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
+            "relative_path": f"_attachments/{stored_name}",
+            "url": f"/api/tasks/{task_id}/attachments/{stored_name}",
+        }
+
+    def get_attachment(self, task_id: str, filename: str) -> tuple[Path, str]:
+        task = self._find_task(task_id)
+        path = self._validate_readable_attachment(task.task_dir, filename)
+        return path, mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
     def _find_task(self, task_id: str):
         try:
             return self.scanner.find_task(task_id)
@@ -116,6 +147,23 @@ class TaskService:
         if filename != "PLAN.md":
             raise TransitionError("only PLAN.md is editable")
         return self._validate_readable_markdown_artifact(task_dir, filename)
+
+    def _attachments_dir(self, task_dir: Path, *, create: bool = False) -> Path:
+        path = task_dir / "_attachments"
+        if create:
+            path.mkdir(parents=True, exist_ok=True)
+        resolved_task_dir = task_dir.resolve()
+        resolved = path.resolve()
+        if resolved.parent != resolved_task_dir or resolved.name != "_attachments":
+            raise TransitionError("attachments directory must stay inside the task directory")
+        return resolved
+
+    def _validate_readable_attachment(self, task_dir: Path, filename: str) -> Path:
+        attachments_dir = self._attachments_dir(task_dir)
+        path = (attachments_dir / filename).resolve()
+        if path.parent != attachments_dir or not path.exists():
+            raise TaskNotFoundError(filename)
+        return path
 
     def _sorted_markdown_files(self, task_dir: Path) -> list[str]:
         files = [path.name for path in task_dir.glob("*.md")]
