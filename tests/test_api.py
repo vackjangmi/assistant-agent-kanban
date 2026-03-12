@@ -558,6 +558,10 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         get_response = client.get("/api/settings/models")
         assert get_response.status_code == 200
         assert get_response.json()["planner_model"] is None
+        assert get_response.json()["planner_session_token_budget"] == 250
+        assert get_response.json()["implementer_session_token_budget"] == 250
+        assert get_response.json()["reviewer_session_token_budget"] == 250
+        assert get_response.json()["commit_session_token_budget"] == 250
         assert get_response.json()["repo_discovery_root"] == str(config.repo_discovery.root)
         assert get_response.json()["repo_discovery_max_depth"] == config.repo_discovery.max_depth
         assert get_response.json()["config_path"] == str(config_path.resolve())
@@ -577,9 +581,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             "/api/settings/models",
             json={
                 "planner_model": "gpt-5-planner",
+                "planner_session_token_budget": 210,
                 "implementer_model": " gpt-5-implementer ",
+                "implementer_session_token_budget": 230,
                 "reviewer_model": "",
+                "reviewer_session_token_budget": 190,
                 "commit_model": "gpt-5-commit",
+                "commit_session_token_budget": 250,
                 "repo_discovery_root": "../",
                 "repo_discovery_max_depth": 4,
             },
@@ -589,17 +597,25 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     payload = put_response.json()
     assert payload["saved"] is True
     assert payload["planner_model"] == "gpt-5-planner"
+    assert payload["planner_session_token_budget"] == 210
     assert payload["implementer_model"] == "gpt-5-implementer"
+    assert payload["implementer_session_token_budget"] == 230
     assert payload["reviewer_model"] is None
+    assert payload["reviewer_session_token_budget"] == 190
     assert payload["commit_model"] == "gpt-5-commit"
+    assert payload["commit_session_token_budget"] == 250
     assert payload["repo_discovery_root"] == "../"
     assert payload["repo_discovery_max_depth"] == 4
     assert app.state.runtime.config.opencode.planner_model == "gpt-5-planner"
+    assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.opencode.implementer_model == "gpt-5-implementer"
+    assert app.state.runtime.config.opencode.implementer_session_token_budget == 230000
     assert app.state.runtime.config.opencode.reviewer_model is None
+    assert app.state.runtime.config.opencode.reviewer_session_token_budget == 190000
     assert app.state.runtime.config.repo_discovery.root == "../"
     assert app.state.runtime.config.repo_discovery.max_depth == 4
     assert load_config(config_path).opencode.commit_model == "gpt-5-commit"
+    assert load_config(config_path).opencode.commit_session_token_budget == 250000
     assert load_config(config_path).repo_discovery.root == "../"
     assert load_config(config_path).repo_discovery.max_depth == 4
 
@@ -646,9 +662,13 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
                 "/api/settings/models",
                 json={
                 "planner_model": "planner-x",
+                "planner_session_token_budget": 180,
                 "implementer_model": None,
+                "implementer_session_token_budget": 250,
                 "reviewer_model": "reviewer-y",
+                "reviewer_session_token_budget": 220,
                 "commit_model": None,
+                "commit_session_token_budget": 250,
                 "repo_discovery_root": "/tmp/scan-root",
                 "repo_discovery_max_depth": 3,
             },
@@ -658,7 +678,9 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         assert default_local_path.exists()
         persisted = load_config(default_local_path)
         assert persisted.opencode.planner_model == "planner-x"
+        assert persisted.opencode.planner_session_token_budget == 180000
         assert persisted.opencode.reviewer_model == "reviewer-y"
+        assert persisted.opencode.reviewer_session_token_budget == 220000
         assert persisted.repo_discovery.root == "/tmp/scan-root"
         assert persisted.repo_discovery.max_depth == 3
         assert response.json()["config_path"] == str(default_local_path.resolve())
@@ -676,9 +698,13 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
             "/api/settings/models",
             json={
                 "planner_model": "planner-x",
+                "planner_session_token_budget": 260,
                 "implementer_model": None,
+                "implementer_session_token_budget": 250,
                 "reviewer_model": None,
+                "reviewer_session_token_budget": 250,
                 "commit_model": None,
+                "commit_session_token_budget": 250,
                 "repo_discovery_max_depth": 5,
             },
         )
@@ -702,9 +728,13 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
             "/api/settings/models",
             json={
                 "planner_model": "openai/gpt-5.4",
+                "planner_session_token_budget": 250,
                 "implementer_model": "openai/gpt-5.4-mini",
+                "implementer_session_token_budget": 250,
                 "reviewer_model": "github-copilot/gpt-5",
+                "reviewer_session_token_budget": 250,
                 "commit_model": None,
+                "commit_session_token_budget": 250,
             },
         )
         assert first_save.status_code == 200
@@ -724,9 +754,13 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
             "/api/settings/models",
             json={
                 "planner_model": None,
+                "planner_session_token_budget": 250,
                 "implementer_model": None,
+                "implementer_session_token_budget": 250,
                 "reviewer_model": None,
+                "reviewer_session_token_budget": 250,
                 "commit_model": None,
+                "commit_session_token_budget": 250,
             },
         )
         assert second_save.status_code == 200
@@ -805,9 +839,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Readable log" in response.text
     assert "Debug log" in response.text
     assert "planner_model" in response.text
+    assert "planner_session_token_budget" in response.text
     assert "implementer_model" in response.text
+    assert "implementer_session_token_budget" in response.text
     assert "reviewer_model" in response.text
+    assert "reviewer_session_token_budget" in response.text
     assert "commit_model" in response.text
+    assert "commit_session_token_budget" in response.text
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
     assert "opencode-model-options" in response.text

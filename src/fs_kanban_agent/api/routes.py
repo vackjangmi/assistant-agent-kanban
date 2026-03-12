@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..agent_materializer import ensure_runtime_agents
-from ..config import DEFAULT_REPO_DISCOVERY_ROOT
+from ..config import DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..omo_config import read_omo_delegation_snapshot
@@ -39,9 +39,13 @@ class HumanVerificationPayload(BaseModel):
 
 class ModelSettingsPayload(BaseModel):
     planner_model: str | None = None
+    planner_session_token_budget: int | None = Field(default=None, ge=1)
     implementer_model: str | None = None
+    implementer_session_token_budget: int | None = Field(default=None, ge=1)
     reviewer_model: str | None = None
+    reviewer_session_token_budget: int | None = Field(default=None, ge=1)
     commit_model: str | None = None
+    commit_session_token_budget: int | None = Field(default=None, ge=1)
     repo_discovery_root: str | None = None
     repo_discovery_max_depth: int | None = Field(default=None, ge=1)
 
@@ -56,6 +60,16 @@ def _normalize_model_override(value: str | None) -> str | None:
 def _normalize_repo_discovery_root(value: str | None) -> str:
     normalized = (value or "").strip()
     return normalized or DEFAULT_REPO_DISCOVERY_ROOT
+
+
+def _normalize_session_token_budget(value: int | None) -> int:
+    if value is None:
+        return DEFAULT_SESSION_TOKEN_BUDGET
+    return max(1, value) * 1000
+
+
+def _display_session_token_budget(value: int) -> int:
+    return max(1, value // 1000)
 
 
 def build_router() -> APIRouter:
@@ -77,9 +91,13 @@ def build_router() -> APIRouter:
         omo_snapshot = read_omo_delegation_snapshot()
         return {
             "planner_model": runtime.config.opencode.planner_model,
+            "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
             "implementer_model": runtime.config.opencode.implementer_model,
+            "implementer_session_token_budget": _display_session_token_budget(runtime.config.opencode.implementer_session_token_budget),
             "reviewer_model": runtime.config.opencode.reviewer_model,
+            "reviewer_session_token_budget": _display_session_token_budget(runtime.config.opencode.reviewer_session_token_budget),
             "commit_model": runtime.config.opencode.commit_model,
+            "commit_session_token_budget": _display_session_token_budget(runtime.config.opencode.commit_session_token_budget),
             "repo_discovery_root": runtime.config.repo_discovery_root_value(),
             "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
             "config_path": str(runtime.config.config_path_for_persistence()),
@@ -105,10 +123,23 @@ def build_router() -> APIRouter:
     @router.put("/api/settings/models")
     async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, str | int | bool | None]:
         runtime = request.app.state.runtime
-        runtime.config.opencode.planner_model = _normalize_model_override(payload.planner_model)
-        runtime.config.opencode.implementer_model = _normalize_model_override(payload.implementer_model)
-        runtime.config.opencode.reviewer_model = _normalize_model_override(payload.reviewer_model)
-        runtime.config.opencode.commit_model = _normalize_model_override(payload.commit_model)
+        fields_set = payload.model_fields_set
+        if "planner_model" in fields_set:
+            runtime.config.opencode.planner_model = _normalize_model_override(payload.planner_model)
+        if "planner_session_token_budget" in fields_set:
+            runtime.config.opencode.planner_session_token_budget = _normalize_session_token_budget(payload.planner_session_token_budget)
+        if "implementer_model" in fields_set:
+            runtime.config.opencode.implementer_model = _normalize_model_override(payload.implementer_model)
+        if "implementer_session_token_budget" in fields_set:
+            runtime.config.opencode.implementer_session_token_budget = _normalize_session_token_budget(payload.implementer_session_token_budget)
+        if "reviewer_model" in fields_set:
+            runtime.config.opencode.reviewer_model = _normalize_model_override(payload.reviewer_model)
+        if "reviewer_session_token_budget" in fields_set:
+            runtime.config.opencode.reviewer_session_token_budget = _normalize_session_token_budget(payload.reviewer_session_token_budget)
+        if "commit_model" in fields_set:
+            runtime.config.opencode.commit_model = _normalize_model_override(payload.commit_model)
+        if "commit_session_token_budget" in fields_set:
+            runtime.config.opencode.commit_session_token_budget = _normalize_session_token_budget(payload.commit_session_token_budget)
         if payload.repo_discovery_root is not None:
             runtime.config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
         if payload.repo_discovery_max_depth is not None:
@@ -118,9 +149,13 @@ def build_router() -> APIRouter:
         await runtime.rescan_and_publish()
         return {
             "planner_model": runtime.config.opencode.planner_model,
+            "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
             "implementer_model": runtime.config.opencode.implementer_model,
+            "implementer_session_token_budget": _display_session_token_budget(runtime.config.opencode.implementer_session_token_budget),
             "reviewer_model": runtime.config.opencode.reviewer_model,
+            "reviewer_session_token_budget": _display_session_token_budget(runtime.config.opencode.reviewer_session_token_budget),
             "commit_model": runtime.config.opencode.commit_model,
+            "commit_session_token_budget": _display_session_token_budget(runtime.config.opencode.commit_session_token_budget),
             "repo_discovery_root": runtime.config.repo_discovery_root_value(),
             "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
             "config_path": str(config_path),
