@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import uvicorn
 from pathlib import Path
 
 from .config import AppConfig, load_config
 from .api.app import create_default_app
+from .api.main import CONFIG_ENV_VAR
 from .request_creator import RequestTemplateData, create_request
 from .scanner import KanbanScanner
 from .services.task_service import TaskService
@@ -20,6 +22,7 @@ def main(argv: list[str] | None = None) -> None:
     serve_parser.add_argument("--config")
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.add_argument("--reload", action="store_true")
 
     request_parser = subparsers.add_parser("request")
     request_parser.add_argument("title")
@@ -36,8 +39,27 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
     if args.command in {None, "serve"}:
-        app = create_default_app(getattr(args, "config", None))
-        uvicorn.run(app, host=getattr(args, "host", "127.0.0.1"), port=getattr(args, "port", 8000))
+        config_path = getattr(args, "config", None)
+        if getattr(args, "reload", False):
+            if config_path:
+                os.environ[CONFIG_ENV_VAR] = config_path
+            else:
+                os.environ.pop(CONFIG_ENV_VAR, None)
+            uvicorn.run(
+                "fs_kanban_agent.api.main:create_app",
+                host=getattr(args, "host", "127.0.0.1"),
+                port=getattr(args, "port", 8000),
+                reload=True,
+                factory=True,
+            )
+            return
+        app = create_default_app(config_path)
+        uvicorn.run(
+            app,
+            host=getattr(args, "host", "127.0.0.1"),
+            port=getattr(args, "port", 8000),
+            reload=False,
+        )
         return
 
     if args.command == "request":
