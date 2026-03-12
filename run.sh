@@ -2,7 +2,7 @@
 set -eu
 
 usage() {
-    printf '%s\n' "Usage: ./run.sh [--config PATH] [--host HOST] [--port PORT]"
+    printf '%s\n' "Usage: ./run.sh [--config PATH] [--host HOST] [--port PORT] [--reload]"
 }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -11,6 +11,7 @@ VENV_DIR=${VENV_DIR:-"$REPO_ROOT/.venv"}
 CONFIG_PATH=${CONFIG_PATH:-}
 HOST=${HOST:-127.0.0.1}
 PORT=${PORT:-8000}
+RELOAD=${RELOAD:-0}
 DEPS_STAMP_FILE="$VENV_DIR/.fs-kanban-agent-deps-stamp"
 
 while [ "$#" -gt 0 ]; do
@@ -38,6 +39,10 @@ while [ "$#" -gt 0 ]; do
             fi
             PORT=$2
             shift 2
+            ;;
+        --reload)
+            RELOAD=1
+            shift
             ;;
         --help|-h)
             usage
@@ -67,4 +72,9 @@ fi
 
 cd "$REPO_ROOT"
 
-exec "$VENV_DIR/bin/fs-kanban-agent" serve --config "$CONFIG_PATH" --host "$HOST" --port "$PORT"
+set -- "$VENV_DIR/bin/fs-kanban-agent" serve --config "$CONFIG_PATH" --host "$HOST" --port "$PORT"
+if [ "$RELOAD" = "1" ]; then
+    set -- "$@" --reload
+fi
+
+exec "$@"
