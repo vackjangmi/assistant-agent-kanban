@@ -27,6 +27,28 @@ class CommitManager:
         return message
 
     def commit_task(self, task_dir: Path, metadata: TaskMetadata) -> str:
+        return self._commit_review_branch(task_dir, metadata, allow_existing_commit=False)
+
+    def finalize_review_branch(self, task_dir: Path, metadata: TaskMetadata) -> str:
+        review_sha = self._commit_review_branch(task_dir, metadata, allow_existing_commit=True)
+        metadata.commit.review_sha = review_sha
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise CommitError(str(exc)) from exc
+        final_branch = self._ensure_final_branch(target_repo_root, metadata, review_sha)
+        metadata.integration.final_branch = final_branch
+        rebase = subprocess.run(
+            ["git", "-C", str(target_repo_root), "rebase", metadata.target.base_branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if rebase.returncode != 0:
+            raise CommitError(rebase.stderr.strip() or "failed to rebase final branch")
+        return self._current_head(target_repo_root) or review_sha
+
+    def _commit_review_branch(self, task_dir: Path, metadata: TaskMetadata, *, allow_existing_commit: bool) -> str:
         try:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
@@ -44,15 +66,28 @@ class CommitManager:
                 )
                 if switch.returncode != 0:
                     raise CommitError(switch.stderr.strip() or "failed to switch to review branch")
-        result = subprocess.run(["git", "-C", str(target_repo_root), "status", "--short"], capture_output=True, text=True, check=False)
-        if not result.stdout.strip():
+        stage_all = subprocess.run(["git", "-C", str(target_repo_root), "add", "-A"], capture_output=True, text=True, check=False)
+        if stage_all.returncode != 0:
+            raise CommitError(stage_all.stderr.strip() or "failed to stage target repo changes")
+        staged = subprocess.run(
+            ["git", "-C", str(target_repo_root), "diff", "--cached", "--quiet"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if staged.returncode == 0:
+            if allow_existing_commit:
+                sha = self._current_head(target_repo_root)
+                if sha:
+                    return sha
             raise CommitError("no changes to commit")
-        commit_path = task_dir / (metadata.commit.message_path or "COMMIT.md")
+        if staged.returncode not in (0, 1):
+            raise CommitError(staged.stderr.strip() or "failed to inspect staged changes")
+        commit_path = (task_dir / (metadata.commit.message_path or "COMMIT.md")).expanduser().resolve()
         commit = subprocess.run(["git", "-C", str(target_repo_root), "commit", "-F", str(commit_path)], capture_output=True, text=True, check=False)
         if commit.returncode != 0:
             raise CommitError(commit.stderr.strip() or "git commit failed")
-        sha = subprocess.run(["git", "-C", str(target_repo_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
-        return sha.stdout.strip()
+        return self._current_head(target_repo_root) or ""
 
     def _build_commit_body(self, task_dir: Path, metadata: TaskMetadata) -> list[str]:
         details: list[str] = []
@@ -129,3 +164,59 @@ class CommitManager:
             return None
         branch = result.stdout.strip()
         return branch or None
+
+    def _current_head(self, repo_root: Path) -> str | None:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        sha = result.stdout.strip()
+        return sha or None
+
+    def _ensure_final_branch(self, repo_root: Path, metadata: TaskMetadata, start_point: str) -> str:
+        branch = self._preferred_final_branch(metadata)
+        if self._branch_exists(repo_root, branch):
+            existing_sha = self._branch_head(repo_root, branch)
+            if existing_sha != start_point:
+                branch = f"{branch}-{metadata.task_id.lower()}"
+                if self._branch_exists(repo_root, branch):
+                    fallback_sha = self._branch_head(repo_root, branch)
+                    if fallback_sha != start_point:
+                        raise CommitError("failed to create final branch: fallback branch already exists")
+        switch = subprocess.run(
+            ["git", "-C", str(repo_root), "switch", "-C", branch, start_point],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if switch.returncode != 0:
+            raise CommitError(switch.stderr.strip() or "failed to create final branch")
+        return branch
+
+    def _preferred_final_branch(self, metadata: TaskMetadata) -> str:
+        slug = metadata.slug.strip("-") if metadata.slug else ""
+        return f"feature/{slug or f'task-{metadata.task_id.lower()}'}"
+
+    def _branch_exists(self, repo_root: Path, branch: str) -> bool:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "show-ref", "--verify", f"refs/heads/{branch}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result.returncode == 0
+
+    def _branch_head(self, repo_root: Path, branch: str) -> str | None:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() or None

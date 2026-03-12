@@ -323,8 +323,13 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
 
     assert moved.state == TaskState.DONE
     done = scanner.find_task(completed.metadata.task_id)
+    expected_final_branch = f"feature/{done.metadata.slug}"
     assert done.state == TaskState.DONE
     assert done.metadata.commit.sha
+    assert done.metadata.commit.review_sha == review_sha
+    assert done.metadata.integration.final_branch == expected_final_branch
+    assert done.metadata.integration.review_branch is None
+    assert done.metadata.integration.original_branch is None
     expected_message = "\n".join(
         [
             f"feat: {done.metadata.title}",
@@ -338,9 +343,10 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert (done.task_dir / "COMMIT.md").read_text().strip() == expected_message
     git_message = subprocess.run(["git", "-C", str(target_repo), "log", "-1", "--pretty=%B"], check=True, capture_output=True, text=True).stdout.strip()
     assert git_message == expected_message
-    assert done.metadata.commit.sha == review_sha
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
-    assert current_branch == f"review/{done.metadata.task_id.lower()}"
+    assert current_branch == expected_final_branch
+    review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
+    assert review_branch == ""
 
 
 def test_human_verification_approve_switches_back_to_review_branch_before_commit(tmp_path):
@@ -358,7 +364,7 @@ def test_human_verification_approve_switches_back_to_review_branch_before_commit
 
     assert moved.state == TaskState.DONE
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
-    assert current_branch == f"review/{moved.metadata.task_id.lower()}"
+    assert current_branch == f"feature/{moved.metadata.slug}"
 
 
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):
@@ -383,3 +389,58 @@ def test_human_verification_approve_stages_manual_review_changes_before_commit(t
     assert "notes.txt" in show
     status = subprocess.run(["git", "-C", str(target_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
     assert status == ""
+
+
+def test_human_verification_approve_returns_to_todos_on_rebase_conflict(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-approve-conflict-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    subprocess.run(["git", "-C", str(target_repo), "switch", "main"], check=True, capture_output=True, text=True)
+    (target_repo / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.TODOS
+    assert refreshed.metadata.commit.sha is None
+    assert refreshed.metadata.commit.review_sha is None
+    assert refreshed.metadata.integration.final_branch is None
+    assert any(error.code == "human-verification-finalize-failed" for error in refreshed.metadata.errors)
+    current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == "main"
+    status = subprocess.run(["git", "-C", str(target_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
+    assert status == ""
+    review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{completed.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
+    final_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"feature/{completed.metadata.slug}"], check=True, capture_output=True, text=True).stdout.strip()
+    assert review_branch == ""
+    assert final_branch == ""
+
+
+def test_human_verification_approve_uses_task_id_suffix_when_final_branch_exists(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-approve-collision-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    subprocess.run(["git", "-C", str(target_repo), "switch", "-c", f"feature/{completed.metadata.slug}"], check=True, capture_output=True, text=True)
+    (target_repo / "collision.txt").write_text("existing branch\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "collision.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "existing branch"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "switch", "main"], check=True, capture_output=True, text=True)
+    service.start(completed.metadata.task_id, by="human")
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.DONE
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.final_branch == f"feature/{completed.metadata.slug}-{completed.metadata.task_id.lower()}"

@@ -85,7 +85,24 @@ class IntegrationManager:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
-        self._cleanup_review_branch(target_repo_root, metadata)
+        self._cleanup_managed_branches(target_repo_root, metadata)
+        metadata.integration.applied = False
+        metadata.integration.applied_at = None
+        metadata.integration.original_branch = None
+        metadata.integration.review_branch = None
+        metadata.integration.final_branch = None
+
+    def finalize_workspace(self, metadata: TaskMetadata) -> None:
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+        review_branch = metadata.integration.review_branch
+        current_branch = self._current_branch(target_repo_root)
+        if review_branch and current_branch == review_branch:
+            raise IntegrationError("cannot finalize while still on review branch")
+        if review_branch:
+            self._delete_branch(target_repo_root, review_branch)
         metadata.integration.applied = False
         metadata.integration.applied_at = None
         metadata.integration.original_branch = None
@@ -147,11 +164,27 @@ class IntegrationManager:
         if deleted.returncode != 0:
             raise IntegrationError(deleted.stderr.strip() or "failed to delete review branch")
 
-    def _cleanup_review_branch(self, repo_root: Path, metadata: TaskMetadata) -> None:
+    def _abort_rebase(self, repo_root: Path) -> None:
+        git_dir = repo_root / ".git"
+        if not (git_dir / "rebase-apply").exists() and not (git_dir / "rebase-merge").exists():
+            return
+        aborted = subprocess.run(
+            ["git", "-C", str(repo_root), "rebase", "--abort"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if aborted.returncode != 0:
+            raise IntegrationError(aborted.stderr.strip() or "failed to abort rebase")
+
+    def _cleanup_managed_branches(self, repo_root: Path, metadata: TaskMetadata) -> None:
         original_branch = metadata.integration.original_branch
         review_branch = metadata.integration.review_branch
+        final_branch = metadata.integration.final_branch
         current_branch = self._current_branch(repo_root)
-        if review_branch and current_branch == review_branch:
+        self._abort_rebase(repo_root)
+        managed_branch = current_branch if current_branch in {review_branch, final_branch} else None
+        if managed_branch:
             reset = subprocess.run(
                 ["git", "-C", str(repo_root), "reset", "--hard", "HEAD"],
                 capture_output=True,
@@ -170,5 +203,10 @@ class IntegrationManager:
                 raise IntegrationError(clean.stderr.strip() or "failed to clean review branch")
         if original_branch:
             self._restore_original_branch(repo_root, original_branch)
+        if final_branch:
+            self._delete_branch(repo_root, final_branch)
         if review_branch:
             self._delete_branch(repo_root, review_branch)
+
+    def _cleanup_review_branch(self, repo_root: Path, metadata: TaskMetadata) -> None:
+        self._cleanup_managed_branches(repo_root, metadata)

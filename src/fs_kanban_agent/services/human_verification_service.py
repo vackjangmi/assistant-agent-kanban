@@ -38,6 +38,8 @@ class HumanVerificationService:
             workspace_repo = context.metadata.implementation.workspace
             if workspace_repo is None:
                 raise IntegrationError("workspace path missing")
+            context.metadata.integration.final_branch = None
+            context.metadata.commit.review_sha = None
             try:
                 self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
                 self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
@@ -75,6 +77,7 @@ class HumanVerificationService:
             self.integration_manager.rollback_workspace(context.metadata)
             context.metadata.commit.status = "pending"
             context.metadata.commit.sha = None
+            context.metadata.commit.review_sha = None
             context.metadata.errors.append(TaskErrorInfo(code="human-verification-rejected", message=cleaned_note))
             self.metadata_store.save(context.task_dir, context.metadata)
             return self.transitions.move(context, TaskState.TODOS, by=by, note=cleaned_note)
@@ -84,11 +87,22 @@ class HumanVerificationService:
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("human verification approval is only allowed from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
-            sha = self.commit_manager.finalize_review_branch(context.task_dir, context.metadata)
-            context.metadata.commit.status = "committed"
-            context.metadata.commit.sha = sha
-            self.metadata_store.save(context.task_dir, context.metadata)
-            return self.transitions.move(context, TaskState.DONE, by=by, note="human verification approved")
+            try:
+                sha = self.commit_manager.finalize_review_branch(context.task_dir, context.metadata)
+                self.integration_manager.finalize_workspace(context.metadata)
+                context.metadata.commit.status = "committed"
+                context.metadata.commit.sha = sha
+                return self.transitions.move(context, TaskState.DONE, by=by, note="human verification approved")
+            except Exception as exc:
+                try:
+                    self.integration_manager.rollback_workspace(context.metadata)
+                except Exception as cleanup_exc:
+                    raise IntegrationError(f"{exc}; cleanup failed: {cleanup_exc}") from exc
+                context.metadata.commit.status = "pending"
+                context.metadata.commit.sha = None
+                context.metadata.commit.review_sha = None
+                context.metadata.errors.append(TaskErrorInfo(code="human-verification-finalize-failed", message=str(exc)))
+                return self.transitions.move(context, TaskState.TODOS, by=by, note=f"human verification finalize failed: {exc}")
 
     def _find_task(self, task_id: str) -> TaskContext:
         try:
