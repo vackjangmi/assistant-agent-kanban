@@ -12,8 +12,8 @@ from .sse import build_sse_router
 from .ui import build_ui_router
 
 
-def create_app(config: AppConfig, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter=None) -> FastAPI:
-    runtime = build_runtime(config, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter)
+def create_app(config: AppConfig, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter=None, branch_summary_adapter=None) -> FastAPI:
+    runtime = build_runtime(config, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -35,4 +35,4 @@ def create_app(config: AppConfig, planner_adapter, implementer_adapter, reviewer
 def create_default_app(config_path: str | None = None) -> FastAPI:
     config = load_config(config_path)
     adapter = SubprocessOpenCodeAdapter()
-    return create_app(config, adapter, adapter, adapter, adapter)
+    return create_app(config, adapter, adapter, adapter, adapter, adapter)

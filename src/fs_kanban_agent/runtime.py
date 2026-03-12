@@ -114,7 +114,7 @@ def board_to_event(board):
     return WorkerEvent(event="board_snapshot", payload=board.model_dump(mode="json"))
 
 
-def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter=None):
+def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter=None, branch_summary_adapter=None):
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
@@ -132,7 +132,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     reviewer = ReviewerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=reviewer_adapter, integration_manager=integration_manager)
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
-    verification_service = HumanVerificationService(scanner, metadata_store, locks, transitions, integration_manager, commit_manager)
+    verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter)
     deletion_service = TaskDeletionService(config, scanner, locks)
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
     recovery = RecoveryService(config, scanner, transitions, locks)

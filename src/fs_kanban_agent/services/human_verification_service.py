@@ -8,27 +8,33 @@ from ..exceptions import IntegrationConflictError, IntegrationError, TaskNotFoun
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
+from ..opencode_adapter import OpenCodeAdapter, AdapterRunError
 from ..models import TaskContext, TaskErrorInfo
 from ..scanner import KanbanScanner
 from ..transitions import TransitionManager
+from ..config import AppConfig
 
 
 class HumanVerificationService:
     def __init__(
         self,
         scanner: KanbanScanner,
+        config: AppConfig,
         metadata_store: MetadataStore,
         locks: TaskLockManager,
         transitions: TransitionManager,
         integration_manager: IntegrationManager,
         commit_manager: CommitManager,
+        branch_summary_adapter: OpenCodeAdapter | None = None,
     ) -> None:
         self.scanner = scanner
+        self.config = config
         self.metadata_store = metadata_store
         self.locks = locks
         self.transitions = transitions
         self.integration_manager = integration_manager
         self.commit_manager = commit_manager
+        self.branch_summary_adapter = branch_summary_adapter
 
     def start(self, task_id: str, *, by: str) -> TaskContext:
         context = self._find_task(task_id)
@@ -41,6 +47,8 @@ class HumanVerificationService:
             context.metadata.integration.final_branch = None
             context.metadata.commit.review_sha = None
             try:
+                if not context.metadata.integration.final_branch_summary:
+                    context.metadata.integration.final_branch_summary = self._generate_branch_summary(context)
                 self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
                 self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
                 sha = self.commit_manager.commit_task(context.task_dir, context.metadata)
@@ -125,3 +133,37 @@ class HumanVerificationService:
                 ]
             )
         )
+
+    def _generate_branch_summary(self, context: TaskContext) -> str:
+        fallback = self.commit_manager.sanitize_branch_summary(None, fallback_title=context.metadata.title)
+        if self.branch_summary_adapter is None:
+            return fallback
+        prompt = "\n".join(
+            [
+                "Return only a concise English git branch summary.",
+                "Requirements:",
+                "- English words only",
+                "- 2 to 6 words",
+                "- lowercase ascii words separated by hyphens",
+                "- no prefix like feature/",
+                "- no punctuation other than hyphens",
+                "- summarize the implementation goal naturally",
+                "",
+                f"Task title: {context.metadata.title}",
+                f"Task ID: {context.metadata.task_id}",
+            ]
+        )
+        run_log_path = self.config.runs_dir / context.metadata.task_id / f"branch-summary-{context.metadata.cycle:03d}.jsonl"
+        try:
+            result = self.branch_summary_adapter.run(
+                agent="planner",
+                prompt=prompt,
+                cwd=context.task_dir,
+                run_log_path=run_log_path,
+                config=self.config,
+            )
+        except AdapterRunError:
+            return fallback
+        if not result.ok:
+            return fallback
+        return self.commit_manager.sanitize_branch_summary(result.assistant_text, fallback_title=context.metadata.title)

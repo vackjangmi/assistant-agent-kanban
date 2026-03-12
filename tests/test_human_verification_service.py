@@ -23,7 +23,7 @@ from fs_kanban_agent.workers.implementer import ImplementerWorker
 from .conftest import FakeAdapter, create_request_task, init_git_repo
 
 
-def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effect=None):
+def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effect=None, branch_summary_adapter=None):
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
@@ -55,7 +55,7 @@ def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effe
     asyncio.run(implementer.run_once())
     reviewing = transitions.move(scanner.scan()[0], TaskState.REVIEWING, by="reviewer")
     completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
-    service = HumanVerificationService(scanner, metadata_store, locks, transitions, IntegrationManager(config), CommitManager())
+    service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, IntegrationManager(config), CommitManager(), branch_summary_adapter=branch_summary_adapter)
     return scanner, service, completed
 
 
@@ -75,6 +75,7 @@ def test_human_verification_start_applies_patch_and_moves_state(configured_paths
     assert updated.metadata.integration.original_branch == "main"
     assert updated.metadata.integration.review_branch == current_branch
     assert updated.metadata.commit.message_path == "COMMIT.md"
+    assert updated.metadata.integration.final_branch_summary == "verify-start-task"
     assert (updated.task_dir / "COMMIT.md").exists()
     assert updated.metadata.commit.status == "review-committed"
     assert updated.metadata.commit.sha
@@ -323,7 +324,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
 
     assert moved.state == TaskState.DONE
     done = scanner.find_task(completed.metadata.task_id)
-    expected_final_branch = f"feature/{done.metadata.slug}"
+    expected_final_branch = f"feature/{done.metadata.task_id.lower()}-{done.metadata.slug}"
     assert done.state == TaskState.DONE
     assert done.metadata.commit.sha
     assert done.metadata.commit.review_sha == review_sha
@@ -364,7 +365,7 @@ def test_human_verification_approve_switches_back_to_review_branch_before_commit
 
     assert moved.state == TaskState.DONE
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
-    assert current_branch == f"feature/{moved.metadata.slug}"
+    assert current_branch == f"feature/{moved.metadata.task_id.lower()}-{moved.metadata.slug}"
 
 
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):
@@ -419,7 +420,7 @@ def test_human_verification_approve_returns_to_todos_on_rebase_conflict(tmp_path
     status = subprocess.run(["git", "-C", str(target_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
     assert status == ""
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{completed.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
-    final_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"feature/{completed.metadata.slug}"], check=True, capture_output=True, text=True).stdout.strip()
+    final_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"feature/{completed.metadata.task_id.lower()}-{completed.metadata.slug}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     assert final_branch == ""
 
@@ -432,7 +433,7 @@ def test_human_verification_approve_uses_task_id_suffix_when_final_branch_exists
     config.bootstrap()
     create_request_task(config, "verify-approve-collision-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
-    subprocess.run(["git", "-C", str(target_repo), "switch", "-c", f"feature/{completed.metadata.slug}"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "switch", "-c", f"feature/{completed.metadata.task_id.lower()}-{completed.metadata.slug}"], check=True, capture_output=True, text=True)
     (target_repo / "collision.txt").write_text("existing branch\n")
     subprocess.run(["git", "-C", str(target_repo), "add", "collision.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "existing branch"], check=True, capture_output=True, text=True)
@@ -443,4 +444,58 @@ def test_human_verification_approve_uses_task_id_suffix_when_final_branch_exists
 
     assert moved.state == TaskState.DONE
     refreshed = scanner.find_task(completed.metadata.task_id)
-    assert refreshed.metadata.integration.final_branch == f"feature/{completed.metadata.slug}-{completed.metadata.task_id.lower()}"
+    assert refreshed.metadata.integration.final_branch == f"feature/{completed.metadata.task_id.lower()}-{completed.metadata.slug}-{completed.metadata.task_id.lower()}"
+
+
+def test_human_verification_approve_romanizes_korean_title_for_final_branch(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "면적 게임모드 추가", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.DONE
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.final_branch is not None
+    assert refreshed.metadata.integration.final_branch == f"feature/{completed.metadata.task_id.lower()}-myeonjeok-geimmodeu-chuga"
+
+
+def test_human_verification_start_generates_english_branch_summary_with_adapter(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "면적 게임모드 추가", target_repo_root=target_repo)
+    branch_summary_adapter = FakeAdapter(["add-area-game-mode"])
+    scanner, service, completed = _task_ready_for_human_verification(config, branch_summary_adapter=branch_summary_adapter)
+
+    moved = service.start(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    updated = scanner.find_task(completed.metadata.task_id)
+    assert updated.metadata.integration.final_branch_summary == "add-area-game-mode"
+    assert branch_summary_adapter.run_calls[0]["agent"] == "planner"
+
+
+def test_human_verification_approve_uses_stored_english_branch_summary(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "면적 게임모드 추가", target_repo_root=target_repo)
+    branch_summary_adapter = FakeAdapter(["add-area-game-mode"])
+    scanner, service, completed = _task_ready_for_human_verification(config, branch_summary_adapter=branch_summary_adapter)
+    service.start(completed.metadata.task_id, by="human")
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.DONE
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.final_branch == f"feature/{completed.metadata.task_id.lower()}-add-area-game-mode"
