@@ -207,6 +207,55 @@ def test_implementer_worker_clones_task_target_repo(tmp_path):
     assert Path(workspace_repo, "target.txt").read_text() == "changed target\n"
 
 
+def test_implementer_worker_supports_named_base_branch_in_cloned_workspace(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    (target_repo / "branch.txt").write_text("main branch\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "branch.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add branch marker"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "checkout", "-b", "v1.0.8"], check=True, capture_output=True, text=True)
+    (target_repo / "branch.txt").write_text("release branch\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "branch.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "release branch commit"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "checkout", "main"], check=True, capture_output=True, text=True)
+
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "named-base-branch-task", target_repo_root=target_repo, base_branch="v1.0.8")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd):
+        assert (cwd / "branch.txt").read_text() == "release branch\n"
+        (cwd / "branch.txt").write_text("release branch updated\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.WAITING_REVIEWS
+    workspace_repo = Path(updated.metadata.implementation.workspace or "")
+    assert (workspace_repo / "branch.txt").read_text() == "release branch updated\n"
+
+
 def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "implement-noop-task")

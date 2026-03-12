@@ -36,8 +36,9 @@ class WorkspaceManager:
         clone = subprocess.run(["git", "clone", str(target_repo_root), str(repo_dir)], capture_output=True, text=True, check=False)
         if clone.returncode != 0:
             raise WorkspaceSyncError(clone.stderr.strip() or "git clone failed")
+        base_ref = self._resolve_base_ref(repo_dir, metadata.target.base_branch)
         checkout = subprocess.run(
-            ["git", "-C", str(repo_dir), "checkout", "-B", f"task/{metadata.task_id.lower()}", metadata.target.base_branch],
+            ["git", "-C", str(repo_dir), "checkout", "-B", f"task/{metadata.task_id.lower()}", base_ref],
             capture_output=True,
             text=True,
             check=False,
@@ -76,8 +77,9 @@ class WorkspaceManager:
             patch_path.unlink(missing_ok=True)
 
     def _workspace_patch(self, repo_dir: Path, metadata: TaskMetadata) -> str:
+        base_ref = self._resolve_base_ref(repo_dir, metadata.target.base_branch)
         local_commits = subprocess.run(
-            ["git", "-C", str(repo_dir), "rev-list", "--count", f"{metadata.target.base_branch}..HEAD"],
+            ["git", "-C", str(repo_dir), "rev-list", "--count", f"{base_ref}..HEAD"],
             capture_output=True,
             text=True,
             check=False,
@@ -98,6 +100,19 @@ class WorkspaceManager:
         if diff.returncode != 0:
             raise WorkspaceSyncError(diff.stderr.strip() or "failed to snapshot workspace changes")
         return diff.stdout
+
+    def _resolve_base_ref(self, repo_dir: Path, base_branch: str) -> str:
+        candidates = [base_branch, f"origin/{base_branch}"]
+        for candidate in candidates:
+            probe = subprocess.run(
+                ["git", "-C", str(repo_dir), "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                return candidate
+        raise WorkspaceSyncError(f"base ref '{base_branch}' does not exist in cloned workspace")
 
     def _apply_overlays(self, repo_dir: Path, target_repo_root: Path) -> None:
         for relative in self.config.workspace.overlay_copy:
