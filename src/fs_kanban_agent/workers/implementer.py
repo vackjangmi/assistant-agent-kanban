@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from ..enums import TaskState
+from ..exceptions import WorkspaceSyncError
 from ..models import TaskErrorInfo
 from ..opencode_adapter import OpenCodeAdapter
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
@@ -25,9 +26,18 @@ class ImplementerWorker(WorkerBase):
         task = tasks[0]
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
-            workspace_repo = await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
+            try:
+                workspace_repo = await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
+            except WorkspaceSyncError as exc:
+                apply_retry_gate(task.metadata, reason="implementation-base-sync-conflict")
+                task.metadata.implementation.last_result = "failure"
+                task.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-base-sync-conflict", message=str(exc))
+                )
+                self.metadata_store.save(task.task_dir, task.metadata)
+                return True
             implementing = self.transitions.move(task, TaskState.IMPLEMENTING, by=self.worker_name)
-            run_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.implementation.iteration + 1:03d}.jsonl"
+            run_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.cycle + 1:03d}.jsonl"
             prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
             await self.emit("task_moved", implementing.metadata.task_id, state=implementing.state.value)
             loop = asyncio.get_running_loop()
@@ -43,12 +53,13 @@ class ImplementerWorker(WorkerBase):
             )
             implementing.metadata.implementation.resolved_model = result.resolved_model
             implementing.metadata.implementation.session_id = result.session_id
-            implementing.metadata.implementation.iteration += 1
+            implementing.metadata.cycle += 1
             has_changes = self.workspace_has_changes(workspace_repo)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
             success = result.ok and has_changes and not has_local_commits
+            implementing.metadata.implementation.iteration = implementing.metadata.cycle
             implementing.metadata.implementation.last_result = "success" if success else "failure"
-            work_name = f"WORK-{implementing.metadata.implementation.iteration:03d}"
+            work_name = f"WORK-{implementing.metadata.cycle:03d}"
             self.write_result_artifacts(implementing.task_dir, work_name, result)
             if not has_changes:
                 implementing.metadata.errors.append(

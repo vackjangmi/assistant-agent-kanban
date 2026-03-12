@@ -51,6 +51,8 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert asyncio.run(worker.run_once()) is True
     updated = scanner.scan()[0]
     assert updated.state == TaskState.WAITING_REVIEWS
+    assert updated.metadata.cycle == 1
+    assert updated.metadata.implementation.iteration == 1
     assert updated.metadata.implementation.workspace is not None
     assert str(task_dir) not in updated.metadata.implementation.workspace
     assert (updated.task_dir / "WORK-001.md").exists()
@@ -180,10 +182,91 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
     assert asyncio.run(worker.run_once()) is True
     updated = scanner.scan()[0]
     assert updated.state == TaskState.TODOS
+    assert updated.metadata.cycle == 1
+    assert updated.metadata.implementation.iteration == 1
     assert updated.metadata.implementation.last_result == "failure"
     assert any(error.code == "implementation-no-changes" for error in updated.metadata.errors)
     assert updated.metadata.retry_gate.reason == "implementation-no-changes"
     assert updated.metadata.retry_gate.not_before is not None
+
+
+def test_implementer_worker_keeps_task_in_todos_on_base_sync_conflict(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    (target_repo / "app.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add app file"], check=True, capture_output=True, text=True)
+
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "implement-conflict-task", target_repo_root=target_repo)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    workspace_manager = WorkspaceManager(config)
+    workspace_repo = workspace_manager.prepare(todo.metadata)
+    Path(workspace_repo, "app.txt").write_text("workspace change\n")
+    (target_repo / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+
+    adapter = FakeAdapter(["## Summary\nimplemented"])
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        workspace_manager=workspace_manager,
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.cycle == 0
+    assert updated.metadata.implementation.last_result == "failure"
+    assert any(error.code == "implementation-base-sync-conflict" for error in updated.metadata.errors)
+    assert updated.metadata.retry_gate.reason == "implementation-base-sync-conflict"
+    assert updated.metadata.retry_gate.not_before is not None
+    assert adapter.responses == ["## Summary\nimplemented"]
+
+
+def test_workspace_manager_refreshes_existing_workspace_with_relative_kanban_root(monkeypatch, tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    (target_repo / "app.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add app file"], check=True, capture_output=True, text=True)
+    monkeypatch.chdir(tmp_path)
+
+    config = AppConfig(kanban_root=Path("ai-kanban"), repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "implement-relative-refresh-task", target_repo_root=target_repo)
+    task = KanbanScanner(config, MetadataStore()).scan()[0]
+    workspace_manager = WorkspaceManager(config)
+
+    workspace_repo = workspace_manager.prepare(task.metadata)
+    Path(workspace_repo, "local.txt").write_text("local change\n")
+    (target_repo / "upstream.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "upstream.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add upstream file"], check=True, capture_output=True, text=True)
+
+    refreshed_repo = workspace_manager.prepare(task.metadata)
+
+    assert Path(refreshed_repo, "local.txt").read_text() == "local change\n"
+    assert Path(refreshed_repo, "upstream.txt").read_text() == "upstream change\n"
 
 
 def test_implementer_worker_skips_retry_gated_todos(configured_paths):
