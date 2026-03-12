@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from fs_kanban_agent.api.app import create_app
+from fs_kanban_agent.api.ui import TEMPLATE_PATH
 from fs_kanban_agent import config as config_module
 from fs_kanban_agent.config import PROJECT_ROOT, load_config
 from fs_kanban_agent.enums import TaskState
@@ -1024,6 +1025,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
 
     assert response.status_code == 200
     assert "Create request" in response.text
+    assert TEMPLATE_PATH.exists()
+    assert "__DEFAULT_TARGET_REPO__" not in response.text
+    assert "__DEFAULT_BASE_BRANCH__" not in response.text
+    assert "__INITIAL_RUNTIME_LANGUAGE__" not in response.text
     assert "Runtime settings" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
@@ -1045,6 +1050,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Debug log" in response.text
     assert "planner_model" in response.text
     assert "runtime_language" in response.text
+    assert "const settingsTranslations = {" in response.text
+    assert "applyRuntimeSettingsTranslations();" in response.text
+    assert "runtimeLanguageInput.addEventListener('change', () => applyRuntimeSettingsTranslations());" in response.text
     assert "planner_session_token_budget" in response.text
     assert "planner_agent_count" in response.text
     assert "implementer_model" in response.text
@@ -1132,6 +1140,21 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "This permanently removes the task directory and any managed workspace artifacts created for it." in response.text
     assert "method: 'DELETE'" in response.text
     assert 'const defaultTargetRepo = "";' in response.text
+
+
+def test_dashboard_page_includes_korean_runtime_settings_translations(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.language = "KO"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'const initialRuntimeLanguage = "KO";' in response.text
+    assert "런타임 설정" in response.text
+    assert "발견된 모델 새로고침" in response.text
+    assert "런타임 설정 저장" in response.text
 
 
 def test_dashboard_page_uses_custom_discovery_root_as_default_target(configured_paths, tmp_path):
