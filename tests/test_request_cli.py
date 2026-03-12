@@ -38,6 +38,7 @@ def test_request_cli_creates_request_with_target_repo(tmp_path, capsys):
     assert len(Path(output).name) == 7
     assert f"repo_root: {target_repo.resolve()}" in content
     assert "base_branch: develop" in content
+    assert "language: en" in content
     assert "## Goal" in content
     assert "Do the thing." in content
 
@@ -64,6 +65,7 @@ def test_request_cli_defaults_target_repo_and_branch_from_current_directory(tmp_
     assert request_path.exists()
     assert f"repo_root: {target_repo.resolve()}" in content
     assert "base_branch: feature/manual-request" in content
+    assert "language: en" in content
     assert "# manual task" in content
     assert "## Goal" not in content
 
