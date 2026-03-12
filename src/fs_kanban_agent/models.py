@@ -141,6 +141,50 @@ class TaskDetail(BaseModel):
     markdown_files: list[str]
     json_files: list[str]
     log_files: list[str]
+    changed_files: list[ChangedFileSummary] = Field(default_factory=list)
+
+
+class ChangedFileSummary(BaseModel):
+    id: str
+    path: str
+    display_path: str
+    previous_path: str | None = None
+    change_type: Literal["added", "deleted", "modified", "renamed"]
+    additions: int = 0
+    deletions: int = 0
+    hunk_count: int = 0
+    is_binary: bool = False
+
+
+class ChangedFileLine(BaseModel):
+    kind: Literal["context", "add", "remove"]
+    old_line_number: int | None = None
+    new_line_number: int | None = None
+    content: str = ""
+
+
+class ChangedFileSide(BaseModel):
+    kind: Literal["context", "add", "remove", "empty"]
+    line_number: int | None = None
+    content: str = ""
+
+
+class ChangedFileRow(BaseModel):
+    left: ChangedFileSide
+    right: ChangedFileSide
+
+
+class ChangedFileHunk(BaseModel):
+    header: str
+    old_start: int
+    new_start: int
+    unified_lines: list[ChangedFileLine] = Field(default_factory=list)
+    rows: list[ChangedFileRow] = Field(default_factory=list)
+
+
+class ChangedFileDetail(BaseModel):
+    summary: ChangedFileSummary
+    hunks: list[ChangedFileHunk] = Field(default_factory=list)
 
 
 class TaskLogEntry(BaseModel):
