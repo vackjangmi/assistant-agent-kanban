@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import uuid
 
+from ..enums import STATE_ORDER, TaskState
 from ..exceptions import TaskNotFoundError, TransitionError
 from ..log_parser import render_opencode_log
 from ..models import (
@@ -15,9 +16,13 @@ from ..models import (
     ChangedFileRow,
     ChangedFileSide,
     ChangedFileSummary,
+    StageTimingSegment,
+    StageTimingSummary,
     TaskDetail,
     TaskLogEntry,
     TaskLogs,
+    TaskMetadata,
+    TaskStageTiming,
 )
 from ..scanner import KanbanScanner
 
@@ -53,6 +58,7 @@ class TaskService:
             json_files=json_files,
             log_files=log_files,
             changed_files=[entry.summary for entry in changed_files],
+            stage_timing=self._build_stage_timing(task.metadata),
         )
 
     def get_logs(self, task_id: str) -> TaskLogs:
@@ -168,6 +174,51 @@ class TaskService:
     def _sorted_markdown_files(self, task_dir: Path) -> list[str]:
         files = [path.name for path in task_dir.glob("*.md")]
         return sorted(files, key=self._artifact_sort_key)
+
+    def _build_stage_timing(self, metadata: TaskMetadata) -> TaskStageTiming:
+        summaries_by_state: dict[TaskState, StageTimingSummary] = {
+            state: StageTimingSummary(state=state)
+            for state in STATE_ORDER
+        }
+        if not metadata.history:
+            return TaskStageTiming(summaries=list(summaries_by_state.values()))
+
+        history = sorted(metadata.history, key=lambda entry: entry.entered_at)
+        now = datetime.now(timezone.utc)
+        segments: list[StageTimingSegment] = []
+        visit_counts: dict[TaskState, int] = {state: 0 for state in STATE_ORDER}
+        total_duration_ms = 0
+
+        for index, entry in enumerate(history):
+            next_entry = history[index + 1] if index + 1 < len(history) else None
+            exited_at = next_entry.entered_at if next_entry else None
+            end_time = exited_at or now
+            duration_ms = max(0, int((end_time - entry.entered_at).total_seconds() * 1000))
+            is_current = next_entry is None and entry.state == metadata.state
+            visit_counts[entry.state] = visit_counts.get(entry.state, 0) + 1
+            segment = StageTimingSegment(
+                state=entry.state,
+                entered_at=entry.entered_at,
+                exited_at=exited_at,
+                duration_ms=duration_ms,
+                visit_index=visit_counts[entry.state],
+                is_current=is_current,
+            )
+            segments.append(segment)
+            summary = summaries_by_state.setdefault(entry.state, StageTimingSummary(state=entry.state))
+            summary.total_duration_ms += duration_ms
+            summary.latest_duration_ms = duration_ms
+            summary.latest_entered_at = entry.entered_at
+            summary.attempt_count += 1
+            summary.is_current = is_current
+            total_duration_ms += duration_ms
+
+        ordered_summaries = [summaries_by_state[state] for state in STATE_ORDER]
+        return TaskStageTiming(
+            total_duration_ms=total_duration_ms,
+            summaries=ordered_summaries,
+            segments=segments,
+        )
 
     def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
         if filename == "REQUEST.md":

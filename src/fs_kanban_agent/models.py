@@ -144,6 +144,30 @@ class BoardSnapshot(BaseModel):
     columns: list[BoardColumn]
 
 
+class StageTimingSummary(BaseModel):
+    state: TaskState
+    total_duration_ms: int = 0
+    latest_duration_ms: int = 0
+    latest_entered_at: datetime | None = None
+    attempt_count: int = 0
+    is_current: bool = False
+
+
+class StageTimingSegment(BaseModel):
+    state: TaskState
+    entered_at: datetime
+    exited_at: datetime | None = None
+    duration_ms: int = 0
+    visit_index: int = 1
+    is_current: bool = False
+
+
+class TaskStageTiming(BaseModel):
+    total_duration_ms: int = 0
+    summaries: list[StageTimingSummary] = Field(default_factory=list)
+    segments: list[StageTimingSegment] = Field(default_factory=list)
+
+
 class TaskDetail(BaseModel):
     metadata: TaskMetadata
     task_path: str
@@ -152,6 +176,7 @@ class TaskDetail(BaseModel):
     json_files: list[str]
     log_files: list[str]
     changed_files: list[ChangedFileSummary] = Field(default_factory=list)
+    stage_timing: TaskStageTiming = Field(default_factory=TaskStageTiming)
 
 
 class ChangedFileSummary(BaseModel):
