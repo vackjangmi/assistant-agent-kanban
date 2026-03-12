@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import subprocess
 import shutil
@@ -14,6 +15,7 @@ from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
+from fs_kanban_agent.models import HistoryEntry
 from fs_kanban_agent.opencode_adapter import _parse_discovered_models
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
@@ -704,6 +706,59 @@ def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_p
     assert detail.json()["metadata"]["review"]["resolved_model"] is None
 
 
+def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "stage-timing-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    staged_task = scanner.find_task(waiting.metadata.task_id)
+    now = datetime.now(timezone.utc)
+    staged_task.metadata.history = [
+        HistoryEntry(state=TaskState.REQUESTS, entered_at=now - timedelta(minutes=12), by="human"),
+        HistoryEntry(state=TaskState.PLANNING, entered_at=now - timedelta(minutes=10), by="planner"),
+        HistoryEntry(state=TaskState.WAITING_CHECK_PLANS, entered_at=now - timedelta(minutes=7), by="planner"),
+        HistoryEntry(state=TaskState.TODOS, entered_at=now - timedelta(minutes=3), by="human"),
+    ]
+    metadata_store.save(staged_task.task_dir, staged_task.metadata)
+
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{staged_task.metadata.task_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    stage_timing = payload["stage_timing"]
+    assert len(stage_timing["summaries"]) == 10
+    assert len(stage_timing["segments"]) == 4
+    requests_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.REQUESTS.value)
+    planning_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.PLANNING.value)
+    waiting_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.WAITING_CHECK_PLANS.value)
+    todos_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.TODOS.value)
+    assert requests_summary["total_duration_ms"] == 120000
+    assert planning_summary["total_duration_ms"] == 180000
+    assert waiting_summary["total_duration_ms"] == 240000
+    assert todos_summary["attempt_count"] == 1
+    assert todos_summary["is_current"] is True
+    assert todos_summary["latest_entered_at"] is not None
+    assert todos_summary["total_duration_ms"] >= 180000
+    assert stage_timing["segments"][1]["state"] == TaskState.PLANNING.value
+    assert stage_timing["segments"][1]["visit_index"] == 1
+    assert stage_timing["segments"][1]["duration_ms"] == 180000
+    assert stage_timing["segments"][3]["state"] == TaskState.TODOS.value
+    assert stage_timing["segments"][3]["is_current"] is True
+
+
 def test_api_persists_model_settings_to_default_local_config_when_unloaded(configured_paths, tmp_path):
     config, _, _ = configured_paths
     default_base_path = tmp_path / "config.yaml"
@@ -965,6 +1020,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert "Approve &amp; commit" in response.text
     assert "Captured stage models" in response.text
+    assert "Stage timing" in response.text
+    assert "stage-timing-grid" in response.text
+    assert "renderStageTiming(stageTiming)" in response.text
     assert "Current stage model used" in response.text
     assert "Planner model used" in response.text
     assert "Implementer model used" in response.text

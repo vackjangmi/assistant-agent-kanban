@@ -100,6 +100,29 @@ def build_ui_router() -> APIRouter:
     .task-model-row span {{ color: var(--accent-strong); font-size: 0.84rem; letter-spacing: 0.04em; text-transform: uppercase; }}
     .task-model-row strong {{ display: block; font-size: 0.98rem; overflow-wrap: anywhere; }}
     .task-model-row small {{ display: block; margin-top: 3px; color: var(--muted); font-size: 0.86rem; }}
+    .stage-timing-shell {{ display: grid; gap: 14px; }}
+    .stage-timing-head {{ display: flex; justify-content: space-between; gap: 12px; align-items: start; flex-wrap: wrap; padding: 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.88); }}
+    .stage-timing-head p {{ margin: 6px 0 0; color: var(--muted); }}
+    .stage-timing-total {{ display: grid; gap: 4px; min-width: 180px; }}
+    .stage-timing-total span {{ color: var(--muted); font-size: 0.84rem; letter-spacing: 0.04em; text-transform: uppercase; }}
+    .stage-timing-total strong {{ font-size: 1.2rem; font-variant-numeric: tabular-nums; }}
+    .stage-timing-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }}
+    .stage-timing-card {{ display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); border-top: 4px solid var(--stage-color, var(--accent)); }}
+    .stage-timing-card.current {{ background: rgba(255,249,239,0.96); box-shadow: 0 10px 20px rgba(24,32,38,0.06); }}
+    .stage-timing-card span {{ color: var(--muted); font-size: 0.82rem; letter-spacing: 0.05em; text-transform: uppercase; }}
+    .stage-timing-card strong {{ font-size: 1.02rem; font-variant-numeric: tabular-nums; }}
+    .stage-timing-card small {{ color: var(--muted); font-size: 0.86rem; }}
+    .stage-timeline-bar {{ display: flex; min-height: 18px; border: 1px solid var(--border); background: rgba(24,32,38,0.06); overflow: hidden; }}
+    .stage-timeline-segment {{ min-width: 10px; background: var(--stage-color, var(--accent)); border-right: 1px solid rgba(255,255,255,0.55); }}
+    .stage-timeline-segment:last-child {{ border-right: 0; }}
+    .stage-timeline-segment.current {{ animation: stage-pulse 1.8s ease-in-out infinite; }}
+    .stage-segment-list {{ display: grid; gap: 8px; }}
+    .stage-segment-row {{ display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.86); }}
+    .stage-segment-row strong {{ overflow-wrap: anywhere; }}
+    .stage-segment-row .muted {{ grid-column: 2 / 4; font-size: 0.9rem; }}
+    .stage-swatch {{ width: 12px; height: 12px; border-radius: 999px; background: var(--stage-color, var(--accent)); }}
+    .stage-segment-duration {{ font-variant-numeric: tabular-nums; }}
+    @keyframes stage-pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.66; }} }}
      .task-tabs {{ display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }}
      .task-tabs button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
      .task-panel {{ min-height: 0; flex: 1; overflow: auto; }}
@@ -620,7 +643,7 @@ def build_ui_router() -> APIRouter:
 
     function renderRunningMeta(item) {{
       if (!isActiveState(item.state) || !item.state_entered_at) return '';
-      return `<div class="card-meta running" data-active-since="${{item.state_entered_at}}">running 00:00:00</div>`;
+      return `<div class="card-meta running" ${{buildDurationAttributes(0, item.state_entered_at, 'running ')}}>running 00:00:00</div>`;
     }}
 
     function renderCardModelMeta(item) {{
@@ -636,12 +659,61 @@ def build_ui_router() -> APIRouter:
       return `${{hours}}:${{minutes}}:${{seconds}}`;
     }}
 
+    function buildDurationAttributes(baseDurationMs = 0, activeSince = '', prefix = '', suffix = '') {{
+      const normalizedBase = Number.isFinite(baseDurationMs) ? Math.max(0, Math.floor(baseDurationMs)) : 0;
+      const activeAttr = activeSince ? ` data-active-since="${{escapeHtml(activeSince)}}"` : '';
+      const prefixAttr = prefix ? ` data-duration-prefix="${{escapeHtml(prefix)}}"` : '';
+      const suffixAttr = suffix ? ` data-duration-suffix="${{escapeHtml(suffix)}}"` : '';
+      return `data-duration-target="true" data-duration-base-ms="${{normalizedBase}}"${{activeAttr}}${{prefixAttr}}${{suffixAttr}}`;
+    }}
+
+    function stateLabel(state) {{
+      const labels = {{
+        requests: 'Requests',
+        planning: 'Planning',
+        'waiting-check-plans': 'Waiting check plans',
+        todos: 'TODOs',
+        implementing: 'Implementing',
+        'waiting-reviews': 'Waiting reviews',
+        reviewing: 'Reviewing',
+        'completed-reviews': 'Completed reviews',
+        'human-verifying': 'Human verifying',
+        done: 'Done',
+      }};
+      return labels[state] || state;
+    }}
+
+    function stageColor(state) {{
+      const palette = {{
+        requests: '#7b6b53',
+        planning: '#7c4f2c',
+        'waiting-check-plans': '#9a6c2f',
+        todos: '#4f6877',
+        implementing: '#217349',
+        'waiting-reviews': '#2f6a7a',
+        reviewing: '#3d5aa8',
+        'completed-reviews': '#4f8a5b',
+        'human-verifying': '#a55a2a',
+        done: '#2f4f3f',
+      }};
+      return palette[state] || '#7c4f2c';
+    }}
+
+    function formatDateTime(value) {{
+      if (!value) return 'now';
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+    }}
+
     function updateRunningClocks() {{
       const now = Date.now();
-      board.querySelectorAll('[data-active-since]').forEach((node) => {{
+      document.querySelectorAll('[data-duration-target="true"]').forEach((node) => {{
+        const baseDurationMs = Number(node.dataset.durationBaseMs || '0');
+        const prefix = node.dataset.durationPrefix || '';
+        const suffix = node.dataset.durationSuffix || '';
         const since = Date.parse(node.dataset.activeSince || '');
-        if (Number.isNaN(since)) return;
-        node.textContent = `running ${{formatElapsed(now - since)}}`;
+        const activeDurationMs = Number.isNaN(since) ? 0 : Math.max(0, now - since);
+        node.textContent = `${{prefix}}${{formatElapsed(baseDurationMs + activeDurationMs)}}${{suffix}}`;
       }});
     }}
 
@@ -1285,6 +1357,72 @@ def build_ui_router() -> APIRouter:
       taskDeleteStatus.textContent = 'This removes the task from the board and deletes its managed workspace artifacts.';
     }}
 
+    function renderStageTiming(stageTiming) {{
+      const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries : [];
+      const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];
+      const hasRecordedTime = segments.length > 0 || summaries.some((summary) => Number(summary.attempt_count || 0) > 0);
+      if (!summaries.length || !hasRecordedTime) {{
+        return `<div class="task-section"><h3>Stage timing</h3><div class="muted">No state history recorded yet.</div></div>`;
+      }}
+      const totalDurationMs = Number(stageTiming?.total_duration_ms || 0);
+      const currentSummary = summaries.find((summary) => summary.is_current) || null;
+      const totalBaseDurationMs = currentSummary
+        ? Math.max(0, totalDurationMs - Number(currentSummary.latest_duration_ms || 0))
+        : totalDurationMs;
+      const totalDurationAttrs = buildDurationAttributes(totalBaseDurationMs, currentSummary?.latest_entered_at || '', '', ' tracked');
+      const summaryCards = summaries.map((summary) => {{
+        const totalBaseMs = summary.is_current
+          ? Math.max(0, Number(summary.total_duration_ms || 0) - Number(summary.latest_duration_ms || 0))
+          : Number(summary.total_duration_ms || 0);
+        return `
+          <article class="stage-timing-card${{summary.is_current ? ' current' : ''}}" style="--stage-color:${{stageColor(summary.state)}}">
+            <span>${{escapeHtml(stateLabel(summary.state))}}</span>
+            <strong ${{buildDurationAttributes(totalBaseMs, summary.is_current ? summary.latest_entered_at : '', 'total ')}}>${{`total ${{formatElapsed(summary.total_duration_ms || 0)}}`}}</strong>
+            <small>${{summary.attempt_count ? `${{summary.attempt_count}} visit${{summary.attempt_count === 1 ? '' : 's'}}${{summary.is_current ? ' - current' : ''}}` : 'Not visited yet'}}</small>
+            <small>${{summary.latest_entered_at ? `Latest entry ${{escapeHtml(formatDateTime(summary.latest_entered_at))}}` : 'No time recorded yet.'}}</small>
+          </article>
+        `;
+      }}).join('');
+      const timelineBar = segments.length
+        ? `<div class="stage-timeline-bar">${{segments.map((segment) => {{
+            const ratio = totalDurationMs > 0 ? (Number(segment.duration_ms || 0) / totalDurationMs) * 100 : 100 / segments.length;
+            const flexBasis = Math.max(ratio, 4);
+            const title = `${{stateLabel(segment.state)}} #${{segment.visit_index}} - ${{formatElapsed(segment.duration_ms || 0)}}`;
+            return `<div class="stage-timeline-segment${{segment.is_current ? ' current' : ''}}" style="--stage-color:${{stageColor(segment.state)}}; flex: ${{flexBasis}} 1 0%;" title="${{escapeHtml(title)}}"></div>`;
+          }}).join('')}}</div>`
+        : '<div class="muted">No stage transitions recorded yet.</div>';
+      const segmentRows = segments.length
+        ? `<div class="stage-segment-list">${{segments.map((segment) => `
+            <div class="stage-segment-row">
+              <span class="stage-swatch" style="--stage-color:${{stageColor(segment.state)}}"></span>
+              <strong>${{escapeHtml(stateLabel(segment.state))}} #${{segment.visit_index}}</strong>
+              <span class="stage-segment-duration" ${{buildDurationAttributes(segment.is_current ? 0 : Number(segment.duration_ms || 0), segment.is_current ? segment.entered_at : '')}}>${{formatElapsed(segment.duration_ms || 0)}}</span>
+              <span class="muted">${{escapeHtml(formatDateTime(segment.entered_at))}} -> ${{escapeHtml(segment.exited_at ? formatDateTime(segment.exited_at) : 'now')}}</span>
+            </div>
+          `).join('')}}</div>`
+        : '<div class="muted">No stage visits recorded yet.</div>';
+      return `
+        <div class="task-section">
+          <h3>Stage timing</h3>
+          <div class="stage-timing-shell">
+            <div class="stage-timing-head">
+              <div>
+                <strong>Timeline built from metadata history</strong>
+                <p>Every duration comes from the task's recorded state transitions, so repeated implement-review loops stay visible.</p>
+              </div>
+              <div class="stage-timing-total">
+                <span>Total tracked time</span>
+                <strong ${{totalDurationAttrs}}>${{formatElapsed(totalDurationMs)}} tracked</strong>
+              </div>
+            </div>
+            <div class="stage-timing-grid">${{summaryCards}}</div>
+            ${{timelineBar}}
+            ${{segmentRows}}
+          </div>
+        </div>
+      `;
+    }}
+
     function renderTaskOverview(detail) {{
       const metadata = detail.metadata;
       activeTaskDetail = detail;
@@ -1326,6 +1464,7 @@ def build_ui_router() -> APIRouter:
           <div class="meta-item"><span>Final branch</span><strong>${{escapeHtml(metadata.integration.final_branch || 'Not created yet')}}</strong></div>
           <div class="meta-item"><span>REQUEST.md path</span><strong>${{escapeHtml(detail.request_markdown_path)}}</strong></div>
         </div>
+        ${{renderStageTiming(detail.stage_timing)}}
           <div class="task-section">
           <h3>Captured stage models</h3>
           <div class="task-model-grid">${{stageModels.map((item) => `<div class="task-model-row"><span>${{escapeHtml(item.label)}}</span><div><strong>${{escapeHtml(item.value || 'Not captured yet')}}</strong><small>${{escapeHtml(item.note)}} This is the actual model used, separate from runtime override settings. Last run tokens: ${{escapeHtml(String(item.tokens || 0))}}. Session tokens: ${{escapeHtml(String(item.sessionTokens || 0))}}.</small></div></div>`).join('')}}</div>
