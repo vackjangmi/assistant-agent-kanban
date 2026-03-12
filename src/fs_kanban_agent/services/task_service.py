@@ -66,12 +66,13 @@ class TaskService:
             for path in paths:
                 raw_content = path.read_text()
                 rendered_content = render_opencode_log(raw_content)
+                debug_rendered_content = render_opencode_log(raw_content, debug=True)
                 entries.append(
                     TaskLogEntry(
                         name=path.name,
                         path=str(path),
-                        content=raw_content,
                         rendered_content=rendered_content or None,
+                        debug_rendered_content=debug_rendered_content or None,
                         updated_at=datetime.fromtimestamp(path.stat().st_mtime, timezone.utc),
                     )
                 )

@@ -190,8 +190,8 @@ class ChangedFileDetail(BaseModel):
 class TaskLogEntry(BaseModel):
     name: str
     path: str
-    content: str
     rendered_content: str | None = None
+    debug_rendered_content: str | None = None
     updated_at: datetime
 
 

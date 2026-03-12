@@ -96,9 +96,9 @@ def test_api_returns_runtime_logs_for_task(configured_paths):
     payload = response.json()
     assert payload["task_id"] == task.metadata.task_id
     assert payload["entries"][0]["name"] == "planner-001.jsonl"
-    assert payload["entries"][0]["content"].startswith('{"type":"final"')
     assert payload["entries"][0]["rendered_content"] == "plan"
-    assert "plan" in payload["entries"][0]["content"]
+    assert payload["entries"][0]["debug_rendered_content"] == "plan"
+    assert "content" not in payload["entries"][0]
 
 
 def test_api_renders_tool_only_runtime_logs_for_task(configured_paths):
@@ -125,6 +125,45 @@ def test_api_renders_tool_only_runtime_logs_for_task(configured_paths):
     assert response.status_code == 200
     payload = response.json()
     assert payload["entries"][0]["rendered_content"] == "Started agent step\n\nTool `read` failed: Error: File not found"
+
+
+def test_api_exposes_debug_runtime_log_metadata_for_task(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "debug-log-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+    log_dir = config.runs_dir / task.metadata.task_id
+    log_dir.mkdir(parents=True)
+    (log_dir / "planner-001.jsonl").write_text('{"type":"step_finish","tokens":{"total":42,"input":30,"output":12,"reasoning":7,"cache":{"read":5}},"durationMs":1800}\n')
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{task.metadata.task_id}/logs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entries"][0]["rendered_content"] is None
+    assert "Debug tokens" in payload["entries"][0]["debug_rendered_content"]
+    assert "reasoning=7" in payload["entries"][0]["debug_rendered_content"]
+
+
+def test_api_keeps_metadata_only_logs_out_of_readable_view(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "metadata-only-log-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+    log_dir = config.runs_dir / task.metadata.task_id
+    log_dir.mkdir(parents=True)
+    (log_dir / "planner-001.jsonl").write_text('{"type":"step_finish","tokens":{"total":8,"input":5,"output":3,"reasoning":2}}\n')
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{task.metadata.task_id}/logs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entries"][0]["rendered_content"] is None
+    assert "Debug tokens" in payload["entries"][0]["debug_rendered_content"]
 
 
 def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
@@ -679,6 +718,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "task-tab-changed-files" in response.text
     assert "task-panel-changed-files" in response.text
     assert "Read-only patch view" in response.text
+    assert "Readable log" in response.text
+    assert "Debug log" in response.text
     assert "planner_model" in response.text
     assert "implementer_model" in response.text
     assert "reviewer_model" in response.text
@@ -701,12 +742,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
+    assert "debug_rendered_content" in response.text
+    assert "(no debug metadata for this log yet)" in response.text
+    assert "(no readable log output for this file)" in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
     assert "width: min(1380px, 100%)" in response.text
     assert ".diff-desktop { font-size: 0.62rem; }" in response.text
     assert ".diff-mobile { font-size: 0.78rem; }" in response.text
     assert "setTaskTab('changed-files');" in response.text
-    assert "typeof payload.content !== 'string'" in response.text
     assert "worker_log" in response.text
     assert "loadTaskLogs(activeTaskId, true)" not in response.text
     assert "maybeStartLogPolling" not in response.text
