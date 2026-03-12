@@ -46,7 +46,7 @@ def build_ui_router() -> APIRouter:
     .modal {{ position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }}
     .modal[hidden] {{ display: none; }}
     .modal-panel {{ width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }}
-    .task-modal-panel {{ width: min(1380px, 100%); }}
+    .task-modal-panel {{ width: min(1380px, 100%); display: flex; flex-direction: column; overflow: hidden; }}
     .modal-head {{ display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }}
     .modal-copy p {{ margin: 6px 0 0; color: var(--muted); }}
     .composer-grid {{ display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; }}
@@ -94,9 +94,10 @@ def build_ui_router() -> APIRouter:
     .task-model-row span {{ color: var(--accent-strong); font-size: 0.84rem; letter-spacing: 0.04em; text-transform: uppercase; }}
     .task-model-row strong {{ display: block; font-size: 0.98rem; overflow-wrap: anywhere; }}
     .task-model-row small {{ display: block; margin-top: 3px; color: var(--muted); font-size: 0.86rem; }}
-    .task-tabs {{ display: flex; gap: 8px; margin-bottom: 14px; }}
-    .task-tabs button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
-    .task-panel[hidden] {{ display: none; }}
+     .task-tabs {{ display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }}
+     .task-tabs button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
+     .task-panel {{ min-height: 0; flex: 1; overflow: auto; }}
+     .task-panel[hidden] {{ display: none; }}
     .task-section {{ margin-bottom: 16px; }}
     .task-section h3 {{ margin-bottom: 8px; }}
     .task-list {{ margin: 0; padding-left: 18px; color: var(--muted); }}
@@ -106,32 +107,32 @@ def build_ui_router() -> APIRouter:
     .task-danger-actions[hidden] {{ display: none; }}
     .danger-button {{ background: var(--danger); border-color: var(--danger); color: #fff; }}
      .verification-actions textarea {{ width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
-     .log-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; }}
-     .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
+     .log-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: min(60vh, calc(100vh - 320px)); }}
+     .log-file-list {{ display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }}
      .log-file-list button {{ text-align: left; }}
      .log-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
      .artifact-group-label {{ margin-top: 8px; padding: 2px 2px 0; color: var(--accent-strong); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }}
      .artifact-subtabs {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }}
      .artifact-subtabs[hidden] {{ display: none; }}
      .artifact-subtabs button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
-     .log-stage {{ min-width: 0; display: grid; gap: 10px; }}
+     .log-stage {{ min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; align-content: start; }}
      .log-toolbar {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }}
      .log-toggle-group {{ display: inline-flex; gap: 8px; flex-wrap: wrap; }}
-     .log-viewer {{ min-height: 320px; max-height: 50vh; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }}
-     .diff-layout {{ display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; }}
-     .diff-file-list {{ display: grid; gap: 8px; align-content: start; }}
+     .log-viewer {{ min-height: 0; height: 100%; max-height: none; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }}
+     .diff-layout {{ display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: min(60vh, calc(100vh - 320px)); }}
+     .diff-file-list {{ display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }}
      .diff-file-list button {{ text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }}
      .diff-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
      .diff-file-title {{ display: block; font-weight: 700; overflow-wrap: anywhere; }}
      .diff-file-meta {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.82rem; color: inherit; opacity: 0.82; }}
-     .diff-stage {{ min-width: 0; display: grid; gap: 10px; }}
+     .diff-stage {{ min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }}
      .diff-summary {{ display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }}
      .diff-summary strong {{ display: block; overflow-wrap: anywhere; }}
      .diff-summary span {{ color: var(--muted); font-size: 0.92rem; }}
      .diff-badges {{ display: flex; gap: 8px; flex-wrap: wrap; }}
      .diff-badge {{ display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }}
-     .diff-shell {{ border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: hidden; }}
-     .diff-desktop, .diff-mobile {{ max-height: 56vh; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }}
+     .diff-shell {{ border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: hidden; min-height: 0; }}
+     .diff-desktop, .diff-mobile {{ height: 100%; max-height: none; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }}
      .diff-desktop {{ font-size: 0.62rem; }}
      .diff-mobile {{ font-size: 0.78rem; }}
      .diff-desktop[hidden], .diff-mobile[hidden] {{ display: none; }}
@@ -156,11 +157,11 @@ def build_ui_router() -> APIRouter:
      .diff-empty {{ padding: 18px; color: var(--muted); }}
      .muted {{ color: var(--muted); }}
     .editor-toolbar {{ display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }}
-    .artifact-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; }}
-    .artifact-stage {{ min-width: 0; }}
+    .artifact-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: min(60vh, calc(100vh - 320px)); }}
+    .artifact-stage {{ min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }}
     .editor-textarea {{ width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 12px; font: inherit; }}
-    .editor-host {{ min-height: 420px; border: 1px solid var(--border); background: #fff; }}
-    .viewer-host {{ min-height: 420px; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; }}
+    .editor-host {{ min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; }}
+    .viewer-host {{ min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; }}
     .editor-host[hidden] {{ display: none; }}
     .viewer-host[hidden] {{ display: none; }}
     .mode-pill {{ display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }}
@@ -423,20 +424,20 @@ def build_ui_router() -> APIRouter:
         </div>
       </section>
       <section id="task-panel-editor" class="task-panel" hidden>
-        <div class="editor-toolbar">
-          <div>
-            <strong id="task-artifact-name">No document selected</strong>
-            <div><span id="task-mode-badge" class="mode-pill">Viewer mode</span><span id="task-editor-status" class="muted">Select a markdown artifact to view.</span></div>
-          </div>
-          <div>
-            <button type="button" id="toggle-plan-edit" hidden>Edit draft</button>
-            <button type="button" id="save-plan" class="primary" hidden disabled>Save draft</button>
-            <button type="button" id="approve-plan" hidden disabled>Approve plan</button>
-          </div>
-        </div>
         <div class="artifact-layout">
           <div id="task-markdown-files" class="log-file-list"></div>
           <div class="artifact-stage">
+            <div class="editor-toolbar">
+              <div>
+                <strong id="task-artifact-name">No document selected</strong>
+                <div><span id="task-mode-badge" class="mode-pill">Viewer mode</span><span id="task-editor-status" class="muted">Select a markdown artifact to view.</span></div>
+              </div>
+              <div>
+                <button type="button" id="toggle-plan-edit" hidden>Edit draft</button>
+                <button type="button" id="save-plan" class="primary" hidden disabled>Save draft</button>
+                <button type="button" id="approve-plan" hidden disabled>Approve plan</button>
+              </div>
+            </div>
             <div id="task-artifact-subtabs" class="artifact-subtabs" hidden></div>
             <div id="task-viewer-host" class="viewer-host"></div>
             <div id="task-editor-host" class="editor-host" hidden></div>
@@ -1194,7 +1195,7 @@ def build_ui_router() -> APIRouter:
       activeTaskDetail = detail;
       setTaskDetailStale(false);
       const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
-      const changedFilesVisible = metadata.state === 'human-verifying' && detail.changed_files.length > 0;
+      const changedFilesVisible = detail.changed_files.length > 0;
       const viewerVisible = detail.markdown_files.length > 0;
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
       const stageModels = [
@@ -1216,7 +1217,7 @@ def build_ui_router() -> APIRouter:
       updateHumanVerificationState();
       updateTaskDeleteState();
       renderChangedFileButtons(detail.changed_files);
-      renderDiffPlaceholder(changedFilesVisible ? 'Select a changed file.' : 'Changed files appear here when a human-verifying task has a stored review patch.');
+      renderDiffPlaceholder(changedFilesVisible ? 'Select a changed file.' : 'Changed files appear here when a stored review patch is available for this task.');
       renderArtifactButtons(detail.markdown_files);
       taskOverview.innerHTML = `
         <div class="task-meta-grid">
@@ -1350,7 +1351,7 @@ def build_ui_router() -> APIRouter:
       }}
       if (!activeLogName || !entries.some((entry) => entry.name === activeLogName)) activeLogName = entries[entries.length - 1].name;
       taskLogFiles.innerHTML = entries.map((entry, index) => `<button type="button" class="${{entry.name === activeLogName ? 'active' : ''}}" data-log-index="${{index}}">${{escapeHtml(entry.name)}}</button>`).join('');
-      showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), true);
+      showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);
     }}
 
     function updateLogViewState() {{
@@ -1392,7 +1393,7 @@ def build_ui_router() -> APIRouter:
 
     async function loadTaskDetail(taskId, preserveTab = false, options = {{}}) {{
       const {{ softRefresh = false }} = options;
-      const defaultTab = preserveTab ? activeTaskTab : 'editor';
+      const defaultTab = preserveTab ? activeTaskTab : 'overview';
       const nextTab = preserveTab ? activeTaskTab : defaultTab;
       const requestToken = ++activeTaskRequestToken;
       activeTaskId = taskId;
