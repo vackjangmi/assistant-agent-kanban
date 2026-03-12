@@ -322,7 +322,29 @@ def test_api_rejects_changed_file_access_outside_human_verifying(configured_path
         response = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/0")
 
     assert response.status_code == 409
-    assert "only available during human verification" in response.json()["detail"]
+    assert "only available during or after human verification" in response.json()["detail"]
+
+
+def test_api_exposes_changed_files_for_done_tasks(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-done-diff-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-verify-done-diff-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+        assert approve.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+
+        diff = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}")
+        assert diff.status_code == 200
 
 
 def test_api_hides_changed_files_when_patch_path_is_outside_managed_runs_root(configured_paths, tmp_path):
@@ -813,6 +835,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Implement&Review-${cycle}" in response.text
     assert "function renderArtifactSubtabs(entries)" in response.text
     assert "artifactDisplayLabel(file)" in response.text
+    assert "const defaultTab = preserveTab ? activeTaskTab : 'overview';" in response.text
+    assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
     assert "Final branch" in response.text
     assert "width: min(1380px, 100%)" in response.text

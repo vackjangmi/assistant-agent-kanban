@@ -138,9 +138,9 @@ class TaskService:
 
     def _load_changed_files(self, task_id: str, *, require_available: bool) -> list[ChangedFileDetail]:
         task = self._find_task(task_id)
-        if task.metadata.state != "human-verifying":
+        if task.metadata.state not in {"human-verifying", "done"}:
             if require_available:
-                raise TransitionError("changed files are only available during human verification")
+                raise TransitionError("changed files are only available during or after human verification")
             return []
         try:
             patch_path = self._resolve_patch_path(task.metadata.task_id, task.metadata.integration.patch_path)
