@@ -49,6 +49,9 @@ class LocksConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     poll_interval_seconds: float = 0.2
     auto_dispatch: bool = True
+    planner_agent_count: int = Field(default=1, ge=1)
+    implementer_agent_count: int = Field(default=1, ge=1)
+    reviewer_agent_count: int = Field(default=1, ge=1)
 
 
 class RepoDiscoveryConfig(BaseModel):
