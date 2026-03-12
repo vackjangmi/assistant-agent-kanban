@@ -26,6 +26,7 @@ class FakeAdapter(OpenCodeAdapter):
         discovery_responses: list[list[str] | Exception] | None = None,
         resolved_models: list[str | None] | None = None,
         session_ids: list[str | None] | None = None,
+        total_tokens: list[int] | None = None,
     ) -> None:
         self.responses = responses or []
         self.side_effect = side_effect
@@ -36,6 +37,7 @@ class FakeAdapter(OpenCodeAdapter):
         self.discovery_calls: list[bool] = []
         self.resolved_models = resolved_models or []
         self.session_ids = session_ids or []
+        self.total_tokens = total_tokens or []
         self.run_calls: list[dict[str, object]] = []
 
     def run(
@@ -67,6 +69,7 @@ class FakeAdapter(OpenCodeAdapter):
             on_log_line(content, content)
         resolved_model = self.resolved_models.pop(0) if self.resolved_models else None
         returned_session_id = self.session_ids.pop(0) if self.session_ids else session_id
+        returned_total_tokens = self.total_tokens.pop(0) if self.total_tokens else 0
         return RunResult(
             ok=self.ok,
             returncode=self.returncode,
@@ -77,6 +80,7 @@ class FakeAdapter(OpenCodeAdapter):
             command=[agent],
             resolved_model=resolved_model,
             session_id=returned_session_id,
+            total_tokens=returned_total_tokens,
         )
 
     def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:

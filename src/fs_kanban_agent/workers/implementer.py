@@ -41,6 +41,12 @@ class ImplementerWorker(WorkerBase):
             prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
             await self.emit("task_moved", implementing.metadata.task_id, state=implementing.state.value)
             loop = asyncio.get_running_loop()
+            session_id = self.reuse_session_id(
+                session_id=implementing.metadata.implementation.session_id,
+                session_tokens=implementing.metadata.implementation.session_tokens,
+                budget=self.config.opencode.implementer_session_token_budget,
+            )
+            prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
             result = await asyncio.to_thread(
                 self.adapter.run,
                 agent=self.config.opencode.implementer_agent,
@@ -48,11 +54,18 @@ class ImplementerWorker(WorkerBase):
                 cwd=workspace_repo,
                 run_log_path=run_log_path,
                 config=self.config,
-                session_id=implementing.metadata.implementation.session_id,
+                session_id=session_id,
                 on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
             )
             implementing.metadata.implementation.resolved_model = result.resolved_model
             implementing.metadata.implementation.session_id = result.session_id
+            implementing.metadata.implementation.last_run_tokens = result.total_tokens
+            implementing.metadata.implementation.session_tokens = self.next_session_token_total(
+                reused_session_id=session_id,
+                returned_session_id=result.session_id,
+                prior_session_tokens=prior_session_tokens,
+                run_tokens=result.total_tokens,
+            )
             implementing.metadata.cycle += 1
             has_changes = self.workspace_has_changes(workspace_repo)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)

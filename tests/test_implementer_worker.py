@@ -112,6 +112,59 @@ def test_implementer_worker_persists_and_reuses_session_id(configured_paths):
     assert adapter.run_calls[1]["session_id"] == "ses_impl_1"
 
 
+def test_implementer_worker_rolls_over_session_after_budget_is_exceeded(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.implementer_session_token_budget = 100
+    create_request_task(config, "implement-session-budget-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed\n")
+
+    adapter = FakeAdapter(
+        ["## Summary\nimplemented once", "## Summary\nimplemented twice"],
+        side_effect=modify_workspace,
+        session_ids=["ses_impl_1", "ses_impl_2"],
+        total_tokens=[120, 30],
+    )
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    first_pass = scanner.scan()[0]
+    assert first_pass.metadata.implementation.session_id == "ses_impl_1"
+    assert first_pass.metadata.implementation.last_run_tokens == 120
+    assert first_pass.metadata.implementation.session_tokens == 120
+
+    reviewing = transitions.move(first_pass, TaskState.REVIEWING, by="reviewer")
+    back_to_todos = transitions.move(reviewing, TaskState.TODOS, by="reviewer", note="review needs changes")
+    metadata_store.save(back_to_todos.task_dir, back_to_todos.metadata)
+
+    assert asyncio.run(worker.run_once()) is True
+    second_pass = scanner.scan()[0]
+    assert adapter.run_calls[1]["session_id"] is None
+    assert second_pass.metadata.implementation.session_id == "ses_impl_2"
+    assert second_pass.metadata.implementation.last_run_tokens == 30
+    assert second_pass.metadata.implementation.session_tokens == 30
+
+
 def test_implementer_worker_clones_task_target_repo(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()

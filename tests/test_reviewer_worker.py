@@ -211,6 +211,40 @@ def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths
     assert "Do not repeat earlier findings unless they still apply" in prompt
 
 
+def test_reviewer_worker_rolls_over_session_after_budget_is_exceeded(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.reviewer_session_token_budget = 100
+    create_request_task(config, "review-session-budget-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    task = scanner.scan()[0]
+    task.metadata.review.session_id = "ses_rev_1"
+    task.metadata.review.session_tokens = 120
+    metadata_store.save(task.task_dir, task.metadata)
+
+    adapter = FakeAdapter(
+        ["Verdict: PASS\nLooks good"],
+        session_ids=["ses_rev_2"],
+        total_tokens=[35],
+    )
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert adapter.run_calls[0]["session_id"] is None
+    assert updated.metadata.review.session_id == "ses_rev_2"
+    assert updated.metadata.review.last_run_tokens == 35
+    assert updated.metadata.review.session_tokens == 35
+
+
 def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "review-gated-task")

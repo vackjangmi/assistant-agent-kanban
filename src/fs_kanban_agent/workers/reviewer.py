@@ -64,6 +64,12 @@ class ReviewerWorker(WorkerBase):
             )
             await self.emit("task_moved", reviewing.metadata.task_id, state=reviewing.state.value)
             loop = asyncio.get_running_loop()
+            session_id = self.reuse_session_id(
+                session_id=reviewing.metadata.review.session_id,
+                session_tokens=reviewing.metadata.review.session_tokens,
+                budget=self.config.opencode.reviewer_session_token_budget,
+            )
+            prior_session_tokens = reviewing.metadata.review.session_tokens if session_id else 0
             result = await asyncio.to_thread(
                 self.adapter.run,
                 agent=self.config.opencode.reviewer_agent,
@@ -71,11 +77,18 @@ class ReviewerWorker(WorkerBase):
                 cwd=workspace_path,
                 run_log_path=run_log_path,
                 config=self.config,
-                session_id=reviewing.metadata.review.session_id,
+                session_id=session_id,
                 on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, run_log_path.name),
             )
             reviewing.metadata.review.resolved_model = result.resolved_model
             reviewing.metadata.review.session_id = result.session_id
+            reviewing.metadata.review.last_run_tokens = result.total_tokens
+            reviewing.metadata.review.session_tokens = self.next_session_token_total(
+                reused_session_id=session_id,
+                returned_session_id=result.session_id,
+                prior_session_tokens=prior_session_tokens,
+                run_tokens=result.total_tokens,
+            )
             if not result.assistant_text.strip():
                 apply_retry_gate(reviewing.metadata, reason="review-empty-artifact")
                 reviewing.metadata.errors.append(
