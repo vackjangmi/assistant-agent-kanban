@@ -33,6 +33,9 @@ locks:
 runtime:
   poll_interval_seconds: 0.2
   auto_dispatch: true
+  planner_agent_count: 1
+  implementer_agent_count: 1
+  reviewer_agent_count: 1
 
 repo_discovery:
   root: ../
