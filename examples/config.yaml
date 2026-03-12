@@ -7,12 +7,16 @@ opencode:
   attach_url: null
   planner_agent: fs-kanban-planner
   planner_model: null
+  planner_session_token_budget: 250000
   implementer_agent: fs-kanban-implementer
   implementer_model: null
+  implementer_session_token_budget: 250000
   reviewer_agent: fs-kanban-reviewer
   reviewer_model: null
+  reviewer_session_token_budget: 250000
   commit_agent: fs-kanban-committer
   commit_model: null
+  commit_session_token_budget: 250000
   timeout_seconds: 1800
 
 workspace:

@@ -122,6 +122,7 @@ class WorkerBase:
                     "command": result.command,
                     "resolved_model": result.resolved_model,
                     "session_id": result.session_id,
+                    "total_tokens": result.total_tokens,
                     "markdown_path": markdown_path.name,
                     "editable_markdown": True,
                     "sync_policy": "markdown_edits_do_not_modify_json",
@@ -131,3 +132,22 @@ class WorkerBase:
             + "\n"
         )
         return markdown_path.name, json_path.name
+
+    def reuse_session_id(self, *, session_id: str | None, session_tokens: int, budget: int) -> str | None:
+        if not session_id:
+            return None
+        if session_tokens >= budget:
+            return None
+        return session_id
+
+    def next_session_token_total(
+        self,
+        *,
+        reused_session_id: str | None,
+        returned_session_id: str | None,
+        prior_session_tokens: int,
+        run_tokens: int,
+    ) -> int:
+        if reused_session_id and returned_session_id == reused_session_id:
+            return prior_session_tokens + run_tokens
+        return run_tokens

@@ -6,7 +6,7 @@ from typing import cast
 import subprocess
 
 from fs_kanban_agent.config import AppConfig
-from fs_kanban_agent.opencode_adapter import SubprocessOpenCodeAdapter, _extract_assistant_text, _extract_session_id
+from fs_kanban_agent.opencode_adapter import SubprocessOpenCodeAdapter, _extract_assistant_text, _extract_session_id, _extract_total_tokens
 
 
 def test_extract_assistant_text_prefers_final_event():
@@ -53,6 +53,19 @@ def test_extract_session_id_reads_first_event_session():
     )
 
     assert _extract_session_id(stdout) == "ses_123"
+
+
+def test_extract_total_tokens_sums_step_finish_events():
+    stdout = "\n".join(
+        [
+            '{"type":"step_start"}',
+            '{"type":"step_finish","tokens":{"total":42}}',
+            '{"type":"step_finish","tokens":{"total":8,"input":5}}',
+            '{"type":"final","content":"ok"}',
+        ]
+    )
+
+    assert _extract_total_tokens(stdout) == 50
 
 
 def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path):

@@ -37,6 +37,9 @@ class PlanInfo(BaseModel):
     approved: bool = False
     path: str | None = None
     resolved_model: str | None = None
+    session_id: str | None = None
+    last_run_tokens: int = 0
+    session_tokens: int = 0
 
 
 class ImplementationInfo(BaseModel):
@@ -46,6 +49,8 @@ class ImplementationInfo(BaseModel):
     last_result: str | None = None
     resolved_model: str | None = None
     session_id: str | None = None
+    last_run_tokens: int = 0
+    session_tokens: int = 0
 
 
 class ReviewInfo(BaseModel):
@@ -53,6 +58,8 @@ class ReviewInfo(BaseModel):
     last_verdict: Literal["PASS", "NEEDS_CHANGES"] | None = None
     resolved_model: str | None = None
     session_id: str | None = None
+    last_run_tokens: int = 0
+    session_tokens: int = 0
 
 
 class RetryGateInfo(BaseModel):
@@ -213,6 +220,7 @@ class RunResult(BaseModel):
     command: list[str] = Field(default_factory=list)
     resolved_model: str | None = None
     session_id: str | None = None
+    total_tokens: int = 0
 
 
 class TaskContext(BaseModel):

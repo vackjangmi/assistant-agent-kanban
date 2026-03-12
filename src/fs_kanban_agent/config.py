@@ -11,6 +11,7 @@ from .enums import STATE_ORDER, TaskState
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
+DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 
 
 class OpenCodeConfig(BaseModel):
@@ -18,12 +19,16 @@ class OpenCodeConfig(BaseModel):
     attach_url: str | None = None
     planner_agent: str = "fs-kanban-planner"
     planner_model: str | None = None
+    planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     implementer_agent: str = "fs-kanban-implementer"
     implementer_model: str | None = None
+    implementer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     reviewer_agent: str = "fs-kanban-reviewer"
     reviewer_model: str | None = None
+    reviewer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     commit_agent: str = "fs-kanban-committer"
     commit_model: str | None = None
+    commit_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     timeout_seconds: int = 1800
 
 

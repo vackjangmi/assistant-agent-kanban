@@ -208,6 +208,7 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
             command=command,
             resolved_model=resolved_model,
             session_id=resolved_session_id,
+            total_tokens=_extract_total_tokens(stdout),
         )
 
 
@@ -245,6 +246,25 @@ def _extract_session_id(stdout: str) -> str | None:
             if isinstance(nested_session_id, str) and nested_session_id.strip():
                 return nested_session_id
     return None
+
+
+def _extract_total_tokens(stdout: str) -> int:
+    total_tokens = 0
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    for line in lines:
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if payload.get("type") != "step_finish":
+            continue
+        tokens = payload.get("tokens")
+        if not isinstance(tokens, dict):
+            continue
+        total = tokens.get("total")
+        if isinstance(total, int):
+            total_tokens += total
+    return total_tokens
 
 
 def _utc_timestamp() -> str:
