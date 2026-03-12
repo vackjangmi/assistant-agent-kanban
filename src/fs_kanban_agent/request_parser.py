@@ -65,7 +65,7 @@ def has_required_request_fields(content: str) -> bool:
 
 
 def extract_goal_text(body: str) -> str | None:
-    goal_section = _extract_markdown_section(body, "Goal")
+    goal_section = _extract_markdown_section(body, "Goal", "목표")
     if goal_section:
         return goal_section
 
@@ -89,15 +89,15 @@ def extract_goal_text(body: str) -> str | None:
     return candidate or None
 
 
-def _extract_markdown_section(body: str, title: str) -> str | None:
-    heading = f"## {title}".casefold()
+def _extract_markdown_section(body: str, *titles: str) -> str | None:
+    headings = {f"## {title}".casefold() for title in titles}
     lines = body.splitlines()
     inside = False
     collected: list[str] = []
     for line in lines:
         stripped = line.strip()
         if not inside:
-            if stripped.casefold() == heading:
+            if stripped.casefold() in headings:
                 inside = True
             continue
         if stripped.startswith("## "):
