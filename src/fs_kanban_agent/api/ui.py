@@ -410,6 +410,7 @@ def build_ui_router() -> APIRouter:
       <div id="task-modal-error" class="form-error" hidden></div>
       <div class="task-tabs">
         <button type="button" id="task-tab-overview" class="active">Overview</button>
+        <button type="button" id="task-tab-timeline">Timeline</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
         <button type="button" id="task-tab-logs">Logs</button>
@@ -445,6 +446,9 @@ def build_ui_router() -> APIRouter:
           <div class="muted">This permanently removes the task directory and any managed workspace artifacts created for it.</div>
         </section>
         <div id="task-overview" class="muted">Select a task to inspect.</div>
+      </section>
+      <section id="task-panel-timeline" class="task-panel" hidden>
+        <div id="task-timeline" class="muted">Select a task to inspect its stage timeline.</div>
       </section>
       <section id="task-panel-logs" class="task-panel" hidden>
         <div class="log-layout">
@@ -561,13 +565,16 @@ def build_ui_router() -> APIRouter:
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
+    const taskTabTimeline = document.getElementById('task-tab-timeline');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
     const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
+    const taskPanelTimeline = document.getElementById('task-panel-timeline');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelEditor = document.getElementById('task-panel-editor');
+    const taskTimeline = document.getElementById('task-timeline');
     const taskVerificationActions = document.getElementById('task-verification-actions');
     const taskVerificationStatus = document.getElementById('task-verification-status');
     const taskVerificationNoteWrap = document.getElementById('task-verification-note-wrap');
@@ -1082,10 +1089,12 @@ def build_ui_router() -> APIRouter:
     function setTaskTab(tab) {{
       activeTaskTab = tab;
       taskTabOverview.classList.toggle('active', tab === 'overview');
+      taskTabTimeline.classList.toggle('active', tab === 'timeline');
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskTabLogs.classList.toggle('active', tab === 'logs');
       taskPanelOverview.hidden = tab !== 'overview';
+      taskPanelTimeline.hidden = tab !== 'timeline';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
       taskPanelEditor.hidden = tab !== 'editor';
       taskPanelLogs.hidden = tab !== 'logs';
@@ -1452,6 +1461,7 @@ def build_ui_router() -> APIRouter:
       renderChangedFileButtons(detail.changed_files);
       renderDiffPlaceholder(changedFilesVisible ? 'Select a changed file.' : 'Changed files appear here when a stored review patch is available for this task.');
       renderArtifactButtons(detail.markdown_files);
+      taskTimeline.innerHTML = renderStageTiming(detail.stage_timing);
       taskOverview.innerHTML = `
         <div class="task-meta-grid">
           <div class="meta-item"><span>Title</span><strong>${{escapeHtml(metadata.title)}}</strong></div>
@@ -1464,7 +1474,6 @@ def build_ui_router() -> APIRouter:
           <div class="meta-item"><span>Final branch</span><strong>${{escapeHtml(metadata.integration.final_branch || 'Not created yet')}}</strong></div>
           <div class="meta-item"><span>REQUEST.md path</span><strong>${{escapeHtml(detail.request_markdown_path)}}</strong></div>
         </div>
-        ${{renderStageTiming(detail.stage_timing)}}
           <div class="task-section">
           <h3>Captured stage models</h3>
           <div class="task-model-grid">${{stageModels.map((item) => `<div class="task-model-row"><span>${{escapeHtml(item.label)}}</span><div><strong>${{escapeHtml(item.value || 'Not captured yet')}}</strong><small>${{escapeHtml(item.note)}} This is the actual model used, separate from runtime override settings. Last run tokens: ${{escapeHtml(String(item.tokens || 0))}}. Session tokens: ${{escapeHtml(String(item.sessionTokens || 0))}}.</small></div></div>`).join('')}}</div>
@@ -1639,6 +1648,7 @@ def build_ui_router() -> APIRouter:
         activeTaskDetail = null;
         activeChangedFileId = null;
         taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
+        taskTimeline.innerHTML = '<div class="muted">Loading stage timeline...</div>';
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder('Select the Changed files tab to inspect the stored review patch.');
         taskLogFiles.innerHTML = '';
@@ -1984,6 +1994,7 @@ def build_ui_router() -> APIRouter:
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
     board.addEventListener('click', (event) => {{ const button = event.target.closest('[data-task-id]'); if (!button) return; loadTaskDetail(button.dataset.taskId); }});
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
+    taskTabTimeline.addEventListener('click', () => setTaskTab('timeline'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));

@@ -1023,6 +1023,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Stage timing" in response.text
     assert "stage-timing-grid" in response.text
     assert "renderStageTiming(stageTiming)" in response.text
+    assert 'id="task-tab-timeline"' in response.text
+    assert 'id="task-panel-timeline"' in response.text
+    assert "setTaskTab('timeline')" in response.text
+    assert "const taskTabTimeline = document.getElementById('task-tab-timeline');" in response.text
     assert "Current stage model used" in response.text
     assert "Planner model used" in response.text
     assert "Implementer model used" in response.text
