@@ -73,6 +73,12 @@ def build_ui_router() -> APIRouter:
     .settings-card span {{ color: var(--muted); font-size: 0.95rem; }}
     .settings-card input {{ width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
     .settings-card small {{ color: var(--muted); font-size: 0.88rem; }}
+    .settings-role-fields {{ display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 10px; align-items: end; }}
+    .settings-field {{ display: grid; gap: 5px; }}
+    .settings-field label {{ font-size: 0.83rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }}
+    .settings-input-with-suffix {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }}
+    .settings-input-with-suffix input {{ border-right: 0; }}
+    .settings-input-suffix {{ display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 12px; border: 1px solid var(--border); background: rgba(124,79,44,0.1); color: var(--accent-strong); font-size: 0.9rem; font-weight: 700; }}
     .settings-path {{ padding: 12px 14px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--muted); }}
     .settings-status {{ padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }}
     .settings-status[data-tone="success"] {{ border-color: rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: var(--success); }}
@@ -298,30 +304,66 @@ def build_ui_router() -> APIRouter:
             <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
             <small>Use larger values only when you need deeper nested repos to appear in the list.</small>
           </label>
-          <label class="settings-card" for="planner_model">
+          <div class="settings-card">
             <strong>Planner model</strong>
             <span>Used for plan generation and plan revisions.</span>
-            <input id="planner_model" name="planner_model" list="opencode-model-options" placeholder="inherit default model">
-            <small>Pick from discovered options or type any custom model value.</small>
-          </label>
-          <label class="settings-card" for="implementer_model">
+            <div class="settings-role-fields">
+              <div class="settings-field">
+                <label for="planner_model">Model</label>
+                <input id="planner_model" name="planner_model" list="opencode-model-options" placeholder="inherit default model">
+              </div>
+              <div class="settings-field">
+                <label for="planner_session_token_budget">Token size (K)</label>
+                <div class="settings-input-with-suffix"><input id="planner_session_token_budget" name="planner_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+              </div>
+            </div>
+            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+          </div>
+          <div class="settings-card">
             <strong>Implementer model</strong>
             <span>Used when coding inside the isolated workspace.</span>
-            <input id="implementer_model" name="implementer_model" list="opencode-model-options" placeholder="inherit default model">
-            <small>Pick from discovered options or type any custom model value.</small>
-          </label>
-          <label class="settings-card" for="reviewer_model">
+            <div class="settings-role-fields">
+              <div class="settings-field">
+                <label for="implementer_model">Model</label>
+                <input id="implementer_model" name="implementer_model" list="opencode-model-options" placeholder="inherit default model">
+              </div>
+              <div class="settings-field">
+                <label for="implementer_session_token_budget">Token size (K)</label>
+                <div class="settings-input-with-suffix"><input id="implementer_session_token_budget" name="implementer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+              </div>
+            </div>
+            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+          </div>
+          <div class="settings-card">
             <strong>Reviewer model</strong>
             <span>Used for review verdicts before human verification.</span>
-            <input id="reviewer_model" name="reviewer_model" list="opencode-model-options" placeholder="inherit default model">
-            <small>Pick from discovered options or type any custom model value.</small>
-          </label>
-          <label class="settings-card" for="commit_model">
+            <div class="settings-role-fields">
+              <div class="settings-field">
+                <label for="reviewer_model">Model</label>
+                <input id="reviewer_model" name="reviewer_model" list="opencode-model-options" placeholder="inherit default model">
+              </div>
+              <div class="settings-field">
+                <label for="reviewer_session_token_budget">Token size (K)</label>
+                <div class="settings-input-with-suffix"><input id="reviewer_session_token_budget" name="reviewer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+              </div>
+            </div>
+            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+          </div>
+          <div class="settings-card">
             <strong>Commit model</strong>
-            <span>Used when generating the final commit message.</span>
-            <input id="commit_model" name="commit_model" list="opencode-model-options" placeholder="inherit default model">
-            <small>Pick from discovered options or type any custom model value.</small>
-          </label>
+            <span>Used when generating the final commit message. The token budget is stored now and applies once the commit worker starts reusing sessions.</span>
+            <div class="settings-role-fields">
+              <div class="settings-field">
+                <label for="commit_model">Model</label>
+                <input id="commit_model" name="commit_model" list="opencode-model-options" placeholder="inherit default model">
+              </div>
+              <div class="settings-field">
+                <label for="commit_session_token_budget">Token size (K)</label>
+                <div class="settings-input-with-suffix"><input id="commit_session_token_budget" name="commit_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+              </div>
+            </div>
+            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+          </div>
         </div>
         <datalist id="opencode-model-options"></datalist>
         <div id="settings-config-path" class="settings-path">Config path: loading...</div>
@@ -476,9 +518,13 @@ def build_ui_router() -> APIRouter:
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
     const plannerModelInput = document.getElementById('planner_model');
+    const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const implementerModelInput = document.getElementById('implementer_model');
+    const implementerSessionTokenBudgetInput = document.getElementById('implementer_session_token_budget');
     const reviewerModelInput = document.getElementById('reviewer_model');
+    const reviewerSessionTokenBudgetInput = document.getElementById('reviewer_session_token_budget');
     const commitModelInput = document.getElementById('commit_model');
+    const commitSessionTokenBudgetInput = document.getElementById('commit_session_token_budget');
     const modelOptions = document.getElementById('opencode-model-options');
     const settingsConfigPath = document.getElementById('settings-config-path');
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
@@ -788,9 +834,13 @@ def build_ui_router() -> APIRouter:
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         repoDiscoveryMaxDepthInput.value = String(data.repo_discovery_max_depth || 2);
         plannerModelInput.value = data.planner_model || '';
+        plannerSessionTokenBudgetInput.value = String(data.planner_session_token_budget || 250);
         implementerModelInput.value = data.implementer_model || '';
+        implementerSessionTokenBudgetInput.value = String(data.implementer_session_token_budget || 250);
         reviewerModelInput.value = data.reviewer_model || '';
+        reviewerSessionTokenBudgetInput.value = String(data.reviewer_session_token_budget || 250);
         commitModelInput.value = data.commit_model || '';
+        commitSessionTokenBudgetInput.value = String(data.commit_session_token_budget || 250);
         renderModelOptions(data.available_models || []);
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
         await loadTargetRepoOptions();
@@ -821,9 +871,13 @@ def build_ui_router() -> APIRouter:
             repo_discovery_root: repoDiscoveryRootInput.value,
             repo_discovery_max_depth: Number.parseInt(repoDiscoveryMaxDepthInput.value || '0', 10) || 1,
             planner_model: plannerModelInput.value,
+            planner_session_token_budget: Number.parseInt(plannerSessionTokenBudgetInput.value || '0', 10) || 250,
             implementer_model: implementerModelInput.value,
+            implementer_session_token_budget: Number.parseInt(implementerSessionTokenBudgetInput.value || '0', 10) || 250,
             reviewer_model: reviewerModelInput.value,
+            reviewer_session_token_budget: Number.parseInt(reviewerSessionTokenBudgetInput.value || '0', 10) || 250,
             commit_model: commitModelInput.value,
+            commit_session_token_budget: Number.parseInt(commitSessionTokenBudgetInput.value || '0', 10) || 250,
           }}),
         }});
         const data = await response.json();
@@ -831,9 +885,13 @@ def build_ui_router() -> APIRouter:
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         repoDiscoveryMaxDepthInput.value = String(data.repo_discovery_max_depth || 2);
         plannerModelInput.value = data.planner_model || '';
+        plannerSessionTokenBudgetInput.value = String(data.planner_session_token_budget || 250);
         implementerModelInput.value = data.implementer_model || '';
+        implementerSessionTokenBudgetInput.value = String(data.implementer_session_token_budget || 250);
         reviewerModelInput.value = data.reviewer_model || '';
+        reviewerSessionTokenBudgetInput.value = String(data.reviewer_session_token_budget || 250);
         commitModelInput.value = data.commit_model || '';
+        commitSessionTokenBudgetInput.value = String(data.commit_session_token_budget || 250);
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
         await loadTargetRepoOptions();
         setSettingsStatus(`Saved runtime config to ${{data.config_path}}.`, 'success');
@@ -1199,9 +1257,9 @@ def build_ui_router() -> APIRouter:
       const viewerVisible = detail.markdown_files.length > 0;
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
       const stageModels = [
-        {{ label: 'Planner model used', value: metadata.plan.resolved_model, note: 'Captured from the plan run output.' }},
-        {{ label: 'Implementer model used', value: metadata.implementation.resolved_model, note: 'Captured from the workspace implementation run.' }},
-        {{ label: 'Reviewer model used', value: metadata.review.resolved_model, note: 'Captured from the AI review run.' }},
+        {{ label: 'Planner model used', value: metadata.plan.resolved_model, note: 'Captured from the plan run output.', tokens: metadata.plan.last_run_tokens, sessionTokens: metadata.plan.session_tokens }},
+        {{ label: 'Implementer model used', value: metadata.implementation.resolved_model, note: 'Captured from the workspace implementation run.', tokens: metadata.implementation.last_run_tokens, sessionTokens: metadata.implementation.session_tokens }},
+        {{ label: 'Reviewer model used', value: metadata.review.resolved_model, note: 'Captured from the AI review run.', tokens: metadata.review.last_run_tokens, sessionTokens: metadata.review.session_tokens }},
       ];
       taskTabChangedFiles.hidden = !changedFilesVisible;
       taskTabEditor.hidden = !viewerVisible;
@@ -1231,9 +1289,9 @@ def build_ui_router() -> APIRouter:
           <div class="meta-item"><span>Final branch</span><strong>${{escapeHtml(metadata.integration.final_branch || 'Not created yet')}}</strong></div>
           <div class="meta-item"><span>REQUEST.md path</span><strong>${{escapeHtml(detail.request_markdown_path)}}</strong></div>
         </div>
-        <div class="task-section">
+          <div class="task-section">
           <h3>Captured stage models</h3>
-          <div class="task-model-grid">${{stageModels.map((item) => `<div class="task-model-row"><span>${{escapeHtml(item.label)}}</span><div><strong>${{escapeHtml(item.value || 'Not captured yet')}}</strong><small>${{escapeHtml(item.note)}} This is the actual model used, separate from runtime override settings.</small></div></div>`).join('')}}</div>
+          <div class="task-model-grid">${{stageModels.map((item) => `<div class="task-model-row"><span>${{escapeHtml(item.label)}}</span><div><strong>${{escapeHtml(item.value || 'Not captured yet')}}</strong><small>${{escapeHtml(item.note)}} This is the actual model used, separate from runtime override settings. Last run tokens: ${{escapeHtml(String(item.tokens || 0))}}. Session tokens: ${{escapeHtml(String(item.sessionTokens || 0))}}.</small></div></div>`).join('')}}</div>
         </div>
         <div class="task-section">
           <h3>Markdown files</h3>
