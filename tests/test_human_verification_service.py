@@ -14,6 +14,7 @@ from fs_kanban_agent.integration_manager import IntegrationManager
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.scanner import KanbanScanner
+from fs_kanban_agent.services.task_service import TaskService
 from fs_kanban_agent.services.human_verification_service import HumanVerificationService
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workspace_manager import WorkspaceManager
@@ -96,6 +97,15 @@ def test_human_verification_start_includes_untracked_files(configured_paths):
 
     assert moved.state == TaskState.HUMAN_VERIFYING
     assert (repo_root / "new-file.txt").read_text() == "brand new\n"
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+    detail = task_service.get_task(completed.metadata.task_id)
+    added_file = next(file for file in detail.changed_files if file.path == "new-file.txt")
+    assert added_file.change_type == "added"
+    assert added_file.additions == 1
+    diff = task_service.get_changed_file(completed.metadata.task_id, added_file.id)
+    assert diff.summary.path == "new-file.txt"
+    assert diff.hunks[0].unified_lines[0].kind == "add"
+    assert diff.hunks[0].unified_lines[0].content == "brand new"
 
 
 def test_human_verification_start_uses_absolute_patch_path_from_relative_config(monkeypatch, tmp_path):

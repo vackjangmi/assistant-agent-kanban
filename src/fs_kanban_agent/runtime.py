@@ -134,7 +134,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     board_service = BoardService(scanner)
     verification_service = HumanVerificationService(scanner, metadata_store, locks, transitions, integration_manager, commit_manager)
     deletion_service = TaskDeletionService(config, scanner, locks)
-    task_service = TaskService(scanner, config.runs_dir)
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = OpenCodeModelRegistry(adapter=planner_adapter, config=config)
     return RuntimeSupervisor(

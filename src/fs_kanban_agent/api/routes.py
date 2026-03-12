@@ -143,6 +143,15 @@ def build_router() -> APIRouter:
         except TaskNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    @router.get("/api/tasks/{task_id}/changed-files/{changed_file_id}")
+    async def task_changed_file(task_id: str, changed_file_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            return runtime.task_service.get_changed_file(task_id, changed_file_id)
+        except (TaskNotFoundError, TransitionError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
     @router.get("/api/tasks/{task_id}/artifacts/{filename}")
     async def task_markdown_artifact(task_id: str, filename: str, request: Request):
         runtime = request.app.state.runtime
