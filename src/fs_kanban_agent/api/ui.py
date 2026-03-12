@@ -46,6 +46,7 @@ def build_ui_router() -> APIRouter:
     .modal {{ position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }}
     .modal[hidden] {{ display: none; }}
     .modal-panel {{ width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }}
+    .task-modal-panel {{ width: min(1380px, 100%); }}
     .modal-head {{ display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }}
     .modal-copy p {{ margin: 6px 0 0; color: var(--muted); }}
     .composer-grid {{ display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; }}
@@ -123,7 +124,9 @@ def build_ui_router() -> APIRouter:
      .diff-badges {{ display: flex; gap: 8px; flex-wrap: wrap; }}
      .diff-badge {{ display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }}
      .diff-shell {{ border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: hidden; }}
-     .diff-desktop, .diff-mobile {{ max-height: 56vh; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93rem; line-height: 1.5; }}
+     .diff-desktop, .diff-mobile {{ max-height: 56vh; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }}
+     .diff-desktop {{ font-size: 0.62rem; }}
+     .diff-mobile {{ font-size: 0.78rem; }}
      .diff-desktop[hidden], .diff-mobile[hidden] {{ display: none; }}
      .diff-hunk {{ border-top: 1px solid rgba(24,32,38,0.08); }}
      .diff-hunk:first-child {{ border-top: 0; }}
@@ -323,7 +326,7 @@ def build_ui_router() -> APIRouter:
     </div>
   </section>
   <section id="task-modal" class="modal" hidden aria-hidden="true">
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+    <div class="modal-panel task-modal-panel" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="task-modal-title">Task details</h2>
@@ -1283,7 +1286,8 @@ def build_ui_router() -> APIRouter:
 
     async function loadTaskDetail(taskId, preserveTab = false, options = {{}}) {{
       const {{ softRefresh = false }} = options;
-      const nextTab = preserveTab ? activeTaskTab : 'editor';
+      const defaultTab = preserveTab ? activeTaskTab : (activeTaskDetail?.metadata?.state === 'human-verifying' ? 'changed-files' : 'editor');
+      const nextTab = preserveTab ? activeTaskTab : defaultTab;
       const requestToken = ++activeTaskRequestToken;
       activeTaskId = taskId;
       taskModalError.hidden = true;
@@ -1321,9 +1325,11 @@ def build_ui_router() -> APIRouter:
         if (!response.ok) throw new Error(detail.detail || 'Failed to load task details.');
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         renderTaskOverview(detail);
-        if (nextTab === 'changed-files' && detail.changed_files.length) await loadChangedFile(taskId, activeChangedFileId, true);
-        if (nextTab === 'editor' && detail.markdown_files.length) await loadMarkdownArtifact(taskId, activeArtifactName);
-        if (nextTab === 'logs') await loadTaskLogs(taskId, true);
+        const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files.length ? 'changed-files' : nextTab;
+        if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab);
+        if (resolvedTab === 'changed-files' && detail.changed_files.length) await loadChangedFile(taskId, activeChangedFileId, true);
+        if (resolvedTab === 'editor' && detail.markdown_files.length) await loadMarkdownArtifact(taskId, activeArtifactName);
+        if (resolvedTab === 'logs') await loadTaskLogs(taskId, true);
       }} catch (error) {{
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         taskModalError.hidden = false;
@@ -1510,6 +1516,7 @@ def build_ui_router() -> APIRouter:
         if (!response.ok) throw new Error(payload.detail || 'Failed to start verification.');
         await loadBoard();
         await loadTaskDetail(activeTaskId, true);
+        if (!taskTabChangedFiles.hidden) setTaskTab('changed-files');
       }} catch (error) {{
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;

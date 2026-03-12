@@ -672,6 +672,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request-modal" in response.text
     assert "settings-modal" in response.text
     assert "task-modal" in response.text
+    assert "task-modal-panel" in response.text
     assert "Viewer" in response.text
     assert "Viewer mode" in response.text
     assert "Changed files" in response.text
@@ -701,6 +702,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
+    assert "width: min(1380px, 100%)" in response.text
+    assert ".diff-desktop { font-size: 0.62rem; }" in response.text
+    assert ".diff-mobile { font-size: 0.78rem; }" in response.text
+    assert "setTaskTab('changed-files');" in response.text
     assert "typeof payload.content !== 'string'" in response.text
     assert "worker_log" in response.text
     assert "loadTaskLogs(activeTaskId, true)" not in response.text
