@@ -308,7 +308,7 @@ def build_ui_router() -> APIRouter:
       <form id="settings-form" class="settings-shell">
         <div class="settings-copy">
           <strong>Runtime overrides</strong>
-          <p>Leave a model field blank to fall back to the configured agent default. Repo discovery root supports relative paths like <code>../</code> or any absolute path you want to scan. Saving updates the in-memory runtime immediately and writes a local config file for future runs.</p>
+          <p>Leave a model field blank to fall back to the configured agent default. Repo discovery root supports relative paths like <code>../</code> or any absolute path you want to scan. Agent counts let each role process different tasks in parallel, while a single task still stays locked to one worker. Saving updates the in-memory runtime immediately and writes a local config file for future runs.</p>
         </div>
         <div class="settings-toolbar">
           <p id="settings-discovery-summary">Open the panel to load current model options.</p>
@@ -339,8 +339,12 @@ def build_ui_router() -> APIRouter:
                 <label for="planner_session_token_budget">Token size (K)</label>
                 <div class="settings-input-with-suffix"><input id="planner_session_token_budget" name="planner_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
+              <div class="settings-field">
+                <label for="planner_agent_count">Agents</label>
+                <input id="planner_agent_count" name="planner_agent_count" type="number" min="1" step="1" placeholder="1">
+              </div>
             </div>
-            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many planner runs can work on different tasks in parallel.</small>
           </div>
           <div class="settings-card">
             <strong>Implementer model</strong>
@@ -354,8 +358,12 @@ def build_ui_router() -> APIRouter:
                 <label for="implementer_session_token_budget">Token size (K)</label>
                 <div class="settings-input-with-suffix"><input id="implementer_session_token_budget" name="implementer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
+              <div class="settings-field">
+                <label for="implementer_agent_count">Agents</label>
+                <input id="implementer_agent_count" name="implementer_agent_count" type="number" min="1" step="1" placeholder="1">
+              </div>
             </div>
-            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many implementation runs can work on different tasks in parallel.</small>
           </div>
           <div class="settings-card">
             <strong>Reviewer model</strong>
@@ -369,8 +377,12 @@ def build_ui_router() -> APIRouter:
                 <label for="reviewer_session_token_budget">Token size (K)</label>
                 <div class="settings-input-with-suffix"><input id="reviewer_session_token_budget" name="reviewer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
+              <div class="settings-field">
+                <label for="reviewer_agent_count">Agents</label>
+                <input id="reviewer_agent_count" name="reviewer_agent_count" type="number" min="1" step="1" placeholder="1">
+              </div>
             </div>
-            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+            <small>Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many review runs can work on different tasks in parallel.</small>
           </div>
           <div class="settings-card">
             <strong>Commit model</strong>
@@ -546,10 +558,13 @@ def build_ui_router() -> APIRouter:
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
+    const plannerAgentCountInput = document.getElementById('planner_agent_count');
     const implementerModelInput = document.getElementById('implementer_model');
     const implementerSessionTokenBudgetInput = document.getElementById('implementer_session_token_budget');
+    const implementerAgentCountInput = document.getElementById('implementer_agent_count');
     const reviewerModelInput = document.getElementById('reviewer_model');
     const reviewerSessionTokenBudgetInput = document.getElementById('reviewer_session_token_budget');
+    const reviewerAgentCountInput = document.getElementById('reviewer_agent_count');
     const commitModelInput = document.getElementById('commit_model');
     const commitSessionTokenBudgetInput = document.getElementById('commit_session_token_budget');
     const modelOptions = document.getElementById('opencode-model-options');
@@ -875,6 +890,19 @@ def build_ui_router() -> APIRouter:
       settingsStatus.dataset.tone = tone;
     }}
 
+    function syncNumericSettingInput(input, value, fallback) {{
+      const normalized = Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+      input.value = String(normalized);
+      input.dataset.currentValue = String(normalized);
+    }}
+
+    function readNumericSettingInput(input, fallback) {{
+      const parsed = Number.parseInt(input.value || '', 10);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      const currentValue = Number.parseInt(input.dataset.currentValue || '', 10);
+      return Number.isFinite(currentValue) && currentValue > 0 ? currentValue : fallback;
+    }}
+
     function renderModelOptions(items) {{
       modelOptions.innerHTML = items.map((item) => `<option value="${{escapeHtml(item)}}"></option>`).join('');
     }}
@@ -911,15 +939,18 @@ def build_ui_router() -> APIRouter:
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Failed to load runtime settings.');
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
-        repoDiscoveryMaxDepthInput.value = String(data.repo_discovery_max_depth || 2);
+        syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         plannerModelInput.value = data.planner_model || '';
-        plannerSessionTokenBudgetInput.value = String(data.planner_session_token_budget || 250);
+        syncNumericSettingInput(plannerSessionTokenBudgetInput, data.planner_session_token_budget, 250);
+        syncNumericSettingInput(plannerAgentCountInput, data.planner_agent_count, 1);
         implementerModelInput.value = data.implementer_model || '';
-        implementerSessionTokenBudgetInput.value = String(data.implementer_session_token_budget || 250);
+        syncNumericSettingInput(implementerSessionTokenBudgetInput, data.implementer_session_token_budget, 250);
+        syncNumericSettingInput(implementerAgentCountInput, data.implementer_agent_count, 1);
         reviewerModelInput.value = data.reviewer_model || '';
-        reviewerSessionTokenBudgetInput.value = String(data.reviewer_session_token_budget || 250);
+        syncNumericSettingInput(reviewerSessionTokenBudgetInput, data.reviewer_session_token_budget, 250);
+        syncNumericSettingInput(reviewerAgentCountInput, data.reviewer_agent_count, 1);
         commitModelInput.value = data.commit_model || '';
-        commitSessionTokenBudgetInput.value = String(data.commit_session_token_budget || 250);
+        syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
         renderModelOptions(data.available_models || []);
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
         await loadTargetRepoOptions();
@@ -948,29 +979,35 @@ def build_ui_router() -> APIRouter:
           headers: {{ 'Content-Type': 'application/json' }},
           body: JSON.stringify({{
             repo_discovery_root: repoDiscoveryRootInput.value,
-            repo_discovery_max_depth: Number.parseInt(repoDiscoveryMaxDepthInput.value || '0', 10) || 1,
+            repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
             planner_model: plannerModelInput.value,
-            planner_session_token_budget: Number.parseInt(plannerSessionTokenBudgetInput.value || '0', 10) || 250,
+            planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
+            planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
             implementer_model: implementerModelInput.value,
-            implementer_session_token_budget: Number.parseInt(implementerSessionTokenBudgetInput.value || '0', 10) || 250,
+            implementer_session_token_budget: readNumericSettingInput(implementerSessionTokenBudgetInput, 250),
+            implementer_agent_count: readNumericSettingInput(implementerAgentCountInput, 1),
             reviewer_model: reviewerModelInput.value,
-            reviewer_session_token_budget: Number.parseInt(reviewerSessionTokenBudgetInput.value || '0', 10) || 250,
+            reviewer_session_token_budget: readNumericSettingInput(reviewerSessionTokenBudgetInput, 250),
+            reviewer_agent_count: readNumericSettingInput(reviewerAgentCountInput, 1),
             commit_model: commitModelInput.value,
-            commit_session_token_budget: Number.parseInt(commitSessionTokenBudgetInput.value || '0', 10) || 250,
+            commit_session_token_budget: readNumericSettingInput(commitSessionTokenBudgetInput, 250),
           }}),
         }});
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Failed to save runtime settings.');
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
-        repoDiscoveryMaxDepthInput.value = String(data.repo_discovery_max_depth || 2);
+        syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         plannerModelInput.value = data.planner_model || '';
-        plannerSessionTokenBudgetInput.value = String(data.planner_session_token_budget || 250);
+        syncNumericSettingInput(plannerSessionTokenBudgetInput, data.planner_session_token_budget, 250);
+        syncNumericSettingInput(plannerAgentCountInput, data.planner_agent_count, 1);
         implementerModelInput.value = data.implementer_model || '';
-        implementerSessionTokenBudgetInput.value = String(data.implementer_session_token_budget || 250);
+        syncNumericSettingInput(implementerSessionTokenBudgetInput, data.implementer_session_token_budget, 250);
+        syncNumericSettingInput(implementerAgentCountInput, data.implementer_agent_count, 1);
         reviewerModelInput.value = data.reviewer_model || '';
-        reviewerSessionTokenBudgetInput.value = String(data.reviewer_session_token_budget || 250);
+        syncNumericSettingInput(reviewerSessionTokenBudgetInput, data.reviewer_session_token_budget, 250);
+        syncNumericSettingInput(reviewerAgentCountInput, data.reviewer_agent_count, 1);
         commitModelInput.value = data.commit_model || '';
-        commitSessionTokenBudgetInput.value = String(data.commit_session_token_budget || 250);
+        syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
         settingsConfigPath.textContent = `Config path: ${{data.config_path}}`;
         await loadTargetRepoOptions();
         setSettingsStatus(`Saved runtime config to ${{data.config_path}}.`, 'success');
@@ -2027,7 +2064,6 @@ def build_ui_router() -> APIRouter:
     const source = new EventSource('/api/events');
     source.addEventListener('board_snapshot', async () => {{
       await loadBoard();
-      scheduleActiveTaskRefresh();
     }});
     source.addEventListener('task_moved', async (event) => {{
       await loadBoard();

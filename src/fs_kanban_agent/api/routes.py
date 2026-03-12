@@ -41,10 +41,13 @@ class HumanVerificationPayload(BaseModel):
 class ModelSettingsPayload(BaseModel):
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
+    planner_agent_count: int | None = Field(default=None, ge=1)
     implementer_model: str | None = None
     implementer_session_token_budget: int | None = Field(default=None, ge=1)
+    implementer_agent_count: int | None = Field(default=None, ge=1)
     reviewer_model: str | None = None
     reviewer_session_token_budget: int | None = Field(default=None, ge=1)
+    reviewer_agent_count: int | None = Field(default=None, ge=1)
     commit_model: str | None = None
     commit_session_token_budget: int | None = Field(default=None, ge=1)
     repo_discovery_root: str | None = None
@@ -73,6 +76,25 @@ def _display_session_token_budget(value: int) -> int:
     return max(1, value // 1000)
 
 
+def _normalize_agent_count(value: int | None) -> int:
+    if value is None:
+        return 1
+    return max(1, value)
+
+
+def _apply_config_update(target, updated) -> None:
+    target.kanban_root = updated.kanban_root
+    target.repo_root = updated.repo_root
+    target.base_branch = updated.base_branch
+    target.opencode = updated.opencode
+    target.workspace = updated.workspace
+    target.locks = updated.locks
+    target.runtime = updated.runtime
+    target.repo_discovery = updated.repo_discovery
+    target.loaded_from = updated.loaded_from
+    target.loaded_local_from = updated.loaded_local_from
+
+
 def build_router() -> APIRouter:
     router = APIRouter()
 
@@ -93,10 +115,13 @@ def build_router() -> APIRouter:
         return {
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
+            "planner_agent_count": runtime.config.runtime.planner_agent_count,
             "implementer_model": runtime.config.opencode.implementer_model,
             "implementer_session_token_budget": _display_session_token_budget(runtime.config.opencode.implementer_session_token_budget),
+            "implementer_agent_count": runtime.config.runtime.implementer_agent_count,
             "reviewer_model": runtime.config.opencode.reviewer_model,
             "reviewer_session_token_budget": _display_session_token_budget(runtime.config.opencode.reviewer_session_token_budget),
+            "reviewer_agent_count": runtime.config.runtime.reviewer_agent_count,
             "commit_model": runtime.config.opencode.commit_model,
             "commit_session_token_budget": _display_session_token_budget(runtime.config.opencode.commit_session_token_budget),
             "repo_discovery_root": runtime.config.repo_discovery_root_value(),
@@ -124,37 +149,47 @@ def build_router() -> APIRouter:
     @router.put("/api/settings/models")
     async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, str | int | bool | None]:
         runtime = request.app.state.runtime
+        next_config = runtime.config.model_copy(deep=True)
         fields_set = payload.model_fields_set
         if "planner_model" in fields_set:
-            runtime.config.opencode.planner_model = _normalize_model_override(payload.planner_model)
+            next_config.opencode.planner_model = _normalize_model_override(payload.planner_model)
         if "planner_session_token_budget" in fields_set:
-            runtime.config.opencode.planner_session_token_budget = _normalize_session_token_budget(payload.planner_session_token_budget)
+            next_config.opencode.planner_session_token_budget = _normalize_session_token_budget(payload.planner_session_token_budget)
+        if "planner_agent_count" in fields_set:
+            next_config.runtime.planner_agent_count = _normalize_agent_count(payload.planner_agent_count)
         if "implementer_model" in fields_set:
-            runtime.config.opencode.implementer_model = _normalize_model_override(payload.implementer_model)
+            next_config.opencode.implementer_model = _normalize_model_override(payload.implementer_model)
         if "implementer_session_token_budget" in fields_set:
-            runtime.config.opencode.implementer_session_token_budget = _normalize_session_token_budget(payload.implementer_session_token_budget)
+            next_config.opencode.implementer_session_token_budget = _normalize_session_token_budget(payload.implementer_session_token_budget)
+        if "implementer_agent_count" in fields_set:
+            next_config.runtime.implementer_agent_count = _normalize_agent_count(payload.implementer_agent_count)
         if "reviewer_model" in fields_set:
-            runtime.config.opencode.reviewer_model = _normalize_model_override(payload.reviewer_model)
+            next_config.opencode.reviewer_model = _normalize_model_override(payload.reviewer_model)
         if "reviewer_session_token_budget" in fields_set:
-            runtime.config.opencode.reviewer_session_token_budget = _normalize_session_token_budget(payload.reviewer_session_token_budget)
+            next_config.opencode.reviewer_session_token_budget = _normalize_session_token_budget(payload.reviewer_session_token_budget)
+        if "reviewer_agent_count" in fields_set:
+            next_config.runtime.reviewer_agent_count = _normalize_agent_count(payload.reviewer_agent_count)
         if "commit_model" in fields_set:
-            runtime.config.opencode.commit_model = _normalize_model_override(payload.commit_model)
+            next_config.opencode.commit_model = _normalize_model_override(payload.commit_model)
         if "commit_session_token_budget" in fields_set:
-            runtime.config.opencode.commit_session_token_budget = _normalize_session_token_budget(payload.commit_session_token_budget)
+            next_config.opencode.commit_session_token_budget = _normalize_session_token_budget(payload.commit_session_token_budget)
         if payload.repo_discovery_root is not None:
-            runtime.config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
+            next_config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
         if payload.repo_discovery_max_depth is not None:
-            runtime.config.repo_discovery.max_depth = payload.repo_discovery_max_depth
-        config_path = runtime.config.persist()
+            next_config.repo_discovery.max_depth = payload.repo_discovery_max_depth
+        config_path = next_config.persist()
+        _apply_config_update(runtime.config, next_config)
         ensure_runtime_agents(runtime.config)
-        await runtime.rescan_and_publish()
         return {
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
+            "planner_agent_count": runtime.config.runtime.planner_agent_count,
             "implementer_model": runtime.config.opencode.implementer_model,
             "implementer_session_token_budget": _display_session_token_budget(runtime.config.opencode.implementer_session_token_budget),
+            "implementer_agent_count": runtime.config.runtime.implementer_agent_count,
             "reviewer_model": runtime.config.opencode.reviewer_model,
             "reviewer_session_token_budget": _display_session_token_budget(runtime.config.opencode.reviewer_session_token_budget),
+            "reviewer_agent_count": runtime.config.runtime.reviewer_agent_count,
             "commit_model": runtime.config.opencode.commit_model,
             "commit_session_token_budget": _display_session_token_budget(runtime.config.opencode.commit_session_token_budget),
             "repo_discovery_root": runtime.config.repo_discovery_root_value(),

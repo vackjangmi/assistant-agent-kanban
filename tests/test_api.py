@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 
 from fs_kanban_agent.api.app import create_app
 from fs_kanban_agent import config as config_module
@@ -616,8 +617,11 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.status_code == 200
         assert get_response.json()["planner_model"] is None
         assert get_response.json()["planner_session_token_budget"] == 250
+        assert get_response.json()["planner_agent_count"] == 1
         assert get_response.json()["implementer_session_token_budget"] == 250
+        assert get_response.json()["implementer_agent_count"] == 1
         assert get_response.json()["reviewer_session_token_budget"] == 250
+        assert get_response.json()["reviewer_agent_count"] == 1
         assert get_response.json()["commit_session_token_budget"] == 250
         assert get_response.json()["repo_discovery_root"] == str(config.repo_discovery.root)
         assert get_response.json()["repo_discovery_max_depth"] == config.repo_discovery.max_depth
@@ -639,10 +643,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             json={
                 "planner_model": "gpt-5-planner",
                 "planner_session_token_budget": 210,
+                "planner_agent_count": 2,
                 "implementer_model": " gpt-5-implementer ",
                 "implementer_session_token_budget": 230,
+                "implementer_agent_count": 3,
                 "reviewer_model": "",
                 "reviewer_session_token_budget": 190,
+                "reviewer_agent_count": 4,
                 "commit_model": "gpt-5-commit",
                 "commit_session_token_budget": 250,
                 "repo_discovery_root": "../",
@@ -655,20 +662,26 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["saved"] is True
     assert payload["planner_model"] == "gpt-5-planner"
     assert payload["planner_session_token_budget"] == 210
+    assert payload["planner_agent_count"] == 2
     assert payload["implementer_model"] == "gpt-5-implementer"
     assert payload["implementer_session_token_budget"] == 230
+    assert payload["implementer_agent_count"] == 3
     assert payload["reviewer_model"] is None
     assert payload["reviewer_session_token_budget"] == 190
+    assert payload["reviewer_agent_count"] == 4
     assert payload["commit_model"] == "gpt-5-commit"
     assert payload["commit_session_token_budget"] == 250
     assert payload["repo_discovery_root"] == "../"
     assert payload["repo_discovery_max_depth"] == 4
     assert app.state.runtime.config.opencode.planner_model == "gpt-5-planner"
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
+    assert app.state.runtime.config.runtime.planner_agent_count == 2
     assert app.state.runtime.config.opencode.implementer_model == "gpt-5-implementer"
     assert app.state.runtime.config.opencode.implementer_session_token_budget == 230000
+    assert app.state.runtime.config.runtime.implementer_agent_count == 3
     assert app.state.runtime.config.opencode.reviewer_model is None
     assert app.state.runtime.config.opencode.reviewer_session_token_budget == 190000
+    assert app.state.runtime.config.runtime.reviewer_agent_count == 4
     assert app.state.runtime.config.repo_discovery.root == "../"
     assert app.state.runtime.config.repo_discovery.max_depth == 4
     assert load_config(config_path).opencode.commit_model == "gpt-5-commit"
@@ -777,10 +790,13 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
                 json={
                 "planner_model": "planner-x",
                 "planner_session_token_budget": 180,
+                "planner_agent_count": 2,
                 "implementer_model": None,
                 "implementer_session_token_budget": 250,
+                "implementer_agent_count": 1,
                 "reviewer_model": "reviewer-y",
                 "reviewer_session_token_budget": 220,
+                "reviewer_agent_count": 3,
                 "commit_model": None,
                 "commit_session_token_budget": 250,
                 "repo_discovery_root": "/tmp/scan-root",
@@ -793,8 +809,10 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         persisted = load_config(default_base_path)
         assert persisted.opencode.planner_model == "planner-x"
         assert persisted.opencode.planner_session_token_budget == 180000
+        assert persisted.runtime.planner_agent_count == 2
         assert persisted.opencode.reviewer_model == "reviewer-y"
         assert persisted.opencode.reviewer_session_token_budget == 220000
+        assert persisted.runtime.reviewer_agent_count == 3
         assert persisted.repo_discovery.root == "/tmp/scan-root"
         assert persisted.repo_discovery.max_depth == 3
         assert response.json()["config_path"] == str(default_local_path.resolve())
@@ -806,6 +824,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
 def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_paths):
     config, _, _ = configured_paths
     config.repo_discovery.root = "../custom-root"
+    config.runtime.planner_agent_count = 5
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     with TestClient(app) as client:
@@ -814,6 +833,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
             json={
                 "planner_model": "planner-x",
                 "planner_session_token_budget": 260,
+                "implementer_agent_count": 2,
                 "implementer_model": None,
                 "implementer_session_token_budget": 250,
                 "reviewer_model": None,
@@ -827,7 +847,43 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     assert response.status_code == 200
     assert response.json()["repo_discovery_root"] == "../custom-root"
     assert response.json()["repo_discovery_max_depth"] == 5
+    assert response.json()["planner_agent_count"] == 5
+    assert response.json()["implementer_agent_count"] == 2
     assert app.state.runtime.config.repo_discovery.root == "../custom-root"
+    assert app.state.runtime.config.runtime.planner_agent_count == 5
+    assert app.state.runtime.config.runtime.implementer_agent_count == 2
+
+
+def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.opencode.planner_model = "stable-planner"
+    config.runtime.planner_agent_count = 3
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    def fail_persist(self, path=None):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(config_module.AppConfig, "persist", fail_persist)
+
+    with TestClient(app) as client:
+        with pytest.raises(OSError, match="disk full"):
+            client.put(
+                "/api/settings/models",
+                json={
+                    "planner_model": "new-planner",
+                    "planner_session_token_budget": 250,
+                    "planner_agent_count": 7,
+                    "implementer_model": None,
+                    "implementer_session_token_budget": 250,
+                    "reviewer_model": None,
+                    "reviewer_session_token_budget": 250,
+                    "commit_model": None,
+                    "commit_session_token_budget": 250,
+                },
+            )
+
+    assert app.state.runtime.config.opencode.planner_model == "stable-planner"
+    assert app.state.runtime.config.runtime.planner_agent_count == 3
 
 
 def test_api_save_materializes_runtime_agents_immediately(configured_paths):
@@ -955,14 +1011,18 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Debug log" in response.text
     assert "planner_model" in response.text
     assert "planner_session_token_budget" in response.text
+    assert "planner_agent_count" in response.text
     assert "implementer_model" in response.text
     assert "implementer_session_token_budget" in response.text
+    assert "implementer_agent_count" in response.text
     assert "reviewer_model" in response.text
     assert "reviewer_session_token_budget" in response.text
+    assert "reviewer_agent_count" in response.text
     assert "commit_model" in response.text
     assert "commit_session_token_budget" in response.text
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
+    assert "readNumericSettingInput" in response.text
     assert "opencode-model-options" in response.text
     assert "Refresh discovered models" in response.text
     assert "Save runtime settings" in response.text
@@ -977,6 +1037,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
     assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
+    assert "source.addEventListener('board_snapshot', async () => {\n      await loadBoard();\n    });" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
     assert "debug_rendered_content" in response.text
