@@ -117,7 +117,9 @@ def configured_paths(tmp_path: Path) -> tuple[AppConfig, Path, Path]:
 
 @pytest.fixture(autouse=True)
 def isolate_default_local_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    default_base_path = tmp_path / "config.yaml"
     default_local_path = tmp_path / "config.local.yaml"
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", default_base_path)
     monkeypatch.setattr(config_module, "DEFAULT_LOCAL_CONFIG_PATH", default_local_path)
     return default_local_path
 

@@ -9,6 +9,7 @@ from .enums import STATE_ORDER, TaskState
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
@@ -65,6 +66,7 @@ class AppConfig(BaseModel):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     repo_discovery: RepoDiscoveryConfig = Field(default_factory=RepoDiscoveryConfig)
     loaded_from: Path | None = Field(default=None, exclude=True)
+    loaded_local_from: Path | None = Field(default=None, exclude=True)
 
     def bootstrap(self) -> None:
         self.kanban_root.mkdir(parents=True, exist_ok=True)
@@ -97,8 +99,10 @@ class AppConfig(BaseModel):
         return self.kanban_root / state.value
 
     def config_path_for_persistence(self) -> Path:
+        if self.loaded_local_from is not None:
+            return self.loaded_local_from
         if self.loaded_from is not None:
-            return self.loaded_from
+            return self.loaded_from.with_name("config.local.yaml")
         return DEFAULT_LOCAL_CONFIG_PATH
 
     def persist(self, path: Path | None = None) -> Path:
@@ -127,16 +131,45 @@ class AppConfig(BaseModel):
 
 def load_config(path: str | Path | None = None) -> AppConfig:
     loaded_from: Path | None = None
-    if path is None and DEFAULT_LOCAL_CONFIG_PATH.exists():
-        loaded_from = DEFAULT_LOCAL_CONFIG_PATH
-    elif path is not None:
-        loaded_from = Path(path)
-    if loaded_from is None:
+    loaded_local_from: Path | None = None
+    raw: dict = {}
+    if path is None:
+        if DEFAULT_CONFIG_PATH.exists():
+            loaded_from = DEFAULT_CONFIG_PATH.expanduser().resolve()
+            raw = _merge_dicts(raw, _read_yaml_dict(loaded_from))
+        if DEFAULT_LOCAL_CONFIG_PATH.exists():
+            loaded_local_from = DEFAULT_LOCAL_CONFIG_PATH.expanduser().resolve()
+            raw = _merge_dicts(raw, _read_yaml_dict(loaded_local_from))
+    else:
+        resolved_path = Path(path).expanduser().resolve()
+        loaded_from = resolved_path
+        raw = _merge_dicts(raw, _read_yaml_dict(resolved_path))
+        sibling_local = resolved_path.with_name("config.local.yaml")
+        if resolved_path.name != "config.local.yaml" and sibling_local.exists():
+            loaded_local_from = sibling_local.resolve()
+            raw = _merge_dicts(raw, _read_yaml_dict(loaded_local_from))
+    if not raw and loaded_from is None and loaded_local_from is None:
         config = AppConfig()
     else:
-        resolved_path = loaded_from.expanduser().resolve()
-        raw = yaml.safe_load(resolved_path.read_text()) or {}
         config = AppConfig.model_validate(raw)
-        config.loaded_from = resolved_path
+        config.loaded_from = loaded_from
+        config.loaded_local_from = loaded_local_from
     config.bootstrap()
     return config
+
+
+def _read_yaml_dict(path: Path) -> dict:
+    data = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"config file must contain a mapping: {path}")
+    return data
+
+
+def _merge_dicts(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_dicts(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
