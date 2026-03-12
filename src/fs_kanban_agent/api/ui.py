@@ -110,6 +110,10 @@ def build_ui_router() -> APIRouter:
      .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
      .log-file-list button {{ text-align: left; }}
      .log-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
+     .artifact-group-label {{ margin-top: 8px; padding: 2px 2px 0; color: var(--accent-strong); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }}
+     .artifact-subtabs {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }}
+     .artifact-subtabs[hidden] {{ display: none; }}
+     .artifact-subtabs button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
      .log-stage {{ min-width: 0; display: grid; gap: 10px; }}
      .log-toolbar {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }}
      .log-toggle-group {{ display: inline-flex; gap: 8px; flex-wrap: wrap; }}
@@ -433,6 +437,7 @@ def build_ui_router() -> APIRouter:
         <div class="artifact-layout">
           <div id="task-markdown-files" class="log-file-list"></div>
           <div class="artifact-stage">
+            <div id="task-artifact-subtabs" class="artifact-subtabs" hidden></div>
             <div id="task-viewer-host" class="viewer-host"></div>
             <div id="task-editor-host" class="editor-host" hidden></div>
             <textarea id="task-editor" class="editor-textarea" spellcheck="false" hidden disabled></textarea>
@@ -513,6 +518,7 @@ def build_ui_router() -> APIRouter:
     const taskLogViewDebug = document.getElementById('task-log-view-debug');
     const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
+    const taskArtifactSubtabs = document.getElementById('task-artifact-subtabs');
     const taskViewerHost = document.getElementById('task-viewer-host');
     const taskEditorHost = document.getElementById('task-editor-host');
     const taskEditor = document.getElementById('task-editor');
@@ -531,6 +537,7 @@ def build_ui_router() -> APIRouter:
     let activeTaskDetail = null;
     let activeChangedFileId = null;
     let activeArtifactName = null;
+    let activeArtifactRequestToken = 0;
     let activeLogName = null;
     let activeLogView = 'readable';
     let runningTimerHandle = null;
@@ -1199,8 +1206,9 @@ def build_ui_router() -> APIRouter:
       taskTabEditor.hidden = !viewerVisible;
       if (!changedFilesVisible && taskTabChangedFiles.classList.contains('active')) setTaskTab('overview');
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
+      if (planEditable && activeArtifactName !== 'PLAN.md') activeArtifactName = 'PLAN.md';
       if (!activeChangedFileId || !detail.changed_files.some((file) => file.id === activeChangedFileId)) activeChangedFileId = detail.changed_files[0]?.id || null;
-      if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files);
+      if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files, metadata);
       planEditMode = false;
       taskModeBadge.textContent = 'Viewer mode';
       taskEditorStatus.textContent = planEditable ? 'Rendered markdown preview. Use Edit PLAN.md only when you want to change the document.' : 'Rendered markdown preview only for this task state.';
@@ -1219,6 +1227,7 @@ def build_ui_router() -> APIRouter:
           <div class="meta-item"><span>Updated</span><strong>${{escapeHtml(metadata.updated_at)}}</strong></div>
           <div class="meta-item"><span>Target repo</span><strong>${{escapeHtml(metadata.target.repo_root)}}</strong></div>
           <div class="meta-item"><span>Base branch</span><strong>${{escapeHtml(metadata.target.base_branch)}}</strong></div>
+          <div class="meta-item"><span>Final branch</span><strong>${{escapeHtml(metadata.integration.final_branch || 'Not created yet')}}</strong></div>
           <div class="meta-item"><span>REQUEST.md path</span><strong>${{escapeHtml(detail.request_markdown_path)}}</strong></div>
         </div>
         <div class="task-section">
@@ -1250,18 +1259,83 @@ def build_ui_router() -> APIRouter:
       document.getElementById('task-modal-subtitle').textContent = `${{metadata.task_id}} in ${{metadata.state}}`;
     }}
 
-    function preferredArtifact(files) {{
-      if (files.includes('PLAN.md')) return 'PLAN.md';
-      return files[files.length - 1] || null;
+    function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {{
+      if (metadata?.state === 'waiting-check-plans' && files.includes('PLAN.md')) return 'PLAN.md';
+      return files[0] || null;
+    }}
+
+    function artifactDisplayLabel(file) {{
+      return file.replace(/\.md$/, '');
+    }}
+
+    function parseArtifactCycle(file) {{
+      const match = /^(WORK|REVIEW|HUMAN-VERIFY)-([0-9]{{3}})\.md$/.exec(file);
+      if (!match) return null;
+      return {{ kind: match[1], cycle: match[2] }};
+    }}
+
+    function formatArtifactFamilyLabel(cycle) {{
+      return `Implement&Review-${{cycle}}`;
+    }}
+
+    function buildArtifactEntries(files) {{
+      const entries = [];
+      let currentCycleEntry = null;
+      files.forEach((file, index) => {{
+        const cycleInfo = parseArtifactCycle(file);
+        if (cycleInfo) {{
+          if (!currentCycleEntry || currentCycleEntry.cycle !== cycleInfo.cycle) {{
+            currentCycleEntry = {{
+              type: 'family',
+              cycle: cycleInfo.cycle,
+              key: `cycle-${{cycleInfo.cycle}}`,
+              label: formatArtifactFamilyLabel(cycleInfo.cycle),
+              files: [],
+            }};
+            entries.push(currentCycleEntry);
+          }}
+          currentCycleEntry.files.push({{ file, index, kind: cycleInfo.kind }});
+          return;
+        }}
+        currentCycleEntry = null;
+        entries.push({{ type: 'file', file, index, label: artifactDisplayLabel(file) }});
+      }});
+      return entries;
+    }}
+
+    function activeArtifactFamily(entries) {{
+      return entries.find((entry) => entry.type === 'family' && entry.files.some((item) => item.file === activeArtifactName)) || null;
+    }}
+
+    function renderArtifactSubtabs(entries) {{
+      const family = activeArtifactFamily(entries);
+      if (!family) {{
+        taskArtifactSubtabs.hidden = true;
+        taskArtifactSubtabs.innerHTML = '';
+        return;
+      }}
+      taskArtifactSubtabs.hidden = false;
+      taskArtifactSubtabs.innerHTML = family.files.map((item) => `<button type="button" class="${{item.file === activeArtifactName ? 'active' : ''}}" data-artifact-file="${{escapeHtml(item.file)}}">${{escapeHtml(item.kind)}}</button>`).join('');
     }}
 
     function renderArtifactButtons(files) {{
       if (!files.length) {{
         taskMarkdownFiles.innerHTML = '<div class="muted">No markdown artifacts yet.</div>';
+        taskArtifactSubtabs.hidden = true;
+        taskArtifactSubtabs.innerHTML = '';
         taskArtifactName.textContent = 'No document selected';
         return;
       }}
-      taskMarkdownFiles.innerHTML = files.map((file, index) => `<button type="button" class="${{file === activeArtifactName ? 'active' : ''}}" data-artifact-index="${{index}}">${{escapeHtml(file)}}</button>`).join('');
+      const entries = buildArtifactEntries(files);
+      taskMarkdownFiles.innerHTML = entries.map((entry) => {{
+        if (entry.type === 'family') {{
+          const active = entry.files.some((item) => item.file === activeArtifactName);
+          const defaultFile = entry.files[0]?.file || '';
+          return `<button type="button" class="${{active ? 'active' : ''}}" data-artifact-file="${{escapeHtml(defaultFile)}}">${{escapeHtml(entry.label)}}</button>`;
+        }}
+        return `<button type="button" class="${{entry.file === activeArtifactName ? 'active' : ''}}" data-artifact-file="${{escapeHtml(entry.file)}}">${{escapeHtml(entry.label)}}</button>`;
+      }}).join('');
+      renderArtifactSubtabs(entries);
       taskArtifactName.textContent = activeArtifactName || 'No document selected';
     }}
 
@@ -1318,7 +1392,7 @@ def build_ui_router() -> APIRouter:
 
     async function loadTaskDetail(taskId, preserveTab = false, options = {{}}) {{
       const {{ softRefresh = false }} = options;
-      const defaultTab = preserveTab ? activeTaskTab : (activeTaskDetail?.metadata?.state === 'human-verifying' ? 'changed-files' : 'editor');
+      const defaultTab = preserveTab ? activeTaskTab : 'editor';
       const nextTab = preserveTab ? activeTaskTab : defaultTab;
       const requestToken = ++activeTaskRequestToken;
       activeTaskId = taskId;
@@ -1456,17 +1530,20 @@ def build_ui_router() -> APIRouter:
 
     async function loadMarkdownArtifact(taskId, filename = null) {{
       if (!activeTaskDetail || !activeTaskDetail.markdown_files.length) return;
-      activeArtifactName = filename && activeTaskDetail.markdown_files.includes(filename) ? filename : preferredArtifact(activeTaskDetail.markdown_files);
+      const resolvedArtifactName = filename && activeTaskDetail.markdown_files.includes(filename) ? filename : preferredArtifact(activeTaskDetail.markdown_files);
+      const requestToken = ++activeArtifactRequestToken;
+      activeArtifactName = resolvedArtifactName;
       renderArtifactButtons(activeTaskDetail.markdown_files);
-      taskArtifactName.textContent = activeArtifactName || 'No document selected';
+      const family = activeArtifactFamily(buildArtifactEntries(activeTaskDetail.markdown_files));
+      taskArtifactName.textContent = family ? `${{family.label}} / ${{activeArtifactName || 'No document selected'}}` : (activeArtifactName || 'No document selected');
       taskEditorStatus.textContent = activeArtifactName ? `Loading ${{activeArtifactName}}...` : 'No markdown artifact selected.';
       setArtifactMode(false);
       updatePlanActionState();
       try {{
-        const response = await fetch(`/api/tasks/${{taskId}}/artifacts/${{activeArtifactName}}`);
+        const response = await fetch(`/api/tasks/${{taskId}}/artifacts/${{encodeURIComponent(activeArtifactName)}}`);
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || `Failed to load ${{activeArtifactName}}.`);
-        if (taskId !== activeTaskId) return;
+        if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;
         planSourceMarkdown = payload.content;
         setPlanEditorContent(payload.content);
         const editable = activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md' && planEditMode;
@@ -1676,7 +1753,8 @@ def build_ui_router() -> APIRouter:
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     taskChangedFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); }});
-    taskMarkdownFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-artifact-index]'); if (!button || !activeTaskDetail) return; const file = activeTaskDetail.markdown_files[Number(button.dataset.artifactIndex)]; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); }});
+    taskMarkdownFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); }});
+    taskArtifactSubtabs.addEventListener('click', (event) => {{ const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); }});
     taskLogFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); }});
     taskLogViewReadable.addEventListener('click', () => {{ activeLogView = 'readable'; updateLogViewState(); showLogEntry(activeTaskLogs.findIndex((entry) => entry.name === activeLogName)); }});
     taskLogViewDebug.addEventListener('click', () => {{ activeLogView = 'debug'; updateLogViewState(); showLogEntry(activeTaskLogs.findIndex((entry) => entry.name === activeLogName)); }});

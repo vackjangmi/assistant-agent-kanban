@@ -244,6 +244,34 @@ def test_api_supports_human_verification_approve(configured_paths):
         approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
         assert approve.status_code == 200
         assert approve.json()["state"] == TaskState.DONE.value
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["metadata"]["integration"]["final_branch"] == f"feature/{completed.metadata.slug}"
+
+
+def test_api_returns_todos_when_human_verification_rebase_fails(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-approve-conflict-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-approve-conflict-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+    subprocess.run(["git", "-C", str(repo_root), "switch", "main"], check=True, capture_output=True, text=True)
+    (repo_root / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+
+    with TestClient(app) as client:
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+
+    assert approve.status_code == 200
+    assert approve.json()["state"] == TaskState.TODOS.value
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.final_branch is None
 
 
 def test_api_exposes_changed_files_for_human_verifying_tasks(configured_paths):
@@ -320,6 +348,40 @@ def test_api_hides_changed_files_when_patch_path_is_outside_managed_runs_root(co
     assert detail.json()["changed_files"] == []
     assert changed.status_code == 409
     assert "outside the managed runs root" in changed.json()["detail"]
+
+
+def test_api_orders_markdown_artifacts_by_lifecycle_and_cycle(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "artifact-order-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+    (task.task_dir / "PLAN.md").write_text("plan\n")
+    (task.task_dir / "WORK-002.md").write_text("work 2\n")
+    (task.task_dir / "REVIEW-002.md").write_text("review 2\n")
+    (task.task_dir / "HUMAN-VERIFY-002.md").write_text("verify 2\n")
+    (task.task_dir / "WORK-001.md").write_text("work 1\n")
+    (task.task_dir / "REVIEW-001.md").write_text("review 1\n")
+    (task.task_dir / "HUMAN-VERIFY-001.md").write_text("verify 1\n")
+    (task.task_dir / "NOTES.md").write_text("notes\n")
+    (task.task_dir / "COMMIT.md").write_text("commit\n")
+
+    with TestClient(app) as client:
+        detail = client.get(f"/api/tasks/{task.metadata.task_id}")
+
+    assert detail.status_code == 200
+    assert detail.json()["markdown_files"] == [
+        "REQUEST.md",
+        "PLAN.md",
+        "WORK-001.md",
+        "REVIEW-001.md",
+        "HUMAN-VERIFY-001.md",
+        "WORK-002.md",
+        "REVIEW-002.md",
+        "HUMAN-VERIFY-002.md",
+        "NOTES.md",
+        "COMMIT.md",
+    ]
 
 
 def test_api_deletes_task_and_owned_runtime_artifacts(configured_paths):
@@ -745,7 +807,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "debug_rendered_content" in response.text
     assert "(no debug metadata for this log yet)" in response.text
     assert "(no readable log output for this file)" in response.text
+    assert "artifact-group-label" in response.text
+    assert "task-artifact-subtabs" in response.text
+    assert "function buildArtifactEntries(files)" in response.text
+    assert "Implement&Review-${cycle}" in response.text
+    assert "function renderArtifactSubtabs(entries)" in response.text
+    assert "artifactDisplayLabel(file)" in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
+    assert "Final branch" in response.text
     assert "width: min(1380px, 100%)" in response.text
     assert ".diff-desktop { font-size: 0.62rem; }" in response.text
     assert ".diff-mobile { font-size: 0.78rem; }" in response.text
@@ -755,8 +824,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "maybeStartLogPolling" not in response.text
     assert "setInterval(() => {" not in response.text
     assert "let activeTaskRequestToken = 0;" in response.text
+    assert "let activeArtifactRequestToken = 0;" in response.text
     assert "function scheduleActiveTaskRefresh()" in response.text
     assert "if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;" in response.text
+    assert "encodeURIComponent(activeArtifactName)" in response.text
+    assert "if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;" in response.text
     assert "setTaskDetailStale(true, 'Task state changed while you were editing PLAN.md locally. Save the draft or leave edit mode to refresh the latest task status.');" in response.text
     assert "source.addEventListener('board_snapshot', async () => {" in response.text
     assert "scheduleActiveTaskRefresh();" in response.text

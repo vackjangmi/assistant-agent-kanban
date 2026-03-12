@@ -21,6 +21,7 @@ from ..scanner import KanbanScanner
 
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
+ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
 
 
 PatchFileState = dict[str, str | int | bool | list[ChangedFileHunk] | None]
@@ -35,7 +36,7 @@ class TaskService:
     def get_task(self, task_id: str) -> TaskDetail:
         task = self._find_task(task_id)
         request_markdown_path = str((task.task_dir / task.metadata.request.path).resolve())
-        markdown_files = sorted(path.name for path in task.task_dir.glob("*.md"))
+        markdown_files = self._sorted_markdown_files(task.task_dir)
         json_files = sorted(path.name for path in task.task_dir.glob("*.json") if path.name != "metadata.json")
         log_dir = self.runs_root / task.metadata.task_id
         log_files = sorted(path.name for path in log_dir.glob("*")) if log_dir.exists() else []
@@ -115,6 +116,25 @@ class TaskService:
         if filename != "PLAN.md":
             raise TransitionError("only PLAN.md is editable")
         return self._validate_readable_markdown_artifact(task_dir, filename)
+
+    def _sorted_markdown_files(self, task_dir: Path) -> list[str]:
+        files = [path.name for path in task_dir.glob("*.md")]
+        return sorted(files, key=self._artifact_sort_key)
+
+    def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
+        if filename == "REQUEST.md":
+            return (0, 0, 0, filename)
+        if filename == "PLAN.md":
+            return (1, 0, 0, filename)
+        match = ARTIFACT_CYCLE_RE.match(filename)
+        if match:
+            kind = match.group(1)
+            cycle = int(match.group("cycle"))
+            kind_order = {"WORK": 0, "REVIEW": 1, "HUMAN-VERIFY": 2}[kind]
+            return (2, cycle, kind_order, filename)
+        if filename == "COMMIT.md":
+            return (4, 0, 0, filename)
+        return (3, 0, 0, filename)
 
     def _load_changed_files(self, task_id: str, *, require_available: bool) -> list[ChangedFileDetail]:
         task = self._find_task(task_id)
