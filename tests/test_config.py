@@ -19,6 +19,7 @@ def test_app_config_bootstrap_creates_state_and_runtime_dirs(tmp_path):
     assert config.workspace.root is not None
     assert config.workspace.root.is_dir()
     assert config.repo_discovery.root == "../"
+    assert config.runtime.language == "EN"
     assert config.runtime.planner_agent_count == 1
     assert config.runtime.implementer_agent_count == 1
     assert config.runtime.reviewer_agent_count == 1
@@ -57,6 +58,7 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
                 "  planner_model: planner-local",
                 "runtime:",
                 "  auto_dispatch: false",
+                "  language: ko",
                 "  planner_agent_count: 2",
             ]
         )
@@ -68,6 +70,7 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
     assert config.opencode.planner_model == "planner-local"
     assert config.repo_discovery.max_depth == 2
     assert config.runtime.auto_dispatch is False
+    assert config.runtime.language == "KO"
     assert config.runtime.planner_agent_count == 2
     assert config.runtime.implementer_agent_count == 1
     assert config.runtime.reviewer_agent_count == 1

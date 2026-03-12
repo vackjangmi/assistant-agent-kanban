@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .enums import STATE_ORDER, TaskState
+from .language import normalize_runtime_language
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -49,9 +51,18 @@ class LocksConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     poll_interval_seconds: float = 0.2
     auto_dispatch: bool = True
+    language: Literal["EN", "KO"] = "EN"
     planner_agent_count: int = Field(default=1, ge=1)
     implementer_agent_count: int = Field(default=1, ge=1)
     reviewer_agent_count: int = Field(default=1, ge=1)
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def normalize_language_setting(cls, value: str) -> str:
+        normalized = normalize_runtime_language(value)
+        if normalized is None:
+            raise ValueError("runtime language must be EN or KO")
+        return normalized
 
 
 class RepoDiscoveryConfig(BaseModel):

@@ -24,6 +24,14 @@ LANGUAGE_NAMES = {
     "zh": "Chinese",
 }
 
+RUNTIME_LANGUAGE_ALIASES = {
+    "en": "EN",
+    "english": "EN",
+    "ko": "KO",
+    "kr": "KO",
+    "korean": "KO",
+}
+
 
 def normalize_language(value: str | None) -> str | None:
     if value is None:
@@ -35,6 +43,22 @@ def normalize_language(value: str | None) -> str | None:
 def language_name(code: str | None) -> str:
     normalized = normalize_language(code) or "en"
     return LANGUAGE_NAMES.get(normalized, "English")
+
+
+def normalize_runtime_language(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return RUNTIME_LANGUAGE_ALIASES.get(value.strip().lower())
+
+
+def runtime_language_name(value: str | None) -> str:
+    normalized = normalize_runtime_language(value) or "EN"
+    return "Korean" if normalized == "KO" else "English"
+
+
+def runtime_language_code_to_request_language(value: str | None) -> str:
+    normalized = normalize_runtime_language(value) or "EN"
+    return normalized.lower()
 
 
 def detect_primary_language(text: str) -> str:
