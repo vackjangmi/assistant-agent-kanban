@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
+from typing import Any, Protocol
 
 from .config import AppConfig
 from .events import EventBus
 from .locks import TaskLockManager
 from .metadata_store import MetadataStore
+from .models import TaskContext
 from .recovery import RecoveryService
 from .scanner import KanbanScanner
 from .services.board_service import BoardService
@@ -21,22 +24,42 @@ from .workers.reviewer import ReviewerWorker
 from watchfiles import awatch
 
 
+class DispatchWorker(Protocol):
+    def candidate_tasks(self) -> list[TaskContext]: ...
+
+    async def run_task(self, task: TaskContext) -> bool: ...
+
+
+class BoardProvider(Protocol):
+    def get_board(self) -> Any: ...
+
+
+class RecoveryProvider(Protocol):
+    def recover(self) -> Iterable[Any]: ...
+
+
+class ModelRegistryProvider(Protocol):
+    adapter: Any
+
+    def get(self, *, refresh: bool = False) -> Any: ...
+
+
 class RuntimeSupervisor:
     def __init__(
         self,
         config: AppConfig,
-        planner: PlanningWorker,
-        implementer: ImplementerWorker,
-        reviewer: ReviewerWorker,
-        committer: CommitWorker,
+        planner: DispatchWorker,
+        implementer: DispatchWorker,
+        reviewer: DispatchWorker,
+        committer: Any,
         scanner: KanbanScanner,
-        board_service: BoardService,
-        verification_service: HumanVerificationService,
-        deletion_service: TaskDeletionService,
-        task_service: TaskService,
-        recovery: RecoveryService,
+        board_service: BoardProvider,
+        verification_service: Any,
+        deletion_service: Any,
+        task_service: Any,
+        recovery: RecoveryProvider,
         events: EventBus,
-        model_registry: OpenCodeModelRegistry,
+        model_registry: ModelRegistryProvider,
     ) -> None:
         self.config = config
         self.planner = planner
@@ -53,6 +76,12 @@ class RuntimeSupervisor:
         self.model_registry = model_registry
         self._stop_event = asyncio.Event()
         self._background_tasks: list[asyncio.Task[None]] = []
+        self._role_tasks: dict[str, set[asyncio.Task[None]]] = {
+            "planner": set(),
+            "implementer": set(),
+            "reviewer": set(),
+        }
+        self._inflight_task_ids: set[str] = set()
 
     async def start(self) -> None:
         self._stop_event.clear()
@@ -72,6 +101,10 @@ class RuntimeSupervisor:
         self._stop_event.set()
         tasks = list(self._background_tasks)
         self._background_tasks.clear()
+        for role_tasks in self._role_tasks.values():
+            tasks.extend(role_tasks)
+            role_tasks.clear()
+        self._inflight_task_ids.clear()
         for task in tasks:
             task.cancel()
         if tasks:
@@ -82,11 +115,32 @@ class RuntimeSupervisor:
         await self.events.publish(board_to_event(board))
 
     async def dispatch_once(self) -> bool:
-        for worker in [self.planner, self.implementer, self.reviewer]:
-            if await worker.run_once():
-                await self.rescan_and_publish()
-                return True
-        return False
+        scheduled = False
+        self._prune_role_tasks()
+        inflight = set(self._inflight_task_ids)
+        for role_name, worker, configured_count in self._worker_specs():
+            available_slots = max(0, configured_count - len(self._role_tasks[role_name]))
+            if available_slots == 0:
+                continue
+            candidates = [
+                task
+                for task in worker.candidate_tasks()
+                if task.metadata.task_id not in inflight
+            ]
+            for task in candidates[:available_slots]:
+                task_id = task.metadata.task_id
+                inflight.add(task_id)
+                self._inflight_task_ids.add(task_id)
+                scheduled = True
+                background_task = asyncio.create_task(
+                    self._run_worker_task(role_name, task_id, worker, task),
+                    name=f"fs-kanban-{role_name}-{task_id}",
+                )
+                self._role_tasks[role_name].add(background_task)
+                background_task.add_done_callback(
+                    lambda done_task, *, role=role_name, finished_task_id=task_id: self._finalize_role_task(role, finished_task_id, done_task)
+                )
+        return scheduled
 
     async def startup_recovery(self) -> None:
         for event in self.recovery.recover():
@@ -106,6 +160,42 @@ class RuntimeSupervisor:
         async for _changes in awatch(self.config.kanban_root, stop_event=self._stop_event):
             await asyncio.sleep(self.config.runtime.poll_interval_seconds)
             await self.rescan_and_publish()
+
+    def _worker_specs(self) -> Iterable[tuple[str, DispatchWorker, int]]:
+        return (
+            ("planner", self.planner, self.config.runtime.planner_agent_count),
+            ("implementer", self.implementer, self.config.runtime.implementer_agent_count),
+            ("reviewer", self.reviewer, self.config.runtime.reviewer_agent_count),
+        )
+
+    async def _run_worker_task(self, role_name: str, task_id: str, worker: DispatchWorker, task: TaskContext) -> None:
+        try:
+            changed = await worker.run_task(task)
+            if changed:
+                await self.rescan_and_publish()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await self.rescan_and_publish()
+            raise
+
+    def _prune_role_tasks(self) -> None:
+        for role_name, tasks in self._role_tasks.items():
+            finished = {task for task in tasks if task.done()}
+            for task in finished:
+                tasks.discard(task)
+                try:
+                    task.result()
+                except Exception:
+                    pass
+
+    def _finalize_role_task(self, role_name: str, task_id: str, task: asyncio.Task[None]) -> None:
+        self._role_tasks[role_name].discard(task)
+        self._inflight_task_ids.discard(task_id)
+        try:
+            task.result()
+        except Exception:
+            pass
 
 
 def board_to_event(board):
