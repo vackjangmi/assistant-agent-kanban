@@ -112,6 +112,42 @@ def test_scanner_refreshes_request_metadata_after_initial_bootstrap(configured_p
     assert refreshed_task.metadata.integration.base_branch == "feature/rescanned"
 
 
+def test_scanner_backfills_cycle_from_legacy_iterations(tmp_path):
+    from fs_kanban_agent.config import AppConfig
+
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config.bootstrap()
+    task_dir = config.state_dir(TaskState.TODOS) / "legacy-task"
+    task_dir.mkdir(parents=True)
+    (task_dir / "REQUEST.md").write_text("# legacy\n")
+    (task_dir / "metadata.json").write_text(
+        """{
+  "version": 1,
+  "task_id": "legacy1",
+  "title": "legacy task",
+  "slug": "legacy-task",
+  "state": "todos",
+  "created_at": "2026-03-10T00:00:00Z",
+  "updated_at": "2026-03-10T00:00:00Z",
+  "request": {"path": "REQUEST.md"},
+  "target": {"repo_root": ".", "base_branch": "main"},
+  "plan": {"revision": 0, "approved": false, "path": null},
+  "implementation": {"iteration": 2, "workspace": null, "branch": null, "last_result": null},
+  "review": {"iteration": 1, "last_verdict": null},
+  "integration": {"applied": false, "base_branch": "main", "base_commit": null, "patch_path": null, "applied_at": null},
+  "commit": {"status": "pending", "sha": null, "message_path": null},
+  "lease": {"owner": null, "run_id": null, "heartbeat_at": null},
+  "history": [],
+  "errors": []
+}
+"""
+    )
+
+    task = KanbanScanner(config, MetadataStore()).scan()[0]
+
+    assert task.metadata.cycle == 2
+
+
 def test_board_snapshot_includes_active_state_entered_at(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "active-task")

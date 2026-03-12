@@ -101,6 +101,7 @@ class TaskMetadata(BaseModel):
     request: RequestInfo = Field(default_factory=RequestInfo)
     target: TargetRepoInfo = Field(default_factory=TargetRepoInfo)
     plan: PlanInfo = Field(default_factory=PlanInfo)
+    cycle: int = 0
     implementation: ImplementationInfo = Field(default_factory=ImplementationInfo)
     review: ReviewInfo = Field(default_factory=ReviewInfo)
     integration: IntegrationInfo = Field(default_factory=IntegrationInfo)

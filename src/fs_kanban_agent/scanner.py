@@ -62,6 +62,10 @@ class KanbanScanner:
                 if metadata.target.repo_root != normalized_repo_root:
                     metadata.target.repo_root = normalized_repo_root
                     should_save = True
+                synced_cycle = max(metadata.cycle, metadata.implementation.iteration, metadata.review.iteration)
+                if metadata.cycle != synced_cycle:
+                    metadata.cycle = synced_cycle
+                    should_save = True
                 if not metadata.target.base_branch:
                     metadata.target.base_branch = self.config.base_branch
                     should_save = True
@@ -85,7 +89,7 @@ class KanbanScanner:
                     path=str(item.task_dir),
                     updated_at=item.metadata.updated_at,
                     state_entered_at=self._state_entered_at(item.metadata, state),
-                    iteration=max(item.metadata.implementation.iteration, item.metadata.review.iteration),
+                    iteration=item.metadata.cycle,
                     has_error=bool(item.metadata.errors),
                     active_model=self._active_model(item.metadata, state),
                 )
