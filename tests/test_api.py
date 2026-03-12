@@ -506,6 +506,7 @@ def test_api_rejects_delete_for_active_task_state(configured_paths):
 
 def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):
     config, _, _ = configured_paths
+    config.runtime.language = "KO"
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
@@ -532,10 +533,11 @@ def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):
         task_dir = _locate_task_dir(config, Path(created_path).name)
         request_markdown = (task_dir / "REQUEST.md").read_text()
         assert len(task_dir.name) == 7
-        assert "## Goal" in request_markdown
-        assert "## Acceptance Criteria" in request_markdown
+        assert "## 목표" in request_markdown
+        assert "## 승인 기준" in request_markdown
         assert f"repo_root: {target_repo.resolve()}" in request_markdown
         assert "base_branch: develop" in request_markdown
+        assert "language: ko" in request_markdown
 
 
 def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_path):
@@ -615,6 +617,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     with TestClient(app) as client:
         get_response = client.get("/api/settings/models")
         assert get_response.status_code == 200
+        assert get_response.json()["language"] == "EN"
         assert get_response.json()["planner_model"] is None
         assert get_response.json()["planner_session_token_budget"] == 250
         assert get_response.json()["planner_agent_count"] == 1
@@ -641,6 +644,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         put_response = client.put(
             "/api/settings/models",
             json={
+                "language": "KO",
                 "planner_model": "gpt-5-planner",
                 "planner_session_token_budget": 210,
                 "planner_agent_count": 2,
@@ -660,6 +664,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert put_response.status_code == 200
     payload = put_response.json()
     assert payload["saved"] is True
+    assert payload["language"] == "KO"
     assert payload["planner_model"] == "gpt-5-planner"
     assert payload["planner_session_token_budget"] == 210
     assert payload["planner_agent_count"] == 2
@@ -674,6 +679,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["repo_discovery_root"] == "../"
     assert payload["repo_discovery_max_depth"] == 4
     assert app.state.runtime.config.opencode.planner_model == "gpt-5-planner"
+    assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.runtime.planner_agent_count == 2
     assert app.state.runtime.config.opencode.implementer_model == "gpt-5-implementer"
@@ -789,6 +795,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
                 "/api/settings/models",
                 json={
                 "planner_model": "planner-x",
+                "language": "KO",
                 "planner_session_token_budget": 180,
                 "planner_agent_count": 2,
                 "implementer_model": None,
@@ -808,6 +815,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         assert default_local_path.exists()
         persisted = load_config(default_base_path)
         assert persisted.opencode.planner_model == "planner-x"
+        assert persisted.runtime.language == "KO"
         assert persisted.opencode.planner_session_token_budget == 180000
         assert persisted.runtime.planner_agent_count == 2
         assert persisted.opencode.reviewer_model == "reviewer-y"
@@ -825,6 +833,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     config, _, _ = configured_paths
     config.repo_discovery.root = "../custom-root"
     config.runtime.planner_agent_count = 5
+    config.runtime.language = "KO"
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     with TestClient(app) as client:
@@ -845,11 +854,13 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
         )
 
     assert response.status_code == 200
+    assert response.json()["language"] == "KO"
     assert response.json()["repo_discovery_root"] == "../custom-root"
     assert response.json()["repo_discovery_max_depth"] == 5
     assert response.json()["planner_agent_count"] == 5
     assert response.json()["implementer_agent_count"] == 2
     assert app.state.runtime.config.repo_discovery.root == "../custom-root"
+    assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.runtime.planner_agent_count == 5
     assert app.state.runtime.config.runtime.implementer_agent_count == 2
 
@@ -858,6 +869,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
     config, _, _ = configured_paths
     config.opencode.planner_model = "stable-planner"
     config.runtime.planner_agent_count = 3
+    config.runtime.language = "EN"
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     def fail_persist(self, path=None):
@@ -871,6 +883,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
                 "/api/settings/models",
                 json={
                     "planner_model": "new-planner",
+                    "language": "KO",
                     "planner_session_token_budget": 250,
                     "planner_agent_count": 7,
                     "implementer_model": None,
@@ -883,7 +896,28 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
             )
 
     assert app.state.runtime.config.opencode.planner_model == "stable-planner"
+    assert app.state.runtime.config.runtime.language == "EN"
     assert app.state.runtime.config.runtime.planner_agent_count == 3
+
+
+def test_api_rejects_invalid_runtime_language(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "language": "JP",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 422
+    assert config.runtime.language == "EN"
 
 
 def test_api_save_materializes_runtime_agents_immediately(configured_paths):
@@ -1010,6 +1044,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Readable log" in response.text
     assert "Debug log" in response.text
     assert "planner_model" in response.text
+    assert "runtime_language" in response.text
     assert "planner_session_token_budget" in response.text
     assert "planner_agent_count" in response.text
     assert "implementer_model" in response.text

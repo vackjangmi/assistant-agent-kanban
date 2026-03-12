@@ -21,11 +21,14 @@ def build_ui_router() -> APIRouter:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FS Kanban Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <style>
     :root {{ --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --panel-strong: rgba(255,252,247,0.95); --border: rgba(24,32,38,0.15); --accent: #7c4f2c; --accent-strong: #5f3417; --accent-soft: rgba(124,79,44,0.12); --success: #217349; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }}
     * {{ box-sizing: border-box; }}
-    body {{ font-family: Georgia, serif; margin: 0; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }}
+    body {{ font-family: "Nanum Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }}
     body.modal-open {{ overflow: hidden; }}
     header {{ padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }}
     .header-actions {{ display: flex; gap: 10px; flex-wrap: wrap; }}
@@ -71,7 +74,7 @@ def build_ui_router() -> APIRouter:
     .settings-card {{ display: grid; gap: 6px; padding: 16px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }}
     .settings-card strong {{ font-size: 1rem; }}
     .settings-card span {{ color: var(--muted); font-size: 0.95rem; }}
-    .settings-card input {{ width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
+    .settings-card input, .settings-card select {{ width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
     .settings-card small {{ color: var(--muted); font-size: 0.88rem; }}
     .settings-role-fields {{ display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 10px; align-items: end; }}
     .settings-field {{ display: grid; gap: 5px; }}
@@ -315,6 +318,15 @@ def build_ui_router() -> APIRouter:
           <button type="button" id="refresh-model-options" class="ghost-button">Refresh discovered models</button>
         </div>
         <div class="settings-grid">
+          <label class="settings-card" for="runtime_language">
+            <strong>Language</strong>
+            <span>Default language for newly created requests and worker markdown artifacts.</span>
+            <select id="runtime_language" name="language">
+              <option value="EN">English</option>
+              <option value="KO">Korean</option>
+            </select>
+            <small>Only `EN` and `KO` are supported. Existing tasks keep the language already stored in their request metadata.</small>
+          </label>
           <label class="settings-card" for="repo_discovery_root">
             <strong>Repo discovery root</strong>
             <span>Base path scanned for target repo suggestions and request defaults.</span>
@@ -556,6 +568,7 @@ def build_ui_router() -> APIRouter:
     const baseBranchHelp = document.getElementById('base-branch-help');
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
+    const runtimeLanguageInput = document.getElementById('runtime_language');
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const plannerAgentCountInput = document.getElementById('planner_agent_count');
@@ -938,6 +951,7 @@ def build_ui_router() -> APIRouter:
         const response = await fetch(`/api/settings/models${{refresh ? '?refresh=true' : ''}}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Failed to load runtime settings.');
+        runtimeLanguageInput.value = data.language || 'EN';
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         plannerModelInput.value = data.planner_model || '';
@@ -978,6 +992,7 @@ def build_ui_router() -> APIRouter:
           method: 'PUT',
           headers: {{ 'Content-Type': 'application/json' }},
           body: JSON.stringify({{
+            language: runtimeLanguageInput.value || 'EN',
             repo_discovery_root: repoDiscoveryRootInput.value,
             repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
             planner_model: plannerModelInput.value,
@@ -995,6 +1010,7 @@ def build_ui_router() -> APIRouter:
         }});
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Failed to save runtime settings.');
+        runtimeLanguageInput.value = data.language || 'EN';
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         plannerModelInput.value = data.planner_model || '';

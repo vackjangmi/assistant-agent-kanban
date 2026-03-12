@@ -4,17 +4,19 @@ from pathlib import Path
 import asyncio
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import FileResponse
 
 from ..agent_materializer import ensure_runtime_agents
 from ..config import DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
+from ..language import normalize_runtime_language
 from ..omo_config import read_omo_delegation_snapshot
 from ..repo_branches import describe_target_repo_branches
 from ..repo_discovery import discover_target_repos
-from ..request_creator import RequestTemplateData, build_default_scope_sections, create_request, split_lines
+from ..language import runtime_language_code_to_request_language
+from ..request_creator import RequestTemplateData, build_default_scope_sections_for_language, create_request, split_lines
 
 
 class CreateRequestPayload(BaseModel):
@@ -39,6 +41,7 @@ class HumanVerificationPayload(BaseModel):
 
 
 class ModelSettingsPayload(BaseModel):
+    language: str | None = None
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
     planner_agent_count: int | None = Field(default=None, ge=1)
@@ -52,6 +55,16 @@ class ModelSettingsPayload(BaseModel):
     commit_session_token_budget: int | None = Field(default=None, ge=1)
     repo_discovery_root: str | None = None
     repo_discovery_max_depth: int | None = Field(default=None, ge=1)
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def normalize_language(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_runtime_language(value)
+        if normalized is None:
+            raise ValueError("language must be EN or KO")
+        return normalized
 
 
 def _normalize_model_override(value: str | None) -> str | None:
@@ -80,6 +93,13 @@ def _normalize_agent_count(value: int | None) -> int:
     if value is None:
         return 1
     return max(1, value)
+
+
+def _normalize_runtime_language(value: str | None) -> str:
+    normalized = normalize_runtime_language(value)
+    if normalized is None:
+        raise ValueError("language must be EN or KO")
+    return normalized
 
 
 def _apply_config_update(target, updated) -> None:
@@ -113,6 +133,7 @@ def build_router() -> APIRouter:
         snapshot = await asyncio.to_thread(runtime.model_registry.get, refresh=refresh)
         omo_snapshot = read_omo_delegation_snapshot()
         return {
+            "language": runtime.config.runtime.language,
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
             "planner_agent_count": runtime.config.runtime.planner_agent_count,
@@ -151,6 +172,8 @@ def build_router() -> APIRouter:
         runtime = request.app.state.runtime
         next_config = runtime.config.model_copy(deep=True)
         fields_set = payload.model_fields_set
+        if "language" in fields_set:
+            next_config.runtime.language = _normalize_runtime_language(payload.language)
         if "planner_model" in fields_set:
             next_config.opencode.planner_model = _normalize_model_override(payload.planner_model)
         if "planner_session_token_budget" in fields_set:
@@ -181,6 +204,7 @@ def build_router() -> APIRouter:
         _apply_config_update(runtime.config, next_config)
         ensure_runtime_agents(runtime.config)
         return {
+            "language": runtime.config.runtime.language,
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
             "planner_agent_count": runtime.config.runtime.planner_agent_count,
@@ -291,8 +315,9 @@ def build_router() -> APIRouter:
     async def create_request_task(payload: CreateRequestPayload, request: Request):
         runtime = request.app.state.runtime
         normalized_base_branch = payload.base_branch.strip() if payload.base_branch else runtime.config.base_branch
+        request_language = runtime_language_code_to_request_language(runtime.config.runtime.language)
         try:
-            default_scope, default_out_of_scope = build_default_scope_sections(payload.target_repo)
+            default_scope, default_out_of_scope = build_default_scope_sections_for_language(payload.target_repo, language_code=request_language)
             task_dir = create_request(
                 runtime.config,
                 template=RequestTemplateData(
