@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> None:
             return
         for entry in logs.entries:
             print(f"== {entry.name} ==")
-            print(entry.content.rstrip())
+            print((entry.rendered_content or entry.debug_rendered_content or "(no readable log output for this file)").rstrip())
             print()
 
 

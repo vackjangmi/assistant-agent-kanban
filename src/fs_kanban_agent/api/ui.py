@@ -110,6 +110,9 @@ def build_ui_router() -> APIRouter:
      .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
      .log-file-list button {{ text-align: left; }}
      .log-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
+     .log-stage {{ min-width: 0; display: grid; gap: 10px; }}
+     .log-toolbar {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }}
+     .log-toggle-group {{ display: inline-flex; gap: 8px; flex-wrap: wrap; }}
      .log-viewer {{ min-height: 320px; max-height: 50vh; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }}
      .diff-layout {{ display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; }}
      .diff-file-list {{ display: grid; gap: 8px; align-content: start; }}
@@ -376,7 +379,19 @@ def build_ui_router() -> APIRouter:
       <section id="task-panel-logs" class="task-panel" hidden>
         <div class="log-layout">
           <div id="task-log-files" class="log-file-list"></div>
-          <pre id="task-log-viewer" class="log-viewer">Select a log file.</pre>
+          <div class="log-stage">
+            <div class="log-toolbar">
+              <div>
+                <strong>Task logs</strong>
+                <div id="task-log-status" class="muted">Readable log hides low-level event metadata by default.</div>
+              </div>
+              <div class="log-toggle-group">
+                <button type="button" id="task-log-view-readable" class="active">Readable log</button>
+                <button type="button" id="task-log-view-debug">Debug log</button>
+              </div>
+            </div>
+            <pre id="task-log-viewer" class="log-viewer">Select a log file.</pre>
+          </div>
         </div>
       </section>
       <section id="task-panel-changed-files" class="task-panel" hidden>
@@ -493,6 +508,9 @@ def build_ui_router() -> APIRouter:
     const taskDiffDesktop = document.getElementById('task-diff-desktop');
     const taskDiffMobile = document.getElementById('task-diff-mobile');
     const taskLogFiles = document.getElementById('task-log-files');
+    const taskLogStatus = document.getElementById('task-log-status');
+    const taskLogViewReadable = document.getElementById('task-log-view-readable');
+    const taskLogViewDebug = document.getElementById('task-log-view-debug');
     const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
     const taskViewerHost = document.getElementById('task-viewer-host');
@@ -514,6 +532,7 @@ def build_ui_router() -> APIRouter:
     let activeChangedFileId = null;
     let activeArtifactName = null;
     let activeLogName = null;
+    let activeLogView = 'readable';
     let runningTimerHandle = null;
     let activeTaskRequestToken = 0;
     let activeTaskRefreshTimer = null;
@@ -1252,6 +1271,7 @@ def build_ui_router() -> APIRouter:
         activeLogName = null;
         taskLogFiles.innerHTML = '<div class="muted">No logs yet.</div>';
         taskLogViewer.textContent = 'No logs yet.';
+        taskLogStatus.textContent = 'Readable log hides low-level event metadata by default.';
         return;
       }}
       if (!activeLogName || !entries.some((entry) => entry.name === activeLogName)) activeLogName = entries[entries.length - 1].name;
@@ -1259,27 +1279,39 @@ def build_ui_router() -> APIRouter:
       showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), true);
     }}
 
+    function updateLogViewState() {{
+      const debugActive = activeLogView === 'debug';
+      taskLogViewReadable.classList.toggle('active', !debugActive);
+      taskLogViewDebug.classList.toggle('active', debugActive);
+      taskLogStatus.textContent = debugActive
+        ? 'Debug log includes raw event-derived metadata such as token accounting and reasoning counts when available.'
+        : 'Readable log hides low-level event metadata by default.';
+    }}
+
     function showLogEntry(index, scrollToBottom = false) {{
       const entry = activeTaskLogs[index];
       if (!entry) return;
       activeLogName = entry.name;
-      taskLogViewer.textContent = entry.rendered_content || entry.content || '(empty log file)';
+      taskLogViewer.textContent = activeLogView === 'debug'
+        ? (entry.debug_rendered_content || '(no debug metadata for this log yet)')
+        : (entry.rendered_content || '(no readable log output for this file)');
       taskLogFiles.querySelectorAll('button').forEach((button, buttonIndex) => {{
         button.classList.toggle('active', buttonIndex === index);
       }});
+      updateLogViewState();
       if (scrollToBottom) taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
     }}
 
     function appendRealtimeLog(eventPayload) {{
       const payload = eventPayload.payload || eventPayload;
-      if (!payload || !payload.log_name || typeof payload.content !== 'string') return;
+      if (!payload || !payload.log_name) return;
       let entry = activeTaskLogs.find((item) => item.name === payload.log_name);
       if (!entry) {{
-        entry = {{ name: payload.log_name, path: payload.log_name, content: '', rendered_content: '', updated_at: new Date().toISOString() }};
+        entry = {{ name: payload.log_name, path: payload.log_name, rendered_content: '', debug_rendered_content: '', updated_at: new Date().toISOString() }};
         activeTaskLogs = [...activeTaskLogs, entry];
       }}
-      entry.content = payload.content;
       entry.rendered_content = typeof payload.rendered_content === 'string' ? payload.rendered_content : '';
+      entry.debug_rendered_content = typeof payload.debug_rendered_content === 'string' ? payload.debug_rendered_content : '';
       entry.updated_at = new Date().toISOString();
       renderTaskLogEntries(activeTaskLogs);
     }}
@@ -1301,6 +1333,7 @@ def build_ui_router() -> APIRouter:
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder('Select the Changed files tab to inspect the stored review patch.');
         taskLogFiles.innerHTML = '';
+        updateLogViewState();
         taskLogViewer.textContent = 'Select the Logs tab to load OpenCode output.';
         taskMarkdownFiles.innerHTML = '';
         taskArtifactName.textContent = 'No document selected';
@@ -1645,6 +1678,8 @@ def build_ui_router() -> APIRouter:
     taskChangedFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); }});
     taskMarkdownFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-artifact-index]'); if (!button || !activeTaskDetail) return; const file = activeTaskDetail.markdown_files[Number(button.dataset.artifactIndex)]; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); }});
     taskLogFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); }});
+    taskLogViewReadable.addEventListener('click', () => {{ activeLogView = 'readable'; updateLogViewState(); showLogEntry(activeTaskLogs.findIndex((entry) => entry.name === activeLogName)); }});
+    taskLogViewDebug.addEventListener('click', () => {{ activeLogView = 'debug'; updateLogViewState(); showLogEntry(activeTaskLogs.findIndex((entry) => entry.name === activeLogName)); }});
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
