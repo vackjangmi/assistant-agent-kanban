@@ -65,6 +65,8 @@ def test_reviewer_worker_returns_to_todos_on_needs_changes(configured_paths):
     assert asyncio.run(worker.run_once()) is True
     updated = scanner.scan()[0]
     assert updated.state == TaskState.TODOS
+    assert updated.metadata.cycle == 1
+    assert updated.metadata.review.iteration == 1
     assert updated.metadata.retry_gate.reason == "review-needs-changes"
     assert updated.metadata.retry_gate.consecutive_count == 1
     assert updated.metadata.retry_gate.not_before is None
@@ -87,6 +89,8 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
 
     assert asyncio.run(worker.run_once()) is True
     assert scanner.scan()[0].state == TaskState.COMPLETED_REVIEWS
+    assert scanner.scan()[0].metadata.cycle == 1
+    assert scanner.scan()[0].metadata.review.iteration == 1
     assert (repo_root / "app.txt").read_text() == "hello\n"
     review_json = json.loads((scanner.scan()[0].task_dir / "REVIEW-001.json").read_text())
     assert "Verdict: PASS" in review_json["assistant_text"]
@@ -175,6 +179,8 @@ def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths
     (first_task.task_dir / "HUMAN-VERIFY-001.md").write_text("Please re-check replay flow.\n")
     (first_task.task_dir / "WORK-000.md").write_text("older work\n")
     first_task.metadata.review.session_id = "ses_rev_1"
+    first_task.metadata.cycle = 1
+    first_task.metadata.implementation.iteration = 1
     first_task.metadata.review.iteration = 1
     metadata_store.save(first_task.task_dir, first_task.metadata)
 

@@ -56,9 +56,9 @@ class ReviewerWorker(WorkerBase):
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review skipped: no workspace changes")
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
-            run_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.review.iteration + 1:03d}.jsonl"
+            run_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.cycle:03d}.jsonl"
             prompt = self.build_prompt(
-                self._build_reviewer_source(reviewing.task_dir, reviewing.metadata.implementation.iteration),
+                self._build_reviewer_source(reviewing.task_dir, reviewing.metadata.cycle),
                 reviewing.metadata,
                 phase="reviewer",
             )
@@ -85,10 +85,11 @@ class ReviewerWorker(WorkerBase):
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review failed: empty artifact")
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
-            reviewing.metadata.review.iteration += 1
+            reviewing.metadata.implementation.iteration = reviewing.metadata.cycle
+            reviewing.metadata.review.iteration = reviewing.metadata.cycle
             verdict = "PASS" if "Verdict: PASS" in result.assistant_text or "VERDICT: PASS" in result.assistant_text else "NEEDS_CHANGES"
             reviewing.metadata.review.last_verdict = verdict
-            review_name = f"REVIEW-{reviewing.metadata.review.iteration:03d}"
+            review_name = f"REVIEW-{reviewing.metadata.cycle:03d}"
             self.write_result_artifacts(reviewing.task_dir, review_name, result)
             self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
             if verdict != "PASS":
