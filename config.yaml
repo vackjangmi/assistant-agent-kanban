@@ -1,0 +1,39 @@
+kanban_root: ai-kanban
+repo_root: .
+base_branch: main
+
+opencode:
+  binary: opencode
+  attach_url: null
+  planner_agent: fs-kanban-planner
+  planner_model: openai/gpt-5.4
+  planner_session_token_budget: 250000
+  implementer_agent: fs-kanban-implementer
+  implementer_model: openai/gpt-5.3-codex
+  implementer_session_token_budget: 250000
+  reviewer_agent: fs-kanban-reviewer
+  reviewer_model: openai/gpt-5.4
+  reviewer_session_token_budget: 250000
+  commit_agent: fs-kanban-committer
+  commit_model: openai/gpt-5.3-codex
+  commit_session_token_budget: 250000
+  timeout_seconds: 1800
+
+workspace:
+  strategy: clone-overlay
+  root: ai-kanban/_runtime/workspaces
+  overlay_copy: []
+  overlay_symlink: []
+
+locks:
+  heartbeat_seconds: 10
+  stale_after_seconds: 60
+  timeout_seconds: 5
+
+runtime:
+  poll_interval_seconds: 0.2
+  auto_dispatch: true
+
+repo_discovery:
+  root: ../
+  max_depth: 1

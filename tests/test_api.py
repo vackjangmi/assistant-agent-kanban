@@ -587,6 +587,7 @@ def test_api_uses_runtime_default_base_branch_when_request_omits_it(configured_p
 def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkeypatch):
     config, _, _ = configured_paths
     config_path = tmp_path / "dashboard-config.yaml"
+    local_config_path = tmp_path / "config.local.yaml"
     config.persist(config_path)
     omo_root = tmp_path / "xdg-config"
     omo_config_dir = omo_root / "opencode"
@@ -618,7 +619,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["commit_session_token_budget"] == 250
         assert get_response.json()["repo_discovery_root"] == str(config.repo_discovery.root)
         assert get_response.json()["repo_discovery_max_depth"] == config.repo_discovery.max_depth
-        assert get_response.json()["config_path"] == str(config_path.resolve())
+        assert get_response.json()["config_path"] == str(local_config_path.resolve())
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["discovery_status"] == "ready"
         assert get_response.json()["discovery_error"] is None
@@ -705,8 +706,12 @@ def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_p
 
 def test_api_persists_model_settings_to_default_local_config_when_unloaded(configured_paths, tmp_path):
     config, _, _ = configured_paths
+    default_base_path = tmp_path / "config.yaml"
     default_local_path = tmp_path / "config.local.yaml"
+    default_base_path.write_text("opencode:\n  planner_model: base-planner\n")
+    original_default_config_path = config_module.DEFAULT_CONFIG_PATH
     original_default_local_path = config_module.DEFAULT_LOCAL_CONFIG_PATH
+    config_module.DEFAULT_CONFIG_PATH = default_base_path
     config_module.DEFAULT_LOCAL_CONFIG_PATH = default_local_path
     try:
         app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
@@ -730,7 +735,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
 
         assert response.status_code == 200
         assert default_local_path.exists()
-        persisted = load_config(default_local_path)
+        persisted = load_config(default_base_path)
         assert persisted.opencode.planner_model == "planner-x"
         assert persisted.opencode.planner_session_token_budget == 180000
         assert persisted.opencode.reviewer_model == "reviewer-y"
@@ -739,6 +744,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         assert persisted.repo_discovery.max_depth == 3
         assert response.json()["config_path"] == str(default_local_path.resolve())
     finally:
+        config_module.DEFAULT_CONFIG_PATH = original_default_config_path
         config_module.DEFAULT_LOCAL_CONFIG_PATH = original_default_local_path
 
 
