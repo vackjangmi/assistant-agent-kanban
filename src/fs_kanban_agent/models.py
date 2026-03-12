@@ -69,11 +69,13 @@ class IntegrationInfo(BaseModel):
     applied_at: datetime | None = None
     original_branch: str | None = None
     review_branch: str | None = None
+    final_branch: str | None = None
 
 
 class CommitInfo(BaseModel):
     status: str = "pending"
     sha: str | None = None
+    review_sha: str | None = None
     message_path: str | None = None
     prepared_message: str | None = None
 
