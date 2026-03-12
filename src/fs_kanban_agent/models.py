@@ -69,6 +69,7 @@ class IntegrationInfo(BaseModel):
     applied_at: datetime | None = None
     original_branch: str | None = None
     review_branch: str | None = None
+    final_branch_summary: str | None = None
     final_branch: str | None = None
 
 
