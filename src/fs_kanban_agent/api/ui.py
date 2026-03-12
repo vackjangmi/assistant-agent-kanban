@@ -104,13 +104,47 @@ def build_ui_router() -> APIRouter:
     .task-danger-actions {{ border: 1px solid rgba(163,58,42,0.24); background: rgba(163,58,42,0.08); padding: 14px; margin-bottom: 14px; }}
     .task-danger-actions[hidden] {{ display: none; }}
     .danger-button {{ background: var(--danger); border-color: var(--danger); color: #fff; }}
-    .verification-actions textarea {{ width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
-    .log-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; }}
-    .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
-    .log-file-list button {{ text-align: left; }}
-    .log-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
-    .log-viewer {{ min-height: 320px; max-height: 50vh; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }}
-    .muted {{ color: var(--muted); }}
+     .verification-actions textarea {{ width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }}
+     .log-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; }}
+     .log-file-list {{ display: grid; gap: 8px; align-content: start; }}
+     .log-file-list button {{ text-align: left; }}
+     .log-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
+     .log-viewer {{ min-height: 320px; max-height: 50vh; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }}
+     .diff-layout {{ display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; }}
+     .diff-file-list {{ display: grid; gap: 8px; align-content: start; }}
+     .diff-file-list button {{ text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }}
+     .diff-file-list button.active {{ background: var(--accent); color: #fff; border-color: var(--accent-strong); }}
+     .diff-file-title {{ display: block; font-weight: 700; overflow-wrap: anywhere; }}
+     .diff-file-meta {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.82rem; color: inherit; opacity: 0.82; }}
+     .diff-stage {{ min-width: 0; display: grid; gap: 10px; }}
+     .diff-summary {{ display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }}
+     .diff-summary strong {{ display: block; overflow-wrap: anywhere; }}
+     .diff-summary span {{ color: var(--muted); font-size: 0.92rem; }}
+     .diff-badges {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+     .diff-badge {{ display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }}
+     .diff-shell {{ border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: hidden; }}
+     .diff-desktop, .diff-mobile {{ max-height: 56vh; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93rem; line-height: 1.5; }}
+     .diff-desktop[hidden], .diff-mobile[hidden] {{ display: none; }}
+     .diff-hunk {{ border-top: 1px solid rgba(24,32,38,0.08); }}
+     .diff-hunk:first-child {{ border-top: 0; }}
+     .diff-hunk-header {{ padding: 8px 12px; background: rgba(124,79,44,0.1); color: var(--accent-strong); font-size: 0.84rem; overflow-wrap: anywhere; }}
+     .diff-grid {{ display: grid; }}
+     .diff-row {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }}
+     .diff-cell {{ display: grid; grid-template-columns: 56px 22px minmax(0, 1fr); min-width: 0; border-top: 1px solid rgba(24,32,38,0.06); }}
+     .diff-cell + .diff-cell {{ border-left: 1px solid rgba(24,32,38,0.08); }}
+     .diff-cell.empty {{ background: rgba(24,32,38,0.03); }}
+     .diff-cell.context {{ background: rgba(255,255,255,0.54); }}
+     .diff-cell.add {{ background: rgba(33,115,73,0.1); }}
+     .diff-cell.remove {{ background: rgba(163,58,42,0.1); }}
+     .diff-line-number {{ padding: 0 10px; border-right: 1px solid rgba(24,32,38,0.08); color: var(--muted); text-align: right; user-select: none; }}
+     .diff-marker {{ display: flex; align-items: start; justify-content: center; padding-top: 1px; color: var(--muted); user-select: none; }}
+     .diff-content {{ display: block; min-width: 0; padding-right: 10px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }}
+     .diff-mobile-line {{ display: grid; grid-template-columns: 56px 56px 22px minmax(0, 1fr); border-top: 1px solid rgba(24,32,38,0.06); }}
+     .diff-mobile-line.context {{ background: rgba(255,255,255,0.54); }}
+     .diff-mobile-line.add {{ background: rgba(33,115,73,0.1); }}
+     .diff-mobile-line.remove {{ background: rgba(163,58,42,0.1); }}
+     .diff-empty {{ padding: 18px; color: var(--muted); }}
+     .muted {{ color: var(--muted); }}
     .editor-toolbar {{ display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }}
     .artifact-layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; }}
     .artifact-stage {{ min-width: 0; }}
@@ -122,7 +156,8 @@ def build_ui_router() -> APIRouter:
     .mode-pill {{ display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }}
     .toastui-editor-defaultUI, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .toastui-editor-contents {{ max-width: 100%; min-width: 0; }}
     .viewer-host .toastui-editor-contents {{ overflow-wrap: anywhere; word-break: break-word; }}
-    @media (max-width: 900px) {{ #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .task-model-row {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} }}
+     @media (max-width: 900px) {{ #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .task-model-row, .diff-layout {{ grid-template-columns: 1fr; }} .modal {{ padding: 12px; align-items: stretch; }} .modal-panel {{ max-height: none; }} .form-actions {{ flex-direction: column-reverse; }} .form-actions button {{ width: 100%; }} .diff-desktop {{ display: none; }} .diff-mobile {{ display: block; }} }}
+     @media (min-width: 901px) {{ .diff-mobile {{ display: none; }} }}
   </style>
 </head>
 <body>
@@ -300,6 +335,7 @@ def build_ui_router() -> APIRouter:
       <div class="task-tabs">
         <button type="button" id="task-tab-overview" class="active">Overview</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
+        <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
         <button type="button" id="task-tab-logs">Logs</button>
       </div>
       <section id="task-panel-overview" class="task-panel">
@@ -338,6 +374,30 @@ def build_ui_router() -> APIRouter:
         <div class="log-layout">
           <div id="task-log-files" class="log-file-list"></div>
           <pre id="task-log-viewer" class="log-viewer">Select a log file.</pre>
+        </div>
+      </section>
+      <section id="task-panel-changed-files" class="task-panel" hidden>
+        <div class="diff-layout">
+          <div id="task-changed-files" class="diff-file-list"></div>
+          <div class="diff-stage">
+            <div id="task-changed-file-summary" class="diff-summary">
+              <div>
+                <strong>Changed files</strong>
+                <span>Select a file to inspect the stored review patch.</span>
+              </div>
+              <div class="diff-badges">
+                <span class="diff-badge">Read-only patch view</span>
+              </div>
+            </div>
+            <div id="task-diff-shell" class="diff-shell">
+              <div id="task-diff-desktop" class="diff-desktop">
+                <div class="diff-empty">Select a changed file.</div>
+              </div>
+              <div id="task-diff-mobile" class="diff-mobile">
+                <div class="diff-empty">Select a changed file.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
       <section id="task-panel-editor" class="task-panel" hidden>
@@ -408,9 +468,11 @@ def build_ui_router() -> APIRouter:
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
+    const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
     const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
+    const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const taskVerificationActions = document.getElementById('task-verification-actions');
@@ -423,6 +485,10 @@ def build_ui_router() -> APIRouter:
     const taskDeleteActions = document.getElementById('task-delete-actions');
     const taskDeleteStatus = document.getElementById('task-delete-status');
     const deleteTaskButton = document.getElementById('delete-task');
+    const taskChangedFiles = document.getElementById('task-changed-files');
+    const taskChangedFileSummary = document.getElementById('task-changed-file-summary');
+    const taskDiffDesktop = document.getElementById('task-diff-desktop');
+    const taskDiffMobile = document.getElementById('task-diff-mobile');
     const taskLogFiles = document.getElementById('task-log-files');
     const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
@@ -442,9 +508,13 @@ def build_ui_router() -> APIRouter:
     let activeTaskTab = 'overview';
     let activeTaskLogs = [];
     let activeTaskDetail = null;
+    let activeChangedFileId = null;
     let activeArtifactName = null;
     let activeLogName = null;
     let runningTimerHandle = null;
+    let activeTaskRequestToken = 0;
+    let activeTaskRefreshTimer = null;
+    let taskDetailStale = false;
     let planSourceMarkdown = '';
     let planEditMode = false;
     let planEditor = null;
@@ -503,6 +573,26 @@ def build_ui_router() -> APIRouter:
       if (runningTimerHandle) clearInterval(runningTimerHandle);
       updateRunningClocks();
       runningTimerHandle = window.setInterval(updateRunningClocks, 1000);
+    }}
+
+    function clearTaskRefreshTimer() {{
+      if (activeTaskRefreshTimer) {{
+        clearTimeout(activeTaskRefreshTimer);
+        activeTaskRefreshTimer = null;
+      }}
+    }}
+
+    function setTaskDetailStale(isStale, message = '') {{
+      taskDetailStale = isStale;
+      if (isStale && message) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = message;
+      }} else if (!isStale && !taskModalError.textContent) {{
+        taskModalError.hidden = true;
+      }}
+      updatePlanActionState();
+      updateHumanVerificationState();
+      updateTaskDeleteState();
     }}
 
     async function loadTargetRepoOptions() {{
@@ -734,6 +824,11 @@ def build_ui_router() -> APIRouter:
     function setTaskModalOpen(isOpen) {{
       taskModal.hidden = !isOpen;
       taskModal.setAttribute('aria-hidden', String(!isOpen));
+      if (!isOpen) {{
+        clearTaskRefreshTimer();
+        activeTaskRequestToken += 1;
+        taskDetailStale = false;
+      }}
       syncBodyModalState();
     }}
 
@@ -827,13 +922,118 @@ def build_ui_router() -> APIRouter:
     function setTaskTab(tab) {{
       activeTaskTab = tab;
       taskTabOverview.classList.toggle('active', tab === 'overview');
+      taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskTabLogs.classList.toggle('active', tab === 'logs');
       taskPanelOverview.hidden = tab !== 'overview';
+      taskPanelChangedFiles.hidden = tab !== 'changed-files';
       taskPanelEditor.hidden = tab !== 'editor';
       taskPanelLogs.hidden = tab !== 'logs';
+      if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
+    }}
+
+    function diffMarker(kind) {{
+      if (kind === 'add') return '+';
+      if (kind === 'remove') return '-';
+      return kind === 'empty' ? '' : ' ';
+    }}
+
+    function diffLineNumber(value) {{
+      return value == null ? '' : String(value);
+    }}
+
+    function renderChangedFileButtons(files) {{
+      if (!files.length) {{
+        taskChangedFiles.innerHTML = '<div class="muted">No changed files captured.</div>';
+        return;
+      }}
+      taskChangedFiles.innerHTML = files.map((file) => `
+        <button type="button" class="${{file.id === activeChangedFileId ? 'active' : ''}}" data-changed-file-id="${{escapeHtml(file.id)}}">
+          <span class="diff-file-title">${{escapeHtml(file.display_path)}}</span>
+          <span class="diff-file-meta">
+            <span>${{escapeHtml(file.change_type)}}</span>
+            <span>+${{file.additions}}</span>
+            <span>-${{file.deletions}}</span>
+          </span>
+        </button>
+      `).join('');
+    }}
+
+    function renderChangedFileSummaryCard(summary) {{
+      taskChangedFileSummary.innerHTML = `
+        <div>
+          <strong>${{escapeHtml(summary.display_path)}}</strong>
+          <span>${{summary.hunk_count}} hunk${{summary.hunk_count === 1 ? '' : 's'}} from the stored review patch.</span>
+        </div>
+        <div class="diff-badges">
+          <span class="diff-badge">${{escapeHtml(summary.change_type)}}</span>
+          <span class="diff-badge">+${{summary.additions}}</span>
+          <span class="diff-badge">-${{summary.deletions}}</span>
+        </div>
+      `;
+    }}
+
+    function renderDiffPlaceholder(message) {{
+      taskDiffDesktop.innerHTML = `<div class="diff-empty">${{escapeHtml(message)}}</div>`;
+      taskDiffMobile.innerHTML = `<div class="diff-empty">${{escapeHtml(message)}}</div>`;
+    }}
+
+    function renderDiffDesktop(detail) {{
+      if (detail.summary.is_binary) {{
+        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
+      }}
+      if (!detail.hunks.length) {{
+        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
+      }}
+      return detail.hunks.map((hunk) => `
+        <section class="diff-hunk">
+          <div class="diff-hunk-header">${{escapeHtml(hunk.header)}}</div>
+          <div class="diff-grid">${{hunk.rows.map((row) => `
+            <div class="diff-row">
+              <div class="diff-cell ${{row.left.kind}}">
+                <span class="diff-line-number">${{diffLineNumber(row.left.line_number)}}</span>
+                <span class="diff-marker">${{diffMarker(row.left.kind)}}</span>
+                <span class="diff-content">${{escapeHtml(row.left.content || ' ')}}</span>
+              </div>
+              <div class="diff-cell ${{row.right.kind}}">
+                <span class="diff-line-number">${{diffLineNumber(row.right.line_number)}}</span>
+                <span class="diff-marker">${{diffMarker(row.right.kind)}}</span>
+                <span class="diff-content">${{escapeHtml(row.right.content || ' ')}}</span>
+              </div>
+            </div>
+          `).join('')}}</div>
+        </section>
+      `).join('');
+    }}
+
+    function renderDiffMobile(detail) {{
+      if (detail.summary.is_binary) {{
+        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
+      }}
+      if (!detail.hunks.length) {{
+        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
+      }}
+      return detail.hunks.map((hunk) => `
+        <section class="diff-hunk">
+          <div class="diff-hunk-header">${{escapeHtml(hunk.header)}}</div>
+          <div class="diff-grid">${{hunk.unified_lines.map((line) => `
+            <div class="diff-mobile-line ${{line.kind}}">
+              <span class="diff-line-number">${{diffLineNumber(line.old_line_number)}}</span>
+              <span class="diff-line-number">${{diffLineNumber(line.new_line_number)}}</span>
+              <span class="diff-marker">${{diffMarker(line.kind)}}</span>
+              <span class="diff-content">${{escapeHtml(line.content || ' ')}}</span>
+            </div>
+          `).join('')}}</div>
+        </section>
+      `).join('');
+    }}
+
+    function renderChangedFileDetail(detail) {{
+      renderChangedFileSummaryCard(detail.summary);
+      taskDiffDesktop.innerHTML = renderDiffDesktop(detail);
+      taskDiffMobile.innerHTML = renderDiffMobile(detail);
     }}
 
     function ensureMarkdownViewer(value) {{
@@ -914,7 +1114,7 @@ def build_ui_router() -> APIRouter:
       approvePlanButton.hidden = !editableArtifact;
       togglePlanEditButton.textContent = planEditMode ? 'Back to viewer' : 'Edit PLAN.md';
       savePlanButton.disabled = !editableArtifact || !planEditMode;
-      approvePlanButton.disabled = !editableArtifact;
+       approvePlanButton.disabled = !editableArtifact || taskDetailStale;
     }}
 
     function updateHumanVerificationState() {{
@@ -926,12 +1126,13 @@ def build_ui_router() -> APIRouter:
       rejectVerificationButton.hidden = !canVerify;
       approveVerificationButton.hidden = !canVerify;
       taskVerificationNoteWrap.hidden = !canVerify;
-      rejectVerificationButton.disabled = !canVerify || !taskVerificationNote.value.trim();
-      approveVerificationButton.disabled = !canVerify;
+      startVerificationButton.disabled = !canStart || taskDetailStale;
+      rejectVerificationButton.disabled = !canVerify || !taskVerificationNote.value.trim() || taskDetailStale;
+      approveVerificationButton.disabled = !canVerify || taskDetailStale;
       if (canStart) {{
-        taskVerificationStatus.textContent = 'AI review passed. Start verification to apply the workspace patch to the target repo for manual checking.';
+        taskVerificationStatus.textContent = taskDetailStale ? 'Task state changed while this modal was paused for a local PLAN.md edit. Save or exit the edit view so the modal can refresh before starting verification.' : 'AI review passed. Start verification to apply the workspace patch to the target repo for manual checking.';
       }} else if (canVerify) {{
-        taskVerificationStatus.textContent = 'Patch is applied in the target repo. Reject rolls it back and sends the task back to TODO; approve commits and completes the task.';
+        taskVerificationStatus.textContent = taskDetailStale ? 'Task state changed while this modal was paused for a local PLAN.md edit. Refresh the detail view before acting on human verification.' : 'Patch is applied in the target repo. Reject rolls it back and sends the task back to TODO; approve commits and completes the task.';
       }} else {{
         taskVerificationStatus.textContent = 'Manual verification actions appear here.';
       }}
@@ -943,7 +1144,7 @@ def build_ui_router() -> APIRouter:
       const available = Boolean(state);
       taskDeleteActions.hidden = !available;
       deleteTaskButton.hidden = !available;
-      deleteTaskButton.disabled = !available || blocked;
+      deleteTaskButton.disabled = !available || blocked || taskDetailStale;
       if (!available) {{
         taskDeleteStatus.textContent = 'Deletion is only available when the task details finish loading.';
         return;
@@ -952,13 +1153,19 @@ def build_ui_router() -> APIRouter:
         taskDeleteStatus.textContent = 'Delete is blocked while this task is actively running. Wait for it to leave planning, implementing, reviewing, or human-verifying.';
         return;
       }}
+      if (taskDetailStale) {{
+        taskDeleteStatus.textContent = 'Task details are temporarily stale while the modal protects an unsaved PLAN.md edit. Save or leave the edit view to refresh before deleting.';
+        return;
+      }}
       taskDeleteStatus.textContent = 'This removes the task from the board and deletes its managed workspace artifacts.';
     }}
 
     function renderTaskOverview(detail) {{
       const metadata = detail.metadata;
       activeTaskDetail = detail;
+      setTaskDetailStale(false);
       const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
+      const changedFilesVisible = metadata.state === 'human-verifying' && detail.changed_files.length > 0;
       const viewerVisible = detail.markdown_files.length > 0;
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
       const stageModels = [
@@ -966,8 +1173,11 @@ def build_ui_router() -> APIRouter:
         {{ label: 'Implementer model used', value: metadata.implementation.resolved_model, note: 'Captured from the workspace implementation run.' }},
         {{ label: 'Reviewer model used', value: metadata.review.resolved_model, note: 'Captured from the AI review run.' }},
       ];
+      taskTabChangedFiles.hidden = !changedFilesVisible;
       taskTabEditor.hidden = !viewerVisible;
+      if (!changedFilesVisible && taskTabChangedFiles.classList.contains('active')) setTaskTab('overview');
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
+      if (!activeChangedFileId || !detail.changed_files.some((file) => file.id === activeChangedFileId)) activeChangedFileId = detail.changed_files[0]?.id || null;
       if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files);
       planEditMode = false;
       taskModeBadge.textContent = 'Viewer mode';
@@ -975,6 +1185,8 @@ def build_ui_router() -> APIRouter:
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
+      renderChangedFileButtons(detail.changed_files);
+      renderDiffPlaceholder(changedFilesVisible ? 'Select a changed file.' : 'Changed files appear here when a human-verifying task has a stored review patch.');
       renderArtifactButtons(detail.markdown_files);
       taskOverview.innerHTML = `
         <div class="task-meta-grid">
@@ -1002,6 +1214,10 @@ def build_ui_router() -> APIRouter:
         <div class="task-section">
           <h3>Log files</h3>
           <ul class="task-list">${{detail.log_files.length ? detail.log_files.map((file) => `<li>${{escapeHtml(file)}}</li>`).join('') : '<li>No logs yet</li>'}}</ul>
+        </div>
+        <div class="task-section">
+          <h3>Changed files</h3>
+          <ul class="task-list">${{detail.changed_files.length ? detail.changed_files.map((file) => `<li>${{escapeHtml(file.display_path)}} (+${{file.additions}} / -${{file.deletions}})</li>`).join('') : '<li>No changed files captured for this task state.</li>'}}</ul>
         </div>
         <div class="task-section">
           <h3>Latest error</h3>
@@ -1065,44 +1281,72 @@ def build_ui_router() -> APIRouter:
       renderTaskLogEntries(activeTaskLogs);
     }}
 
-    async function loadTaskDetail(taskId, preserveTab = false) {{
+    async function loadTaskDetail(taskId, preserveTab = false, options = {{}}) {{
+      const {{ softRefresh = false }} = options;
       const nextTab = preserveTab ? activeTaskTab : 'editor';
+      const requestToken = ++activeTaskRequestToken;
       activeTaskId = taskId;
-      activeTaskLogs = [];
-      activeLogName = null;
-      activeTaskDetail = null;
       taskModalError.hidden = true;
-      taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
-      taskLogFiles.innerHTML = '';
-      taskLogViewer.textContent = 'Select the Logs tab to load OpenCode output.';
-      taskMarkdownFiles.innerHTML = '';
-      taskArtifactName.textContent = 'No document selected';
-      setPlanEditorContent('');
-      setArtifactMode(false);
-      activeArtifactName = null;
-      planEditMode = false;
-      savePlanButton.disabled = true;
-      taskModeBadge.textContent = 'Viewer mode';
-      taskEditorStatus.textContent = 'Select a markdown artifact to view.';
-      taskVerificationNote.value = '';
-      updateHumanVerificationState();
-      updateTaskDeleteState();
-      taskTabEditor.hidden = true;
-      setTaskTab(nextTab);
-      setTaskModalOpen(true);
+      setTaskDetailStale(false);
+      if (!softRefresh) {{
+        activeTaskLogs = [];
+        activeLogName = null;
+        activeTaskDetail = null;
+        activeChangedFileId = null;
+        taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
+        taskChangedFiles.innerHTML = '';
+        renderDiffPlaceholder('Select the Changed files tab to inspect the stored review patch.');
+        taskLogFiles.innerHTML = '';
+        taskLogViewer.textContent = 'Select the Logs tab to load OpenCode output.';
+        taskMarkdownFiles.innerHTML = '';
+        taskArtifactName.textContent = 'No document selected';
+        setPlanEditorContent('');
+        setArtifactMode(false);
+        activeArtifactName = null;
+        planEditMode = false;
+        savePlanButton.disabled = true;
+        taskModeBadge.textContent = 'Viewer mode';
+        taskEditorStatus.textContent = 'Select a markdown artifact to view.';
+        taskVerificationNote.value = '';
+        updateHumanVerificationState();
+        updateTaskDeleteState();
+        taskTabChangedFiles.hidden = true;
+        taskTabEditor.hidden = true;
+        setTaskTab(nextTab);
+        setTaskModalOpen(true);
+      }}
       try {{
         const response = await fetch(`/api/tasks/${{taskId}}`);
         const detail = await response.json();
         if (!response.ok) throw new Error(detail.detail || 'Failed to load task details.');
+        if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         renderTaskOverview(detail);
-        if (nextTab === 'editor' && detail.markdown_files.length) loadMarkdownArtifact(taskId, activeArtifactName);
-        if (nextTab === 'logs') loadTaskLogs(taskId, true);
+        if (nextTab === 'changed-files' && detail.changed_files.length) await loadChangedFile(taskId, activeChangedFileId, true);
+        if (nextTab === 'editor' && detail.markdown_files.length) await loadMarkdownArtifact(taskId, activeArtifactName);
+        if (nextTab === 'logs') await loadTaskLogs(taskId, true);
       }} catch (error) {{
+        if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskOverview.innerHTML = '<div class="muted">Unable to load task details.</div>';
+        if (!softRefresh) taskOverview.innerHTML = '<div class="muted">Unable to load task details.</div>';
         updateTaskDeleteState();
       }}
+    }}
+
+    function scheduleActiveTaskRefresh() {{
+      if (taskModal.hidden || !activeTaskId) return;
+      if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md' && isPlanDirty()) {{
+        setTaskDetailStale(true, 'Task state changed while you were editing PLAN.md locally. Save the draft or leave edit mode to refresh the latest task status.');
+        return;
+      }}
+      clearTaskRefreshTimer();
+      activeTaskRefreshTimer = window.setTimeout(() => {{
+        activeTaskRefreshTimer = null;
+        loadTaskDetail(activeTaskId, true, {{ softRefresh: true }}).catch((error) => {{
+          taskModalError.hidden = false;
+          taskModalError.textContent = error.message;
+        }});
+      }}, 120);
     }}
 
     async function deleteTask() {{
@@ -1140,12 +1384,34 @@ def build_ui_router() -> APIRouter:
         const response = await fetch(`/api/tasks/${{taskId}}/logs`);
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || 'Failed to load task logs.');
+        if (taskId !== activeTaskId) return;
         renderTaskLogEntries(payload.entries);
       }} catch (error) {{
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
         taskLogFiles.innerHTML = '<div class="muted">Failed to load logs.</div>';
         taskLogViewer.textContent = 'Failed to load logs.';
+      }}
+    }}
+
+    async function loadChangedFile(taskId, changedFileId = null, silent = false) {{
+      if (!activeTaskDetail || !activeTaskDetail.changed_files.length) return;
+      const selected = changedFileId && activeTaskDetail.changed_files.some((file) => file.id === changedFileId)
+        ? changedFileId
+        : activeTaskDetail.changed_files[0].id;
+      activeChangedFileId = selected;
+      renderChangedFileButtons(activeTaskDetail.changed_files);
+      if (!silent) renderDiffPlaceholder('Loading stored patch...');
+      try {{
+        const response = await fetch(`/api/tasks/${{taskId}}/changed-files/${{encodeURIComponent(activeChangedFileId)}}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to load changed file diff.');
+        if (taskId !== activeTaskId || activeChangedFileId !== selected) return;
+        renderChangedFileDetail(payload);
+      }} catch (error) {{
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        renderDiffPlaceholder('Failed to load changed file diff.');
       }}
     }}
 
@@ -1161,6 +1427,7 @@ def build_ui_router() -> APIRouter:
         const response = await fetch(`/api/tasks/${{taskId}}/artifacts/${{activeArtifactName}}`);
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || `Failed to load ${{activeArtifactName}}.`);
+        if (taskId !== activeTaskId) return;
         planSourceMarkdown = payload.content;
         setPlanEditorContent(payload.content);
         const editable = activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md' && planEditMode;
@@ -1184,6 +1451,7 @@ def build_ui_router() -> APIRouter:
       setArtifactMode(planEditMode);
       updatePlanActionState();
       await loadMarkdownArtifact(activeTaskId, activeArtifactName);
+      if (!planEditMode && taskDetailStale) scheduleActiveTaskRefresh();
     }}
 
     async function savePlanArtifact() {{
@@ -1200,6 +1468,7 @@ def build_ui_router() -> APIRouter:
         if (!response.ok) throw new Error(payload.detail || 'Failed to save PLAN.md.');
         planSourceMarkdown = getPlanEditorContent();
         taskEditorStatus.textContent = 'Saved PLAN.md.';
+        if (taskDetailStale) scheduleActiveTaskRefresh();
       }} catch (error) {{
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -1363,8 +1632,10 @@ def build_ui_router() -> APIRouter:
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
     board.addEventListener('click', (event) => {{ const button = event.target.closest('[data-task-id]'); if (!button) return; loadTaskDetail(button.dataset.taskId); }});
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
+    taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
+    taskChangedFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); }});
     taskMarkdownFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-artifact-index]'); if (!button || !activeTaskDetail) return; const file = activeTaskDetail.markdown_files[Number(button.dataset.artifactIndex)]; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); }});
     taskLogFiles.addEventListener('click', (event) => {{ const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); }});
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
@@ -1388,12 +1659,15 @@ def build_ui_router() -> APIRouter:
     resetFormState();
     loadTargetRepoOptions();
     const source = new EventSource('/api/events');
-    source.addEventListener('board_snapshot', loadBoard);
+    source.addEventListener('board_snapshot', async () => {{
+      await loadBoard();
+      scheduleActiveTaskRefresh();
+    }});
     source.addEventListener('task_moved', async (event) => {{
       await loadBoard();
       const payload = JSON.parse(event.data);
       if (taskModal.hidden || activeTaskId !== payload.task_id) return;
-      await loadTaskDetail(activeTaskId, true);
+      scheduleActiveTaskRefresh();
     }});
     source.addEventListener('worker_log', (event) => {{
       if (taskModal.hidden) return;

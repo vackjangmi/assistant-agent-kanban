@@ -207,6 +207,82 @@ def test_api_supports_human_verification_approve(configured_paths):
         assert approve.json()["state"] == TaskState.DONE.value
 
 
+def test_api_exposes_changed_files_for_human_verifying_tasks(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-diff-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-verify-diff-task")
+
+    with TestClient(app) as client:
+        before = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert before.status_code == 200
+        assert before.json()["changed_files"] == []
+
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+        assert changed_files[0]["path"] == "app.txt"
+        assert changed_files[0]["display_path"] == "app.txt"
+        assert changed_files[0]["change_type"] == "modified"
+        assert changed_files[0]["additions"] == 1
+        assert changed_files[0]["deletions"] == 1
+
+        diff = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}")
+        assert diff.status_code == 200
+        payload = diff.json()
+        assert payload["summary"]["path"] == "app.txt"
+        assert payload["hunks"][0]["unified_lines"][0]["kind"] == "remove"
+        assert payload["hunks"][0]["unified_lines"][0]["content"] == "hello"
+        assert payload["hunks"][0]["unified_lines"][1]["kind"] == "add"
+        assert payload["hunks"][0]["unified_lines"][1]["content"] == "review me"
+        assert payload["hunks"][0]["rows"][0]["left"]["kind"] == "remove"
+        assert payload["hunks"][0]["rows"][0]["right"]["kind"] == "add"
+
+
+def test_api_rejects_changed_file_access_outside_human_verifying(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-diff-blocked-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-verify-diff-blocked-task")
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/0")
+
+    assert response.status_code == 409
+    assert "only available during human verification" in response.json()["detail"]
+
+
+def test_api_hides_changed_files_when_patch_path_is_outside_managed_runs_root(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-bad-patch-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-bad-patch-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+    task = scanner.find_task(completed.metadata.task_id)
+    task.metadata.integration.patch_path = str((tmp_path / "outside.patch").resolve())
+    scanner.metadata_store.save(task.task_dir, task.metadata)
+
+    with TestClient(app) as client:
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        changed = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/0")
+
+    assert detail.status_code == 200
+    assert detail.json()["changed_files"] == []
+    assert changed.status_code == 409
+    assert "outside the managed runs root" in changed.json()["detail"]
+
+
 def test_api_deletes_task_and_owned_runtime_artifacts(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -598,6 +674,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "task-modal" in response.text
     assert "Viewer" in response.text
     assert "Viewer mode" in response.text
+    assert "Changed files" in response.text
+    assert "task-tab-changed-files" in response.text
+    assert "task-panel-changed-files" in response.text
+    assert "Read-only patch view" in response.text
     assert "planner_model" in response.text
     assert "implementer_model" in response.text
     assert "reviewer_model" in response.text
@@ -620,11 +700,18 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
+    assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
     assert "typeof payload.content !== 'string'" in response.text
     assert "worker_log" in response.text
     assert "loadTaskLogs(activeTaskId, true)" not in response.text
     assert "maybeStartLogPolling" not in response.text
     assert "setInterval(() => {" not in response.text
+    assert "let activeTaskRequestToken = 0;" in response.text
+    assert "function scheduleActiveTaskRefresh()" in response.text
+    assert "if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;" in response.text
+    assert "setTaskDetailStale(true, 'Task state changed while you were editing PLAN.md locally. Save the draft or leave edit mode to refresh the latest task status.');" in response.text
+    assert "source.addEventListener('board_snapshot', async () => {" in response.text
+    assert "scheduleActiveTaskRefresh();" in response.text
     assert "data-active-since" in response.text
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
