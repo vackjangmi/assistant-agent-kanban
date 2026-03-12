@@ -24,11 +24,22 @@ class PlanningWorker(WorkerBase):
         super().__init__(*args, **kwargs)
         self.adapter = adapter
 
+    def candidate_tasks(self):
+        return [
+            task
+            for task in self.scanner.scan()
+            if task.state == TaskState.REQUESTS
+            and can_auto_dispatch(task.metadata)
+            and self._request_ready_for_planning(task.task_dir)
+        ]
+
     async def run_once(self) -> bool:
-        tasks = [task for task in self.scanner.scan() if task.state == TaskState.REQUESTS and can_auto_dispatch(task.metadata) and self._request_ready_for_planning(task.task_dir)]
+        tasks = self.candidate_tasks()
         if not tasks:
             return False
-        task = tasks[0]
+        return await self.run_task(tasks[0])
+
+    async def run_task(self, task) -> bool:
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             planning = self.transitions.move(task, TaskState.PLANNING, by=self.worker_name)
@@ -44,13 +55,14 @@ class PlanningWorker(WorkerBase):
                 budget=self.config.opencode.planner_session_token_budget,
             )
             prior_session_tokens = planning.metadata.plan.session_tokens if session_id else 0
+            run_config = self.config.model_copy(deep=True)
             result = await asyncio.to_thread(
                 self.adapter.run,
-                agent=self.config.opencode.planner_agent,
+                agent=run_config.opencode.planner_agent,
                 prompt=prompt,
                 cwd=planner_cwd,
                 run_log_path=run_log_path,
-                config=self.config,
+                config=run_config,
                 session_id=session_id,
                 on_log_line=self.make_log_callback(loop, planning.metadata.task_id, run_log_path.name),
             )

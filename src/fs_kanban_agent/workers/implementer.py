@@ -19,11 +19,20 @@ class ImplementerWorker(WorkerBase):
         self.adapter = adapter
         self.workspace_manager = workspace_manager
 
+    def candidate_tasks(self):
+        return [
+            task
+            for task in self.scanner.scan()
+            if task.state == TaskState.TODOS and can_auto_dispatch(task.metadata)
+        ]
+
     async def run_once(self) -> bool:
-        tasks = [task for task in self.scanner.scan() if task.state == TaskState.TODOS and can_auto_dispatch(task.metadata)]
+        tasks = self.candidate_tasks()
         if not tasks:
             return False
-        task = tasks[0]
+        return await self.run_task(tasks[0])
+
+    async def run_task(self, task) -> bool:
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             try:
@@ -47,13 +56,14 @@ class ImplementerWorker(WorkerBase):
                 budget=self.config.opencode.implementer_session_token_budget,
             )
             prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
+            run_config = self.config.model_copy(deep=True)
             result = await asyncio.to_thread(
                 self.adapter.run,
-                agent=self.config.opencode.implementer_agent,
+                agent=run_config.opencode.implementer_agent,
                 prompt=prompt,
                 cwd=workspace_repo,
                 run_log_path=run_log_path,
-                config=self.config,
+                config=run_config,
                 session_id=session_id,
                 on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
             )
