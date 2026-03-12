@@ -9,6 +9,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$SCRIPT_DIR
 VENV_DIR=${VENV_DIR:-"$REPO_ROOT/.venv"}
 CONFIG_PATH=${CONFIG_PATH:-}
+DEPS_STAMP_FILE="$VENV_DIR/.fs-kanban-agent-deps-stamp"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -33,7 +34,11 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$CONFIG_PATH" ]; then
-    CONFIG_PATH="$REPO_ROOT/config.local.yaml"
+    if [ -f "$REPO_ROOT/config.yaml" ]; then
+        CONFIG_PATH="$REPO_ROOT/config.yaml"
+    else
+        CONFIG_PATH="$REPO_ROOT/examples/config.yaml"
+    fi
 fi
 
 if [ -d "$VENV_DIR" ]; then
@@ -55,6 +60,7 @@ fi
 cd "$REPO_ROOT"
 
 "$PYTHON_BIN" -m pip install -e '.[dev]'
+touch "$DEPS_STAMP_FILE"
 
 if [ ! -f "$CONFIG_PATH" ]; then
     mkdir -p "$(dirname -- "$CONFIG_PATH")"

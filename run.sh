@@ -11,6 +11,7 @@ VENV_DIR=${VENV_DIR:-"$REPO_ROOT/.venv"}
 CONFIG_PATH=${CONFIG_PATH:-}
 HOST=${HOST:-127.0.0.1}
 PORT=${PORT:-8000}
+DEPS_STAMP_FILE="$VENV_DIR/.fs-kanban-agent-deps-stamp"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -51,14 +52,16 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$CONFIG_PATH" ]; then
-    if [ -f "$REPO_ROOT/config.local.yaml" ]; then
+    if [ -f "$REPO_ROOT/config.yaml" ]; then
+        CONFIG_PATH="$REPO_ROOT/config.yaml"
+    elif [ -f "$REPO_ROOT/config.local.yaml" ]; then
         CONFIG_PATH="$REPO_ROOT/config.local.yaml"
     else
         CONFIG_PATH="$REPO_ROOT/examples/config.yaml"
     fi
 fi
 
-if [ ! -x "$VENV_DIR/bin/fs-kanban-agent" ]; then
+if [ ! -x "$VENV_DIR/bin/fs-kanban-agent" ] || [ ! -f "$DEPS_STAMP_FILE" ] || [ "$REPO_ROOT/pyproject.toml" -nt "$DEPS_STAMP_FILE" ]; then
     "$REPO_ROOT/init.sh" --config "$CONFIG_PATH"
 fi
 

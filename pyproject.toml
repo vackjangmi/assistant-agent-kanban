@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
   "filelock>=3.16",
+  "python-multipart>=0.0.9",
   "pydantic>=2.8",
   "pydantic-settings>=2.4",
   "pyyaml>=6.0.2",
