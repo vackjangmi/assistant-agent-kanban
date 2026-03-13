@@ -93,6 +93,20 @@ class RequestInfo(BaseModel):
     language: str | None = None
 
 
+class HumanReviewComment(BaseModel):
+    comment_id: str
+    file_path: str
+    body: str
+    created_at: datetime = Field(default_factory=utc_now)
+    created_by: str = "human"
+
+
+class HumanVerificationInfo(BaseModel):
+    note_path: str | None = None
+    note_markdown: str = ""
+    comments: list[HumanReviewComment] = Field(default_factory=list)
+
+
 class TargetRepoInfo(BaseModel):
     repo_root: str = "."
     base_branch: str = "main"
@@ -109,6 +123,7 @@ class TaskMetadata(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     request: RequestInfo = Field(default_factory=RequestInfo)
+    human_verification: HumanVerificationInfo = Field(default_factory=HumanVerificationInfo)
     target: TargetRepoInfo = Field(default_factory=TargetRepoInfo)
     plan: PlanInfo = Field(default_factory=PlanInfo)
     cycle: int = 0
@@ -177,6 +192,7 @@ class TaskDetail(BaseModel):
     log_files: list[str]
     changed_files: list[ChangedFileSummary] = Field(default_factory=list)
     stage_timing: TaskStageTiming = Field(default_factory=TaskStageTiming)
+    human_review: HumanReviewState = Field(default_factory=lambda: HumanReviewState())
 
 
 class ChangedFileSummary(BaseModel):
@@ -189,6 +205,7 @@ class ChangedFileSummary(BaseModel):
     deletions: int = 0
     hunk_count: int = 0
     is_binary: bool = False
+    comment_count: int = 0
 
 
 class ChangedFileLine(BaseModel):
@@ -220,6 +237,14 @@ class ChangedFileHunk(BaseModel):
 class ChangedFileDetail(BaseModel):
     summary: ChangedFileSummary
     hunks: list[ChangedFileHunk] = Field(default_factory=list)
+    comments: list[HumanReviewComment] = Field(default_factory=list)
+
+
+class HumanReviewState(BaseModel):
+    note_path: str | None = None
+    note_markdown: str = ""
+    unresolved_comment_count: int = 0
+    approval_block_reason: str | None = None
 
 
 class TaskLogEntry(BaseModel):

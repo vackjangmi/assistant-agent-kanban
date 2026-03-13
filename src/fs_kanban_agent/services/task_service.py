@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import mimetypes
 from pathlib import Path
 import re
+import subprocess
 import uuid
 
 from ..enums import STATE_ORDER, TaskState
@@ -16,6 +17,7 @@ from ..models import (
     ChangedFileRow,
     ChangedFileSide,
     ChangedFileSummary,
+    HumanReviewState,
     StageTimingSegment,
     StageTimingSummary,
     TaskDetail,
@@ -25,6 +27,7 @@ from ..models import (
     TaskStageTiming,
 )
 from ..scanner import KanbanScanner
+from ..target_repo_guard import resolve_safe_target_repo_root
 
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
@@ -59,6 +62,7 @@ class TaskService:
             log_files=log_files,
             changed_files=[entry.summary for entry in changed_files],
             stage_timing=self._build_stage_timing(task.metadata),
+            human_review=self._build_human_review_state(task.metadata),
         )
 
     def get_logs(self, task_id: str) -> TaskLogs:
@@ -90,7 +94,8 @@ class TaskService:
         return TaskLogs(task_id=task.metadata.task_id, entries=entries)
 
     def get_changed_file(self, task_id: str, changed_file_id: str) -> ChangedFileDetail:
-        changed_files = self._load_changed_files(task_id, require_available=True)
+        task = self._find_task(task_id)
+        changed_files = self._load_changed_files_for_task(task, require_available=True)
         for entry in changed_files:
             if entry.summary.id == changed_file_id:
                 return entry
@@ -106,6 +111,8 @@ class TaskService:
         if task.state != "waiting-check-plans":
             raise TransitionError("markdown editing is only allowed in waiting-check-plans")
         path = self._validate_writable_markdown_artifact(task.task_dir, filename)
+        if not content.strip():
+            raise TransitionError("PLAN.md cannot be empty")
         path.write_text(content.rstrip() + "\n")
 
     def save_attachment(self, task_id: str, artifact_filename: str, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
@@ -220,6 +227,15 @@ class TaskService:
             segments=segments,
         )
 
+    def _build_human_review_state(self, metadata: TaskMetadata) -> HumanReviewState:
+        unresolved_count = len(metadata.human_verification.comments)
+        return HumanReviewState(
+            note_path=metadata.human_verification.note_path,
+            note_markdown=metadata.human_verification.note_markdown,
+            unresolved_comment_count=unresolved_count,
+            approval_block_reason="Resolve all file comments before approval." if unresolved_count else None,
+        )
+
     def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
         if filename == "REQUEST.md":
             return (0, 0, 0, filename)
@@ -237,21 +253,63 @@ class TaskService:
 
     def _load_changed_files(self, task_id: str, *, require_available: bool) -> list[ChangedFileDetail]:
         task = self._find_task(task_id)
+        return self._load_changed_files_for_task(task, require_available=require_available)
+
+    def _load_changed_files_for_task(self, task, *, require_available: bool) -> list[ChangedFileDetail]:
         if task.metadata.state not in {"human-verifying", "done"}:
             if require_available:
                 raise TransitionError("changed files are only available during or after human verification")
             return []
+        patch_text = self._resolve_changed_files_patch(task.metadata, require_available=require_available)
+        if patch_text is None:
+            return []
+        return self._apply_human_review_comments(self._parse_patch(patch_text), task.metadata)
+
+    def _resolve_changed_files_patch(self, metadata: TaskMetadata, *, require_available: bool) -> str | None:
+        if metadata.integration.patch_path:
+            try:
+                self._resolve_patch_path(metadata.task_id, metadata.integration.patch_path)
+            except TransitionError:
+                if require_available:
+                    raise
+                return None
+        if metadata.state == TaskState.HUMAN_VERIFYING:
+            patch_text = self._target_repo_diff_against_base(metadata, ref=None)
+            if patch_text is not None:
+                return patch_text
         try:
-            patch_path = self._resolve_patch_path(task.metadata.task_id, task.metadata.integration.patch_path)
+            patch_path = self._resolve_patch_path(metadata.task_id, metadata.integration.patch_path)
         except TransitionError:
             if require_available:
                 raise
-            return []
+            return None
         if patch_path is None or not patch_path.exists():
             if require_available:
-                raise TaskNotFoundError(f"patch for {task_id}")
-            return []
-        return self._parse_patch(patch_path.read_text())
+                raise TaskNotFoundError(f"patch for {metadata.task_id}")
+            return None
+        return patch_path.read_text()
+
+    def _target_repo_diff_against_base(self, metadata: TaskMetadata, *, ref: str | None) -> str | None:
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError:
+            return None
+        range_spec = metadata.target.base_branch if ref is None else f"{metadata.target.base_branch}..{ref}"
+        command = ["git", "-C", str(target_repo_root), "diff", "--binary", range_spec]
+        diff = subprocess.run(command, capture_output=True, text=True, check=False)
+        if diff.returncode != 0:
+            return None
+        return diff.stdout
+
+    def _apply_human_review_comments(self, details: list[ChangedFileDetail], metadata: TaskMetadata) -> list[ChangedFileDetail]:
+        comments_by_path: dict[str, list] = {}
+        for comment in metadata.human_verification.comments:
+            comments_by_path.setdefault(comment.file_path, []).append(comment)
+        for detail in details:
+            file_comments = comments_by_path.get(detail.summary.path, [])
+            detail.summary.comment_count = len(file_comments)
+            detail.comments = list(file_comments)
+        return details
 
     def _resolve_patch_path(self, task_id: str, raw_path: str | None) -> Path | None:
         if not raw_path:

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
+import uuid
 
 from ..commit_manager import CommitManager
 from ..enums import TaskState
@@ -9,8 +13,9 @@ from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
 from ..opencode_adapter import OpenCodeAdapter, AdapterRunError
-from ..models import TaskContext, TaskErrorInfo
+from ..models import HumanReviewComment, TaskContext, TaskErrorInfo
 from ..scanner import KanbanScanner
+from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
 from ..config import AppConfig
 
@@ -47,6 +52,7 @@ class HumanVerificationService:
             context.metadata.integration.final_branch = None
             context.metadata.commit.review_sha = None
             try:
+                self._ensure_human_verification_note(context.task_dir, context.metadata, verdict="IN_PROGRESS")
                 if not context.metadata.integration.final_branch_summary:
                     context.metadata.integration.final_branch_summary = self._generate_branch_summary(context)
                 self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
@@ -57,7 +63,8 @@ class HumanVerificationService:
                 self.metadata_store.save(context.task_dir, context.metadata)
                 return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
             except IntegrationConflictError as exc:
-                self._write_human_verification_artifact(context.task_dir, context.metadata.cycle, "CONFLICT", str(exc))
+                context.metadata.human_verification.note_markdown = str(exc)
+                self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="CONFLICT")
                 context.metadata.errors.append(TaskErrorInfo(code="integration-conflict", message=str(exc)))
                 context.metadata.commit.status = "pending"
                 context.metadata.commit.sha = None
@@ -73,22 +80,73 @@ class HumanVerificationService:
                 self.metadata_store.save(context.task_dir, context.metadata)
                 raise
 
-    def reject(self, task_id: str, *, by: str, note: str) -> TaskContext:
+    def save_note(self, task_id: str, *, by: str, content: str) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("human verification note editing is only allowed from human-verifying")
+        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-note"):
+            context.metadata.human_verification.note_markdown = content.rstrip()
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
+            self.metadata_store.save(context.task_dir, context.metadata)
+            return context
+
+    def add_comment(self, task_id: str, *, by: str, file_path: str, body: str) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("human review comments are only allowed from human-verifying")
+        cleaned_body = body.strip()
+        cleaned_path = file_path.strip()
+        if not cleaned_path:
+            raise TransitionError("file path is required")
+        if not cleaned_body:
+            raise TransitionError("comment body is required")
+        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-comment-add"):
+            context.metadata.human_verification.comments.append(
+                HumanReviewComment(
+                    comment_id=uuid.uuid4().hex[:12],
+                    file_path=cleaned_path,
+                    body=cleaned_body,
+                    created_by=by,
+                )
+            )
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
+            self.metadata_store.save(context.task_dir, context.metadata)
+            return context
+
+    def delete_comment(self, task_id: str, *, by: str, comment_id: str) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("human review comments are only allowed from human-verifying")
+        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-comment-delete"):
+            before_count = len(context.metadata.human_verification.comments)
+            context.metadata.human_verification.comments = [
+                comment
+                for comment in context.metadata.human_verification.comments
+                if comment.comment_id != comment_id
+            ]
+            if len(context.metadata.human_verification.comments) == before_count:
+                raise TaskNotFoundError(comment_id)
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
+            self.metadata_store.save(context.task_dir, context.metadata)
+            return context
+
+    def reject(self, task_id: str, *, by: str, note: str = "") -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("human verification rejection is only allowed from human-verifying")
-        cleaned_note = note.strip()
-        if not cleaned_note:
-            raise TransitionError("rejection note is required")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-reject"):
-            self._write_human_verification_artifact(context.task_dir, context.metadata.cycle, "REJECTED", cleaned_note)
+            if note.strip():
+                context.metadata.human_verification.note_markdown = note.strip()
+            self._capture_review_branch_to_workspace(context.metadata)
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="REQUEST_CHANGES")
             self.integration_manager.rollback_workspace(context.metadata)
             context.metadata.commit.status = "pending"
             context.metadata.commit.sha = None
             context.metadata.commit.review_sha = None
-            context.metadata.errors.append(TaskErrorInfo(code="human-verification-rejected", message=cleaned_note))
+            summary = self._human_review_summary(context.metadata)
+            context.metadata.errors.append(TaskErrorInfo(code="human-verification-rejected", message=summary or "human verification requested changes"))
             self.metadata_store.save(context.task_dir, context.metadata)
-            return self.transitions.move(context, TaskState.TODOS, by=by, note=cleaned_note)
+            return self.transitions.move(context, TaskState.TODOS, by=by, note=summary or "human verification requested changes")
 
     def approve(self, task_id: str, *, by: str) -> TaskContext:
         context = self._find_task(task_id)
@@ -96,11 +154,20 @@ class HumanVerificationService:
             raise TransitionError("human verification approval is only allowed from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
             try:
+                if context.metadata.human_verification.comments:
+                    raise TransitionError("resolve all human review comments before approval")
+                if context.metadata.commit.review_sha is None:
+                    context.metadata.commit.review_sha = context.metadata.commit.sha
+                self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="APPROVED")
+                self._sync_task_documents_to_target_repo(context.task_dir, context.metadata)
+                self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
                 sha = self.commit_manager.finalize_review_branch(context.task_dir, context.metadata)
                 self.integration_manager.finalize_workspace(context.metadata)
                 context.metadata.commit.status = "committed"
                 context.metadata.commit.sha = sha
                 return self.transitions.move(context, TaskState.DONE, by=by, note="human verification approved")
+            except TransitionError:
+                raise
             except Exception as exc:
                 try:
                     self.integration_manager.rollback_workspace(context.metadata)
@@ -118,21 +185,108 @@ class HumanVerificationService:
         except FileNotFoundError as exc:
             raise TaskNotFoundError(task_id) from exc
 
-    def _write_human_verification_artifact(self, task_dir: Path, cycle: int, verdict: str, note: str) -> None:
-        artifact_path = task_dir / f"HUMAN-VERIFY-{cycle:03d}.md"
-        artifact_path.write_text(
-            "\n".join(
-                [
-                    "# Human Verification",
-                    "",
-                    f"Verdict: {verdict}",
-                    "",
-                    "## Follow-ups",
-                    note.strip(),
-                    "",
-                ]
-            )
+    def _ensure_human_verification_note(self, task_dir: Path, metadata, *, verdict: str) -> None:
+        if not metadata.human_verification.note_path:
+            metadata.human_verification.note_path = f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
+        self._write_human_verification_artifact(task_dir, metadata, verdict=verdict)
+
+    def _write_human_verification_artifact(self, task_dir: Path, metadata, *, verdict: str) -> None:
+        note_path = metadata.human_verification.note_path or f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
+        metadata.human_verification.note_path = note_path
+        artifact_path = task_dir / note_path
+        sections = ["# Human Verification", "", f"Verdict: {verdict}", ""]
+        sections.extend(["## Notes", metadata.human_verification.note_markdown.strip() or "No notes yet.", ""])
+        sections.extend(["## File Comments", self._render_comment_section(metadata), ""])
+        artifact_path.write_text("\n".join(sections))
+
+    def _render_comment_section(self, metadata) -> str:
+        if not metadata.human_verification.comments:
+            return "No unresolved comments."
+        lines: list[str] = []
+        for comment in metadata.human_verification.comments:
+            lines.append(f"- `{comment.file_path}`: {comment.body}")
+        return "\n".join(lines)
+
+    def _human_review_summary(self, metadata) -> str:
+        note = metadata.human_verification.note_markdown.strip()
+        if note:
+            return note.splitlines()[0].strip()
+        if metadata.human_verification.comments:
+            return metadata.human_verification.comments[0].body
+        return ""
+
+    def _capture_review_branch_to_workspace(self, metadata) -> None:
+        workspace_repo = metadata.implementation.workspace
+        if not workspace_repo:
+            return
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+        stage_target = subprocess.run(["git", "-C", str(target_repo_root), "add", "-A"], capture_output=True, text=True, check=False)
+        if stage_target.returncode != 0:
+            raise IntegrationError(stage_target.stderr.strip() or "failed to stage reviewed code")
+        patch = subprocess.run(
+            ["git", "-C", str(target_repo_root), "diff", "--cached", "--binary", metadata.target.base_branch],
+            capture_output=True,
+            text=True,
+            check=False,
         )
+        subprocess.run(["git", "-C", str(target_repo_root), "reset"], capture_output=True, text=True, check=False)
+        if patch.returncode != 0:
+            raise IntegrationError(patch.stderr.strip() or "failed to capture review branch state")
+        workspace_path = Path(workspace_repo)
+        base_ref = self._resolve_workspace_base_ref(workspace_path, metadata.target.base_branch)
+        reset_branch = subprocess.run(
+            ["git", "-C", str(workspace_path), "checkout", "-B", f"task/{metadata.task_id.lower()}", base_ref],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if reset_branch.returncode != 0:
+            raise IntegrationError(reset_branch.stderr.strip() or "failed to reset workspace branch")
+        reset = subprocess.run(["git", "-C", str(workspace_path), "reset", "--hard"], capture_output=True, text=True, check=False)
+        clean = subprocess.run(["git", "-C", str(workspace_path), "clean", "-fd"], capture_output=True, text=True, check=False)
+        if reset.returncode != 0 or clean.returncode != 0:
+            raise IntegrationError((reset.stderr or clean.stderr).strip() or "failed to reset workspace")
+        patch_path = workspace_path.parent / ".human-review-reject.patch"
+        patch_path.write_text(patch.stdout)
+        try:
+            if patch.stdout.strip():
+                apply_result = subprocess.run(
+                    ["git", "-C", str(workspace_path), "apply", "--3way", str(patch_path)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if apply_result.returncode != 0:
+                    raise IntegrationError(apply_result.stderr.strip() or "failed to apply reviewed code back into workspace")
+        finally:
+            patch_path.unlink(missing_ok=True)
+
+    def _resolve_workspace_base_ref(self, workspace_path: Path, base_branch: str) -> str:
+        for candidate in (base_branch, f"origin/{base_branch}"):
+            probe = subprocess.run(
+                ["git", "-C", str(workspace_path), "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                return candidate
+        raise IntegrationError(f"base ref '{base_branch}' does not exist in workspace")
+
+    def _sync_task_documents_to_target_repo(self, task_dir: Path, metadata) -> None:
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+        review_date = datetime.now(timezone.utc)
+        docs_root = target_repo_root / "docs" / "ai-kanban" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / metadata.task_id
+        shutil.rmtree(docs_root, ignore_errors=True)
+        docs_root.mkdir(parents=True, exist_ok=True)
+        for path in sorted(task_dir.glob("*.md")):
+            shutil.copy2(path, docs_root / path.name)
 
     def _generate_branch_summary(self, context: TaskContext) -> str:
         fallback = self.commit_manager.sanitize_branch_summary(None, fallback_title=context.metadata.title)

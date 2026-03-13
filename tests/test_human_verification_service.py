@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import subprocess
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from fs_kanban_agent.commit_manager import CommitManager
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
-from fs_kanban_agent.exceptions import IntegrationError
+from fs_kanban_agent.exceptions import IntegrationError, TransitionError
 from fs_kanban_agent.integration_manager import IntegrationManager
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
@@ -176,6 +177,28 @@ def test_human_verification_reject_discards_review_branch_even_when_patch_file_i
     assert status == ""
     branches = subprocess.run(["git", "-C", str(repo_root), "branch", "--list", f"review/{completed.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert branches == ""
+
+
+def test_human_verification_reject_preserves_human_reviewed_code_in_workspace(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-reject-preserve-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    (target_repo / "app.txt").write_text("review me\nhuman tweak\n")
+    (target_repo / "extra.txt").write_text("keep this for next iteration\n")
+
+    moved = service.reject(completed.metadata.task_id, by="human", note="carry these edits forward")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    workspace_repo = Path(refreshed.metadata.implementation.workspace or "")
+    assert (workspace_repo / "app.txt").read_text() == "review me\nhuman tweak\n"
+    assert (workspace_repo / "extra.txt").read_text() == "keep this for next iteration\n"
 
 
 def test_human_verification_start_cleans_up_review_branch_on_apply_failure(configured_paths):
@@ -348,6 +371,12 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert current_branch == expected_final_branch
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
+    review_date = datetime.now(timezone.utc)
+    docs_root = target_repo / "docs" / "ai-kanban" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / done.metadata.task_id
+    assert (docs_root / "REQUEST.md").exists()
+    assert (docs_root / "PLAN.md").exists()
+    assert (docs_root / "HUMAN-VERIFY-001.md").exists()
+    assert (docs_root / "COMMIT.md").exists()
 
 
 def test_human_verification_approve_switches_back_to_review_branch_before_commit(tmp_path):
@@ -390,6 +419,24 @@ def test_human_verification_approve_stages_manual_review_changes_before_commit(t
     assert "notes.txt" in show
     status = subprocess.run(["git", "-C", str(target_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
     assert status == ""
+
+
+def test_human_verification_approve_blocks_when_comments_exist(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-approve-comment-block-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    service.add_comment(completed.metadata.task_id, by="human", file_path="app.txt", body="Need one more tweak")
+
+    with pytest.raises(TransitionError, match="resolve all human review comments"):
+        service.approve(completed.metadata.task_id, by="human")
+
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.HUMAN_VERIFYING
 
 
 def test_human_verification_approve_returns_to_todos_on_rebase_conflict(tmp_path):

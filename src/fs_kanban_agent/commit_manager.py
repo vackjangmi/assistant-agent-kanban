@@ -32,7 +32,8 @@ class CommitManager:
 
     def finalize_review_branch(self, task_dir: Path, metadata: TaskMetadata) -> str:
         review_sha = self._commit_review_branch(task_dir, metadata, allow_existing_commit=True)
-        metadata.commit.review_sha = review_sha
+        if metadata.commit.review_sha is None:
+            metadata.commit.review_sha = review_sha
         try:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
@@ -101,6 +102,9 @@ class CommitManager:
         review = self._latest_artifact_summary(task_dir, "REVIEW-*.md")
         if review:
             details.append(f"Review: {review}")
+        human_verify = self._latest_artifact_summary(task_dir, "HUMAN-VERIFY-*.md")
+        if human_verify:
+            details.append(f"Human review: {human_verify}")
         details.append(f"Task: {metadata.task_id}")
         return details
 
@@ -126,6 +130,8 @@ class CommitManager:
             if not line or line.startswith("#"):
                 continue
             if line.startswith("Verdict:"):
+                continue
+            if line in {"No notes yet.", "No unresolved comments."}:
                 continue
             return self._single_line(line)
         return None
