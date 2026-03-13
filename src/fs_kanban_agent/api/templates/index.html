@@ -690,6 +690,14 @@
       implementation: ['todos', 'implementing', 'waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
       final: ['done'],
     };
+    const boardPhasePriorityRules = [
+      { phase: 'implementation', states: ['human-verifying'] },
+      { phase: 'implementation', states: ['completed-reviews'] },
+      { phase: 'plan', states: ['waiting-check-plans'] },
+      { phase: 'implementation', states: ['todos', 'implementing', 'waiting-reviews', 'reviewing'] },
+      { phase: 'plan', states: ['requests', 'planning'] },
+      { phase: 'final', states: ['done'] },
+    ];
     const lastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
@@ -770,7 +778,8 @@
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
     let lastLoadedSettingsState = null;
-    let activeBoardPhase = 'implementation';
+    let activeBoardPhase = 'plan';
+    let boardPhaseManuallySelected = false;
 
     const settingsTranslations = {
       EN: {
@@ -1289,9 +1298,22 @@
       });
     }
 
+    function selectDefaultBoardPhase(columns) {
+      const itemCounts = Object.fromEntries(columns.map((column) => [column.state, Array.isArray(column.items) ? column.items.length : 0]));
+      for (const rule of boardPhasePriorityRules) {
+        if (rule.states.some((state) => (itemCounts[state] || 0) > 0)) {
+          return rule.phase;
+        }
+      }
+      return 'plan';
+    }
+
     async function loadBoard() {
       const res = await fetch('/api/board');
       const data = await res.json();
+      if (!boardPhaseManuallySelected) {
+        activeBoardPhase = selectDefaultBoardPhase(data.columns);
+      }
       renderBoardPhaseTabs();
       const visibleStates = new Set(boardPhaseStates[activeBoardPhase] || []);
       const visibleColumns = data.columns.filter((column) => visibleStates.has(column.state));
@@ -2892,6 +2914,7 @@
     boardPhaseTabs.addEventListener('click', (event) => {
       const button = event.target.closest('[data-board-phase]');
       if (!button) return;
+      boardPhaseManuallySelected = true;
       activeBoardPhase = button.dataset.boardPhase;
       renderBoardPhaseTabs();
       loadBoard();

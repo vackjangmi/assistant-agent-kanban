@@ -1240,6 +1240,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "source.addEventListener('board_snapshot', async () => {\n      await loadBoard();\n    });" in response.text
     assert "function phaseLabel(phase)" in response.text
     assert "const boardPhaseStates = {" in response.text
+    assert "const boardPhasePriorityRules = [" in response.text
+    assert "function selectDefaultBoardPhase(columns)" in response.text
+    assert "if (!boardPhaseManuallySelected) {" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
     assert "debug_rendered_content" in response.text
