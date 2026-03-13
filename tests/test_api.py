@@ -201,6 +201,31 @@ def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
     assert (updated_task.task_dir / "PLAN.md").read_text() == "edited plan\n"
 
 
+def test_api_rejects_empty_plan_md_edit_in_waiting_check_plans(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-empty-edit-task")
+    app = create_app(config, FakeAdapter(["## Summary\nplan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    runtime = app.state.runtime
+    metadata_store = runtime.planner.metadata_store
+    scanner = runtime.planner.scanner
+    transitions = runtime.planner.transitions
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("original plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    with TestClient(app) as client:
+        response = client.put(
+            f"/api/tasks/{waiting.metadata.task_id}/artifacts/PLAN.md",
+            json={"content": "   \n\n"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "PLAN.md cannot be empty"
+    assert (waiting.task_dir / "PLAN.md").read_text() == "original plan\n"
+
+
 def test_api_rejects_plan_md_edit_outside_waiting_check_plans(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -367,6 +392,8 @@ def test_api_exposes_changed_files_for_human_verifying_tasks(configured_paths):
         assert payload["hunks"][0]["unified_lines"][1]["content"] == "review me"
         assert payload["hunks"][0]["rows"][0]["left"]["kind"] == "remove"
         assert payload["hunks"][0]["rows"][0]["right"]["kind"] == "add"
+        assert payload["comments"] == []
+        assert detail.json()["human_review"]["unresolved_comment_count"] == 0
 
 
 def test_api_rejects_changed_file_access_outside_human_verifying(configured_paths):
@@ -403,6 +430,70 @@ def test_api_exposes_changed_files_for_done_tasks(configured_paths):
 
         diff = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}")
         assert diff.status_code == 200
+
+
+def test_api_supports_human_review_comment_crud_and_approval_block(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-comments-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-comments-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        changed_file = detail.json()["changed_files"][0]
+
+        add_comment = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/human-review-comments",
+            json={"file_path": changed_file["path"], "body": "Need another pass"},
+        )
+        assert add_comment.status_code == 200
+
+        refreshed = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert refreshed.json()["human_review"]["unresolved_comment_count"] == 1
+        assert refreshed.json()["human_review"]["approval_block_reason"] == "Resolve all file comments before approval."
+        assert refreshed.json()["changed_files"][0]["comment_count"] == 1
+
+        changed = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_file['id']}")
+        assert changed.status_code == 200
+        assert changed.json()["comments"][0]["file_path"] == changed_file["path"]
+        comment_id = changed.json()["comments"][0]["comment_id"]
+
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+        assert approve.status_code == 409
+        assert "resolve all human review comments" in approve.json()["detail"]
+
+        delete_comment = client.delete(f"/api/tasks/{completed.metadata.task_id}/human-review-comments/{comment_id}")
+        assert delete_comment.status_code == 200
+
+        refreshed_again = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert refreshed_again.json()["human_review"]["unresolved_comment_count"] == 0
+        assert refreshed_again.json()["changed_files"][0]["comment_count"] == 0
+
+
+def test_api_saves_human_review_note(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-note-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-note-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        save_note = client.put(
+            f"/api/tasks/{completed.metadata.task_id}/human-review-note",
+            json={"content": "## Note\nPlease keep the animation timing."},
+        )
+        assert save_note.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["human_review"]["note_markdown"] == "## Note\nPlease keep the animation timing."
 
 
 def test_api_hides_changed_files_when_patch_path_is_outside_managed_runs_root(configured_paths, tmp_path):
@@ -1063,6 +1154,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "__DEFAULT_TARGET_REPO__" not in response.text
     assert "__DEFAULT_BASE_BRANCH__" not in response.text
     assert "__INITIAL_RUNTIME_LANGUAGE__" not in response.text
+    assert 'id="board-phase-tabs"' in response.text
+    assert 'data-board-phase="plan"' in response.text
+    assert 'data-board-phase="implementation"' in response.text
+    assert 'data-board-phase="final"' in response.text
     assert "Runtime settings" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
@@ -1091,7 +1186,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_coding_assistant" in response.text
     assert "const settingsTranslations = {" in response.text
     assert "applyRuntimeSettingsTranslations();" in response.text
-    assert "runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); refreshRequestDerivedText(); });" in response.text
+    assert "runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); refreshRequestDerivedText(); });" in response.text
     assert 'class="settings-sections"' in response.text
     assert 'id="settings-basics-heading"' in response.text
     assert 'id="settings-agents-heading"' in response.text
@@ -1116,6 +1211,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "opencode-model-options" in response.text
     assert "Refresh discovered models" in response.text
     assert "Save runtime settings" in response.text
+    assert "window.location.reload();" in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
     assert "models loaded ·" in response.text
@@ -1125,7 +1221,15 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "buildScopeDefaults" in response.text
     assert "buildOutOfScopeDefaults" in response.text
     assert "const requestTranslations = {" in response.text
+    assert "const humanReviewTranslations = {" in response.text
     assert "applyRequestTranslations();" in response.text
+    assert "['waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')" in response.text
+    assert "task-human-review-panel" in response.text
+    assert "save-human-review-note" in response.text
+    assert "request-changes-button" in response.text
+    assert "approve-human-review-button" in response.text
+    assert "/api/tasks/${activeTaskId}/human-review-note" in response.text
+    assert "/api/tasks/${activeTaskId}/human-review-comments" in response.text
     assert "translateRequest('validationGoal')" in response.text
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
@@ -1134,6 +1238,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
     assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
     assert "source.addEventListener('board_snapshot', async () => {\n      await loadBoard();\n    });" in response.text
+    assert "function phaseLabel(phase)" in response.text
+    assert "const boardPhaseStates = {" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
     assert "debug_rendered_content" in response.text
@@ -1175,7 +1281,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
-    assert "Approve &amp; commit" in response.text
+    assert "Approve" in response.text
+    assert "Request changes" in response.text
     assert "Captured stage models" in response.text
     assert "Stage timing" in response.text
     assert "stage-timing-grid" in response.text
@@ -1213,6 +1320,19 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert "요청 생성" in response.text
     assert "요청 기본값" in response.text
     assert "저장소 범위" in response.text
+    assert "플랜 단계" in response.text
+    assert "구현 단계" in response.text
+    assert "최종 완료" in response.text
+    assert "요구사항" in response.text
+    assert "계획 작성중" in response.text
+    assert "계획 승인 대기" in response.text
+    assert "구현 대기" in response.text
+    assert "구현중" in response.text
+    assert "리뷰 대기중" in response.text
+    assert "리뷰중" in response.text
+    assert "리뷰 완료" in response.text
+    assert "인간 리뷰중" in response.text
+    assert "완료" in response.text
     assert "발견된 모델 새로고침" in response.text
     assert "저장" in response.text
 

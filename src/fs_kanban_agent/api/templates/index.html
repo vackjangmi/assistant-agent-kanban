@@ -20,7 +20,10 @@
     button.primary { background: var(--accent); border-color: var(--accent-strong); color: #fff; }
     .ghost-button { background: transparent; border-color: var(--border); }
     button:disabled { opacity: 0.7; cursor: progress; }
-    #board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 20px; }
+    .board-phase-shell { padding: 0 20px 12px; }
+    .board-phase-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .board-phase-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
+    #board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 20px; }
     .column { background: var(--panel); border: 1px solid var(--border); padding: 12px; min-height: 160px; }
     .column h2 { margin-top: 0; }
     .card { background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 10px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
@@ -160,7 +163,18 @@
      .diff-summary span { color: var(--muted); font-size: 0.92rem; }
      .diff-badges { display: flex; gap: 8px; flex-wrap: wrap; }
      .diff-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }
-     .diff-shell { border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: hidden; min-height: 0; }
+    .diff-shell { border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: hidden; min-height: 0; }
+    .human-review-panel { display: grid; gap: 12px; }
+    .human-review-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr); gap: 12px; }
+    .human-review-box { display: grid; gap: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; }
+    .human-review-comments { display: grid; gap: 10px; align-content: start; }
+    .human-review-comment-list { display: grid; gap: 8px; max-height: 280px; overflow: auto; }
+    .human-review-comment { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,249,239,0.8); }
+    .human-review-comment-meta { display: flex; justify-content: space-between; gap: 8px; align-items: center; color: var(--muted); font-size: 0.82rem; }
+    .human-review-comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .human-review-comment-form { display: grid; gap: 8px; }
+    .human-review-comment-form textarea { min-height: 88px; }
+    .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; }
      .diff-desktop, .diff-mobile { height: 100%; max-height: none; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }
      .diff-desktop { font-size: 0.62rem; }
      .diff-mobile { font-size: 0.78rem; }
@@ -196,7 +210,7 @@
     .mode-pill { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }
     .toastui-editor-defaultUI, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .toastui-editor-contents { max-width: 100%; min-width: 0; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-     @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } }
+     @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .human-review-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; } .human-review-actions button { width: 100%; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -484,13 +498,7 @@
             </div>
             <div>
               <button type="button" id="start-verification" hidden>Start verification</button>
-              <button type="button" id="reject-verification" hidden>Reject to TODO</button>
-              <button type="button" id="approve-verification" class="primary" hidden>Approve &amp; commit</button>
             </div>
-          </div>
-          <div id="task-verification-note-wrap" hidden>
-            <label for="task-verification-note"><strong>Follow-up requirements</strong></label>
-            <textarea id="task-verification-note" placeholder="Explain what must change before the task returns to TODO."></textarea>
           </div>
         </section>
         <section id="task-delete-actions" class="task-danger-actions" hidden>
@@ -549,6 +557,49 @@
                 <div class="diff-empty">Select a changed file.</div>
               </div>
             </div>
+            <div id="task-human-review-panel" class="human-review-panel" hidden>
+              <div class="diff-summary">
+                <div>
+                  <strong id="task-human-review-title">Human review</strong>
+                  <span id="task-human-review-status">Review note and file comments live here.</span>
+                </div>
+                <div class="diff-badges">
+                  <span id="task-human-review-comment-count" class="diff-badge">0 comments</span>
+                </div>
+              </div>
+              <div class="human-review-layout">
+                <div class="human-review-box">
+                  <div class="editor-toolbar">
+                    <div>
+                      <strong id="task-human-review-note-title">Review note</strong>
+                      <div id="task-human-review-note-status" class="muted">Saved into the current HUMAN-VERIFY document.</div>
+                    </div>
+                    <div>
+                      <button type="button" id="save-human-review-note">Save note</button>
+                    </div>
+                  </div>
+                  <div id="task-human-review-editor-host" class="editor-host"></div>
+                  <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
+                </div>
+                <div class="human-review-box human-review-comments">
+                  <div>
+                    <strong id="task-human-review-comments-title">File comments</strong>
+                    <div id="task-human-review-comments-status" class="muted">Comments block approval until they are removed.</div>
+                  </div>
+                  <div id="task-human-review-comments" class="human-review-comment-list">
+                    <div class="muted">Select a changed file to add comments.</div>
+                  </div>
+                  <div class="human-review-comment-form">
+                    <textarea id="task-human-review-comment-input" placeholder="Leave a comment for this file..."></textarea>
+                    <button type="button" id="add-human-review-comment">Add comment</button>
+                  </div>
+                </div>
+              </div>
+              <div class="human-review-actions">
+                <button type="button" id="request-changes-button">Request changes</button>
+                <button type="button" id="approve-human-review-button" class="primary">Approve</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -576,10 +627,20 @@
       </section>
     </div>
   </section>
-  <main id="board"></main>
+  <main>
+    <div class="board-phase-shell">
+      <div id="board-phase-tabs" class="board-phase-tabs">
+        <button type="button" data-board-phase="plan">Planning</button>
+        <button type="button" data-board-phase="implementation" class="active">Implementation</button>
+        <button type="button" data-board-phase="final">Completed</button>
+      </div>
+    </div>
+    <div id="board"></div>
+  </main>
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
   <script>
     const board = document.getElementById('board');
+    const boardPhaseTabs = document.getElementById('board-phase-tabs');
     const body = document.body;
     const modal = document.getElementById('request-modal');
     const settingsModal = document.getElementById('settings-modal');
@@ -624,6 +685,11 @@
     const defaultTargetRepo = __DEFAULT_TARGET_REPO__;
     const defaultBaseBranch = __DEFAULT_BASE_BRANCH__;
     const initialRuntimeLanguage = __INITIAL_RUNTIME_LANGUAGE__;
+    const boardPhaseStates = {
+      plan: ['requests', 'planning', 'waiting-check-plans'],
+      implementation: ['todos', 'implementing', 'waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
+      final: ['done'],
+    };
     const lastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
@@ -640,11 +706,7 @@
     const taskTimeline = document.getElementById('task-timeline');
     const taskVerificationActions = document.getElementById('task-verification-actions');
     const taskVerificationStatus = document.getElementById('task-verification-status');
-    const taskVerificationNoteWrap = document.getElementById('task-verification-note-wrap');
-    const taskVerificationNote = document.getElementById('task-verification-note');
     const startVerificationButton = document.getElementById('start-verification');
-    const rejectVerificationButton = document.getElementById('reject-verification');
-    const approveVerificationButton = document.getElementById('approve-verification');
     const taskDeleteActions = document.getElementById('task-delete-actions');
     const taskDeleteStatus = document.getElementById('task-delete-status');
     const deleteTaskButton = document.getElementById('delete-task');
@@ -652,6 +714,19 @@
     const taskChangedFileSummary = document.getElementById('task-changed-file-summary');
     const taskDiffDesktop = document.getElementById('task-diff-desktop');
     const taskDiffMobile = document.getElementById('task-diff-mobile');
+    const taskHumanReviewPanel = document.getElementById('task-human-review-panel');
+    const taskHumanReviewStatus = document.getElementById('task-human-review-status');
+    const taskHumanReviewCommentCount = document.getElementById('task-human-review-comment-count');
+    const taskHumanReviewEditorHost = document.getElementById('task-human-review-editor-host');
+    const taskHumanReviewEditorFallback = document.getElementById('task-human-review-editor-fallback');
+    const taskHumanReviewNoteStatus = document.getElementById('task-human-review-note-status');
+    const saveHumanReviewNoteButton = document.getElementById('save-human-review-note');
+    const taskHumanReviewComments = document.getElementById('task-human-review-comments');
+    const taskHumanReviewCommentsStatus = document.getElementById('task-human-review-comments-status');
+    const taskHumanReviewCommentInput = document.getElementById('task-human-review-comment-input');
+    const addHumanReviewCommentButton = document.getElementById('add-human-review-comment');
+    const requestChangesButton = document.getElementById('request-changes-button');
+    const approveHumanReviewButton = document.getElementById('approve-human-review-button');
     const taskLogFiles = document.getElementById('task-log-files');
     const taskLogStatus = document.getElementById('task-log-status');
     const taskLogViewReadable = document.getElementById('task-log-view-readable');
@@ -676,6 +751,7 @@
     let activeTaskLogs = [];
     let activeTaskDetail = null;
     let activeChangedFileId = null;
+    let activeChangedFileDetail = null;
     let activeArtifactName = null;
     let activeArtifactRequestToken = 0;
     let activeLogName = null;
@@ -687,11 +763,14 @@
     let planSourceMarkdown = '';
     let planEditMode = false;
     let planEditor = null;
+    let humanReviewEditor = null;
+    let humanReviewSourceMarkdown = '';
     let markdownViewer = null;
     let branchLookupTimer = null;
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
     let lastLoadedSettingsState = null;
+    let activeBoardPhase = 'implementation';
 
     const settingsTranslations = {
       EN: {
@@ -905,6 +984,59 @@
       },
     };
 
+    const humanReviewTranslations = {
+      EN: {
+        title: 'Human review',
+        status: 'Review note and file comments live here.',
+        noteTitle: 'Review note',
+        noteStatus: 'Saved into the current HUMAN-VERIFY document.',
+        commentsTitle: 'File comments',
+        commentsStatus: 'Comments block approval until they are removed.',
+        emptyComments: 'Select a changed file to add comments.',
+        commentPlaceholder: 'Leave a comment for this file...',
+        addComment: 'Add comment',
+        saveNote: 'Save note',
+        requestChanges: 'Request changes',
+        approve: 'Approve',
+        commentCountOne: '{count} comment',
+        commentCountMany: '{count} comments',
+        approvalBlocked: 'Resolve all file comments before approval.',
+        approvalReady: 'Approve creates the final commit from the current human-reviewed code.',
+        noteSaving: 'Saving review note...',
+        noteSaved: 'Review note saved.',
+        commentSaving: 'Saving comment...',
+        commentDeleting: 'Deleting comment...',
+        requestingChanges: 'Sending task back to TODO with the current reviewed code state...',
+        approving: 'Creating the final commit from the current reviewed code and task documents...',
+        commentMeta: '{by} · {createdAt}',
+      },
+      KO: {
+        title: '인간 리뷰',
+        status: '리뷰 노트와 파일 댓글을 여기에서 관리합니다.',
+        noteTitle: '리뷰 노트',
+        noteStatus: '현재 HUMAN-VERIFY 문서에 저장됩니다.',
+        commentsTitle: '파일 댓글',
+        commentsStatus: '댓글이 남아 있으면 승인할 수 없습니다.',
+        emptyComments: '변경 파일을 선택하면 댓글을 달 수 있습니다.',
+        commentPlaceholder: '이 파일에 대한 댓글을 남기세요...',
+        addComment: '댓글 추가',
+        saveNote: '노트 저장',
+        requestChanges: '재요청',
+        approve: '승인',
+        commentCountOne: '댓글 {count}개',
+        commentCountMany: '댓글 {count}개',
+        approvalBlocked: '모든 파일 댓글을 정리해야 승인할 수 있습니다.',
+        approvalReady: '승인하면 현재 인간 리뷰 기준 코드와 문서로 최종 커밋을 만듭니다.',
+        noteSaving: '리뷰 노트를 저장하는 중...',
+        noteSaved: '리뷰 노트를 저장했습니다.',
+        commentSaving: '댓글을 저장하는 중...',
+        commentDeleting: '댓글을 삭제하는 중...',
+        requestingChanges: '현재 검토한 코드 상태를 다음 구현 단계로 넘기면서 TODO로 되돌리는 중...',
+        approving: '현재 검토한 코드와 작업 문서를 기준으로 최종 커밋을 만드는 중...',
+        commentMeta: '{by} · {createdAt}',
+      },
+    };
+
     targetRepoInput.value = defaultTargetRepo;
     runtimeLanguageInput.value = initialRuntimeLanguage;
     baseBranchInput.value = defaultBaseBranch;
@@ -912,6 +1044,7 @@
     lastAutoBaseBranch = defaultBaseBranch;
     applyRuntimeSettingsTranslations();
     applyRequestTranslations();
+    applyHumanReviewTranslations();
 
     function currentUiLanguage() {
       return settingsTranslations[runtimeLanguageInput.value] ? runtimeLanguageInput.value : initialRuntimeLanguage;
@@ -928,6 +1061,13 @@
       const language = currentUiLanguage();
       const table = requestTranslations[language] || requestTranslations.EN;
       const template = table[key] || requestTranslations.EN[key] || '';
+      return Object.entries(variables).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, String(value)), template);
+    }
+
+    function translateHumanReview(key, variables = {}) {
+      const language = currentUiLanguage();
+      const table = humanReviewTranslations[language] || humanReviewTranslations.EN;
+      const template = table[key] || humanReviewTranslations.EN[key] || '';
       return Object.entries(variables).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, String(value)), template);
     }
 
@@ -953,6 +1093,22 @@
       const node = document.getElementById(id);
       if (!node) return;
       node.innerHTML = translateSettings(key, variables);
+    }
+
+    function applyHumanReviewTranslations() {
+      taskHumanReviewStatus.textContent = translateHumanReview('status');
+      document.getElementById('task-human-review-title').textContent = translateHumanReview('title');
+      document.getElementById('task-human-review-note-title').textContent = translateHumanReview('noteTitle');
+      document.getElementById('task-human-review-comments-title').textContent = translateHumanReview('commentsTitle');
+      taskHumanReviewCommentsStatus.textContent = translateHumanReview('commentsStatus');
+      taskHumanReviewCommentInput.placeholder = translateHumanReview('commentPlaceholder');
+      addHumanReviewCommentButton.textContent = translateHumanReview('addComment');
+      saveHumanReviewNoteButton.textContent = translateHumanReview('saveNote');
+      requestChangesButton.textContent = translateHumanReview('requestChanges');
+      approveHumanReviewButton.textContent = translateHumanReview('approve');
+      if (!activeChangedFileDetail?.comments?.length) {
+        taskHumanReviewComments.innerHTML = `<div class="muted">${escapeHtml(translateHumanReview('emptyComments'))}</div>`;
+      }
     }
 
     function applyRuntimeSettingsTranslations() {
@@ -1008,6 +1164,7 @@
         settingsDiscoverySummary.textContent = translateSettings('discoveryIdle');
         setSettingsStatus(translateSettings('statusIdle'));
       }
+      renderBoardPhaseTabs();
     }
 
     function applyRequestTranslations() {
@@ -1100,6 +1257,7 @@
       syncNumericSettingInput(commitSessionTokenBudgetInput, state.commit_session_token_budget, 250);
       applyRuntimeSettingsTranslations();
       applyRequestTranslations();
+      applyHumanReviewTranslations();
       refreshRequestDerivedText();
     }
 
@@ -1108,12 +1266,38 @@
       setSettingsModalOpen(false);
     }
 
+    function phaseLabel(phase) {
+      const labels = currentUiLanguage() === 'KO'
+        ? {
+            plan: '플랜 단계',
+            implementation: '구현 단계',
+            final: '최종 완료',
+          }
+        : {
+            plan: 'Planning',
+            implementation: 'Implementation',
+            final: 'Completed',
+          };
+      return labels[phase] || phase;
+    }
+
+    function renderBoardPhaseTabs() {
+      boardPhaseTabs.querySelectorAll('[data-board-phase]').forEach((button) => {
+        const phase = button.dataset.boardPhase;
+        button.textContent = phaseLabel(phase);
+        button.classList.toggle('active', phase === activeBoardPhase);
+      });
+    }
+
     async function loadBoard() {
       const res = await fetch('/api/board');
       const data = await res.json();
-      board.innerHTML = data.columns.map((column) => `
+      renderBoardPhaseTabs();
+      const visibleStates = new Set(boardPhaseStates[activeBoardPhase] || []);
+      const visibleColumns = data.columns.filter((column) => visibleStates.has(column.state));
+      board.innerHTML = visibleColumns.map((column) => `
         <section class="column">
-          <h2>${column.state}</h2>
+          <h2>${stateLabel(column.state)}</h2>
           ${column.items.map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong>${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderRunningMeta(item)}${renderCardModelMeta(item)}</button></article>`).join('')}
         </section>`).join('');
       refreshRunningClocks();
@@ -1150,18 +1334,31 @@
     }
 
     function stateLabel(state) {
-      const labels = {
-        requests: 'Requests',
-        planning: 'Planning',
-        'waiting-check-plans': 'Waiting check plans',
-        todos: 'TODOs',
-        implementing: 'Implementing',
-        'waiting-reviews': 'Waiting reviews',
-        reviewing: 'Reviewing',
-        'completed-reviews': 'Completed reviews',
-        'human-verifying': 'Human verifying',
-        done: 'Done',
-      };
+      const labels = currentUiLanguage() === 'KO'
+        ? {
+            requests: '요구사항',
+            planning: '계획 작성중',
+            'waiting-check-plans': '계획 승인 대기',
+            todos: '구현 대기',
+            implementing: '구현중',
+            'waiting-reviews': '리뷰 대기중',
+            reviewing: '리뷰중',
+            'completed-reviews': '리뷰 완료',
+            'human-verifying': '인간 리뷰중',
+            done: '완료',
+          }
+        : {
+            requests: 'Requirements',
+            planning: 'Planning',
+            'waiting-check-plans': 'Plan approval',
+            todos: 'Ready to implement',
+            implementing: 'Implementing',
+            'waiting-reviews': 'Awaiting review',
+            reviewing: 'In review',
+            'completed-reviews': 'Review complete',
+            'human-verifying': 'Human review',
+            done: 'Done',
+          };
       return labels[state] || state;
     }
 
@@ -1481,6 +1678,7 @@
         setSettingsStatus(translateSettings('statusSaved'), 'success');
         lastLoadedSettingsState = captureSettingsState();
         setSettingsModalOpen(false);
+        window.location.reload();
       } catch (error) {
         setSettingsStatus(error.message, 'error');
       } finally {
@@ -1719,9 +1917,11 @@
     }
 
     function renderChangedFileDetail(detail) {
+      activeChangedFileDetail = detail;
       renderChangedFileSummaryCard(detail.summary);
       taskDiffDesktop.innerHTML = renderDiffDesktop(detail);
       taskDiffMobile.innerHTML = renderDiffMobile(detail);
+      updateHumanReviewPanel();
     }
 
     function ensureMarkdownViewer(value) {
@@ -1805,6 +2005,109 @@
       return taskEditor.value;
     }
 
+    function ensureHumanReviewEditor() {
+      if (humanReviewEditor || !window.toastui || !window.toastui.Editor) return humanReviewEditor;
+      humanReviewEditor = new window.toastui.Editor({
+        el: taskHumanReviewEditorHost,
+        height: '320px',
+        initialEditType: 'markdown',
+        previewStyle: 'tab',
+        hideModeSwitch: true,
+        usageStatistics: false,
+      });
+      humanReviewEditor.on('change', updateHumanReviewPanel);
+      return humanReviewEditor;
+    }
+
+    function setHumanReviewEditorContent(value) {
+      humanReviewSourceMarkdown = value || '';
+      const editor = ensureHumanReviewEditor();
+      if (editor) {
+        editor.setMarkdown(humanReviewSourceMarkdown);
+        taskHumanReviewEditorFallback.hidden = true;
+        updateHumanReviewPanel();
+        return;
+      }
+      taskHumanReviewEditorFallback.hidden = false;
+      taskHumanReviewEditorFallback.value = humanReviewSourceMarkdown;
+      updateHumanReviewPanel();
+    }
+
+    function getHumanReviewEditorContent() {
+      const editor = ensureHumanReviewEditor();
+      if (editor) return editor.getMarkdown();
+      return taskHumanReviewEditorFallback.value;
+    }
+
+    function humanReviewNoteDirty() {
+      return getHumanReviewEditorContent().replace(/\s+$/, '') !== humanReviewSourceMarkdown.replace(/\s+$/, '');
+    }
+
+    async function saveHumanReviewNoteIfNeeded() {
+      if (!activeTaskId || activeTaskDetail?.metadata?.state !== 'human-verifying') return;
+      if (!humanReviewNoteDirty()) return;
+      taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaving');
+      saveHumanReviewNoteButton.disabled = true;
+      const response = await fetch(`/api/tasks/${activeTaskId}/human-review-note`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: getHumanReviewEditorContent() }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Failed to save human review note.');
+      humanReviewSourceMarkdown = getHumanReviewEditorContent();
+      taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaved');
+      updateHumanReviewPanel();
+    }
+
+    function renderHumanReviewComments(detail) {
+      const comments = Array.isArray(detail?.comments) ? detail.comments : [];
+      if (!comments.length) {
+        taskHumanReviewComments.innerHTML = `<div class="muted">${escapeHtml(translateHumanReview('emptyComments'))}</div>`;
+        return;
+      }
+      taskHumanReviewComments.innerHTML = comments.map((comment) => `
+        <article class="human-review-comment">
+          <div class="human-review-comment-meta">
+            <span>${escapeHtml(translateHumanReview('commentMeta', { by: comment.created_by, createdAt: formatDateTime(comment.created_at) }))}</span>
+            <button type="button" data-human-review-comment-id="${escapeHtml(comment.comment_id)}">Delete</button>
+          </div>
+          <div class="human-review-comment-body">${escapeHtml(comment.body)}</div>
+        </article>
+      `).join('');
+    }
+
+    function updateHumanReviewPanel() {
+      const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
+      taskHumanReviewPanel.hidden = !canVerify;
+      if (!canVerify) return;
+      const unresolved = Number(activeTaskDetail?.human_review?.unresolved_comment_count || 0);
+      taskHumanReviewCommentCount.textContent = translateHumanReview(unresolved === 1 ? 'commentCountOne' : 'commentCountMany', { count: unresolved });
+      taskHumanReviewCommentsStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('commentsStatus');
+      taskHumanReviewStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('approvalReady');
+      taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
+      saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
+      addHumanReviewCommentButton.disabled = !activeChangedFileDetail || !taskHumanReviewCommentInput.value.trim() || taskDetailStale;
+      requestChangesButton.disabled = taskDetailStale;
+      approveHumanReviewButton.disabled = taskDetailStale || unresolved > 0;
+      renderHumanReviewComments(activeChangedFileDetail);
+    }
+
+    async function saveHumanReviewNoteIfNeeded() {
+      if (!activeTaskId || activeTaskDetail?.metadata?.state !== 'human-verifying') return;
+      if (!humanReviewNoteDirty()) return;
+      taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaving');
+      const response = await fetch(`/api/tasks/${activeTaskId}/human-review-note`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: getHumanReviewEditorContent() }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Failed to save human review note.');
+      humanReviewSourceMarkdown = getHumanReviewEditorContent();
+      taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaved');
+    }
+
     function setArtifactMode(editing) {
       taskModeBadge.textContent = editing ? 'Edit mode' : 'Viewer mode';
       taskViewerHost.hidden = editing;
@@ -1842,25 +2145,50 @@
        approvePlanButton.disabled = !editableArtifact || taskDetailStale;
     }
 
+    function renderHumanReviewComments(detail) {
+      const comments = Array.isArray(detail?.comments) ? detail.comments : [];
+      if (!comments.length) {
+        taskHumanReviewComments.innerHTML = `<div class="muted">${escapeHtml(translateHumanReview('emptyComments'))}</div>`;
+        return;
+      }
+      taskHumanReviewComments.innerHTML = comments.map((comment) => `
+        <article class="human-review-comment">
+          <div class="human-review-comment-meta">
+            <span>${escapeHtml(translateHumanReview('commentMeta', { by: comment.created_by, createdAt: formatDateTime(comment.created_at) }))}</span>
+            <button type="button" data-human-review-comment-id="${escapeHtml(comment.comment_id)}">Delete</button>
+          </div>
+          <div class="human-review-comment-body">${escapeHtml(comment.body)}</div>
+        </article>
+      `).join('');
+    }
+
+    function updateHumanReviewPanel() {
+      const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
+      taskHumanReviewPanel.hidden = !canVerify;
+      if (!canVerify) return;
+      const unresolved = Number(activeTaskDetail?.human_review?.unresolved_comment_count || 0);
+      taskHumanReviewCommentCount.textContent = translateHumanReview(unresolved === 1 ? 'commentCountOne' : 'commentCountMany', { count: unresolved });
+      taskHumanReviewCommentsStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('commentsStatus');
+      taskHumanReviewStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('approvalReady');
+      taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
+      addHumanReviewCommentButton.disabled = !activeChangedFileDetail || !taskHumanReviewCommentInput.value.trim() || taskDetailStale;
+      requestChangesButton.disabled = taskDetailStale;
+      approveHumanReviewButton.disabled = taskDetailStale || unresolved > 0;
+      renderHumanReviewComments(activeChangedFileDetail);
+    }
+
     function updateHumanVerificationState() {
       const state = activeTaskDetail?.metadata?.state;
       const canStart = state === 'completed-reviews';
-      const canVerify = state === 'human-verifying';
-      taskVerificationActions.hidden = !(canStart || canVerify);
+      taskVerificationActions.hidden = !canStart;
       startVerificationButton.hidden = !canStart;
-      rejectVerificationButton.hidden = !canVerify;
-      approveVerificationButton.hidden = !canVerify;
-      taskVerificationNoteWrap.hidden = !canVerify;
       startVerificationButton.disabled = !canStart || taskDetailStale;
-      rejectVerificationButton.disabled = !canVerify || !taskVerificationNote.value.trim() || taskDetailStale;
-      approveVerificationButton.disabled = !canVerify || taskDetailStale;
       if (canStart) {
         taskVerificationStatus.textContent = taskDetailStale ? 'Task state changed while this modal was paused for a local PLAN.md edit. Save or exit the edit view so the modal can refresh before starting verification.' : 'AI review passed. Start verification to apply the workspace patch to the target repo for manual checking.';
-      } else if (canVerify) {
-        taskVerificationStatus.textContent = taskDetailStale ? 'Task state changed while this modal was paused for a local PLAN.md edit. Refresh the detail view before acting on human verification.' : 'Patch is applied in the target repo. Reject rolls it back and sends the task back to TODO; approve commits and completes the task.';
       } else {
         taskVerificationStatus.textContent = 'Manual verification actions appear here.';
       }
+      updateHumanReviewPanel();
     }
 
     function updateTaskDeleteState() {
@@ -1977,6 +2305,9 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
+      setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
+      taskHumanReviewCommentInput.value = '';
+      activeChangedFileDetail = null;
       renderChangedFileButtons(detail.changed_files);
       renderDiffPlaceholder(changedFilesVisible ? 'Select a changed file.' : 'Changed files appear here when a stored review patch is available for this task.');
       renderArtifactButtons(detail.markdown_files);
@@ -2023,7 +2354,7 @@
     }
 
     function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {
-      if (metadata?.state === 'waiting-check-plans' && files.includes('PLAN.md')) return 'PLAN.md';
+      if (['waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')) return 'PLAN.md';
       return files[0] || null;
     }
 
@@ -2166,10 +2497,14 @@
         activeLogName = null;
         activeTaskDetail = null;
         activeChangedFileId = null;
+        activeChangedFileDetail = null;
         taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
         taskTimeline.innerHTML = '<div class="muted">Loading stage timeline...</div>';
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder('Select the Changed files tab to inspect the stored review patch.');
+        taskHumanReviewComments.innerHTML = '<div class="muted">Select a changed file to add comments.</div>';
+        taskHumanReviewCommentInput.value = '';
+        setHumanReviewEditorContent('');
         taskLogFiles.innerHTML = '';
         updateLogViewState();
         taskLogViewer.textContent = 'Select the Logs tab to load OpenCode output.';
@@ -2182,7 +2517,6 @@
         savePlanButton.disabled = true;
         taskModeBadge.textContent = 'Viewer mode';
         taskEditorStatus.textContent = 'Select a markdown artifact to view.';
-        taskVerificationNote.value = '';
         updateHumanVerificationState();
         updateTaskDeleteState();
         taskTabChangedFiles.hidden = true;
@@ -2289,6 +2623,52 @@
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
         renderDiffPlaceholder('Failed to load changed file diff.');
+      }
+    }
+
+    async function addHumanReviewComment() {
+      if (!activeTaskId || !activeChangedFileDetail) return;
+      const body = taskHumanReviewCommentInput.value.trim();
+      if (!body) return;
+      addHumanReviewCommentButton.disabled = true;
+      taskHumanReviewStatus.textContent = translateHumanReview('commentSaving');
+      try {
+        await saveHumanReviewNoteIfNeeded();
+        const response = await fetch(`/api/tasks/${activeTaskId}/human-review-comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: activeChangedFileDetail.summary.path, body }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to save human review comment.');
+        taskHumanReviewCommentInput.value = '';
+        await loadTaskDetail(activeTaskId, true, { softRefresh: true });
+        await loadChangedFile(activeTaskId, activeChangedFileId, true);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskHumanReviewStatus.textContent = error.message;
+      } finally {
+        updateHumanReviewPanel();
+      }
+    }
+
+    async function deleteHumanReviewComment(commentId) {
+      if (!activeTaskId || !commentId) return;
+      taskHumanReviewStatus.textContent = translateHumanReview('commentDeleting');
+      try {
+        await saveHumanReviewNoteIfNeeded();
+        const response = await fetch(`/api/tasks/${activeTaskId}/human-review-comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to delete human review comment.');
+        await loadTaskDetail(activeTaskId, true, { softRefresh: true });
+        await loadChangedFile(activeTaskId, activeChangedFileId, true);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskHumanReviewStatus.textContent = error.message;
+      } finally {
+        updateHumanReviewPanel();
       }
     }
 
@@ -2402,26 +2782,24 @@
 
     async function rejectVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
-      const note = taskVerificationNote.value.trim();
-      if (!note) return;
-      rejectVerificationButton.disabled = true;
-      approveVerificationButton.disabled = true;
-      taskVerificationStatus.textContent = 'Rolling back patch and sending task back to TODO...';
+      requestChangesButton.disabled = true;
+      approveHumanReviewButton.disabled = true;
+      taskHumanReviewStatus.textContent = translateHumanReview('requestingChanges');
       try {
+        await saveHumanReviewNoteIfNeeded();
         const response = await fetch(`/api/tasks/${activeTaskId}/reject-verification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note }),
+          body: JSON.stringify({ note: getHumanReviewEditorContent() }),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || 'Failed to reject verification.');
-        taskVerificationNote.value = '';
         await loadBoard();
         setTaskModalOpen(false);
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskVerificationStatus.textContent = 'Failed to reject verification.';
+        taskHumanReviewStatus.textContent = error.message;
       } finally {
         updateHumanVerificationState();
       }
@@ -2429,20 +2807,20 @@
 
     async function approveVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
-      rejectVerificationButton.disabled = true;
-      approveVerificationButton.disabled = true;
-      taskVerificationStatus.textContent = 'Creating commit in target repo...';
+      requestChangesButton.disabled = true;
+      approveHumanReviewButton.disabled = true;
+      taskHumanReviewStatus.textContent = translateHumanReview('approving');
       try {
+        await saveHumanReviewNoteIfNeeded();
         const response = await fetch(`/api/tasks/${activeTaskId}/approve-verification`, { method: 'POST' });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || 'Failed to approve verification.');
-        taskVerificationNote.value = '';
         await loadBoard();
         setTaskModalOpen(false);
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskVerificationStatus.textContent = 'Failed to approve verification.';
+        taskHumanReviewStatus.textContent = error.message;
       } finally {
         updateHumanVerificationState();
       }
@@ -2499,7 +2877,7 @@
     document.getElementById('refresh').addEventListener('click', loadBoard);
     openComposerButton.addEventListener('click', async () => { clearMessages(); applyRequestTranslations(); resetFormState(); setModalOpen(true); await loadTargetRepoBranches(); });
     openSettingsButton.addEventListener('click', openSettingsModal);
-    runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); refreshRequestDerivedText(); });
+    runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); refreshRequestDerivedText(); });
     cancelComposerButton.addEventListener('click', () => { clearMessages(); resetFormState(); setModalOpen(false); });
     cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
     modal.addEventListener('click', (event) => { if (event.target === modal) setModalOpen(false); });
@@ -2511,12 +2889,26 @@
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
     board.addEventListener('click', (event) => { const button = event.target.closest('[data-task-id]'); if (!button) return; loadTaskDetail(button.dataset.taskId); });
+    boardPhaseTabs.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-board-phase]');
+      if (!button) return;
+      activeBoardPhase = button.dataset.boardPhase;
+      renderBoardPhaseTabs();
+      loadBoard();
+    });
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
     taskTabTimeline.addEventListener('click', () => setTaskTab('timeline'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
+    taskHumanReviewComments.addEventListener('click', (event) => { const button = event.target.closest('[data-human-review-comment-id]'); if (!button) return; deleteHumanReviewComment(button.dataset.humanReviewCommentId); });
+    taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
+    taskHumanReviewCommentInput.addEventListener('input', updateHumanReviewPanel);
+    saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; taskHumanReviewStatus.textContent = error.message; updateHumanReviewPanel(); }));
+    addHumanReviewCommentButton.addEventListener('click', addHumanReviewComment);
+    requestChangesButton.addEventListener('click', rejectVerification);
+    approveHumanReviewButton.addEventListener('click', approveVerification);
     taskMarkdownFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     taskArtifactSubtabs.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     taskLogFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); });
@@ -2525,10 +2917,7 @@
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
-    taskVerificationNote.addEventListener('input', updateHumanVerificationState);
     startVerificationButton.addEventListener('click', startVerification);
-    rejectVerificationButton.addEventListener('click', rejectVerification);
-    approveVerificationButton.addEventListener('click', approveVerification);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'goal', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
     targetRepoInput.addEventListener('input', () => { targetRepoInput.dataset.autofilled = 'false'; });
