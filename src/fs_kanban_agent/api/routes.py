@@ -40,6 +40,15 @@ class HumanVerificationPayload(BaseModel):
     note: str = ""
 
 
+class HumanReviewNotePayload(BaseModel):
+    content: str = ""
+
+
+class HumanReviewCommentPayload(BaseModel):
+    file_path: str
+    body: str
+
+
 class ModelSettingsPayload(BaseModel):
     language: str | None = None
     coding_assistant: str | None = None
@@ -387,6 +396,43 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return moved.metadata
+
+    @router.put("/api/tasks/{task_id}/human-review-note")
+    async def save_human_review_note(task_id: str, payload: HumanReviewNotePayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            context = await asyncio.to_thread(runtime.verification_service.save_note, task_id, by="human", content=payload.content)
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return {"saved": True, "task_id": context.metadata.task_id}
+
+    @router.post("/api/tasks/{task_id}/human-review-comments")
+    async def add_human_review_comment(task_id: str, payload: HumanReviewCommentPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            context = await asyncio.to_thread(
+                runtime.verification_service.add_comment,
+                task_id,
+                by="human",
+                file_path=payload.file_path,
+                body=payload.body,
+            )
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return {"saved": True, "task_id": context.metadata.task_id}
+
+    @router.delete("/api/tasks/{task_id}/human-review-comments/{comment_id}")
+    async def delete_human_review_comment(task_id: str, comment_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            context = await asyncio.to_thread(runtime.verification_service.delete_comment, task_id, by="human", comment_id=comment_id)
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return {"deleted": True, "task_id": context.metadata.task_id, "comment_id": comment_id}
 
     @router.post("/api/tasks/{task_id}/reject-verification")
     async def reject_verification(task_id: str, payload: HumanVerificationPayload, request: Request):
