@@ -619,6 +619,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         get_response = client.get("/api/settings/models")
         assert get_response.status_code == 200
         assert get_response.json()["language"] == "EN"
+        assert get_response.json()["coding_assistant"] == "opencode"
+        assert get_response.json()["available_assistants"] == [{"value": "opencode", "label": "OpenCode"}]
         assert get_response.json()["planner_model"] is None
         assert get_response.json()["planner_session_token_budget"] == 250
         assert get_response.json()["planner_agent_count"] == 1
@@ -646,6 +648,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             "/api/settings/models",
             json={
                 "language": "KO",
+                "coding_assistant": "opencode",
                 "planner_model": "gpt-5-planner",
                 "planner_session_token_budget": 210,
                 "planner_agent_count": 2,
@@ -666,6 +669,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     payload = put_response.json()
     assert payload["saved"] is True
     assert payload["language"] == "KO"
+    assert payload["coding_assistant"] == "opencode"
     assert payload["planner_model"] == "gpt-5-planner"
     assert payload["planner_session_token_budget"] == 210
     assert payload["planner_agent_count"] == 2
@@ -681,6 +685,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["repo_discovery_max_depth"] == 4
     assert app.state.runtime.config.opencode.planner_model == "gpt-5-planner"
     assert app.state.runtime.config.runtime.language == "KO"
+    assert app.state.runtime.config.runtime.coding_assistant == "opencode"
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.runtime.planner_agent_count == 2
     assert app.state.runtime.config.opencode.implementer_model == "gpt-5-implementer"
@@ -797,6 +802,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
                 json={
                 "planner_model": "planner-x",
                 "language": "KO",
+                "coding_assistant": "opencode",
                 "planner_session_token_budget": 180,
                 "planner_agent_count": 2,
                 "implementer_model": None,
@@ -817,6 +823,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         persisted = load_config(default_base_path)
         assert persisted.opencode.planner_model == "planner-x"
         assert persisted.runtime.language == "KO"
+        assert persisted.runtime.coding_assistant == "opencode"
         assert persisted.opencode.planner_session_token_budget == 180000
         assert persisted.runtime.planner_agent_count == 2
         assert persisted.opencode.reviewer_model == "reviewer-y"
@@ -835,6 +842,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     config.repo_discovery.root = "../custom-root"
     config.runtime.planner_agent_count = 5
     config.runtime.language = "KO"
+    config.runtime.coding_assistant = "opencode"
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     with TestClient(app) as client:
@@ -842,6 +850,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
             "/api/settings/models",
             json={
                 "planner_model": "planner-x",
+                "coding_assistant": "opencode",
                 "planner_session_token_budget": 260,
                 "implementer_agent_count": 2,
                 "implementer_model": None,
@@ -856,12 +865,14 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
 
     assert response.status_code == 200
     assert response.json()["language"] == "KO"
+    assert response.json()["coding_assistant"] == "opencode"
     assert response.json()["repo_discovery_root"] == "../custom-root"
     assert response.json()["repo_discovery_max_depth"] == 5
     assert response.json()["planner_agent_count"] == 5
     assert response.json()["implementer_agent_count"] == 2
     assert app.state.runtime.config.repo_discovery.root == "../custom-root"
     assert app.state.runtime.config.runtime.language == "KO"
+    assert app.state.runtime.config.runtime.coding_assistant == "opencode"
     assert app.state.runtime.config.runtime.planner_agent_count == 5
     assert app.state.runtime.config.runtime.implementer_agent_count == 2
 
@@ -871,6 +882,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
     config.opencode.planner_model = "stable-planner"
     config.runtime.planner_agent_count = 3
     config.runtime.language = "EN"
+    config.runtime.coding_assistant = "opencode"
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     def fail_persist(self, path=None):
@@ -885,6 +897,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
                 json={
                     "planner_model": "new-planner",
                     "language": "KO",
+                    "coding_assistant": "opencode",
                     "planner_session_token_budget": 250,
                     "planner_agent_count": 7,
                     "implementer_model": None,
@@ -898,6 +911,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
 
     assert app.state.runtime.config.opencode.planner_model == "stable-planner"
     assert app.state.runtime.config.runtime.language == "EN"
+    assert app.state.runtime.config.runtime.coding_assistant == "opencode"
     assert app.state.runtime.config.runtime.planner_agent_count == 3
 
 
@@ -919,6 +933,26 @@ def test_api_rejects_invalid_runtime_language(configured_paths):
 
     assert response.status_code == 422
     assert config.runtime.language == "EN"
+
+
+def test_api_rejects_invalid_runtime_coding_assistant(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "codex",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 422
+    assert config.runtime.coding_assistant == "opencode"
 
 
 def test_api_save_materializes_runtime_agents_immediately(configured_paths):
@@ -1050,9 +1084,18 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Debug log" in response.text
     assert "planner_model" in response.text
     assert "runtime_language" in response.text
+    assert "runtime_coding_assistant" in response.text
     assert "const settingsTranslations = {" in response.text
     assert "applyRuntimeSettingsTranslations();" in response.text
     assert "runtimeLanguageInput.addEventListener('change', () => applyRuntimeSettingsTranslations());" in response.text
+    assert 'class="settings-sections"' in response.text
+    assert 'id="settings-basics-heading"' in response.text
+    assert 'id="settings-agents-heading"' in response.text
+    assert 'class="settings-role-inline"' in response.text
+    assert 'class="settings-role-inline settings-role-inline-commit"' in response.text
+    assert "Agent" in response.text
+    assert 'id="close-settings"' not in response.text
+    assert 'id="settings-config-path"' not in response.text
     assert "planner_session_token_budget" in response.text
     assert "planner_agent_count" in response.text
     assert "implementer_model" in response.text
@@ -1071,6 +1114,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Save runtime settings" in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
+    assert "models loaded ·" in response.text
     assert "task-viewer-host" in response.text
     assert "Approve plan" in response.text
     assert "toastui-editor" in response.text
@@ -1153,8 +1197,12 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert response.status_code == 200
     assert 'const initialRuntimeLanguage = "KO";' in response.text
     assert "런타임 설정" in response.text
+    assert "기본값" in response.text
+    assert "런타임 역할" in response.text
+    assert "어시스턴트" in response.text
+    assert "에이전트" in response.text
     assert "발견된 모델 새로고침" in response.text
-    assert "런타임 설정 저장" in response.text
+    assert "저장" in response.text
 
 
 def test_dashboard_page_uses_custom_discovery_root_as_default_target(configured_paths, tmp_path):

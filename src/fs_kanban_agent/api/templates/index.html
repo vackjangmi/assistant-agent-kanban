@@ -54,19 +54,31 @@
     .settings-copy p { margin: 8px 0 0; color: var(--muted); }
     .settings-toolbar { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
     .settings-toolbar p { margin: 0; color: var(--muted); }
+    .settings-sections { display: grid; gap: 18px; }
+    .settings-section { display: grid; gap: 12px; }
+    .settings-section-head { display: grid; gap: 4px; }
+    .settings-section-head strong { font-size: 1rem; }
+    .settings-section-head span { color: var(--muted); font-size: 0.92rem; }
+    .settings-toolbar-cluster { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .settings-toolbar-actions { justify-content: flex-end; margin-left: auto; }
+    .settings-toolbar-field { display: inline-grid; grid-template-columns: auto minmax(120px, auto); gap: 8px; align-items: center; }
+    .settings-toolbar-field label { font-size: 0.78rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+    .settings-toolbar-field select { min-width: 132px; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 9px 12px; font: inherit; color: var(--text); }
     .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; }
+    .settings-grid-basic { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
     .settings-card { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }
     .settings-card strong { font-size: 1rem; }
     .settings-card span { color: var(--muted); font-size: 0.95rem; }
     .settings-card input, .settings-card select { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
     .settings-card small { color: var(--muted); font-size: 0.88rem; }
-    .settings-role-fields { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 10px; align-items: end; }
+    .settings-role-inline { display: grid; grid-template-columns: 64px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
+    .settings-role-inline-commit { grid-template-columns: minmax(0, 1fr) 110px; }
+    .settings-field-compact input { text-align: center; }
     .settings-field { display: grid; gap: 5px; }
     .settings-field label { font-size: 0.83rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
     .settings-input-with-suffix { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
-    .settings-input-with-suffix input { border-right: 0; }
+    .settings-input-with-suffix input { border-right: 0; text-align: center; }
     .settings-input-suffix { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 12px; border: 1px solid var(--border); background: rgba(124,79,44,0.1); color: var(--accent-strong); font-size: 0.9rem; font-weight: 700; }
-    .settings-path { padding: 12px 14px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--muted); }
     .settings-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }
     .settings-status[data-tone="success"] { border-color: rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: var(--success); }
     .settings-status[data-tone="error"] { border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
@@ -183,7 +195,7 @@
     .mode-pill { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }
     .toastui-editor-defaultUI, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .toastui-editor-contents { max-width: 100%; min-width: 0; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-     @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .task-model-row, .diff-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } }
+     @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -288,119 +300,143 @@
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="settings-modal-title">Runtime settings</h2>
-          <p id="settings-modal-description">Adjust runtime overrides for the planner, implementer, reviewer, and commit worker without leaving the board.</p>
+          <p id="settings-modal-description">Update runtime defaults and model choices.</p>
         </div>
-          <button type="button" id="close-settings" aria-label="Close runtime settings">Close</button>
       </div>
       <form id="settings-form" class="settings-shell">
         <div class="settings-copy">
-          <strong id="settings-copy-title">Runtime overrides</strong>
-          <p id="settings-copy-body">Leave a model field blank to fall back to the configured agent default. Repo discovery root supports relative paths like <code>../</code> or any absolute path you want to scan. Agent counts let each role process different tasks in parallel, while a single task still stays locked to one worker. Saving updates the in-memory runtime immediately and writes a local config file for future runs.</p>
+          <strong id="settings-copy-title">Quick setup</strong>
+          <p id="settings-copy-body">Save once to update the live runtime and your local config.</p>
         </div>
-        <div class="settings-toolbar">
-          <p id="settings-discovery-summary">Open the panel to load current model options.</p>
-          <button type="button" id="refresh-model-options" class="ghost-button">Refresh discovered models</button>
-        </div>
-        <div class="settings-grid">
-          <label class="settings-card" for="runtime_language">
-            <strong id="settings-language-title">Language</strong>
-            <span id="settings-language-description">Default language for newly created requests and worker markdown artifacts.</span>
-            <select id="runtime_language" name="language">
-              <option value="EN">English</option>
-              <option value="KO">Korean</option>
-            </select>
-            <small id="settings-language-note">Only `EN` and `KO` are supported. Existing tasks keep the language already stored in their request metadata.</small>
-          </label>
-          <label class="settings-card" for="repo_discovery_root">
-            <strong id="settings-repo-root-title">Repo discovery root</strong>
-            <span id="settings-repo-root-description">Base path scanned for target repo suggestions and request defaults.</span>
-            <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
-            <small id="settings-repo-root-note">Keep <code>../</code> for the default relative scan root, or enter any absolute path manually.</small>
-          </label>
-          <label class="settings-card" for="repo_discovery_max_depth">
-            <strong id="settings-repo-depth-title">Repo discovery depth</strong>
-            <span id="settings-repo-depth-description">How many directory levels to scan when building target repo suggestions.</span>
-            <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
-            <small id="settings-repo-depth-note">Use larger values only when you need deeper nested repos to appear in the list.</small>
-          </label>
-          <div class="settings-card">
+        <div class="settings-sections">
+          <section class="settings-section">
+            <div class="settings-section-head">
+              <strong id="settings-basics-heading">Basics</strong>
+              <span id="settings-basics-description">Language and repository defaults.</span>
+            </div>
+            <div class="settings-grid settings-grid-basic">
+              <label class="settings-card" for="runtime_language">
+                <strong id="settings-language-title">Language</strong>
+                <span id="settings-language-description">Default for new requests.</span>
+                <select id="runtime_language" name="language">
+                  <option value="EN">English</option>
+                  <option value="KO">Korean</option>
+                </select>
+                <small id="settings-language-note">Only <code>EN</code> and <code>KO</code>.</small>
+              </label>
+              <label class="settings-card" for="repo_discovery_root">
+                <strong id="settings-repo-root-title">Repo discovery root</strong>
+                <span id="settings-repo-root-description">Where repo suggestions are scanned.</span>
+                <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
+                <small id="settings-repo-root-note">Use <code>../</code> or an absolute path.</small>
+              </label>
+              <label class="settings-card" for="repo_discovery_max_depth">
+                <strong id="settings-repo-depth-title">Repo discovery depth</strong>
+                <span id="settings-repo-depth-description">How deep discovery scans.</span>
+                <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
+                <small id="settings-repo-depth-note">Increase only for nested repos.</small>
+              </label>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-head">
+              <strong id="settings-agents-heading">Runtime roles</strong>
+              <span id="settings-agents-description">Models, token budgets, and parallel slots.</span>
+            </div>
+            <div class="settings-toolbar">
+              <div class="settings-toolbar-cluster">
+                <div class="settings-toolbar-field">
+                  <label id="settings-coding-assistant-label" for="runtime_coding_assistant">Assistant</label>
+                  <select id="runtime_coding_assistant" name="coding_assistant">
+                    <option value="opencode">OpenCode</option>
+                  </select>
+                </div>
+              </div>
+              <div class="settings-toolbar-cluster settings-toolbar-actions">
+                <p id="settings-discovery-summary">Open the panel to load current model options.</p>
+                <button type="button" id="refresh-model-options" class="ghost-button">Refresh discovered models</button>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <div class="settings-card">
             <strong id="settings-planner-title">Planner model</strong>
-            <span id="settings-planner-description">Used for plan generation and plan revisions.</span>
-            <div class="settings-role-fields">
+            <span id="settings-planner-description">Planning runs.</span>
+            <div class="settings-role-inline">
+              <div class="settings-field settings-field-compact">
+                <label id="settings-planner-agents-label" for="planner_agent_count">Agent</label>
+                <input id="planner_agent_count" name="planner_agent_count" type="number" min="1" step="1" placeholder="1">
+              </div>
               <div class="settings-field">
                 <label id="settings-planner-model-label" for="planner_model">Model</label>
                 <input id="planner_model" name="planner_model" list="opencode-model-options" placeholder="inherit default model">
               </div>
-              <div class="settings-field">
-                <label id="settings-planner-token-label" for="planner_session_token_budget">Token size (K)</label>
+              <div class="settings-field settings-field-compact">
+                <label id="settings-planner-token-label" for="planner_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="planner_session_token_budget" name="planner_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
-              <div class="settings-field">
-                <label id="settings-planner-agents-label" for="planner_agent_count">Agents</label>
-                <input id="planner_agent_count" name="planner_agent_count" type="number" min="1" step="1" placeholder="1">
-              </div>
             </div>
-            <small id="settings-planner-note">Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many planner runs can work on different tasks in parallel.</small>
+            <small id="settings-planner-note">Model, token budget, and parallel agents.</small>
           </div>
           <div class="settings-card">
             <strong id="settings-implementer-title">Implementer model</strong>
-            <span id="settings-implementer-description">Used when coding inside the isolated workspace.</span>
-            <div class="settings-role-fields">
+            <span id="settings-implementer-description">Workspace coding runs.</span>
+            <div class="settings-role-inline">
+              <div class="settings-field settings-field-compact">
+                <label id="settings-implementer-agents-label" for="implementer_agent_count">Agent</label>
+                <input id="implementer_agent_count" name="implementer_agent_count" type="number" min="1" step="1" placeholder="1">
+              </div>
               <div class="settings-field">
                 <label id="settings-implementer-model-label" for="implementer_model">Model</label>
                 <input id="implementer_model" name="implementer_model" list="opencode-model-options" placeholder="inherit default model">
               </div>
-              <div class="settings-field">
-                <label id="settings-implementer-token-label" for="implementer_session_token_budget">Token size (K)</label>
+              <div class="settings-field settings-field-compact">
+                <label id="settings-implementer-token-label" for="implementer_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="implementer_session_token_budget" name="implementer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
-              <div class="settings-field">
-                <label id="settings-implementer-agents-label" for="implementer_agent_count">Agents</label>
-                <input id="implementer_agent_count" name="implementer_agent_count" type="number" min="1" step="1" placeholder="1">
-              </div>
             </div>
-            <small id="settings-implementer-note">Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many implementation runs can work on different tasks in parallel.</small>
+            <small id="settings-implementer-note">Model, token budget, and parallel agents.</small>
           </div>
           <div class="settings-card">
             <strong id="settings-reviewer-title">Reviewer model</strong>
-            <span id="settings-reviewer-description">Used for review verdicts before human verification.</span>
-            <div class="settings-role-fields">
+            <span id="settings-reviewer-description">Review runs.</span>
+            <div class="settings-role-inline">
+              <div class="settings-field settings-field-compact">
+                <label id="settings-reviewer-agents-label" for="reviewer_agent_count">Agent</label>
+                <input id="reviewer_agent_count" name="reviewer_agent_count" type="number" min="1" step="1" placeholder="1">
+              </div>
               <div class="settings-field">
                 <label id="settings-reviewer-model-label" for="reviewer_model">Model</label>
                 <input id="reviewer_model" name="reviewer_model" list="opencode-model-options" placeholder="inherit default model">
               </div>
-              <div class="settings-field">
-                <label id="settings-reviewer-token-label" for="reviewer_session_token_budget">Token size (K)</label>
+              <div class="settings-field settings-field-compact">
+                <label id="settings-reviewer-token-label" for="reviewer_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="reviewer_session_token_budget" name="reviewer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
-              <div class="settings-field">
-                <label id="settings-reviewer-agents-label" for="reviewer_agent_count">Agents</label>
-                <input id="reviewer_agent_count" name="reviewer_agent_count" type="number" min="1" step="1" placeholder="1">
-              </div>
             </div>
-            <small id="settings-reviewer-note">Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many review runs can work on different tasks in parallel.</small>
+            <small id="settings-reviewer-note">Model, token budget, and parallel agents.</small>
           </div>
           <div class="settings-card">
             <strong id="settings-commit-title">Commit model</strong>
-            <span id="settings-commit-description">Used when generating the final commit message. The token budget is stored now and applies once the commit worker starts reusing sessions.</span>
-            <div class="settings-role-fields">
+            <span id="settings-commit-description">Commit message generation.</span>
+            <div class="settings-role-inline settings-role-inline-commit">
               <div class="settings-field">
                 <label id="settings-commit-model-label" for="commit_model">Model</label>
                 <input id="commit_model" name="commit_model" list="opencode-model-options" placeholder="inherit default model">
               </div>
-              <div class="settings-field">
-                <label id="settings-commit-token-label" for="commit_session_token_budget">Token size (K)</label>
+              <div class="settings-field settings-field-compact">
+                <label id="settings-commit-token-label" for="commit_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="commit_session_token_budget" name="commit_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
             </div>
-            <small id="settings-commit-note">Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.</small>
+            <small id="settings-commit-note">Model and token budget.</small>
           </div>
+            </div>
+          </section>
         </div>
         <datalist id="opencode-model-options"></datalist>
-        <div id="settings-config-path" class="settings-path">Config path: loading...</div>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
         <div class="form-actions">
-          <button type="button" id="cancel-settings">Cancel</button>
+          <button type="button" id="cancel-settings">Close</button>
           <button type="submit" id="save-settings" class="primary">Save runtime settings</button>
         </div>
       </form>
@@ -535,7 +571,6 @@
     const openComposerButton = document.getElementById('open-composer');
     const openSettingsButton = document.getElementById('open-settings');
     const closeComposerButton = document.getElementById('close-composer');
-    const closeSettingsButton = document.getElementById('close-settings');
     const closeTaskModalButton = document.getElementById('close-task-modal');
     const cancelComposerButton = document.getElementById('cancel-composer');
     const cancelSettingsButton = document.getElementById('cancel-settings');
@@ -553,6 +588,7 @@
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
     const runtimeLanguageInput = document.getElementById('runtime_language');
+    const runtimeCodingAssistantInput = document.getElementById('runtime_coding_assistant');
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const plannerAgentCountInput = document.getElementById('planner_agent_count');
@@ -565,7 +601,6 @@
     const commitModelInput = document.getElementById('commit_model');
     const commitSessionTokenBudgetInput = document.getElementById('commit_session_token_budget');
     const modelOptions = document.getElementById('opencode-model-options');
-    const settingsConfigPath = document.getElementById('settings-config-path');
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
     const settingsStatus = document.getElementById('settings-status');
     const refreshModelOptionsButton = document.getElementById('refresh-model-options');
@@ -641,49 +676,50 @@
     let branchLookupTimer = null;
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
-    let lastSettingsConfigPath = null;
 
     const settingsTranslations = {
       EN: {
         openSettings: 'Runtime settings',
         settingsTitle: 'Runtime settings',
-        settingsDescription: 'Adjust runtime overrides for the planner, implementer, reviewer, and commit worker without leaving the board.',
+        settingsDescription: 'Update runtime defaults and model choices.',
         closeSettings: 'Close',
-        closeSettingsAria: 'Close runtime settings',
-        settingsCopyTitle: 'Runtime overrides',
-        settingsCopyBody: 'Leave a model field blank to fall back to the configured agent default. Repo discovery root supports relative paths like <code>../</code> or any absolute path you want to scan. Agent counts let each role process different tasks in parallel, while a single task still stays locked to one worker. Saving updates the in-memory runtime immediately and writes a local config file for future runs.',
+        settingsCopyTitle: 'Quick setup',
+        settingsCopyBody: 'Save once to update the live runtime and your local config.',
         discoveryIdle: 'Open the panel to load current model options.',
         refreshModels: 'Refresh discovered models',
+        basicsHeading: 'Basics',
+        basicsDescription: 'Language and repository defaults.',
+        agentsHeading: 'Runtime roles',
+        agentsDescription: 'Models, token budgets, and parallel slots.',
+        codingAssistantLabel: 'Assistant',
         languageTitle: 'Language',
-        languageDescription: 'Default language for newly created requests and worker markdown artifacts.',
-        languageNote: 'Only <code>EN</code> and <code>KO</code> are supported. Existing tasks keep the language already stored in their request metadata.',
+        languageDescription: 'Default for new requests.',
+        languageNote: 'Only <code>EN</code> and <code>KO</code>.',
         languageEnglish: 'English',
         languageKorean: 'Korean',
         repoRootTitle: 'Repo discovery root',
-        repoRootDescription: 'Base path scanned for target repo suggestions and request defaults.',
-        repoRootNote: 'Keep <code>../</code> for the default relative scan root, or enter any absolute path manually.',
+        repoRootDescription: 'Where repo suggestions are scanned.',
+        repoRootNote: 'Use <code>../</code> or an absolute path.',
         repoDepthTitle: 'Repo discovery depth',
-        repoDepthDescription: 'How many directory levels to scan when building target repo suggestions.',
-        repoDepthNote: 'Use larger values only when you need deeper nested repos to appear in the list.',
+        repoDepthDescription: 'How deep discovery scans.',
+        repoDepthNote: 'Increase only for nested repos.',
         plannerTitle: 'Planner model',
-        plannerDescription: 'Used for plan generation and plan revisions.',
+        plannerDescription: 'Planning runs.',
         implementerTitle: 'Implementer model',
-        implementerDescription: 'Used when coding inside the isolated workspace.',
+        implementerDescription: 'Workspace coding runs.',
         reviewerTitle: 'Reviewer model',
-        reviewerDescription: 'Used for review verdicts before human verification.',
+        reviewerDescription: 'Review runs.',
         commitTitle: 'Commit model',
-        commitDescription: 'Used when generating the final commit message. The token budget is stored now and applies once the commit worker starts reusing sessions.',
+        commitDescription: 'Commit message generation.',
         modelLabel: 'Model',
-        tokenLabel: 'Token size (K)',
-        agentsLabel: 'Agents',
-        plannerNote: 'Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many planner runs can work on different tasks in parallel.',
-        implementerNote: 'Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many implementation runs can work on different tasks in parallel.',
-        reviewerNote: 'Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens. Agent count controls how many review runs can work on different tasks in parallel.',
-        commitNote: 'Pick from discovered options or type any custom model value. Enter token budget in thousands, for example <code>250</code> means <code>250K</code> tokens.',
-        cancel: 'Cancel',
-        saveSettings: 'Save runtime settings',
-        configPathLoading: 'Config path: loading...',
-        configPath: 'Config path: {path}',
+        tokenLabel: 'Token',
+        agentsLabel: 'Agent',
+        plannerNote: 'Model, token budget, and parallel agents.',
+        implementerNote: 'Model, token budget, and parallel agents.',
+        reviewerNote: 'Model, token budget, and parallel agents.',
+        commitNote: 'Model and token budget.',
+        cancel: 'Close',
+        saveSettings: 'Save',
         statusIdle: 'Current values load when you open this panel.',
         statusLoading: 'Loading current runtime settings...',
         statusRefreshing: 'Refreshing discovered model options...',
@@ -693,52 +729,54 @@
         statusFallback: 'Using cached model suggestions. Refresh failed: {error}',
         statusDiscoveryFailed: 'Model discovery failed: {error}. Manual entry still works.',
         statusDiscoveryEmpty: 'OpenCode responded, but no model options were returned. Manual entry still works.',
-        statusSaved: 'Saved runtime config to {path}.',
-        summaryAvailableOne: '{count} discovered model available. Suggestions stay editable, so you can still type any custom value. Last update: {refreshedAt}.',
-        summaryAvailableMany: '{count} discovered models available. Suggestions stay editable, so you can still type any custom value. Last update: {refreshedAt}.',
-        summaryEmpty: 'No models are cached yet. You can still leave a field blank or type any custom model value manually.',
+        statusSaved: 'Saved runtime settings.',
+        summaryAvailableOne: '{count} model loaded · {refreshedAt}',
+        summaryAvailableMany: '{count} models loaded · {refreshedAt}',
+        summaryEmpty: 'No cached models yet.',
         justNow: 'just now',
       },
       KO: {
         openSettings: '런타임 설정',
         settingsTitle: '런타임 설정',
-        settingsDescription: '보드를 벗어나지 않고 planner, implementer, reviewer, commit worker의 런타임 오버라이드를 조정합니다.',
+        settingsDescription: '런타임 기본값과 모델을 정리합니다.',
         closeSettings: '닫기',
-        closeSettingsAria: '런타임 설정 닫기',
-        settingsCopyTitle: '런타임 오버라이드',
-        settingsCopyBody: '모델 필드를 비워두면 설정된 기본 agent 값을 그대로 사용합니다. 저장소 탐색 루트는 <code>../</code> 같은 상대 경로나 원하는 절대 경로를 넣을 수 있습니다. Agent 수를 늘리면 각 역할이 서로 다른 task를 병렬 처리할 수 있고, 같은 task는 여전히 하나의 worker만 잡습니다. 저장하면 현재 런타임에 즉시 반영되고 이후 실행을 위해 로컬 config 파일에도 기록됩니다.',
+        settingsCopyTitle: '빠른 설정',
+        settingsCopyBody: '저장하면 현재 런타임과 로컬 설정 파일에 바로 반영됩니다.',
         discoveryIdle: '패널을 열면 현재 모델 옵션을 불러옵니다.',
         refreshModels: '발견된 모델 새로고침',
+        basicsHeading: '기본값',
+        basicsDescription: '언어와 저장소 기본 설정입니다.',
+        agentsHeading: '런타임 역할',
+        agentsDescription: '모델, 토큰 예산, 병렬 수를 정합니다.',
+        codingAssistantLabel: '어시스턴트',
         languageTitle: '언어',
-        languageDescription: '새로 만드는 요청과 worker markdown artifact의 기본 언어입니다.',
-        languageNote: '<code>EN</code>과 <code>KO</code>만 지원합니다. 기존 task는 이미 request metadata에 저장된 언어를 그대로 유지합니다.',
+        languageDescription: '새 요청 기본 언어입니다.',
+        languageNote: '<code>EN</code>과 <code>KO</code>만 지원합니다.',
         languageEnglish: '영어',
         languageKorean: '한국어',
         repoRootTitle: '저장소 탐색 루트',
-        repoRootDescription: '대상 저장소 추천과 요청 기본값을 만들 때 스캔하는 기준 경로입니다.',
-        repoRootNote: '기본 상대 스캔 루트를 유지하려면 <code>../</code>를 쓰고, 직접 지정하려면 절대 경로를 입력하세요.',
+        repoRootDescription: '저장소 추천을 스캔하는 경로입니다.',
+        repoRootNote: '<code>../</code> 또는 절대 경로를 사용하세요.',
         repoDepthTitle: '저장소 탐색 깊이',
-        repoDepthDescription: '대상 저장소 추천을 만들 때 몇 단계 아래까지 스캔할지 정합니다.',
-        repoDepthNote: '더 깊은 중첩 저장소가 필요할 때만 값을 키우세요.',
+        repoDepthDescription: '탐색 깊이를 정합니다.',
+        repoDepthNote: '중첩 저장소가 필요할 때만 늘리세요.',
         plannerTitle: 'Planner 모델',
-        plannerDescription: '계획 생성과 계획 수정에 사용됩니다.',
+        plannerDescription: '계획 실행용입니다.',
         implementerTitle: 'Implementer 모델',
-        implementerDescription: '격리된 workspace 안에서 코드를 수정할 때 사용됩니다.',
+        implementerDescription: '코드 수정 실행용입니다.',
         reviewerTitle: 'Reviewer 모델',
-        reviewerDescription: '사람 검수 전에 review verdict를 만들 때 사용됩니다.',
+        reviewerDescription: '리뷰 실행용입니다.',
         commitTitle: 'Commit 모델',
-        commitDescription: '최종 commit 메시지를 생성할 때 사용됩니다. 토큰 예산은 지금 저장되며, commit worker가 세션 재사용을 시작하면 적용됩니다.',
+        commitDescription: '커밋 메시지 생성용입니다.',
         modelLabel: '모델',
-        tokenLabel: '토큰 크기 (K)',
-        agentsLabel: '에이전트 수',
-        plannerNote: '발견된 옵션 중에서 고르거나 원하는 모델 값을 직접 입력할 수 있습니다. 토큰 예산은 천 단위로 입력하며, 예를 들어 <code>250</code>은 <code>250K</code> 토큰을 뜻합니다. Agent 수는 planner가 서로 다른 task를 몇 개까지 병렬 처리할지 결정합니다.',
-        implementerNote: '발견된 옵션 중에서 고르거나 원하는 모델 값을 직접 입력할 수 있습니다. 토큰 예산은 천 단위로 입력하며, 예를 들어 <code>250</code>은 <code>250K</code> 토큰을 뜻합니다. Agent 수는 implementer가 서로 다른 task를 몇 개까지 병렬 처리할지 결정합니다.',
-        reviewerNote: '발견된 옵션 중에서 고르거나 원하는 모델 값을 직접 입력할 수 있습니다. 토큰 예산은 천 단위로 입력하며, 예를 들어 <code>250</code>은 <code>250K</code> 토큰을 뜻합니다. Agent 수는 reviewer가 서로 다른 task를 몇 개까지 병렬 처리할지 결정합니다.',
-        commitNote: '발견된 옵션 중에서 고르거나 원하는 모델 값을 직접 입력할 수 있습니다. 토큰 예산은 천 단위로 입력하며, 예를 들어 <code>250</code>은 <code>250K</code> 토큰을 뜻합니다.',
-        cancel: '취소',
-        saveSettings: '런타임 설정 저장',
-        configPathLoading: '설정 경로: 불러오는 중...',
-        configPath: '설정 경로: {path}',
+        tokenLabel: '토큰',
+        agentsLabel: '에이전트',
+        plannerNote: '모델, 토큰 예산, 병렬 수.',
+        implementerNote: '모델, 토큰 예산, 병렬 수.',
+        reviewerNote: '모델, 토큰 예산, 병렬 수.',
+        commitNote: '모델과 토큰 예산.',
+        cancel: '닫기',
+        saveSettings: '저장',
         statusIdle: '패널을 열면 현재 값을 불러옵니다.',
         statusLoading: '현재 런타임 설정을 불러오는 중...',
         statusRefreshing: '발견된 모델 옵션을 새로고침하는 중...',
@@ -748,10 +786,10 @@
         statusFallback: '캐시된 모델 제안을 사용합니다. 새로고침 실패: {error}',
         statusDiscoveryFailed: '모델 탐색에 실패했습니다: {error}. 직접 입력은 계속 사용할 수 있습니다.',
         statusDiscoveryEmpty: 'OpenCode는 응답했지만 모델 옵션을 돌려주지 않았습니다. 직접 입력은 계속 사용할 수 있습니다.',
-        statusSaved: '런타임 설정을 저장했습니다: {path}',
-        summaryAvailableOne: '발견된 모델 {count}개를 사용할 수 있습니다. 제안은 그대로 수정 가능하므로 원하는 커스텀 값을 직접 입력해도 됩니다. 마지막 업데이트: {refreshedAt}.',
-        summaryAvailableMany: '발견된 모델 {count}개를 사용할 수 있습니다. 제안은 그대로 수정 가능하므로 원하는 커스텀 값을 직접 입력해도 됩니다. 마지막 업데이트: {refreshedAt}.',
-        summaryEmpty: '아직 캐시된 모델이 없습니다. 필드를 비워 두거나 원하는 모델 값을 직접 입력할 수 있습니다.',
+        statusSaved: '런타임 설정을 저장했습니다.',
+        summaryAvailableOne: '모델 {count}개 로드됨 · {refreshedAt}',
+        summaryAvailableMany: '모델 {count}개 로드됨 · {refreshedAt}',
+        summaryEmpty: '캐시된 모델이 없습니다.',
         justNow: '방금 전',
       },
     };
@@ -786,20 +824,19 @@
       node.innerHTML = translateSettings(key, variables);
     }
 
-    function renderSettingsConfigPath(path) {
-      lastSettingsConfigPath = path || null;
-      settingsConfigPath.textContent = path ? translateSettings('configPath', { path }) : translateSettings('configPathLoading');
-    }
-
     function applyRuntimeSettingsTranslations() {
       openSettingsButton.textContent = translateSettings('openSettings');
       setSettingsText('settings-modal-title', 'settingsTitle');
       setSettingsText('settings-modal-description', 'settingsDescription');
-      closeSettingsButton.textContent = translateSettings('closeSettings');
-      closeSettingsButton.setAttribute('aria-label', translateSettings('closeSettingsAria'));
+      cancelSettingsButton.textContent = translateSettings('closeSettings');
       setSettingsText('settings-copy-title', 'settingsCopyTitle');
       setSettingsHtml('settings-copy-body', 'settingsCopyBody');
       refreshModelOptionsButton.textContent = translateSettings('refreshModels');
+      setSettingsText('settings-coding-assistant-label', 'codingAssistantLabel');
+      setSettingsText('settings-basics-heading', 'basicsHeading');
+      setSettingsText('settings-basics-description', 'basicsDescription');
+      setSettingsText('settings-agents-heading', 'agentsHeading');
+      setSettingsText('settings-agents-description', 'agentsDescription');
       setSettingsText('settings-language-title', 'languageTitle');
       setSettingsText('settings-language-description', 'languageDescription');
       setSettingsHtml('settings-language-note', 'languageNote');
@@ -834,13 +871,20 @@
       setSettingsHtml('settings-commit-note', 'commitNote');
       cancelSettingsButton.textContent = translateSettings('cancel');
       saveSettingsButton.textContent = translateSettings('saveSettings');
-      renderSettingsConfigPath(lastSettingsConfigPath);
       if (lastSettingsPayload) {
         updateModelDiscoverySummary(lastSettingsPayload);
       } else {
         settingsDiscoverySummary.textContent = translateSettings('discoveryIdle');
         setSettingsStatus(translateSettings('statusIdle'));
       }
+    }
+
+    function renderAssistantOptions(options, selectedValue = 'opencode') {
+      const items = Array.isArray(options) && options.length ? options : [{ value: 'opencode', label: 'OpenCode' }];
+      runtimeCodingAssistantInput.innerHTML = items
+        .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
+        .join('');
+      runtimeCodingAssistantInput.value = items.some((item) => item.value === selectedValue) ? selectedValue : items[0].value;
     }
 
     async function loadBoard() {
@@ -1135,6 +1179,7 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || translateSettings('settingsLoadFailed'));
         runtimeLanguageInput.value = data.language || 'EN';
+        renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
@@ -1150,7 +1195,6 @@
         commitModelInput.value = data.commit_model || '';
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
         renderModelOptions(data.available_models || []);
-        renderSettingsConfigPath(data.config_path);
         await loadTargetRepoOptions();
         updateModelDiscoverySummary(data);
       } finally {
@@ -1177,6 +1221,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             language: runtimeLanguageInput.value || 'EN',
+            coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
             repo_discovery_root: repoDiscoveryRootInput.value,
             repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
             planner_model: plannerModelInput.value,
@@ -1195,6 +1240,7 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || translateSettings('settingsSaveFailed'));
         runtimeLanguageInput.value = data.language || 'EN';
+        renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
@@ -1209,9 +1255,9 @@
         syncNumericSettingInput(reviewerAgentCountInput, data.reviewer_agent_count, 1);
         commitModelInput.value = data.commit_model || '';
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
-        renderSettingsConfigPath(data.config_path);
         await loadTargetRepoOptions();
-        setSettingsStatus(translateSettings('statusSaved', { path: data.config_path }), 'success');
+        setSettingsStatus(translateSettings('statusSaved'), 'success');
+        setSettingsModalOpen(false);
       } catch (error) {
         setSettingsStatus(error.message, 'error');
       } finally {
@@ -2220,7 +2266,6 @@
     openSettingsButton.addEventListener('click', openSettingsModal);
     runtimeLanguageInput.addEventListener('change', () => applyRuntimeSettingsTranslations());
     closeComposerButton.addEventListener('click', () => { clearMessages(); setModalOpen(false); });
-    closeSettingsButton.addEventListener('click', () => setSettingsModalOpen(false));
     cancelComposerButton.addEventListener('click', () => { clearMessages(); resetFormState(); setModalOpen(false); });
     cancelSettingsButton.addEventListener('click', () => setSettingsModalOpen(false));
     modal.addEventListener('click', (event) => { if (event.target === modal) setModalOpen(false); });
