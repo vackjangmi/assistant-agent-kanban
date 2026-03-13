@@ -1072,6 +1072,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "base-branch-options" in response.text
     assert "request-modal" in response.text
     assert "settings-modal" in response.text
+    assert "request-copy-title" in response.text
+    assert "request-basics-heading" in response.text
+    assert "request-repo-heading" in response.text
+    assert 'class="field span-full"' in response.text
     assert "task-modal" in response.text
     assert "task-modal-panel" in response.text
     assert "Viewer" in response.text
@@ -1087,7 +1091,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_coding_assistant" in response.text
     assert "const settingsTranslations = {" in response.text
     assert "applyRuntimeSettingsTranslations();" in response.text
-    assert "runtimeLanguageInput.addEventListener('change', () => applyRuntimeSettingsTranslations());" in response.text
+    assert "runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); refreshRequestDerivedText(); });" in response.text
     assert 'class="settings-sections"' in response.text
     assert 'id="settings-basics-heading"' in response.text
     assert 'id="settings-agents-heading"' in response.text
@@ -1120,6 +1124,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "toastui-editor" in response.text
     assert "buildScopeDefaults" in response.text
     assert "buildOutOfScopeDefaults" in response.text
+    assert "const requestTranslations = {" in response.text
+    assert "applyRequestTranslations();" in response.text
+    assert "translateRequest('validationGoal')" in response.text
+    assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
+    assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
     assert "fs-kanban-agent.last-target-repo" in response.text
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
@@ -1201,6 +1210,9 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert "런타임 역할" in response.text
     assert "어시스턴트" in response.text
     assert "에이전트" in response.text
+    assert "요청 생성" in response.text
+    assert "요청 기본값" in response.text
+    assert "저장소 범위" in response.text
     assert "발견된 모델 새로고침" in response.text
     assert "저장" in response.text
 

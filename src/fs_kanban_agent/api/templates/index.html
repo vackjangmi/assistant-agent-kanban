@@ -39,6 +39,7 @@
     .composer-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; }
     .group { display: grid; gap: 12px; align-content: start; }
     .field { display: grid; gap: 6px; }
+    .field.span-full { grid-column: 1 / -1; }
     .field label { font-weight: 700; }
     .field span { color: var(--muted); font-size: 0.95rem; }
     .field input, .field textarea { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
@@ -214,82 +215,97 @@
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="request-modal-title">Create request</h2>
-          <p>Build a structured <code>REQUEST.md</code> with repo-aware defaults and editable planning fields.</p>
+          <p id="request-modal-description">Build a structured <code>REQUEST.md</code> with repo-aware defaults and editable planning fields.</p>
         </div>
-        <button type="button" id="close-composer" aria-label="Close request form">Close</button>
       </div>
       <div id="form-error" class="form-error" hidden></div>
-      <form id="request-form">
-        <div class="composer-grid">
-          <div class="group">
-            <div class="field">
-              <label for="title">Title</label>
-              <span>Short task name used for the request heading and task folder slug.</span>
-              <input id="title" name="title" maxlength="80" required>
-              <div class="error-text" data-error-for="title"></div>
-            </div>
-            <div class="field">
-              <label for="goal">Goal</label>
-              <span>The concrete outcome you want from the implementation.</span>
-              <textarea id="goal" name="goal" required></textarea>
-              <div class="error-text" data-error-for="goal"></div>
-            </div>
-            <div class="field">
-              <label for="background">Background / Why</label>
-              <span>Context that helps the planner understand motivation and history.</span>
-              <textarea id="background" name="background"></textarea>
-              <div class="error-text" data-error-for="background"></div>
-            </div>
-          </div>
-          <div class="group">
-          <div class="field compact">
-            <label for="target_repo">Target repo</label>
-            <span>Choose a nearby repo from the dropdown or type any path manually.</span>
-            <input id="target_repo" name="target_repo" list="target-repo-options" required>
-            <datalist id="target-repo-options"></datalist>
-            <div class="error-text" data-error-for="target_repo"></div>
-            </div>
-          <div class="field">
-            <label for="base_branch">Base branch</label>
-            <span id="base-branch-help">Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.</span>
-            <input id="base_branch" name="base_branch" list="base-branch-options" required>
-            <datalist id="base-branch-options"></datalist>
-            <div class="error-text" data-error-for="base_branch"></div>
-          </div>
-          <div class="field compact">
-            <label for="scope">Scope</label>
-            <span>Starts with repo-based defaults; you can edit each line.</span>
-            <textarea id="scope" name="scope"></textarea>
-            <div class="error-text" data-error-for="scope"></div>
-          </div>
-          <div class="field compact">
-            <label for="out_of_scope">Out of scope</label>
-            <span>Pre-filled to keep changes inside the target repo; you can edit it.</span>
-            <textarea id="out_of_scope" name="out_of_scope"></textarea>
-            <div class="error-text" data-error-for="out_of_scope"></div>
-          </div>
-          <div class="field compact">
-            <label for="constraints">Constraints / Notes</label>
-            <span>Technical limits, deadlines, or environment rules.</span>
-            <textarea id="constraints" name="constraints"></textarea>
-            <div class="error-text" data-error-for="constraints"></div>
-          </div>
-          <div class="field compact">
-            <label for="references">Reference files / paths</label>
-            <span>One path per line.</span>
-            <textarea id="references" name="references"></textarea>
-            <div class="error-text" data-error-for="references"></div>
-          </div>
-          <div class="field compact">
-            <label for="acceptance_criteria">Acceptance criteria</label>
-            <span>One expected outcome per line.</span>
-            <textarea id="acceptance_criteria" name="acceptance_criteria"></textarea>
-            <div class="error-text" data-error-for="acceptance_criteria"></div>
-          </div>
+      <form id="request-form" class="settings-shell">
+        <div class="settings-copy">
+          <strong id="request-copy-title">Quick setup</strong>
+          <p id="request-copy-body">Start with the task basics, then adjust repo-aware defaults only where needed.</p>
         </div>
+        <div class="settings-sections">
+          <section class="settings-section">
+            <div class="settings-section-head">
+              <strong id="request-basics-heading">Request basics</strong>
+              <span id="request-basics-description">What you want built and why it matters.</span>
+            </div>
+            <div class="composer-grid">
+              <div class="field span-full">
+                <label id="request-title-label" for="title">Title</label>
+                <span id="request-title-description">Short task name used for the request heading and task folder slug.</span>
+                <input id="title" name="title" maxlength="80" required>
+                <div class="error-text" data-error-for="title"></div>
+              </div>
+              <div class="field compact">
+                <label id="request-target-repo-label" for="target_repo">Target repo</label>
+                <span id="request-target-repo-description">Choose a nearby repo from the dropdown or type any path manually.</span>
+                <input id="target_repo" name="target_repo" list="target-repo-options" required>
+                <datalist id="target-repo-options"></datalist>
+                <div class="error-text" data-error-for="target_repo"></div>
+              </div>
+              <div class="field">
+                <label id="request-base-branch-label" for="base_branch">Base branch</label>
+                <span id="base-branch-help">Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.</span>
+                <input id="base_branch" name="base_branch" list="base-branch-options" required>
+                <datalist id="base-branch-options"></datalist>
+                <div class="error-text" data-error-for="base_branch"></div>
+              </div>
+              <div class="field">
+                <label id="request-background-label" for="background">Background / Why</label>
+                <span id="request-background-description">Context that helps the planner understand motivation and history.</span>
+                <textarea id="background" name="background"></textarea>
+                <div class="error-text" data-error-for="background"></div>
+              </div>
+              <div class="field">
+                <label id="request-goal-label" for="goal">Goal</label>
+                <span id="request-goal-description">The concrete outcome you want from the implementation.</span>
+                <textarea id="goal" name="goal" required></textarea>
+                <div class="error-text" data-error-for="goal"></div>
+              </div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-head">
+              <strong id="request-repo-heading">Repo scope</strong>
+              <span id="request-repo-description">Target repo, branch, and delivery guardrails.</span>
+            </div>
+            <div class="composer-grid">
+              <div class="field compact">
+                <label id="request-constraints-label" for="constraints">Constraints / Notes</label>
+                <span id="request-constraints-description">Technical limits, deadlines, or environment rules.</span>
+                <textarea id="constraints" name="constraints"></textarea>
+                <div class="error-text" data-error-for="constraints"></div>
+              </div>
+              <div class="field compact">
+                <label id="request-acceptance-label" for="acceptance_criteria">Acceptance criteria</label>
+                <span id="request-acceptance-description">One expected outcome per line.</span>
+                <textarea id="acceptance_criteria" name="acceptance_criteria"></textarea>
+                <div class="error-text" data-error-for="acceptance_criteria"></div>
+              </div>
+              <div class="field compact">
+                <label id="request-scope-label" for="scope">Scope</label>
+                <span id="request-scope-description">Starts with repo-based defaults; you can edit each line.</span>
+                <textarea id="scope" name="scope"></textarea>
+                <div class="error-text" data-error-for="scope"></div>
+              </div>
+              <div class="field compact">
+                <label id="request-out-of-scope-label" for="out_of_scope">Out of scope</label>
+                <span id="request-out-of-scope-description">Pre-filled to keep changes inside the target repo; you can edit it.</span>
+                <textarea id="out_of_scope" name="out_of_scope"></textarea>
+                <div class="error-text" data-error-for="out_of_scope"></div>
+              </div>
+              <div class="field compact span-full">
+                <label id="request-references-label" for="references">Reference files / paths</label>
+                <span id="request-references-description">One path per line.</span>
+                <textarea id="references" name="references"></textarea>
+                <div class="error-text" data-error-for="references"></div>
+              </div>
+            </div>
+          </section>
         </div>
         <div class="form-actions">
-          <button type="button" id="cancel-composer">Cancel</button>
+          <button type="button" id="cancel-composer">Close</button>
           <button type="submit" id="submit-request" class="primary">Create request</button>
         </div>
       </form>
@@ -570,7 +586,6 @@
     const taskModal = document.getElementById('task-modal');
     const openComposerButton = document.getElementById('open-composer');
     const openSettingsButton = document.getElementById('open-settings');
-    const closeComposerButton = document.getElementById('close-composer');
     const closeTaskModalButton = document.getElementById('close-task-modal');
     const cancelComposerButton = document.getElementById('cancel-composer');
     const cancelSettingsButton = document.getElementById('cancel-settings');
@@ -676,6 +691,7 @@
     let branchLookupTimer = null;
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
+    let lastLoadedSettingsState = null;
 
     const settingsTranslations = {
       EN: {
@@ -794,22 +810,137 @@
       },
     };
 
+    const requestTranslations = {
+      EN: {
+        openComposer: 'New request',
+        title: 'Create request',
+        description: 'Build a structured REQUEST.md with repo-aware defaults and editable planning fields.',
+        copyTitle: 'Quick setup',
+        copyBody: 'Start with the task basics, then adjust repo-aware defaults only where needed.',
+        basicsHeading: 'Request basics',
+        basicsDescription: 'What you want built and why it matters.',
+        repoHeading: 'Repo scope',
+        repoDescription: 'Target repo, branch, and delivery guardrails.',
+        titleLabel: 'Title',
+        titleDescription: 'Short task name for the request and task folder.',
+        goalLabel: 'Goal',
+        goalDescription: 'The concrete outcome you want.',
+        backgroundLabel: 'Background / Why',
+        backgroundDescription: 'Context that explains the request.',
+        targetRepoLabel: 'Target repo',
+        targetRepoDescription: 'Pick a nearby repo or type a path.',
+        baseBranchLabel: 'Base branch',
+        baseBranchHelp: 'Pick a repo branch or type one manually.',
+        baseBranchLoading: 'Loading branch suggestions from the selected repo...',
+        baseBranchNotRepo: 'The selected path is not a git repo. You can still type a base branch manually.',
+        baseBranchNoSuggestions: 'This git repo has no local branch suggestions yet. Type a base branch manually.',
+        baseBranchLoadedOne: 'Loaded {count} branch suggestion.{currentNote}',
+        baseBranchLoadedMany: 'Loaded {count} branch suggestions.{currentNote}',
+        currentBranchNote: ' Current branch: {branch}.',
+        baseBranchLoadFailed: 'Failed to load branch suggestions. You can still type a base branch manually.',
+        scopeLabel: 'Scope',
+        scopeDescription: 'Starts with repo defaults; edit each line as needed.',
+        outOfScopeLabel: 'Out of scope',
+        outOfScopeDescription: 'Keeps work inside the target repo by default.',
+        constraintsLabel: 'Constraints / Notes',
+        constraintsDescription: 'Technical limits, deadlines, or environment rules.',
+        referencesLabel: 'Reference files / paths',
+        referencesDescription: 'One path per line.',
+        acceptanceLabel: 'Acceptance criteria',
+        acceptanceDescription: 'One expected outcome per line.',
+        close: 'Close',
+        submit: 'Create request',
+        creating: 'Creating...',
+        success: 'Created request at {path}',
+        validationTitle: 'Use at least 5 characters.',
+        validationGoal: 'Goal is required.',
+        validationTargetRepo: 'Target repo is required.',
+        validationBaseBranch: 'Base branch is required.',
+      },
+      KO: {
+        openComposer: '새 요청',
+        title: '요청 생성',
+        description: '저장소 기본값이 반영된 REQUEST.md를 빠르게 작성합니다.',
+        copyTitle: '빠른 설정',
+        copyBody: '핵심 요청을 먼저 적고, 저장소 범위는 필요한 만큼만 다듬으세요.',
+        basicsHeading: '요청 기본값',
+        basicsDescription: '무엇을 왜 바꾸는지 정리합니다.',
+        repoHeading: '저장소 범위',
+        repoDescription: '대상 저장소, 기준 브랜치, 작업 범위를 정합니다.',
+        titleLabel: '제목',
+        titleDescription: '요청 제목과 task 폴더 이름에 쓰입니다.',
+        goalLabel: '목표',
+        goalDescription: '원하는 결과를 구체적으로 적습니다.',
+        backgroundLabel: '배경 / 이유',
+        backgroundDescription: '이 요청이 필요한 맥락을 적습니다.',
+        targetRepoLabel: '대상 저장소',
+        targetRepoDescription: '근처 저장소를 고르거나 경로를 직접 입력하세요.',
+        baseBranchLabel: '기준 브랜치',
+        baseBranchHelp: '저장소 브랜치를 고르거나 직접 입력하세요.',
+        baseBranchLoading: '선택한 저장소의 브랜치를 불러오는 중...',
+        baseBranchNotRepo: '선택한 경로는 git 저장소가 아닙니다. 기준 브랜치를 직접 입력할 수 있습니다.',
+        baseBranchNoSuggestions: '이 저장소에는 로컬 브랜치 추천이 없습니다. 기준 브랜치를 직접 입력하세요.',
+        baseBranchLoadedOne: '브랜치 추천 {count}개를 불러왔습니다.{currentNote}',
+        baseBranchLoadedMany: '브랜치 추천 {count}개를 불러왔습니다.{currentNote}',
+        currentBranchNote: ' 현재 브랜치: {branch}.',
+        baseBranchLoadFailed: '브랜치 추천을 불러오지 못했습니다. 기준 브랜치를 직접 입력할 수 있습니다.',
+        scopeLabel: '범위',
+        scopeDescription: '저장소 기본값으로 시작하며 줄별로 수정할 수 있습니다.',
+        outOfScopeLabel: '범위 외',
+        outOfScopeDescription: '기본적으로 대상 저장소 밖 수정은 막습니다.',
+        constraintsLabel: '제약 / 메모',
+        constraintsDescription: '기술 제한, 일정, 환경 규칙 등을 적습니다.',
+        referencesLabel: '참고 파일 / 경로',
+        referencesDescription: '한 줄에 하나씩 적습니다.',
+        acceptanceLabel: '승인 기준',
+        acceptanceDescription: '기대 결과를 한 줄에 하나씩 적습니다.',
+        close: '닫기',
+        submit: '요청 생성',
+        creating: '생성 중...',
+        success: '요청 생성 완료: {path}',
+        validationTitle: '최소 5글자 이상 입력하세요.',
+        validationGoal: '목표는 필수입니다.',
+        validationTargetRepo: '대상 저장소는 필수입니다.',
+        validationBaseBranch: '기준 브랜치는 필수입니다.',
+      },
+    };
+
     targetRepoInput.value = defaultTargetRepo;
     runtimeLanguageInput.value = initialRuntimeLanguage;
     baseBranchInput.value = defaultBaseBranch;
     baseBranchInput.dataset.autofilled = 'true';
     lastAutoBaseBranch = defaultBaseBranch;
     applyRuntimeSettingsTranslations();
+    applyRequestTranslations();
 
-    function currentSettingsLanguage() {
+    function currentUiLanguage() {
       return settingsTranslations[runtimeLanguageInput.value] ? runtimeLanguageInput.value : initialRuntimeLanguage;
     }
 
     function translateSettings(key, variables = {}) {
-      const language = currentSettingsLanguage();
+      const language = currentUiLanguage();
       const table = settingsTranslations[language] || settingsTranslations.EN;
       const template = table[key] || settingsTranslations.EN[key] || '';
       return Object.entries(variables).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, String(value)), template);
+    }
+
+    function translateRequest(key, variables = {}) {
+      const language = currentUiLanguage();
+      const table = requestTranslations[language] || requestTranslations.EN;
+      const template = table[key] || requestTranslations.EN[key] || '';
+      return Object.entries(variables).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, String(value)), template);
+    }
+
+    function setRequestText(id, key) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.textContent = translateRequest(key);
+    }
+
+    function setRequestHtml(id, key, variables = {}) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.innerHTML = translateRequest(key, variables);
     }
 
     function setSettingsText(id, key) {
@@ -879,12 +1010,102 @@
       }
     }
 
+    function applyRequestTranslations() {
+      openComposerButton.textContent = translateRequest('openComposer');
+      setRequestText('request-modal-title', 'title');
+      setRequestHtml('request-modal-description', 'description');
+      setRequestText('request-copy-title', 'copyTitle');
+      setRequestHtml('request-copy-body', 'copyBody');
+      setRequestText('request-basics-heading', 'basicsHeading');
+      setRequestText('request-basics-description', 'basicsDescription');
+      setRequestText('request-repo-heading', 'repoHeading');
+      setRequestText('request-repo-description', 'repoDescription');
+      setRequestText('request-title-label', 'titleLabel');
+      setRequestText('request-title-description', 'titleDescription');
+      setRequestText('request-goal-label', 'goalLabel');
+      setRequestText('request-goal-description', 'goalDescription');
+      setRequestText('request-background-label', 'backgroundLabel');
+      setRequestText('request-background-description', 'backgroundDescription');
+      setRequestText('request-target-repo-label', 'targetRepoLabel');
+      setRequestText('request-target-repo-description', 'targetRepoDescription');
+      setRequestText('request-base-branch-label', 'baseBranchLabel');
+      setRequestText('request-scope-label', 'scopeLabel');
+      setRequestText('request-scope-description', 'scopeDescription');
+      setRequestText('request-out-of-scope-label', 'outOfScopeLabel');
+      setRequestText('request-out-of-scope-description', 'outOfScopeDescription');
+      setRequestText('request-constraints-label', 'constraintsLabel');
+      setRequestText('request-constraints-description', 'constraintsDescription');
+      setRequestText('request-references-label', 'referencesLabel');
+      setRequestText('request-references-description', 'referencesDescription');
+      setRequestText('request-acceptance-label', 'acceptanceLabel');
+      setRequestText('request-acceptance-description', 'acceptanceDescription');
+      cancelComposerButton.textContent = translateRequest('close');
+      submitButton.textContent = translateRequest('submit');
+    }
+
+    function refreshRequestDerivedText() {
+      if (normalizeRepoPath(targetRepoInput.value)) {
+        queueTargetRepoBranchLookup();
+      } else {
+        updateBaseBranchHelp(translateRequest('baseBranchHelp'));
+      }
+      applyRepoDefaults();
+      validateForm();
+    }
+
     function renderAssistantOptions(options, selectedValue = 'opencode') {
       const items = Array.isArray(options) && options.length ? options : [{ value: 'opencode', label: 'OpenCode' }];
       runtimeCodingAssistantInput.innerHTML = items
         .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
         .join('');
       runtimeCodingAssistantInput.value = items.some((item) => item.value === selectedValue) ? selectedValue : items[0].value;
+    }
+
+    function captureSettingsState() {
+      return {
+        language: runtimeLanguageInput.value || 'EN',
+        coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
+        repo_discovery_root: repoDiscoveryRootInput.value || '../',
+        repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
+        planner_model: plannerModelInput.value || '',
+        planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
+        planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
+        implementer_model: implementerModelInput.value || '',
+        implementer_session_token_budget: readNumericSettingInput(implementerSessionTokenBudgetInput, 250),
+        implementer_agent_count: readNumericSettingInput(implementerAgentCountInput, 1),
+        reviewer_model: reviewerModelInput.value || '',
+        reviewer_session_token_budget: readNumericSettingInput(reviewerSessionTokenBudgetInput, 250),
+        reviewer_agent_count: readNumericSettingInput(reviewerAgentCountInput, 1),
+        commit_model: commitModelInput.value || '',
+        commit_session_token_budget: readNumericSettingInput(commitSessionTokenBudgetInput, 250),
+      };
+    }
+
+    function restoreSettingsState(state) {
+      if (!state) return;
+      runtimeLanguageInput.value = state.language || initialRuntimeLanguage;
+      renderAssistantOptions([{ value: 'opencode', label: 'OpenCode' }], state.coding_assistant || 'opencode');
+      repoDiscoveryRootInput.value = state.repo_discovery_root || '../';
+      syncNumericSettingInput(repoDiscoveryMaxDepthInput, state.repo_discovery_max_depth, 2);
+      plannerModelInput.value = state.planner_model || '';
+      syncNumericSettingInput(plannerSessionTokenBudgetInput, state.planner_session_token_budget, 250);
+      syncNumericSettingInput(plannerAgentCountInput, state.planner_agent_count, 1);
+      implementerModelInput.value = state.implementer_model || '';
+      syncNumericSettingInput(implementerSessionTokenBudgetInput, state.implementer_session_token_budget, 250);
+      syncNumericSettingInput(implementerAgentCountInput, state.implementer_agent_count, 1);
+      reviewerModelInput.value = state.reviewer_model || '';
+      syncNumericSettingInput(reviewerSessionTokenBudgetInput, state.reviewer_session_token_budget, 250);
+      syncNumericSettingInput(reviewerAgentCountInput, state.reviewer_agent_count, 1);
+      commitModelInput.value = state.commit_model || '';
+      syncNumericSettingInput(commitSessionTokenBudgetInput, state.commit_session_token_budget, 250);
+      applyRuntimeSettingsTranslations();
+      applyRequestTranslations();
+      refreshRequestDerivedText();
+    }
+
+    function closeSettingsModal({ restore = false } = {}) {
+      if (restore) restoreSettingsState(lastLoadedSettingsState);
+      setSettingsModalOpen(false);
     }
 
     async function loadBoard() {
@@ -1053,7 +1274,7 @@
       if (!nextValue) {
         invalidateBranchLookup();
         replaceBaseBranchSuggestions([]);
-        updateBaseBranchHelp('Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.');
+        updateBaseBranchHelp(translateRequest('baseBranchHelp'));
         return;
       }
       applyRepoDefaults();
@@ -1083,32 +1304,32 @@
       const lookupToken = latestBranchLookupToken;
       replaceBaseBranchSuggestions([]);
       if (!repoPath) {
-        updateBaseBranchHelp('Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.');
+        updateBaseBranchHelp(translateRequest('baseBranchHelp'));
         maybeAutofillBaseBranch(defaultBaseBranch);
         return;
       }
-      updateBaseBranchHelp('Loading branch suggestions from the selected target repo...');
+      updateBaseBranchHelp(translateRequest('baseBranchLoading'));
       try {
         const response = await fetch(`/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}`);
         const data = await response.json();
         if (lookupToken !== latestBranchLookupToken) return;
-        if (!response.ok) throw new Error(data.detail || 'Failed to load branch suggestions.');
+        if (!response.ok) throw new Error(data.detail || translateRequest('baseBranchLoadFailed'));
         replaceBaseBranchSuggestions(data.branches || []);
         maybeAutofillBaseBranch(data.suggested_base_branch || defaultBaseBranch);
         if (!data.git_repository) {
-          updateBaseBranchHelp('The selected path is not a git repo. You can still type a base branch manually.');
+          updateBaseBranchHelp(translateRequest('baseBranchNotRepo'));
           return;
         }
         if (!data.branches || !data.branches.length) {
-          updateBaseBranchHelp('This git repo has no local branch suggestions yet. Type a base branch manually.');
+          updateBaseBranchHelp(translateRequest('baseBranchNoSuggestions'));
           return;
         }
-        const currentNote = data.current_branch ? ` Current branch: ${data.current_branch}.` : '';
-        updateBaseBranchHelp(`Loaded ${data.branches.length} branch suggestion${data.branches.length === 1 ? '' : 's'} from the selected repo.${currentNote}`);
+        const currentNote = data.current_branch ? translateRequest('currentBranchNote', { branch: data.current_branch }) : '';
+        updateBaseBranchHelp(translateRequest(data.branches.length === 1 ? 'baseBranchLoadedOne' : 'baseBranchLoadedMany', { count: data.branches.length, currentNote }));
       } catch (error) {
         if (lookupToken !== latestBranchLookupToken) return;
         replaceBaseBranchSuggestions([]);
-        updateBaseBranchHelp(error.message || 'Failed to load branch suggestions. You can still type a base branch manually.');
+        updateBaseBranchHelp(error.message || translateRequest('baseBranchLoadFailed'));
       }
     }
 
@@ -1197,6 +1418,7 @@
         renderModelOptions(data.available_models || []);
         await loadTargetRepoOptions();
         updateModelDiscoverySummary(data);
+        lastLoadedSettingsState = captureSettingsState();
       } finally {
         refreshModelOptionsButton.disabled = false;
       }
@@ -1257,6 +1479,7 @@
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
         await loadTargetRepoOptions();
         setSettingsStatus(translateSettings('statusSaved'), 'success');
+        lastLoadedSettingsState = captureSettingsState();
         setSettingsModalOpen(false);
       } catch (error) {
         setSettingsStatus(error.message, 'error');
@@ -1309,23 +1532,35 @@
 
     function buildScopeDefaults(path) {
       const context = deriveRepoContext(path);
-      const lines = [
-        `Limit code changes to \`${context.normalized}\`.`,
-        `Modify only the files under \`${context.normalized}\` that are needed for this request.`,
-        `Keep tests and local configuration changes scoped to \`${context.normalized}\`.`,
-      ];
-      if (context.repoName && context.repoName !== 'target repo') lines.push(`Focus on the \`${context.repoName}\` project or app.`);
+      const lines = currentUiLanguage() === 'KO'
+        ? [
+            `코드 변경 범위는 \`${context.normalized}\` 내부로 제한한다.`,
+            `이 요청에 필요한 파일만 \`${context.normalized}\` 아래에서 수정한다.`,
+            `테스트와 로컬 설정 변경도 \`${context.normalized}\` 범위 안에서만 수행한다.`,
+          ]
+        : [
+            `Limit code changes to \`${context.normalized}\`.`,
+            `Modify only the files under \`${context.normalized}\` that are needed for this request.`,
+            `Keep tests and local configuration changes scoped to \`${context.normalized}\`.`,
+          ];
+      if (context.repoName && context.repoName !== 'target repo') lines.push(currentUiLanguage() === 'KO' ? `\`${context.repoName}\` 프로젝트 범위를 우선으로 작업한다.` : `Focus on the \`${context.repoName}\` project or app.`);
       return lines.join('\n');
     }
 
     function buildOutOfScopeDefaults(path) {
       const context = deriveRepoContext(path);
-      const lines = [
-        `Do not modify files outside \`${context.normalized}\`.`,
-        'Do not change unrelated apps, packages, or workspace-wide configuration.',
-        'Do not add deployment or infrastructure changes unless the request explicitly asks for them.',
-      ];
-      if (context.parentName) lines.push(`Do not modify sibling projects under \`${context.parentName}/\` unless the request explicitly requires it.`);
+      const lines = currentUiLanguage() === 'KO'
+        ? [
+            `\`${context.normalized}\` 밖의 파일은 수정하지 않는다.`,
+            '관련 없는 앱, 패키지, 워크스페이스 전체 설정은 변경하지 않는다.',
+            '요청에서 명시하지 않으면 배포나 인프라 변경은 추가하지 않는다.',
+          ]
+        : [
+            `Do not modify files outside \`${context.normalized}\`.`,
+            'Do not change unrelated apps, packages, or workspace-wide configuration.',
+            'Do not add deployment or infrastructure changes unless the request explicitly asks for them.',
+          ];
+      if (context.parentName) lines.push(currentUiLanguage() === 'KO' ? `\`${context.parentName}/\` 아래의 다른 프로젝트는 요청에서 명시하지 않으면 수정하지 않는다.` : `Do not modify sibling projects under \`${context.parentName}/\` unless the request explicitly requires it.`);
       return lines.join('\n');
     }
 
@@ -1359,7 +1594,7 @@
       baseBranchInput.dataset.autofilled = 'true';
       lastAutoBaseBranch = defaultBaseBranch;
       replaceBaseBranchSuggestions([]);
-      updateBaseBranchHelp('Branch used when preparing the isolated workspace. Pick from the repo branch list or type one manually.');
+      updateBaseBranchHelp(translateRequest('baseBranchHelp'));
       scopeField.dataset.autofilled = 'true';
       outOfScopeField.dataset.autofilled = 'true';
       applyTargetRepoAutofill(currentTargetRepoOptions());
@@ -2220,10 +2455,10 @@
       const goal = (data.get('goal') || '').toString().trim();
       const targetRepo = normalizeRepoPath(data.get('target_repo'));
       const baseBranch = (data.get('base_branch') || '').toString().trim();
-      if (title.length < 5) errors.title = 'Use at least 5 characters.';
-      if (!goal) errors.goal = 'Goal is required.';
-      if (!targetRepo) errors.target_repo = 'Target repo is required.';
-      if (!baseBranch) errors.base_branch = 'Base branch is required.';
+      if (title.length < 5) errors.title = translateRequest('validationTitle');
+      if (!goal) errors.goal = translateRequest('validationGoal');
+      if (!targetRepo) errors.target_repo = translateRequest('validationTargetRepo');
+      if (!baseBranch) errors.base_branch = translateRequest('validationBaseBranch');
       document.querySelectorAll('[data-error-for]').forEach((node) => {
         node.textContent = errors[node.dataset.errorFor] || '';
       });
@@ -2237,7 +2472,7 @@
       if (!validateForm()) return;
       const payload = Object.fromEntries(new FormData(requestForm).entries());
       submitButton.disabled = true;
-      submitButton.textContent = 'Creating...';
+      submitButton.textContent = translateRequest('creating');
       try {
         const response = await fetch('/api/requests', {
           method: 'POST',
@@ -2248,7 +2483,7 @@
         if (!response.ok) throw new Error(data.detail || 'Request creation failed.');
         persistLastTargetRepo(payload.target_repo);
         formSuccess.hidden = false;
-        formSuccess.textContent = `Created request at ${data.task_path}`;
+        formSuccess.textContent = translateRequest('success', { path: data.task_path });
         resetFormState();
         setModalOpen(false);
         await loadBoard();
@@ -2257,22 +2492,21 @@
         formError.textContent = error.message;
       } finally {
         submitButton.disabled = false;
-        submitButton.textContent = 'Create request';
+        submitButton.textContent = translateRequest('submit');
       }
     }
 
     document.getElementById('refresh').addEventListener('click', loadBoard);
-    openComposerButton.addEventListener('click', async () => { clearMessages(); resetFormState(); setModalOpen(true); await loadTargetRepoBranches(); });
+    openComposerButton.addEventListener('click', async () => { clearMessages(); applyRequestTranslations(); resetFormState(); setModalOpen(true); await loadTargetRepoBranches(); });
     openSettingsButton.addEventListener('click', openSettingsModal);
-    runtimeLanguageInput.addEventListener('change', () => applyRuntimeSettingsTranslations());
-    closeComposerButton.addEventListener('click', () => { clearMessages(); setModalOpen(false); });
+    runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); refreshRequestDerivedText(); });
     cancelComposerButton.addEventListener('click', () => { clearMessages(); resetFormState(); setModalOpen(false); });
-    cancelSettingsButton.addEventListener('click', () => setSettingsModalOpen(false));
+    cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
     modal.addEventListener('click', (event) => { if (event.target === modal) setModalOpen(false); });
-    settingsModal.addEventListener('click', (event) => { if (event.target === settingsModal) setSettingsModalOpen(false); });
+    settingsModal.addEventListener('click', (event) => { if (event.target === settingsModal) closeSettingsModal({ restore: true }); });
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
     taskModal.addEventListener('click', (event) => { if (event.target === taskModal) { setTaskModalOpen(false); } });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) setSettingsModalOpen(false); if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
