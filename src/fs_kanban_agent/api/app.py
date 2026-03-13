@@ -34,5 +34,12 @@ def create_app(config: AppConfig, planner_adapter, implementer_adapter, reviewer
 
 def create_default_app(config_path: str | None = None) -> FastAPI:
     config = load_config(config_path)
+    planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = _build_role_adapters(config)
+    return create_app(config, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter)
+
+
+def _build_role_adapters(config: AppConfig):
+    if config.runtime.coding_assistant != "opencode":
+        raise NotImplementedError(f"unsupported coding assistant: {config.runtime.coding_assistant}")
     adapter = SubprocessOpenCodeAdapter()
-    return create_app(config, adapter, adapter, adapter, adapter, adapter)
+    return adapter, adapter, adapter, adapter, adapter

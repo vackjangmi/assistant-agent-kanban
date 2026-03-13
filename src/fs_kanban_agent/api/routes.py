@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import FileResponse
 
 from ..agent_materializer import ensure_runtime_agents
-from ..config import DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET
+from ..config import DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, normalize_runtime_assistant
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..language import normalize_runtime_language
@@ -42,6 +42,7 @@ class HumanVerificationPayload(BaseModel):
 
 class ModelSettingsPayload(BaseModel):
     language: str | None = None
+    coding_assistant: str | None = None
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
     planner_agent_count: int | None = Field(default=None, ge=1)
@@ -64,6 +65,16 @@ class ModelSettingsPayload(BaseModel):
         normalized = normalize_runtime_language(value)
         if normalized is None:
             raise ValueError("language must be EN or KO")
+        return normalized
+
+    @field_validator("coding_assistant", mode="before")
+    @classmethod
+    def normalize_coding_assistant(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_runtime_assistant(value)
+        if normalized is None:
+            raise ValueError("coding assistant must be OpenCode")
         return normalized
 
 
@@ -102,6 +113,13 @@ def _normalize_runtime_language(value: str | None) -> str:
     return normalized
 
 
+def _normalize_runtime_coding_assistant(value: str | None) -> str:
+    normalized = normalize_runtime_assistant(value)
+    if normalized is None:
+        raise ValueError("coding assistant must be OpenCode")
+    return normalized
+
+
 def _apply_config_update(target, updated) -> None:
     target.kanban_root = updated.kanban_root
     target.repo_root = updated.repo_root
@@ -134,6 +152,7 @@ def build_router() -> APIRouter:
         omo_snapshot = read_omo_delegation_snapshot()
         return {
             "language": runtime.config.runtime.language,
+            "coding_assistant": runtime.config.runtime.coding_assistant,
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
             "planner_agent_count": runtime.config.runtime.planner_agent_count,
@@ -148,6 +167,10 @@ def build_router() -> APIRouter:
             "repo_discovery_root": runtime.config.repo_discovery_root_value(),
             "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
             "config_path": str(runtime.config.config_path_for_persistence()),
+            "available_assistants": [
+                {"value": value, "label": label}
+                for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
+            ],
             "available_models": snapshot.models,
             "discovery_status": snapshot.status,
             "discovered_at": snapshot.discovered_at,
@@ -168,12 +191,14 @@ def build_router() -> APIRouter:
         }
 
     @router.put("/api/settings/models")
-    async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, str | int | bool | None]:
+    async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, object]:
         runtime = request.app.state.runtime
         next_config = runtime.config.model_copy(deep=True)
         fields_set = payload.model_fields_set
         if "language" in fields_set:
             next_config.runtime.language = _normalize_runtime_language(payload.language)
+        if "coding_assistant" in fields_set:
+            next_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(payload.coding_assistant)
         if "planner_model" in fields_set:
             next_config.opencode.planner_model = _normalize_model_override(payload.planner_model)
         if "planner_session_token_budget" in fields_set:
@@ -205,6 +230,7 @@ def build_router() -> APIRouter:
         ensure_runtime_agents(runtime.config)
         return {
             "language": runtime.config.runtime.language,
+            "coding_assistant": runtime.config.runtime.coding_assistant,
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
             "planner_agent_count": runtime.config.runtime.planner_agent_count,
@@ -219,6 +245,10 @@ def build_router() -> APIRouter:
             "repo_discovery_root": runtime.config.repo_discovery_root_value(),
             "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
             "config_path": str(config_path),
+            "available_assistants": [
+                {"value": value, "label": label}
+                for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
+            ],
             "saved": True,
         }
 
