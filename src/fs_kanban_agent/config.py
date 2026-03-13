@@ -15,6 +15,18 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
+SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode"}
+
+
+def normalize_runtime_assistant(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in SUPPORTED_RUNTIME_ASSISTANTS:
+        return normalized
+    if normalized == "opencode":
+        return "opencode"
+    return None
 
 
 class OpenCodeConfig(BaseModel):
@@ -52,6 +64,7 @@ class RuntimeConfig(BaseModel):
     poll_interval_seconds: float = 0.2
     auto_dispatch: bool = True
     language: Literal["EN", "KO"] = "EN"
+    coding_assistant: Literal["opencode"] = "opencode"
     planner_agent_count: int = Field(default=1, ge=1)
     implementer_agent_count: int = Field(default=1, ge=1)
     reviewer_agent_count: int = Field(default=1, ge=1)
@@ -62,6 +75,14 @@ class RuntimeConfig(BaseModel):
         normalized = normalize_runtime_language(value)
         if normalized is None:
             raise ValueError("runtime language must be EN or KO")
+        return normalized
+
+    @field_validator("coding_assistant", mode="before")
+    @classmethod
+    def normalize_coding_assistant_setting(cls, value: str) -> str:
+        normalized = normalize_runtime_assistant(value)
+        if normalized is None:
+            raise ValueError("runtime coding assistant must be OpenCode")
         return normalized
 
 

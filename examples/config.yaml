@@ -34,6 +34,7 @@ runtime:
   poll_interval_seconds: 0.2
   auto_dispatch: true
   language: EN
+  coding_assistant: opencode
   planner_agent_count: 1
   implementer_agent_count: 1
   reviewer_agent_count: 1
