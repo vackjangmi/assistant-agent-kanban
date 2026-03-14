@@ -77,7 +77,7 @@ class TaskDeletionService:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
-        docs_root = target_repo_root / "docs" / "ai-kanban"
+        docs_root = target_repo_root / "docs" / "kanban-agent"
         if not docs_root.exists():
             return
         for candidate in docs_root.glob(f"*/*/*/{metadata.task_id}"):

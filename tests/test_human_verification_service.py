@@ -117,7 +117,7 @@ def test_human_verification_start_uses_absolute_patch_path_from_relative_config(
     target_repo.mkdir()
     init_git_repo(target_repo)
     monkeypatch.chdir(tmp_path)
-    config = AppConfig(kanban_root=Path("ai-kanban"), repo_root=target_repo)
+    config = AppConfig(kanban_root=Path(".kanban-agent"), repo_root=target_repo)
     config.bootstrap()
     create_request_task(config, "verify-relative-patch-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -127,7 +127,7 @@ def test_human_verification_start_uses_absolute_patch_path_from_relative_config(
     assert moved.state == TaskState.HUMAN_VERIFYING
     updated = scanner.find_task(completed.metadata.task_id)
     assert updated.metadata.integration.patch_path == str(
-        (tmp_path / "ai-kanban" / "_runtime" / "runs" / updated.metadata.task_id / "review-001.patch").resolve()
+        (tmp_path / ".kanban-agent" / "_runtime" / "runs" / updated.metadata.task_id / "review-001.patch").resolve()
     )
     assert (target_repo / "app.txt").read_text() == "review me\n"
 
@@ -185,7 +185,7 @@ def test_human_verification_reject_preserves_human_reviewed_code_in_workspace(tm
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "verify-reject-preserve-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -542,7 +542,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "verify-approve-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -578,7 +578,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     review_date = datetime.now(timezone.utc)
-    docs_root = target_repo / "docs" / "ai-kanban" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / done.metadata.task_id
+    docs_root = target_repo / "docs" / "kanban-agent" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / done.metadata.task_id
     assert (docs_root / "REQUEST.md").exists()
     assert (docs_root / "PLAN.md").exists()
     assert (docs_root / "HUMAN-VERIFY-001.md").exists()
@@ -589,7 +589,7 @@ def test_human_verification_approve_switches_back_to_review_branch_before_commit
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "verify-approve-branch-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -607,7 +607,7 @@ def test_human_verification_approve_stages_manual_review_changes_before_commit(t
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "verify-approve-manual-edit-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -631,7 +631,7 @@ def test_human_verification_approve_returns_to_todos_on_rebase_conflict(tmp_path
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "verify-approve-conflict-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -664,7 +664,7 @@ def test_human_verification_approve_uses_task_id_suffix_when_final_branch_exists
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "verify-approve-collision-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -686,7 +686,7 @@ def test_human_verification_approve_romanizes_korean_title_for_final_branch(tmp_
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "면적 게임모드 추가", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -704,7 +704,7 @@ def test_human_verification_start_generates_english_branch_summary_with_adapter(
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "면적 게임모드 추가", target_repo_root=target_repo)
     branch_summary_adapter = FakeAdapter(["add-area-game-mode"])
@@ -722,7 +722,7 @@ def test_human_verification_approve_uses_stored_english_branch_summary(tmp_path)
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "면적 게임모드 추가", target_repo_root=target_repo)
     branch_summary_adapter = FakeAdapter(["add-area-game-mode"])

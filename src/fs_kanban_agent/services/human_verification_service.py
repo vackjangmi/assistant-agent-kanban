@@ -328,7 +328,7 @@ class HumanVerificationService:
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
         review_date = datetime.now(timezone.utc)
-        docs_root = target_repo_root / "docs" / "ai-kanban" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / metadata.task_id
+        docs_root = target_repo_root / "docs" / "kanban-agent" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / metadata.task_id
         shutil.rmtree(docs_root, ignore_errors=True)
         docs_root.mkdir(parents=True, exist_ok=True)
         for path in sorted(task_dir.glob("*.md")):
