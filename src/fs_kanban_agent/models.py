@@ -199,11 +199,13 @@ class HumanLineComment(BaseModel):
     id: str
     anchor: HumanLineCommentAnchor
     body_markdown: str
+    cycle: int | None = None
     author: str = "human"
     resolved: bool = False
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     resolved_at: datetime | None = None
+    editable: bool = True
 
 
 class HumanLineCommentsArtifact(BaseModel):
@@ -260,6 +262,7 @@ class HumanReviewState(BaseModel):
     note_markdown: str = ""
     total_comment_count: int = 0
     unresolved_comment_count: int = 0
+    historical_comment_count: int = 0
 
 
 class TaskLogEntry(BaseModel):
