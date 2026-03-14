@@ -92,7 +92,7 @@ class RepoDiscoveryConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    kanban_root: Path = Path("./ai-kanban")
+    kanban_root: Path = Path("./.kanban-agent")
     repo_root: Path = Path(".")
     base_branch: str = "main"
     opencode: OpenCodeConfig = Field(default_factory=OpenCodeConfig)

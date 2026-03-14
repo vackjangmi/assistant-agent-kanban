@@ -24,7 +24,7 @@ class WorkspaceManager:
             if git_dir.exists():
                 self._clone_task_repo(target_repo_root, repo_dir, metadata)
             else:
-                shutil.copytree(target_repo_root, repo_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "ai-kanban"))
+                shutil.copytree(target_repo_root, repo_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", ".kanban-agent"))
         elif (target_repo_root / ".git").exists():
             self._refresh_git_workspace(repo_dir, target_repo_root, metadata)
         self._apply_overlays(repo_dir, target_repo_root)
