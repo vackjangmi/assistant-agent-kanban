@@ -37,13 +37,31 @@
     .column h2 { margin-top: 0; }
     .column-cards { display: grid; gap: 10px; }
     .plan-board .column-cards, .implementation-board .column-cards, .final-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
-    .card { background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-    .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
+    .card { position: relative; background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0 28px 0 0; cursor: pointer; color: inherit; }
     .card:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+    .card-title { display: block; padding-right: 8px; }
     .card-meta { color: var(--muted); font-size: 0.95rem; }
-    .card-meta.running { color: var(--accent-strong); font-variant-numeric: tabular-nums; }
     .card-model { margin-top: 8px; padding: 7px 8px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.86rem; line-height: 1.35; }
     .card-model strong { display: block; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }
+    .card-activity { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; justify-content: center; }
+    .activity-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: 1px solid rgba(24,32,38,0.12); border-radius: 999px; background: rgba(255,255,255,0.82); color: var(--accent-strong); box-shadow: 0 6px 14px rgba(24,32,38,0.08); }
+    .activity-dot { width: 8px; height: 8px; border-radius: 999px; background: currentColor; box-shadow: 0 0 0 0 rgba(24,32,38,0.12); }
+    .activity-badge[data-activity-state="active"] { color: var(--success); border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.94); }
+    .activity-badge[data-activity-state="active"] .activity-dot { animation: activity-pulse 1.8s ease-out infinite; }
+    .activity-badge[data-activity-state="waiting"] { color: #9a6c2f; border-color: rgba(154,108,47,0.22); background: rgba(255,247,232,0.94); }
+    .activity-badge[data-activity-state="idle"] { color: #52606b; border-color: rgba(82,96,107,0.18); background: rgba(244,246,248,0.96); }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .task-activity-shell { display: grid; gap: 12px; }
+    .task-activity-hero { display: flex; justify-content: space-between; align-items: start; gap: 14px; flex-wrap: wrap; padding: 14px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,249,239,0.96), rgba(247,242,232,0.84)); }
+    .task-activity-copy { display: grid; gap: 5px; max-width: 720px; }
+    .task-activity-copy p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .task-activity-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .task-activity-card { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); }
+    .task-activity-card span { color: var(--accent-strong); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    .task-activity-card strong { font-size: 0.98rem; overflow-wrap: anywhere; }
+    .task-activity-card small { color: var(--muted); font-size: 0.86rem; line-height: 1.4; }
+    @keyframes activity-pulse { 0% { box-shadow: 0 0 0 0 rgba(33,115,73,0.24); } 70% { box-shadow: 0 0 0 8px rgba(33,115,73,0); } 100% { box-shadow: 0 0 0 0 rgba(33,115,73,0); } }
     .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }
     .modal[hidden] { display: none; }
     .modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
@@ -63,8 +81,6 @@
     .error-text { min-height: 1.1em; color: var(--danger); font-size: 0.9rem; }
     .form-error { margin-bottom: 12px; padding: 10px 12px; border: 1px solid rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
     .form-error[hidden] { display: none; }
-    .form-success { margin: 0 20px 20px; padding: 10px 12px; border: 1px solid rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: #217349; }
-    .form-success[hidden] { display: none; }
     .stacked-modal-panel { display: flex; flex-direction: column; overflow: hidden; }
     .stacked-modal-panel .modal-head { margin-bottom: 0; padding-bottom: 14px; flex: 0 0 auto; border-bottom: 1px solid rgba(24,32,38,0.08); }
     .modal-scroll-form { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; overflow: hidden; padding-top: 14px; }
@@ -156,7 +172,6 @@
     .task-danger-actions[hidden] { display: none; }
     .danger-button { background: var(--danger); border-color: var(--danger); color: #fff; }
      .verification-actions textarea { width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
-    .log-layout { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
      .log-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding: 5px 4px 0 0; }
      .log-file-list button { text-align: left; }
      .log-file-list button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
@@ -279,7 +294,6 @@
       <button id="refresh">Refresh</button>
     </div>
   </header>
-  <div id="form-success" class="form-success" hidden></div>
   <section id="request-modal" class="modal" hidden aria-hidden="true">
     <div class="modal-panel stacked-modal-panel" role="dialog" aria-modal="true" aria-labelledby="request-modal-title">
       <div class="modal-head">
@@ -527,7 +541,7 @@
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="task-modal-title">Task details</h2>
-          <p id="task-modal-subtitle">Inspect task metadata, markdown artifacts, and live agent logs.</p>
+          <p id="task-modal-subtitle">Inspect task metadata, current agent activity, and task artifacts.</p>
         </div>
         <div class="task-modal-actions">
           <button type="button" id="start-verification" class="accent-button" hidden>Start verification</button>
@@ -545,7 +559,6 @@
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
         <button type="button" id="task-tab-review-note" hidden>Review note</button>
-        <button type="button" id="task-tab-logs">Logs</button>
       </div>
       <section id="task-panel-overview" class="task-panel">
         <div class="task-panel-scroll">
@@ -554,14 +567,6 @@
       </section>
       <section id="task-panel-timeline" class="task-panel" hidden>
         <div id="task-timeline" class="task-panel-scroll muted">Select a task to inspect its stage timeline.</div>
-      </section>
-      <section id="task-panel-logs" class="task-panel" hidden>
-        <div class="log-layout">
-          <div id="task-log-files" class="log-file-list"></div>
-          <div class="log-stage">
-            <pre id="task-log-viewer" class="log-viewer">Select a log file.</pre>
-          </div>
-        </div>
       </section>
       <section id="task-panel-changed-files" class="task-panel" hidden>
         <div class="diff-layout">
@@ -659,7 +664,6 @@
     const submitButton = document.getElementById('submit-request');
     const saveSettingsButton = document.getElementById('save-settings');
     const formError = document.getElementById('form-error');
-    const formSuccess = document.getElementById('form-success');
     const targetRepoInput = document.getElementById('target_repo');
     const targetRepoOptions = document.getElementById('target-repo-options');
     const baseBranchInput = document.getElementById('base_branch');
@@ -713,13 +717,11 @@
     const taskTabTimeline = document.getElementById('task-tab-timeline');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
     const taskTabReviewNote = document.getElementById('task-tab-review-note');
-    const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
     const taskPanelTimeline = document.getElementById('task-panel-timeline');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
     const taskPanelReviewNote = document.getElementById('task-panel-review-note');
-    const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const taskTimeline = document.getElementById('task-timeline');
     const startVerificationButton = document.getElementById('start-verification');
@@ -740,8 +742,6 @@
     const requestChangesShell = document.getElementById('request-changes-shell');
     const approveHumanReviewButton = document.getElementById('approve-human-review-button');
     const approveHumanReviewShell = document.getElementById('approve-human-review-shell');
-    const taskLogFiles = document.getElementById('task-log-files');
-    const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
     const taskArtifactSubtabs = document.getElementById('task-artifact-subtabs');
     const taskViewerHost = document.getElementById('task-viewer-host');
@@ -758,14 +758,11 @@
     let lastAutoBaseBranch = '';
     let activeTaskId = null;
     let activeTaskTab = 'overview';
-    let activeTaskLogs = [];
     let activeTaskDetail = null;
     let activeChangedFileId = null;
     let activeChangedFileDetail = null;
     let activeArtifactName = null;
     let activeArtifactRequestToken = 0;
-    let activeLogName = null;
-    let activeLogView = 'readable';
     let runningTimerHandle = null;
     let activeTaskRequestToken = 0;
     let activeTaskRefreshTimer = null;
@@ -943,7 +940,6 @@
         close: 'Close',
         submit: 'Create request',
         creating: 'Creating...',
-        success: 'Created request at {path}',
         validationTitle: 'Use at least 5 characters.',
         validationGoal: 'Goal is required.',
         validationTargetRepo: 'Target repo is required.',
@@ -989,7 +985,6 @@
         close: '닫기',
         submit: '요청 생성',
         creating: '생성 중...',
-        success: '요청 생성 완료: {path}',
         validationTitle: '최소 5글자 이상 입력하세요.',
         validationGoal: '목표는 필수입니다.',
         validationTargetRepo: '대상 저장소는 필수입니다.',
@@ -1369,22 +1364,67 @@
       return `
         <section class="column">
           <h2>${stateLabel(column.state)}</h2>
-          <div class="column-cards">${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong>${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderRunningMeta(item)}${renderCardModelMeta(item)}</button></article>`).join('')}</div>
+          <div class="column-cards">${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}">${renderCardActivity(item)}<strong class="card-title">${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderCardModelMeta(item)}</button></article>`).join('')}</div>
         </section>`;
-    }
-
-    function isActiveState(state) {
-      return ['planning', 'implementing', 'reviewing', 'human-verifying'].includes(state);
-    }
-
-    function renderRunningMeta(item) {
-      if (!isActiveState(item.state) || !item.state_entered_at) return '';
-      return `<div class="card-meta running" ${buildDurationAttributes(0, item.state_entered_at, 'running ')}>running 00:00:00</div>`;
     }
 
     function renderCardModelMeta(item) {
       if (!item.active_model) return '';
       return `<div class="card-model"><strong>Current stage model used</strong>${escapeHtml(item.active_model)}</div>`;
+    }
+
+    function normalizeAgentActivityStatus(status) {
+      if (status === 'active' || status === 'idle' || status === 'waiting') return status;
+      return '';
+    }
+
+    function formatRelativeTime(value) {
+      if (!value) return 'No heartbeat yet';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return String(value);
+      const deltaSeconds = Math.max(0, Math.round((Date.now() - parsed.getTime()) / 1000));
+      if (deltaSeconds < 10) return 'just now';
+      if (deltaSeconds < 60) return `${deltaSeconds}s ago`;
+      const deltaMinutes = Math.round(deltaSeconds / 60);
+      if (deltaMinutes < 60) return `${deltaMinutes}m ago`;
+      const deltaHours = Math.round(deltaMinutes / 60);
+      if (deltaHours < 24) return `${deltaHours}h ago`;
+      const deltaDays = Math.round(deltaHours / 24);
+      return `${deltaDays}d ago`;
+    }
+
+    function resolveAgentActivity({ status = '', owner = '', heartbeatAt = '', state = '' } = {}) {
+      const explicitStatus = normalizeAgentActivityStatus(status);
+      if (explicitStatus) return explicitStatus;
+      const hasOwner = Boolean(owner);
+      if (hasOwner && ['planning', 'implementing', 'reviewing'].includes(state)) return 'active';
+      if (['planning', 'implementing', 'reviewing'].includes(state)) return 'waiting';
+      return 'idle';
+    }
+
+    function activityLabel(status) {
+      if (status === 'active') return 'Agent active';
+      if (status === 'waiting') return 'Agent waiting';
+      return 'Agent idle';
+    }
+
+    function buildActivityBadge(status, label = activityLabel(status)) {
+      return `<span class="activity-badge" data-activity-state="${escapeHtml(status)}" aria-label="${escapeHtml(label)}"><span class="activity-dot" aria-hidden="true"></span><span class="sr-only">${escapeHtml(label)}</span></span>`;
+    }
+
+    function renderCardActivity(item) {
+      const status = resolveAgentActivity({
+        status: item.agent_status,
+        owner: item.agent_owner,
+        heartbeatAt: item.agent_heartbeat_at,
+        state: item.state,
+      });
+      const owner = item.agent_owner ? `Owned by ${item.agent_owner}` : 'No worker lease attached';
+      const meta = item.agent_heartbeat_at
+        ? `Heartbeat ${formatRelativeTime(item.agent_heartbeat_at)} · ${formatDateTime(item.agent_heartbeat_at)}`
+        : (status === 'waiting' ? 'This stage is active, but no worker lease is attached yet.' : 'No heartbeat recorded for this task.');
+      const tooltip = `${activityLabel(status)} - ${owner}. ${meta}`;
+      return `<span class="card-activity" title="${escapeHtml(tooltip)}">${buildActivityBadge(status, tooltip)}</span>`;
     }
 
     function formatElapsed(milliseconds) {
@@ -1782,8 +1822,6 @@
     function clearMessages() {
       formError.hidden = true;
       formError.textContent = '';
-      formSuccess.hidden = true;
-      formSuccess.textContent = '';
       document.querySelectorAll('[data-error-for]').forEach((node) => { node.textContent = ''; });
     }
 
@@ -1881,17 +1919,72 @@
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
       taskTabReviewNote.classList.toggle('active', tab === 'review-note');
       taskTabEditor.classList.toggle('active', tab === 'editor');
-      taskTabLogs.classList.toggle('active', tab === 'logs');
       taskPanelOverview.hidden = tab !== 'overview';
       taskPanelTimeline.hidden = tab !== 'timeline';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
       taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
-      taskPanelLogs.hidden = tab !== 'logs';
       if (tab === 'review-note') requestAnimationFrame(() => syncHumanReviewEditorHeight());
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
-      if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
+    }
+
+    function renderTaskActivity(detail) {
+      const metadata = detail?.metadata || {};
+      const lease = metadata.lease || {};
+      const status = resolveAgentActivity({
+        status: detail?.agent_status,
+        owner: lease.owner,
+        heartbeatAt: lease.heartbeat_at,
+        state: metadata.state,
+      });
+      const owner = lease.owner || 'No lease owner';
+      const runId = lease.run_id || 'No active run';
+      const heartbeat = lease.heartbeat_at ? formatDateTime(lease.heartbeat_at) : 'No heartbeat yet';
+      const heartbeatNote = lease.heartbeat_at ? `Last heartbeat ${formatRelativeTime(lease.heartbeat_at)}.` : 'A worker heartbeat appears here once a lease is active.';
+      const activityCopy = status === 'active'
+        ? 'A worker currently holds the task lease for this agent-run stage.'
+        : status === 'waiting'
+          ? 'This task is in an agent-run stage, but no worker lease is attached right now.'
+          : 'No worker lease is currently attached to this task.';
+      const logSummary = detail.log_files.length
+        ? `${detail.log_files.length} runtime log file${detail.log_files.length === 1 ? '' : 's'} recorded. Latest: ${detail.log_files[detail.log_files.length - 1]}.`
+        : 'No runtime log files recorded for this task yet.';
+      return `
+        <div class="task-section">
+          <h3>Agent activity</h3>
+          <div class="task-activity-shell">
+            <div class="task-activity-hero">
+              <div class="task-activity-copy">
+                ${buildActivityBadge(status)}
+                <strong>${escapeHtml(owner)}</strong>
+                <p>${escapeHtml(activityCopy)}</p>
+              </div>
+            </div>
+            <div class="task-activity-grid">
+              <div class="task-activity-card">
+                <span>Lease owner</span>
+                <strong>${escapeHtml(owner)}</strong>
+                <small>${escapeHtml(lease.owner ? 'Current task lease owner from metadata.' : 'No worker currently owns the task lease.')}</small>
+              </div>
+              <div class="task-activity-card">
+                <span>Lease run</span>
+                <strong>${escapeHtml(runId)}</strong>
+                <small>${escapeHtml(lease.run_id ? 'Worker run identifier for the current lease.' : 'Run id appears once a worker claims the task.')}</small>
+              </div>
+              <div class="task-activity-card">
+                <span>Heartbeat</span>
+                <strong>${escapeHtml(heartbeat)}</strong>
+                <small>${escapeHtml(heartbeatNote)}</small>
+              </div>
+              <div class="task-activity-card">
+                <span>Log artifacts</span>
+                <strong>${escapeHtml(detail.log_files.length ? detail.log_files.join(', ') : 'None yet')}</strong>
+                <small>${escapeHtml(logSummary)}</small>
+              </div>
+            </div>
+          </div>
+        </div>`;
     }
 
     function diffMarker(kind) {
@@ -2619,7 +2712,8 @@
           <div class="meta-item"><span>Final branch</span><strong>${escapeHtml(metadata.integration.final_branch || 'Not created yet')}</strong></div>
           <div class="meta-item"><span>REQUEST.md path</span><strong>${escapeHtml(detail.request_markdown_path)}</strong></div>
         </div>
-          <div class="task-section">
+        ${renderTaskActivity(detail)}
+        <div class="task-section">
           <h3>Captured stage models</h3>
           <div class="task-model-grid">${stageModels.map((item) => `<div class="task-model-row"><span>${escapeHtml(item.label)}</span><div><strong>${escapeHtml(item.value || 'Not captured yet')}</strong><small>${escapeHtml(item.note)} This is the actual model used, separate from runtime override settings. Last run tokens: ${escapeHtml(String(item.tokens || 0))}. Session tokens: ${escapeHtml(String(item.sessionTokens || 0))}.</small></div></div>`).join('')}</div>
         </div>
@@ -2630,10 +2724,6 @@
         <div class="task-section">
           <h3>JSON files</h3>
           <ul class="task-list">${detail.json_files.length ? detail.json_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : '<li>No JSON files</li>'}</ul>
-        </div>
-        <div class="task-section">
-          <h3>Log files</h3>
-          <ul class="task-list">${detail.log_files.length ? detail.log_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : '<li>No logs yet</li>'}</ul>
         </div>
         <div class="task-section">
           <h3>Changed files</h3>
@@ -2730,51 +2820,6 @@
       taskArtifactName.textContent = activeArtifactName || 'No document selected';
     }
 
-    function renderTaskLogEntries(entries) {
-      activeTaskLogs = entries;
-      if (!entries.length) {
-        activeLogName = null;
-        taskLogFiles.innerHTML = '<div class="muted">No logs yet.</div>';
-        taskLogViewer.textContent = 'No logs yet.';
-        return;
-      }
-      if (!activeLogName || !entries.some((entry) => entry.name === activeLogName)) activeLogName = entries[entries.length - 1].name;
-      taskLogFiles.innerHTML = entries.map((entry, index) => `<button type="button" class="${entry.name === activeLogName ? 'active' : ''}" data-log-index="${index}">${escapeHtml(entry.name)}</button>`).join('');
-      showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);
-    }
-
-    function updateLogViewState() {
-      activeLogView = 'readable';
-    }
-
-    function showLogEntry(index, scrollToBottom = false) {
-      const entry = activeTaskLogs[index];
-      if (!entry) return;
-      activeLogName = entry.name;
-      taskLogViewer.textContent = activeLogView === 'debug'
-        ? (entry.debug_rendered_content || '(no debug metadata for this log yet)')
-        : (entry.rendered_content || '(no readable log output for this file)');
-      taskLogFiles.querySelectorAll('button').forEach((button, buttonIndex) => {
-        button.classList.toggle('active', buttonIndex === index);
-      });
-      updateLogViewState();
-      if (scrollToBottom) taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
-    }
-
-    function appendRealtimeLog(eventPayload) {
-      const payload = eventPayload.payload || eventPayload;
-      if (!payload || !payload.log_name) return;
-      let entry = activeTaskLogs.find((item) => item.name === payload.log_name);
-      if (!entry) {
-        entry = { name: payload.log_name, path: payload.log_name, rendered_content: '', debug_rendered_content: '', updated_at: new Date().toISOString() };
-        activeTaskLogs = [...activeTaskLogs, entry];
-      }
-      entry.rendered_content = typeof payload.rendered_content === 'string' ? payload.rendered_content : '';
-      entry.debug_rendered_content = typeof payload.debug_rendered_content === 'string' ? payload.debug_rendered_content : '';
-      entry.updated_at = new Date().toISOString();
-      renderTaskLogEntries(activeTaskLogs);
-    }
-
     async function loadTaskDetail(taskId, preserveTab = false, options = {}) {
       const { softRefresh = false } = options;
       const defaultTab = preserveTab ? activeTaskTab : 'overview';
@@ -2784,8 +2829,6 @@
       taskModalError.hidden = true;
       setTaskDetailStale(false);
       if (!softRefresh) {
-        activeTaskLogs = [];
-        activeLogName = null;
         activeTaskDetail = null;
         activeChangedFileId = null;
         activeChangedFileDetail = null;
@@ -2795,9 +2838,6 @@
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder('Select the Changed files tab to inspect the stored review patch.');
         setHumanReviewEditorContent('');
-        taskLogFiles.innerHTML = '';
-        updateLogViewState();
-        taskLogViewer.textContent = 'Select the Logs tab to load OpenCode output.';
         taskMarkdownFiles.innerHTML = '';
         taskArtifactName.textContent = 'No document selected';
         setPlanEditorContent('');
@@ -2825,7 +2865,6 @@
         if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab);
         if (resolvedTab === 'changed-files' && detail.changed_files.length) await loadChangedFile(taskId, activeChangedFileId, true);
         if (resolvedTab === 'editor' && detail.markdown_files.length) await loadMarkdownArtifact(taskId, activeArtifactName);
-        if (resolvedTab === 'logs') await loadTaskLogs(taskId, true);
       } catch (error) {
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         taskModalError.hidden = false;
@@ -2871,25 +2910,6 @@
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
         updateTaskDeleteState();
-      }
-    }
-
-    async function loadTaskLogs(taskId, silent = false) {
-      if (!silent) {
-        taskLogFiles.innerHTML = '<div class="muted">Loading logs...</div>';
-        taskLogViewer.textContent = 'Loading logs...';
-      }
-      try {
-        const response = await fetch(`/api/tasks/${taskId}/logs`);
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to load task logs.');
-        if (taskId !== activeTaskId) return;
-        renderTaskLogEntries(payload.entries);
-      } catch (error) {
-        taskModalError.hidden = false;
-        taskModalError.textContent = error.message;
-        taskLogFiles.innerHTML = '<div class="muted">Failed to load logs.</div>';
-        taskLogViewer.textContent = 'Failed to load logs.';
       }
     }
 
@@ -3159,8 +3179,6 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Request creation failed.');
         persistLastTargetRepo(payload.target_repo);
-        formSuccess.hidden = false;
-        formSuccess.textContent = translateRequest('success', { path: data.task_path });
         resetFormState();
         setModalOpen(false);
         await loadBoard();
@@ -3197,7 +3215,6 @@
     taskTabTimeline.addEventListener('click', () => setTaskTab('timeline'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
-    taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
     taskDiffShell.addEventListener('click', (event) => {
@@ -3228,7 +3245,6 @@
     approveHumanReviewButton.addEventListener('click', approveVerification);
     taskMarkdownFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     taskArtifactSubtabs.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
-    taskLogFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); });
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
@@ -3260,7 +3276,7 @@
       if (taskModal.hidden) return;
       const payload = JSON.parse(event.data);
       if (activeTaskId !== payload.task_id) return;
-      appendRealtimeLog(payload);
+      scheduleActiveTaskRefresh();
     });
     loadBoard();
   </script>

@@ -23,6 +23,7 @@ from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workspace_manager import WorkspaceManager
 from fs_kanban_agent.workers.implementer import ImplementerWorker
+from fs_kanban_agent.models import utc_now
 
 from .conftest import FakeAdapter, create_request_task
 
@@ -923,6 +924,9 @@ def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_p
     planning.metadata.plan.revision = 1
     planning.metadata.plan.resolved_model = "openai/gpt-5.4"
     planning.metadata.implementation.resolved_model = "github-copilot/gpt-5"
+    planning.metadata.lease.owner = "planner"
+    planning.metadata.lease.run_id = "planner-run-1"
+    planning.metadata.lease.heartbeat_at = utc_now()
     (planning.task_dir / "PLAN.md").write_text("plan\n")
     metadata_store.save(planning.task_dir, planning.metadata)
     board_snapshot = scanner.board_snapshot()
@@ -933,10 +937,36 @@ def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_p
 
     planning_column = next(column for column in board_snapshot.model_dump(mode="json")["columns"] if column["state"] == TaskState.PLANNING.value)
     assert planning_column["items"][0]["active_model"] == "openai/gpt-5.4"
+    assert planning_column["items"][0]["agent_status"] == "active"
+    assert planning_column["items"][0]["agent_owner"] == "planner"
     assert detail.status_code == 200
     assert detail.json()["metadata"]["plan"]["resolved_model"] == "openai/gpt-5.4"
     assert detail.json()["metadata"]["implementation"]["resolved_model"] == "github-copilot/gpt-5"
     assert detail.json()["metadata"]["review"]["resolved_model"] is None
+    assert detail.json()["agent_status"] == "active"
+
+
+def test_api_task_detail_marks_active_state_without_lease_as_waiting(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "waiting-activity-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(scanner.find_task(waiting.metadata.task_id), TaskState.IMPLEMENTING, by="implementer")
+    implementing.metadata.lease.heartbeat_at = utc_now()
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        detail = client.get(f"/api/tasks/{implementing.metadata.task_id}")
+
+    assert detail.status_code == 200
+    assert detail.json()["agent_status"] == "waiting"
 
 
 def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
@@ -1296,8 +1326,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "task-tab-changed-files" in response.text
     assert "task-panel-changed-files" in response.text
     assert "Read-only patch view" in response.text
-    assert "Readable log" in response.text
-    assert "Debug log" in response.text
+    assert "Readable log" not in response.text
+    assert "Debug log" not in response.text
+    assert "Agent activity" in response.text
+    assert "task-activity-shell" in response.text
     assert "planner_model" in response.text
     assert "runtime_language" in response.text
     assert "runtime_coding_assistant" in response.text
@@ -1350,7 +1382,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'id="task-panel-review-note"' in response.text
     assert 'class="diff-grid"' in response.text
     assert 'class="diff-row"' in response.text
-    assert 'class="diff-cell ${row.left.kind}"' in response.text
+    assert 'class="diff-cell ${line.kind}"' in response.text
     assert 'class="diff-unified"' in response.text
     assert "translateRequest('validationGoal')" in response.text
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
@@ -1366,10 +1398,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function selectDefaultBoardPhase(columns)" in response.text
     assert "if (!boardPhaseManuallySelected) {" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
-    assert "/api/tasks/${taskId}/logs" in response.text
-    assert "debug_rendered_content" in response.text
-    assert "(no debug metadata for this log yet)" in response.text
-    assert "(no readable log output for this file)" in response.text
+    assert "/api/tasks/${taskId}/logs" not in response.text
+    assert "debug_rendered_content" not in response.text
+    assert "(no debug metadata for this log yet)" not in response.text
+    assert "(no readable log output for this file)" not in response.text
     assert "artifact-group-label" in response.text
     assert "task-artifact-subtabs" in response.text
     assert "function buildArtifactEntries(files)" in response.text
@@ -1381,7 +1413,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "callback(uploaded.relative_path, uploaded.filename);" in response.text
     assert "function rewriteAttachmentPaths(markdown, taskId)" in response.text
     assert "const defaultTab = preserveTab ? activeTaskTab : 'overview';" in response.text
-    assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" in response.text
+    assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" not in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
     assert "Final branch" in response.text
     assert "width: min(1380px, 100%)" in response.text
@@ -1390,6 +1422,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".diff-mobile { font-size: 0.82rem; }" in response.text
     assert "setTaskTab('changed-files');" in response.text
     assert "worker_log" in response.text
+    assert 'id="task-tab-logs"' not in response.text
+    assert 'id="task-panel-logs"' not in response.text
     assert "loadTaskLogs(activeTaskId, true)" not in response.text
     assert "maybeStartLogPolling" not in response.text
     assert "setInterval(() => {" not in response.text
@@ -1403,12 +1437,21 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "source.addEventListener('board_snapshot', async () => {" in response.text
     assert "scheduleActiveTaskRefresh();" in response.text
     assert "data-active-since" in response.text
+    assert "renderRunningMeta(item)" not in response.text
+    assert "running 00:00:00" not in response.text
+    assert 'class="card-activity"' in response.text
+    assert "aria-label=\"${escapeHtml(label)}\"" in response.text
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert "Approve" in response.text
     assert "Request changes" in response.text
+    assert "Agent active" in response.text
+    assert "Agent waiting" in response.text
+    assert "Agent idle" in response.text
+    assert "Agent activity" in response.text
+    assert "task-activity-shell" in response.text
     assert "Captured stage models" in response.text
     assert "Stage timing" in response.text
     assert "stage-timing-grid" in response.text
@@ -1423,7 +1466,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Reviewer model used" in response.text
     assert "REQUEST.md path" in response.text
     assert "Delete task" in response.text
-    assert "This permanently removes the task directory and any managed workspace artifacts created for it." in response.text
+    assert "This stops any running task work and removes managed artifacts" in response.text
     assert "method: 'DELETE'" in response.text
     assert 'const defaultTargetRepo = "";' in response.text
 
