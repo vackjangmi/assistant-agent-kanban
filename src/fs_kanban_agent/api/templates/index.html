@@ -165,9 +165,13 @@
      .diff-badges { display: flex; gap: 8px; flex-wrap: wrap; }
      .diff-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }
     .diff-shell { border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: auto; min-height: 0; height: 100%; }
-    .human-review-panel { display: grid; gap: 12px; height: 100%; }
-    .human-review-box { display: grid; gap: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; }
-    .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .human-review-panel { display: grid; gap: 12px; height: 100%; min-height: 0; }
+    .human-review-box { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; min-height: 0; height: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; overflow: hidden; }
+    .human-review-editor-shell { min-height: 0; height: 100%; display: grid; }
+    .human-review-footer { display: grid; gap: 8px; }
+    .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
+    .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
+    .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
     .diff-desktop, .diff-mobile { height: 100%; max-height: none; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }
     .diff-desktop { font-size: 0.82rem; }
     .diff-mobile { font-size: 0.82rem; }
@@ -177,7 +181,7 @@
     .diff-hunk-header { padding: 8px 12px; background: rgba(124,79,44,0.1); color: var(--accent-strong); font-size: 0.84rem; overflow-wrap: anywhere; }
     .diff-grid { display: grid; }
     .diff-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .diff-cell { display: grid; grid-template-columns: 56px 22px minmax(0, 1fr); min-width: 0; border-top: 1px solid rgba(24,32,38,0.06); }
+    .diff-cell { display: grid; grid-template-columns: 56px auto 22px minmax(0, 1fr); min-width: 0; border-top: 1px solid rgba(24,32,38,0.06); align-items: start; }
     .diff-cell + .diff-cell { border-left: 1px solid rgba(24,32,38,0.08); }
     .diff-cell.empty { background: rgba(24,32,38,0.03); }
     .diff-cell.context { background: rgba(255,255,255,0.54); }
@@ -186,6 +190,39 @@
     .diff-line-number { padding: 0 10px; border-right: 1px solid rgba(24,32,38,0.08); color: var(--muted); text-align: right; user-select: none; }
     .diff-marker { display: flex; align-items: start; justify-content: center; padding-top: 1px; color: var(--muted); user-select: none; }
     .diff-content { display: block; min-width: 0; padding-right: 10px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+    .diff-line-action { display: flex; align-items: start; justify-content: center; padding: 0 6px 0 4px; }
+    .diff-line-comment-button { width: 24px; height: 24px; border-radius: 999px; border: 1px solid rgba(24,32,38,0.14); background: rgba(255,255,255,0.92); color: var(--accent-strong); display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 1rem; font-weight: 700; line-height: 1; box-shadow: 0 8px 16px rgba(24,32,38,0.08); opacity: 0; transform: translateY(2px); transition: opacity 140ms ease, transform 140ms ease, background 140ms ease, border-color 140ms ease; }
+    .diff-line-comment-button:hover, .diff-line-comment-button:focus-visible { background: rgba(255,249,239,0.98); border-color: rgba(124,79,44,0.3); transform: translateY(0); }
+    .diff-cell:hover .diff-line-comment-button, .diff-cell:focus-within .diff-line-comment-button, .diff-line-comment-button.has-comments { opacity: 1; transform: translateY(0); }
+    .diff-line-thread-shell { grid-column: 1 / -1; display: grid; gap: 8px; padding: 8px 10px 10px; border-top: 1px solid rgba(24,32,38,0.06); background: rgba(255,252,247,0.92); min-width: 0; }
+    .diff-thread-stack { display: grid; gap: 10px; }
+    .diff-thread-comment { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid rgba(24,32,38,0.1); background: rgba(255,255,255,0.95); box-shadow: 0 10px 20px rgba(24,32,38,0.05); }
+    .diff-thread-comment.resolved { border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.96); }
+    .diff-thread-comment-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 0.76rem; letter-spacing: 0.03em; text-transform: uppercase; }
+    .diff-thread-comment-meta strong { color: var(--accent-strong); font-size: 0.76rem; }
+    .diff-thread-comment-meta-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+    .diff-thread-comment-meta-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .diff-thread-comment-badge { display: inline-flex; align-items: center; padding: 3px 8px; border: 1px solid rgba(33,115,73,0.2); background: rgba(33,115,73,0.1); color: var(--success); font-size: 0.72rem; font-weight: 700; }
+    .diff-thread-comment-delete { padding: 4px 8px; min-height: 28px; border: 1px solid rgba(24,32,38,0.12); background: rgba(24,32,38,0.04); color: var(--muted); font-size: 0.72rem; line-height: 1; }
+    .diff-thread-comment-delete:hover, .diff-thread-comment-delete:focus-visible { border-color: rgba(163,58,42,0.24); background: rgba(163,58,42,0.08); color: var(--danger); }
+    .diff-thread-comment-body { border: 1px solid rgba(24,32,38,0.06); background: rgba(255,255,255,0.92); padding: 10px 12px; }
+    .diff-thread-comment-body .toastui-editor-contents { font-size: 0.96rem; line-height: 1.55; }
+    .diff-thread-empty { color: var(--muted); font-size: 0.9rem; }
+    .diff-inline-comment { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid rgba(124,79,44,0.18); background: linear-gradient(135deg, rgba(255,249,239,0.98), rgba(247,242,232,0.88)); box-shadow: 0 12px 24px rgba(24,32,38,0.06); min-width: 0; }
+    .diff-inline-comment-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .diff-inline-comment-head strong { color: var(--accent-strong); font-size: 0.82rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    .diff-inline-comment-anchor { color: var(--muted); font-size: 0.84rem; }
+    .diff-inline-comment-fallback { width: 100%; min-height: 88px; max-height: 180px; border: 1px solid rgba(24,32,38,0.1); background: rgba(255,255,255,0.96); padding: 10px 12px; font: inherit; color: var(--text); resize: vertical; box-sizing: border-box; }
+    .diff-inline-comment-status { min-height: 1.1em; color: var(--muted); font-size: 0.88rem; }
+    .diff-inline-comment-status[data-tone="error"] { color: var(--danger); }
+    .diff-inline-comment-status[data-tone="success"] { color: var(--success); }
+    .diff-inline-comment-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+    .diff-mobile-stack { display: grid; }
+    .diff-mobile-line { display: grid; gap: 0; border-top: 1px solid rgba(24,32,38,0.06); }
+    .diff-mobile-line-head { display: grid; grid-template-columns: auto 64px auto 22px minmax(0, 1fr); align-items: start; gap: 0; min-width: 0; }
+    .diff-mobile-line-side { padding: 0 10px; border-right: 1px solid rgba(24,32,38,0.08); color: var(--accent-strong); font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase; display: inline-flex; align-items: center; }
+    .diff-mobile-line .diff-line-number { padding-left: 12px; }
+    .diff-mobile-line .diff-content { padding-top: 0; padding-bottom: 0; }
     .diff-unified { margin: 0; padding: 12px 14px; min-height: 100%; background: rgba(255,255,255,0.9); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
     .diff-unified-line { display: block; padding: 1px 0; }
     .diff-unified-line.header { color: var(--accent-strong); font-weight: 700; }
@@ -199,13 +236,20 @@
     .artifact-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
     .editor-textarea { width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 12px; font: inherit; }
     .editor-host { min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; }
+    .human-review-editor-shell .editor-host,
+    .human-review-editor-shell .editor-textarea { min-height: 0; height: 100%; }
+    .human-review-editor-shell .editor-textarea { resize: none; overflow: auto; }
     .viewer-host { min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; }
     .editor-host[hidden] { display: none; }
     .viewer-host[hidden] { display: none; }
     .mode-pill { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }
     .toastui-editor-defaultUI, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .toastui-editor-contents { max-width: 100%; min-width: 0; }
+    .human-review-editor-shell .toastui-editor-defaultUI,
+    .human-review-editor-shell .toastui-editor-main,
+    .human-review-editor-shell .toastui-editor-md-container,
+    .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-     @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; } .human-review-actions button { width: 100%; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -570,11 +614,16 @@
                 <button type="button" id="save-human-review-note">Save note</button>
               </div>
             </div>
-            <div id="task-human-review-editor-host" class="editor-host"></div>
-            <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
-            <div class="human-review-actions">
-              <button type="button" id="request-changes-button">Request changes</button>
-              <button type="button" id="approve-human-review-button" class="primary">Approve</button>
+            <div class="human-review-editor-shell">
+              <div id="task-human-review-editor-host" class="editor-host"></div>
+              <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
+            </div>
+            <div class="human-review-footer">
+              <div id="task-human-review-approval-status" class="human-review-approval-status">Approve creates the final commit from the current human-reviewed code.</div>
+              <div class="human-review-actions">
+                <button type="button" id="request-changes-button">Request changes</button>
+                <button type="button" id="approve-human-review-button" class="primary">Approve</button>
+              </div>
             </div>
           </div>
         </div>
@@ -698,12 +747,14 @@
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');
     const taskChangedFileSummary = document.getElementById('task-changed-file-summary');
+    const taskDiffShell = document.getElementById('task-diff-shell');
     const taskDiffDesktop = document.getElementById('task-diff-desktop');
     const taskDiffMobile = document.getElementById('task-diff-mobile');
     const taskHumanReviewPanel = document.getElementById('task-human-review-panel');
     const taskHumanReviewEditorHost = document.getElementById('task-human-review-editor-host');
     const taskHumanReviewEditorFallback = document.getElementById('task-human-review-editor-fallback');
     const taskHumanReviewNoteStatus = document.getElementById('task-human-review-note-status');
+    const taskHumanReviewApprovalStatus = document.getElementById('task-human-review-approval-status');
     const saveHumanReviewNoteButton = document.getElementById('save-human-review-note');
     const requestChangesButton = document.getElementById('request-changes-button');
     const approveHumanReviewButton = document.getElementById('approve-human-review-button');
@@ -746,6 +797,8 @@
     let humanReviewEditor = null;
     let humanReviewSourceMarkdown = '';
     let markdownViewer = null;
+    let activeInlineCommentAnchor = null;
+    let deletingCommentId = null;
     let branchLookupTimer = null;
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
@@ -971,29 +1024,77 @@
         tab: 'Review note',
         status: 'Review note and file comments live here.',
         noteTitle: 'Review note',
-        noteStatus: 'Saved into the current HUMAN-VERIFY document.',
+        noteStatus: 'Saved into the current HUMAN-VERIFY document. Inline file comments stay attached to changed lines.',
         saveNote: 'Save note',
         requestChanges: 'Request changes',
         approve: 'Approve',
         approvalReady: 'Approve creates the final commit from the current human-reviewed code.',
+        approvalBlockedOne: 'Approval is blocked until {count} inline comment is resolved.',
+        approvalBlockedMany: 'Approval is blocked until {count} inline comments are resolved.',
         noteSaving: 'Saving review note...',
         noteSaved: 'Review note saved.',
         requestingChanges: 'Sending task back to TODO with the current reviewed code state...',
         approving: 'Creating the final commit from the current reviewed code and task documents...',
+        commentsBadge: 'Inline comments',
+        commentsReady: 'Hover a line to leave an inline review comment.',
+        commentsReadyMobile: 'Tap the comment action on a line to leave an inline review comment.',
+        commentsExistingOne: '{count} saved thread',
+        commentsExistingMany: '{count} saved threads',
+        commentAction: '+',
+        commentActionMobile: 'Comment',
+        commentComposerTitle: 'Line comment',
+        commentComposerHint: '{side} line {lineNumber}',
+        commentComposerPlaceholder: 'Add a focused review comment for this line.',
+        commentComposerCancel: 'Cancel',
+        commentComposerSubmit: 'Comment',
+        commentComposerSubmitting: 'Saving line comment...',
+        commentComposerSaved: 'Line comment saved.',
+        commentComposerError: 'Failed to save line comment.',
+        commentThreadLabel: 'Saved comment',
+        commentDelete: 'Delete',
+        commentDeleteBusy: 'Deleting...',
+        commentDeleteError: 'Failed to delete line comment.',
+        commentResolved: 'Resolved',
+        commentSideLeft: 'Old',
+        commentSideRight: 'New',
       },
       KO: {
         title: '인간 리뷰',
         tab: '리뷰 노트',
         noteTitle: '리뷰 노트',
-        noteStatus: '현재 HUMAN-VERIFY 문서에 저장됩니다.',
+        noteStatus: '현재 HUMAN-VERIFY 문서에 저장됩니다. 파일 줄 코멘트는 변경된 줄 아래에 바로 붙습니다.',
         saveNote: '노트 저장',
         requestChanges: '재요청',
         approve: '승인',
         approvalReady: '승인하면 현재 인간 리뷰 기준 코드와 문서로 최종 커밋을 만듭니다.',
+        approvalBlockedOne: '해결되지 않은 줄 코멘트 {count}개가 남아 있어 승인이 막혀 있습니다.',
+        approvalBlockedMany: '해결되지 않은 줄 코멘트 {count}개가 남아 있어 승인이 막혀 있습니다.',
         noteSaving: '리뷰 노트를 저장하는 중...',
         noteSaved: '리뷰 노트를 저장했습니다.',
         requestingChanges: '현재 검토한 코드 상태를 다음 구현 단계로 넘기면서 TODO로 되돌리는 중...',
         approving: '현재 검토한 코드와 작업 문서를 기준으로 최종 커밋을 만드는 중...',
+        commentsBadge: '줄 코멘트',
+        commentsReady: '줄 위에 마우스를 올리면 인라인 코멘트를 남길 수 있습니다.',
+        commentsReadyMobile: '줄의 코멘트 버튼을 눌러 인라인 코멘트를 남기세요.',
+        commentsExistingOne: '저장된 스레드 {count}개',
+        commentsExistingMany: '저장된 스레드 {count}개',
+        commentAction: '+',
+        commentActionMobile: '코멘트',
+        commentComposerTitle: '줄 코멘트',
+        commentComposerHint: '{side} 줄 {lineNumber}',
+        commentComposerPlaceholder: '이 줄에 대한 검토 코멘트를 적어주세요.',
+        commentComposerCancel: '취소',
+        commentComposerSubmit: '코멘트 저장',
+        commentComposerSubmitting: '줄 코멘트를 저장하는 중...',
+        commentComposerSaved: '줄 코멘트를 저장했습니다.',
+        commentComposerError: '줄 코멘트를 저장하지 못했습니다.',
+        commentThreadLabel: '저장된 코멘트',
+        commentDelete: '삭제',
+        commentDeleteBusy: '삭제 중...',
+        commentDeleteError: '줄 코멘트를 삭제하지 못했습니다.',
+        commentResolved: '해결됨',
+        commentSideLeft: '이전',
+        commentSideRight: '새줄',
       },
     };
 
@@ -1061,6 +1162,12 @@
       saveHumanReviewNoteButton.textContent = translateHumanReview('saveNote');
       requestChangesButton.textContent = translateHumanReview('requestChanges');
       approveHumanReviewButton.textContent = translateHumanReview('approve');
+      if (!activeTaskDetail || activeTaskDetail?.metadata?.state !== 'human-verifying') {
+        taskHumanReviewApprovalStatus.textContent = translateHumanReview('approvalReady');
+        taskHumanReviewApprovalStatus.dataset.tone = 'neutral';
+      } else {
+        updateHumanReviewPanel();
+      }
     }
 
     function applyRuntimeSettingsTranslations() {
@@ -1665,6 +1772,7 @@
         clearTaskRefreshTimer();
         activeTaskRequestToken += 1;
         taskDetailStale = false;
+        activeInlineCommentAnchor = null;
       }
       syncBodyModalState();
     }
@@ -1797,6 +1905,211 @@
       return value == null ? '' : String(value);
     }
 
+    function canUseLineComments() {
+      return activeTaskDetail?.metadata?.state === 'human-verifying';
+    }
+
+    function lineCommentSideLabel(side) {
+      return translateHumanReview(side === 'left' ? 'commentSideLeft' : 'commentSideRight');
+    }
+
+    function normalizeLineAnchor(anchor = {}) {
+      return {
+        path: anchor.path || activeChangedFileDetail?.summary?.path || '',
+        side: anchor.side === 'left' ? 'left' : 'right',
+        line_number: anchor.line_number == null ? null : Number(anchor.line_number),
+        line_kind: anchor.line_kind || '',
+        hunk_header: anchor.hunk_header || '',
+      };
+    }
+
+    function buildLineAnchor(detail, hunk, line, side) {
+      if (!detail || !hunk || !line || line.kind === 'empty' || line.line_number == null) return null;
+      return normalizeLineAnchor({
+        path: detail.summary.path,
+        side,
+        line_number: line.line_number,
+        line_kind: line.kind,
+        hunk_header: hunk.header,
+      });
+    }
+
+    function buildLineAnchorKey(anchor) {
+      const normalized = normalizeLineAnchor(anchor);
+      return [normalized.path, normalized.side, normalized.line_number == null ? '' : normalized.line_number, normalized.line_kind, normalized.hunk_header].join('::');
+    }
+
+    function sameLineAnchor(left, right) {
+      if (!left || !right) return false;
+      return buildLineAnchorKey(left) === buildLineAnchorKey(right);
+    }
+
+    function commentThreadsByAnchor(detail) {
+      const threads = new Map();
+      (detail.comments || []).forEach((comment) => {
+        const key = buildLineAnchorKey(comment.anchor || {});
+        if (!threads.has(key)) threads.set(key, []);
+        threads.get(key).push(comment);
+      });
+      return threads;
+    }
+
+    function formatCommentAnchor(anchor) {
+      const normalized = normalizeLineAnchor(anchor);
+      return translateHumanReview('commentComposerHint', {
+        side: lineCommentSideLabel(normalized.side),
+        lineNumber: normalized.line_number == null ? '-' : normalized.line_number,
+      });
+    }
+
+    function openInlineCommentComposer(anchor) {
+      if (!canUseLineComments() || !anchor) return;
+      activeInlineCommentAnchor = normalizeLineAnchor(anchor);
+      renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true });
+    }
+
+    function closeInlineCommentComposer() {
+      activeInlineCommentAnchor = null;
+      if (activeChangedFileDetail) renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true });
+    }
+
+    function currentInlineCommentDraft() {
+      const fallback = document.querySelector('[data-inline-comment-fallback]');
+      return fallback ? fallback.value : '';
+    }
+
+    function updateInlineCommentComposerState(status = '', tone = 'neutral') {
+      const submitButton = document.querySelector('[data-inline-comment-submit]');
+      const cancelButton = document.querySelector('[data-inline-comment-cancel]');
+      const statusNode = document.querySelector('[data-inline-comment-status]');
+      const draft = currentInlineCommentDraft().trim();
+      if (submitButton) submitButton.disabled = taskDetailStale || !draft;
+      if (cancelButton) cancelButton.disabled = false;
+      if (statusNode) {
+        statusNode.textContent = status;
+        statusNode.dataset.tone = tone;
+      }
+    }
+
+    function mountInlineCommentComposer() {
+      if (!activeInlineCommentAnchor) return;
+      const fallback = Array.from(document.querySelectorAll('[data-inline-comment-fallback]')).find((node) => node.offsetParent !== null) || document.querySelector('[data-inline-comment-fallback]');
+      if (!fallback) return;
+      fallback.placeholder = translateHumanReview('commentComposerPlaceholder');
+      fallback.hidden = false;
+      fallback.focus();
+      updateInlineCommentComposerState();
+    }
+
+    function mountRenderedCommentViewers() {
+      if (!activeChangedFileDetail) return;
+      const commentsById = new Map((activeChangedFileDetail.comments || []).map((comment) => [String(comment.id), comment]));
+      document.querySelectorAll('[data-comment-body-id]').forEach((node) => {
+        const comment = commentsById.get(node.dataset.commentBodyId);
+        if (!comment) return;
+        if (window.toastui && window.toastui.Editor && window.toastui.Editor.factory) {
+          node.innerHTML = '';
+          window.toastui.Editor.factory({
+            el: node,
+            viewer: true,
+            initialValue: comment.body_markdown || '',
+          });
+          return;
+        }
+        node.innerHTML = `<pre class="log-viewer">${escapeHtml(comment.body_markdown || '')}</pre>`;
+      });
+    }
+
+    function renderCommentAction(anchor, hasComments = false) {
+      if (!anchor || !canUseLineComments()) return '<span class="diff-line-action"></span>';
+      const mobileLabel = currentUiLanguage() === 'KO' ? translateHumanReview('commentActionMobile') : translateHumanReview('commentAction');
+      return `<span class="diff-line-action"><button type="button" class="diff-line-comment-button${hasComments ? ' has-comments' : ''}" data-line-comment-action="true" data-line-anchor-key="${escapeHtml(buildLineAnchorKey(anchor))}" aria-label="${escapeHtml(translateHumanReview('commentComposerTitle'))}">${escapeHtml(window.innerWidth <= 900 ? mobileLabel : translateHumanReview('commentAction'))}</button></span>`;
+    }
+
+    function renderCommentThread(thread = []) {
+      if (!thread.length) return '';
+      return `<div class="diff-thread-stack">${thread.map((comment) => `
+        <article class="diff-thread-comment${comment.resolved ? ' resolved' : ''}">
+          <div class="diff-thread-comment-meta">
+            <div class="diff-thread-comment-meta-main">
+              <strong>${escapeHtml(translateHumanReview('commentThreadLabel'))}</strong>
+              <span>${escapeHtml(formatDateTime(comment.created_at || comment.updated_at || ''))}</span>
+            </div>
+            <div class="diff-thread-comment-meta-actions">
+              ${comment.resolved ? `<span class="diff-thread-comment-badge">${escapeHtml(translateHumanReview('commentResolved'))}</span>` : ''}
+              ${canUseLineComments() ? `<button type="button" class="diff-thread-comment-delete" data-delete-comment-id="${escapeHtml(String(comment.id))}" ${(taskDetailStale || deletingCommentId === String(comment.id)) ? 'disabled' : ''}>${escapeHtml(deletingCommentId === String(comment.id) ? translateHumanReview('commentDeleteBusy') : translateHumanReview('commentDelete'))}</button>` : ''}
+            </div>
+          </div>
+          <div class="diff-thread-comment-body" data-comment-body-id="${escapeHtml(String(comment.id))}"></div>
+        </article>`).join('')}</div>`;
+    }
+
+    function renderInlineCommentComposer(anchor) {
+      if (!anchor || !sameLineAnchor(anchor, activeInlineCommentAnchor)) return '';
+      return `
+        <div class="diff-inline-comment">
+          <div class="diff-inline-comment-head">
+            <strong>${escapeHtml(translateHumanReview('commentComposerTitle'))}</strong>
+            <span class="diff-inline-comment-anchor">${escapeHtml(formatCommentAnchor(anchor))}</span>
+          </div>
+          <textarea class="diff-inline-comment-fallback" data-inline-comment-fallback spellcheck="true"></textarea>
+          <div class="diff-inline-comment-status" data-inline-comment-status></div>
+          <div class="diff-inline-comment-actions">
+            <button type="button" data-inline-comment-cancel>${escapeHtml(translateHumanReview('commentComposerCancel'))}</button>
+            <button type="button" class="primary" data-inline-comment-submit>${escapeHtml(translateHumanReview('commentComposerSubmit'))}</button>
+          </div>
+        </div>`;
+    }
+
+    function renderLineThreadSection(anchor, threads) {
+      if (!anchor) return '';
+      const thread = threads.get(buildLineAnchorKey(anchor)) || [];
+      const threadHtml = renderCommentThread(thread);
+      const composerHtml = renderInlineCommentComposer(anchor);
+      if (!threadHtml && !composerHtml) return '';
+      return `<div class="diff-line-thread-shell">${threadHtml}${composerHtml}</div>`;
+    }
+
+    function renderDesktopDiffCell(detail, hunk, line, side, threads) {
+      const anchor = buildLineAnchor(detail, hunk, line, side);
+      const thread = anchor ? (threads.get(buildLineAnchorKey(anchor)) || []) : [];
+      return `
+        <div class="diff-cell ${line.kind}">
+          <span class="diff-line-number">${escapeHtml(diffLineNumber(line.line_number))}</span>
+          ${renderCommentAction(anchor, thread.length > 0)}
+          <span class="diff-marker">${escapeHtml(diffMarker(line.kind))}</span>
+          <span class="diff-content">${escapeHtml(line.content || ' ')}</span>
+          ${renderLineThreadSection(anchor, threads)}
+        </div>`;
+    }
+
+    function mobileRowEntries(detail, hunk, row) {
+      const leftAnchor = buildLineAnchor(detail, hunk, row.left, 'left');
+      const rightAnchor = buildLineAnchor(detail, hunk, row.right, 'right');
+      if (row.left.kind === 'context' && row.right.kind === 'context' && row.left.content === row.right.content) {
+        return [{ line: row.right, side: 'right', anchor: rightAnchor }];
+      }
+      const entries = [];
+      if (row.left.kind !== 'empty' && leftAnchor) entries.push({ line: row.left, side: 'left', anchor: leftAnchor });
+      if (row.right.kind !== 'empty' && rightAnchor) entries.push({ line: row.right, side: 'right', anchor: rightAnchor });
+      return entries;
+    }
+
+    function renderMobileDiffLine(entry, threads) {
+      const thread = entry.anchor ? (threads.get(buildLineAnchorKey(entry.anchor)) || []) : [];
+      return `
+        <div class="diff-mobile-line ${entry.line.kind}">
+          <div class="diff-mobile-line-head">
+            <span class="diff-mobile-line-side">${escapeHtml(lineCommentSideLabel(entry.side))}</span>
+            <span class="diff-line-number">${escapeHtml(diffLineNumber(entry.line.line_number))}</span>
+            ${renderCommentAction(entry.anchor, thread.length > 0)}
+            <span class="diff-marker">${escapeHtml(diffMarker(entry.line.kind))}</span>
+            <span class="diff-content">${escapeHtml(entry.line.content || ' ')}</span>
+          </div>
+          ${renderLineThreadSection(entry.anchor, threads)}
+        </div>`;
+    }
+
     function renderChangedFileButtons(files) {
       if (!files.length) {
         taskChangedFiles.innerHTML = '<div class="muted">No changed files captured.</div>';
@@ -1815,15 +2128,25 @@
     }
 
     function renderChangedFileSummaryCard(summary) {
+      const commentCount = Array.isArray(activeChangedFileDetail?.comments) ? activeChangedFileDetail.comments.length : 0;
+      const threadCount = commentCount ? new Set((activeChangedFileDetail.comments || []).map((comment) => buildLineAnchorKey(comment.anchor || {}))).size : 0;
+      const commentBadge = activeTaskDetail?.metadata?.state === 'human-verifying'
+        ? `<span class="diff-badge">${escapeHtml(translateHumanReview('commentsBadge'))}</span>`
+        : '';
+      const threadBadge = threadCount
+        ? `<span class="diff-badge">${escapeHtml(translateHumanReview(threadCount === 1 ? 'commentsExistingOne' : 'commentsExistingMany', { count: threadCount }))}</span>`
+        : '';
       taskChangedFileSummary.innerHTML = `
         <div>
           <strong>${escapeHtml(summary.display_path)}</strong>
-          <span>${summary.hunk_count} hunk${summary.hunk_count === 1 ? '' : 's'} from the stored review patch.</span>
+          <span>${summary.hunk_count} hunk${summary.hunk_count === 1 ? '' : 's'} from the stored review patch. ${escapeHtml(canUseLineComments() ? (window.innerWidth <= 900 ? translateHumanReview('commentsReadyMobile') : translateHumanReview('commentsReady')) : '')}</span>
         </div>
         <div class="diff-badges">
           <span class="diff-badge">${escapeHtml(summary.change_type)}</span>
           <span class="diff-badge">+${summary.additions}</span>
           <span class="diff-badge">-${summary.deletions}</span>
+          ${commentBadge}
+          ${threadBadge}
         </div>
       `;
     }
@@ -1881,21 +2204,14 @@
       if (!detail.hunks.length) {
         return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
       }
+      const threads = commentThreadsByAnchor(detail);
       return detail.hunks.map((hunk) => `
         <section class="diff-hunk">
           <div class="diff-hunk-header">${escapeHtml(hunk.header)}</div>
           <div class="diff-grid">${hunk.rows.map((row) => `
             <div class="diff-row">
-              <div class="diff-cell ${row.left.kind}">
-                <span class="diff-line-number">${diffLineNumber(row.left.line_number)}</span>
-                <span class="diff-marker">${diffMarker(row.left.kind)}</span>
-                <span class="diff-content">${escapeHtml(row.left.content || ' ')}</span>
-              </div>
-              <div class="diff-cell ${row.right.kind}">
-                <span class="diff-line-number">${diffLineNumber(row.right.line_number)}</span>
-                <span class="diff-marker">${diffMarker(row.right.kind)}</span>
-                <span class="diff-content">${escapeHtml(row.right.content || ' ')}</span>
-              </div>
+              ${renderDesktopDiffCell(detail, hunk, row.left, 'left', threads)}
+              ${renderDesktopDiffCell(detail, hunk, row.right, 'right', threads)}
             </div>
           `).join('')}</div>
         </section>
@@ -1903,14 +2219,38 @@
     }
 
     function renderDiffMobile(detail) {
-      return renderUnifiedDiff(detail);
+      if (detail.summary.is_binary) {
+        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
+      }
+      if (!detail.hunks.length) {
+        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
+      }
+      const threads = commentThreadsByAnchor(detail);
+      return detail.hunks.map((hunk) => `
+        <section class="diff-hunk">
+          <div class="diff-hunk-header">${escapeHtml(hunk.header)}</div>
+          <div class="diff-mobile-stack">${hunk.rows.map((row) => mobileRowEntries(detail, hunk, row).map((entry) => renderMobileDiffLine(entry, threads)).join('')).join('')}</div>
+        </section>
+      `).join('');
     }
 
-    function renderChangedFileDetail(detail) {
+    function renderChangedFileDetail(detail, options = {}) {
+      const { preserveScroll = false, keepComposer = false } = options;
+      const desktopScrollTop = taskDiffDesktop.scrollTop;
+      const mobileScrollTop = taskDiffMobile.scrollTop;
       activeChangedFileDetail = detail;
+      if (!keepComposer && activeInlineCommentAnchor && !commentThreadsByAnchor(detail).has(buildLineAnchorKey(activeInlineCommentAnchor))) {
+        activeInlineCommentAnchor = null;
+      }
       renderChangedFileSummaryCard(detail.summary);
       taskDiffDesktop.innerHTML = renderDiffDesktop(detail);
       taskDiffMobile.innerHTML = renderDiffMobile(detail);
+      mountRenderedCommentViewers();
+      mountInlineCommentComposer();
+      if (preserveScroll) {
+        taskDiffDesktop.scrollTop = desktopScrollTop;
+        taskDiffMobile.scrollTop = mobileScrollTop;
+      }
       updateHumanReviewPanel();
     }
 
@@ -2052,12 +2392,18 @@
 
     function updateHumanReviewPanel() {
       const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
+      const unresolvedCommentCount = Number(activeTaskDetail?.human_review?.unresolved_comment_count || 0);
+      const approvalBlockedByComments = unresolvedCommentCount > 0;
       taskHumanReviewPanel.hidden = !canVerify;
       if (!canVerify) return;
       taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
       saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
       requestChangesButton.disabled = taskDetailStale;
-      approveHumanReviewButton.disabled = taskDetailStale;
+      approveHumanReviewButton.disabled = taskDetailStale || approvalBlockedByComments;
+      taskHumanReviewApprovalStatus.textContent = approvalBlockedByComments
+        ? translateHumanReview(unresolvedCommentCount === 1 ? 'approvalBlockedOne' : 'approvalBlockedMany', { count: unresolvedCommentCount })
+        : translateHumanReview('approvalReady');
+      taskHumanReviewApprovalStatus.dataset.tone = approvalBlockedByComments ? 'warning' : 'neutral';
     }
 
     function setArtifactMode(editing) {
@@ -2420,6 +2766,7 @@
         activeTaskDetail = null;
         activeChangedFileId = null;
         activeChangedFileDetail = null;
+        activeInlineCommentAnchor = null;
         taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
         taskTimeline.innerHTML = '<div class="muted">Loading stage timeline...</div>';
         taskChangedFiles.innerHTML = '';
@@ -2531,6 +2878,7 @@
         ? changedFileId
         : activeTaskDetail.changed_files[0].id;
       activeChangedFileId = selected;
+      activeInlineCommentAnchor = null;
       renderChangedFileButtons(activeTaskDetail.changed_files);
       if (!silent) renderDiffPlaceholder('Loading stored patch...');
       try {
@@ -2543,6 +2891,64 @@
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
         renderDiffPlaceholder('Failed to load changed file diff.');
+      }
+    }
+
+    async function submitInlineComment() {
+      if (!activeTaskId || !activeChangedFileId || !activeInlineCommentAnchor) return;
+      const body = currentInlineCommentDraft().trim();
+      if (!body) {
+        updateInlineCommentComposerState(translateHumanReview('commentComposerError'), 'error');
+        return;
+      }
+      updateInlineCommentComposerState(translateHumanReview('commentComposerSubmitting'));
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/changed-files/${encodeURIComponent(activeChangedFileId)}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: activeInlineCommentAnchor.path,
+            side: activeInlineCommentAnchor.side,
+            line_number: activeInlineCommentAnchor.line_number,
+            line_kind: activeInlineCommentAnchor.line_kind,
+            hunk_header: activeInlineCommentAnchor.hunk_header,
+            body,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateHumanReview('commentComposerError'));
+        activeInlineCommentAnchor = null;
+        activeChangedFileId = payload.summary?.id || activeChangedFileId;
+        renderChangedFileDetail(payload, { preserveScroll: true });
+        taskModalError.hidden = true;
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        updateInlineCommentComposerState(error.message, 'error');
+      }
+    }
+
+    async function deleteInlineComment(commentId) {
+      if (!canUseLineComments() || taskDetailStale || !activeTaskId || !activeChangedFileDetail || !commentId) return;
+      const changedFileId = activeChangedFileDetail.summary?.id || activeChangedFileId;
+      if (!changedFileId) return;
+      deletingCommentId = String(commentId);
+      renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true });
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/changed-files/${encodeURIComponent(changedFileId)}/comments/${encodeURIComponent(String(commentId))}`, {
+          method: 'DELETE',
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateHumanReview('commentDeleteError'));
+        activeChangedFileId = payload.summary?.id || changedFileId;
+        renderChangedFileDetail(payload, { preserveScroll: true, keepComposer: true });
+        taskModalError.hidden = true;
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+      } finally {
+        deletingCommentId = null;
+        if (activeChangedFileDetail) renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true });
       }
     }
 
@@ -2778,6 +3184,27 @@
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
+    taskDiffShell.addEventListener('click', (event) => {
+      const lineCommentButton = event.target.closest('[data-line-comment-action]');
+      if (lineCommentButton && activeChangedFileDetail) {
+        const anchor = (activeChangedFileDetail.comments || []).map((comment) => comment.anchor || {}).concat(activeChangedFileDetail.hunks.flatMap((hunk) => hunk.rows.flatMap((row) => [buildLineAnchor(activeChangedFileDetail, hunk, row.left, 'left'), buildLineAnchor(activeChangedFileDetail, hunk, row.right, 'right')].filter(Boolean)))).find((item) => buildLineAnchorKey(item) === lineCommentButton.dataset.lineAnchorKey);
+        if (anchor) openInlineCommentComposer(anchor);
+        return;
+      }
+      if (event.target.closest('[data-inline-comment-cancel]')) {
+        closeInlineCommentComposer();
+        return;
+      }
+      if (event.target.closest('[data-inline-comment-submit]')) {
+        submitInlineComment();
+        return;
+      }
+      const deleteCommentButton = event.target.closest('[data-delete-comment-id]');
+      if (deleteCommentButton) {
+        deleteInlineComment(deleteCommentButton.dataset.deleteCommentId);
+      }
+    });
+    taskDiffShell.addEventListener('input', (event) => { if (event.target.matches('[data-inline-comment-fallback]')) updateInlineCommentComposerState(); });
     taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
     saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
     requestChangesButton.addEventListener('click', rejectVerification);

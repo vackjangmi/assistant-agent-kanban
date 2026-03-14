@@ -452,6 +452,124 @@ def test_api_saves_human_review_note(configured_paths):
         assert detail.json()["human_review"]["note_markdown"] == "## Note\nPlease keep the animation timing."
 
 
+def test_api_creates_line_comment_for_changed_file(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-line-comment-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-line-comment-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+
+        diff_before = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}")
+        assert diff_before.status_code == 200
+        assert diff_before.json()["comments"] == []
+
+        create_comment = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}/comments",
+            json={
+                "path": "app.txt",
+                "side": "right",
+                "line_number": 1,
+                "line_kind": "add",
+                "hunk_header": "@@ -1 +1 @@",
+                "body": "Please keep this rename but adjust the copy.",
+            },
+        )
+        assert create_comment.status_code == 200
+        payload = create_comment.json()
+        assert len(payload["comments"]) == 1
+        assert payload["comments"][0]["anchor"]["path"] == "app.txt"
+        assert payload["comments"][0]["anchor"]["side"] == "right"
+        assert payload["comments"][0]["anchor"]["line_number"] == 1
+        assert payload["comments"][0]["body_markdown"] == "Please keep this rename but adjust the copy."
+
+        refreshed_detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert refreshed_detail.status_code == 200
+        assert refreshed_detail.json()["human_review"]["total_comment_count"] == 1
+        assert refreshed_detail.json()["human_review"]["unresolved_comment_count"] == 1
+
+
+def test_api_deletes_line_comment_for_changed_file(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-line-comment-delete-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-line-comment-delete-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+
+        create_comment = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}/comments",
+            json={
+                "path": "app.txt",
+                "side": "right",
+                "line_number": 1,
+                "line_kind": "add",
+                "hunk_header": "@@ -1 +1 @@",
+                "body": "Please keep this rename but adjust the copy.",
+            },
+        )
+        assert create_comment.status_code == 200
+        comment_id = create_comment.json()["comments"][0]["id"]
+
+        delete_comment = client.delete(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{create_comment.json()['summary']['id']}/comments/{comment_id}"
+        )
+        assert delete_comment.status_code == 200
+        assert delete_comment.json()["comments"] == []
+
+        refreshed_detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert refreshed_detail.status_code == 200
+        assert refreshed_detail.json()["human_review"]["total_comment_count"] == 0
+        assert refreshed_detail.json()["human_review"]["unresolved_comment_count"] == 0
+
+
+def test_api_blocks_approval_when_line_comments_remain(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-line-comment-approval-block-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-line-comment-approval-block-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+
+        create_comment = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}/comments",
+            json={
+                "path": "app.txt",
+                "side": "right",
+                "line_number": 1,
+                "line_kind": "add",
+                "hunk_header": "@@ -1 +1 @@",
+                "body": "Please fix this before approval.",
+            },
+        )
+        assert create_comment.status_code == 200
+
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+        assert approve.status_code == 409
+        assert "approval is blocked until all inline comments are removed" in approve.json()["detail"]
+
+
 def test_api_hides_changed_files_when_patch_path_is_outside_managed_runs_root(configured_paths, tmp_path):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False

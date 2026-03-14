@@ -4,6 +4,8 @@ from pathlib import Path
 import asyncio
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import FileResponse
 
@@ -42,6 +44,15 @@ class HumanVerificationPayload(BaseModel):
 
 class HumanReviewNotePayload(BaseModel):
     content: str = ""
+
+
+class CreateLineCommentPayload(BaseModel):
+    path: str
+    side: Literal["left", "right"]
+    line_number: int = Field(ge=1)
+    line_kind: Literal["context", "add", "remove"]
+    hunk_header: str | None = None
+    body: str = ""
 
 
 class ModelSettingsPayload(BaseModel):
@@ -280,6 +291,45 @@ def build_router() -> APIRouter:
         except (TaskNotFoundError, TransitionError) as exc:
             status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+    @router.post("/api/tasks/{task_id}/changed-files/{changed_file_id}/comments")
+    async def create_line_comment(task_id: str, changed_file_id: str, payload: CreateLineCommentPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            await asyncio.to_thread(
+                runtime.verification_service.add_line_comment,
+                task_id,
+                by="human",
+                path=payload.path,
+                side=payload.side,
+                line_number=payload.line_number,
+                line_kind=payload.line_kind,
+                hunk_header=payload.hunk_header,
+                body_markdown=payload.body,
+            )
+            detail = await asyncio.to_thread(runtime.task_service.get_changed_file_by_path, task_id, payload.path)
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return detail
+
+    @router.delete("/api/tasks/{task_id}/changed-files/{changed_file_id}/comments/{comment_id}")
+    async def delete_line_comment(task_id: str, changed_file_id: str, comment_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            await asyncio.to_thread(
+                runtime.verification_service.delete_line_comment,
+                task_id,
+                by="human",
+                comment_id=comment_id,
+            )
+            detail = await asyncio.to_thread(runtime.task_service.get_changed_file, task_id, changed_file_id)
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return detail
 
     @router.get("/api/tasks/{task_id}/artifacts/{filename}")
     async def task_markdown_artifact(task_id: str, filename: str, request: Request):
