@@ -24,7 +24,10 @@
     .board-phase-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
     .board-phase-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
     #board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 20px; }
+    #board.implementation-board { grid-template-columns: 1fr; }
+    .implementation-board-row { display: grid; gap: 12px; grid-template-columns: repeat(var(--implementation-row-columns, 1), minmax(0, 1fr)); }
     .column { background: var(--panel); border: 1px solid var(--border); padding: 12px; min-height: 160px; }
+    .implementation-board .column { min-width: 0; }
     .column h2 { margin-top: 0; }
     .card { background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 10px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
     .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
@@ -38,6 +41,7 @@
     .modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
     .task-modal-panel { width: min(1380px, 100%); height: min(86vh, calc(100vh - 64px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .modal-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }
+    .task-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .modal-copy p { margin: 6px 0 0; color: var(--muted); }
     .composer-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; }
     .group { display: grid; gap: 12px; align-content: start; }
@@ -53,6 +57,10 @@
     .form-error[hidden] { display: none; }
     .form-success { margin: 0 20px 20px; padding: 10px 12px; border: 1px solid rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: #217349; }
     .form-success[hidden] { display: none; }
+    .stacked-modal-panel { display: flex; flex-direction: column; overflow: hidden; }
+    .stacked-modal-panel .modal-head { margin-bottom: 0; padding-bottom: 14px; flex: 0 0 auto; border-bottom: 1px solid rgba(24,32,38,0.08); }
+    .modal-scroll-form { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; overflow: hidden; padding-top: 14px; }
+    .modal-scroll-body { min-height: 0; overflow: auto; padding-right: 4px; display: grid; gap: 18px; }
     .settings-shell { display: grid; gap: 18px; }
     .settings-copy { padding: 16px 18px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,249,239,0.96), rgba(247,242,232,0.82)); }
     .settings-copy p { margin: 8px 0 0; color: var(--muted); }
@@ -250,7 +258,7 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -265,20 +273,21 @@
   </header>
   <div id="form-success" class="form-success" hidden></div>
   <section id="request-modal" class="modal" hidden aria-hidden="true">
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="request-modal-title">
+    <div class="modal-panel stacked-modal-panel" role="dialog" aria-modal="true" aria-labelledby="request-modal-title">
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="request-modal-title">Create request</h2>
           <p id="request-modal-description">Build a structured <code>REQUEST.md</code> with repo-aware defaults and editable planning fields.</p>
         </div>
+        <div class="modal-head-actions">
+          <button type="submit" id="submit-request" class="primary" form="request-form">Create request</button>
+          <button type="button" id="cancel-composer">Close</button>
+        </div>
       </div>
       <div id="form-error" class="form-error" hidden></div>
-      <form id="request-form" class="settings-shell">
-        <div class="settings-copy">
-          <strong id="request-copy-title">Quick setup</strong>
-          <p id="request-copy-body">Start with the task basics, then adjust repo-aware defaults only where needed.</p>
-        </div>
-        <div class="settings-sections">
+      <form id="request-form" class="modal-scroll-form">
+        <div class="modal-scroll-body">
+          <div class="settings-sections">
           <section class="settings-section">
             <div class="settings-section-head">
               <strong id="request-basics-heading">Request basics</strong>
@@ -358,27 +367,24 @@
             </div>
           </section>
         </div>
-        <div class="form-actions">
-          <button type="button" id="cancel-composer">Close</button>
-          <button type="submit" id="submit-request" class="primary">Create request</button>
-        </div>
       </form>
     </div>
   </section>
   <section id="settings-modal" class="modal" hidden aria-hidden="true">
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-panel stacked-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="settings-modal-title">Runtime settings</h2>
           <p id="settings-modal-description">Update runtime defaults and model choices.</p>
         </div>
-      </div>
-      <form id="settings-form" class="settings-shell">
-        <div class="settings-copy">
-          <strong id="settings-copy-title">Quick setup</strong>
-          <p id="settings-copy-body">Save once to update the live runtime and your local config.</p>
+        <div class="modal-head-actions">
+          <button type="submit" id="save-settings" class="primary" form="settings-form">Save runtime settings</button>
+          <button type="button" id="cancel-settings">Close</button>
         </div>
-        <div class="settings-sections">
+      </div>
+      <form id="settings-form" class="modal-scroll-form">
+        <div class="modal-scroll-body">
+          <div class="settings-sections">
           <section class="settings-section">
             <div class="settings-section-head">
               <strong id="settings-basics-heading">Basics</strong>
@@ -505,10 +511,6 @@
         </div>
         <datalist id="opencode-model-options"></datalist>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
-        <div class="form-actions">
-          <button type="button" id="cancel-settings">Close</button>
-          <button type="submit" id="save-settings" class="primary">Save runtime settings</button>
-        </div>
       </form>
     </div>
   </section>
@@ -519,7 +521,11 @@
           <h2 id="task-modal-title">Task details</h2>
           <p id="task-modal-subtitle">Inspect task metadata, markdown artifacts, and live agent logs.</p>
         </div>
-        <button type="button" id="close-task-modal" aria-label="Close task details">Close</button>
+        <div class="task-modal-actions">
+          <button type="button" id="start-verification" hidden>Start verification</button>
+          <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
+          <button type="button" id="close-task-modal" aria-label="Close task details">Close</button>
+        </div>
       </div>
       <div id="task-modal-error" class="form-error" hidden></div>
       <div class="task-tabs">
@@ -533,26 +539,12 @@
       <section id="task-panel-overview" class="task-panel">
         <div class="task-panel-scroll">
           <section id="task-verification-actions" class="verification-actions" hidden>
-            <div class="editor-toolbar">
-              <div>
-                <strong id="task-verification-title">Human verification</strong>
-                <div id="task-verification-status" class="muted">Manual verification actions appear here.</div>
-              </div>
-              <div>
-                <button type="button" id="start-verification" hidden>Start verification</button>
-              </div>
-            </div>
+            <strong id="task-verification-title">Human verification</strong>
+            <div id="task-verification-status" class="muted">Manual verification actions appear here.</div>
           </section>
           <section id="task-delete-actions" class="task-danger-actions" hidden>
-            <div class="editor-toolbar">
-              <div>
-                <strong>Delete task</strong>
-                <div id="task-delete-status" class="muted">Deletion is only available when the task is not actively running.</div>
-              </div>
-              <div>
-                <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
-              </div>
-            </div>
+            <strong>Delete task</strong>
+            <div id="task-delete-status" class="muted">Deletion is only available when the task is not actively running.</div>
             <div class="muted">This permanently removes the task directory and any managed workspace artifacts created for it.</div>
           </section>
           <div id="task-overview" class="muted">Select a task to inspect.</div>
@@ -705,6 +697,10 @@
       implementation: ['todos', 'implementing', 'waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
       final: ['done'],
     };
+    const implementationBoardRows = [
+      ['todos', 'implementing'],
+      ['waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
+    ];
     const boardPhasePriorityRules = [
       { phase: 'implementation', states: ['human-verifying'] },
       { phase: 'implementation', states: ['completed-reviews'] },
@@ -1359,12 +1355,25 @@
       renderBoardPhaseTabs();
       const visibleStates = new Set(boardPhaseStates[activeBoardPhase] || []);
       const visibleColumns = data.columns.filter((column) => visibleStates.has(column.state));
-      board.innerHTML = visibleColumns.map((column) => `
+      board.classList.toggle('implementation-board', activeBoardPhase === 'implementation');
+      if (activeBoardPhase === 'implementation') {
+        const columnsByState = new Map(visibleColumns.map((column) => [column.state, column]));
+        board.innerHTML = implementationBoardRows.map((states) => `
+          <div class="implementation-board-row" style="--implementation-row-columns: ${states.length};">
+            ${states.map((state) => renderBoardColumn(columnsByState.get(state) || { state, items: [] })).join('')}
+          </div>`).join('');
+      } else {
+        board.innerHTML = visibleColumns.map((column) => renderBoardColumn(column)).join('');
+      }
+      refreshRunningClocks();
+    }
+
+    function renderBoardColumn(column) {
+      return `
         <section class="column">
           <h2>${stateLabel(column.state)}</h2>
-          ${column.items.map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong>${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderRunningMeta(item)}${renderCardModelMeta(item)}</button></article>`).join('')}
-        </section>`).join('');
-      refreshRunningClocks();
+          ${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong>${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderRunningMeta(item)}${renderCardModelMeta(item)}</button></article>`).join('')}
+        </section>`;
     }
 
     function isActiveState(state) {
@@ -2471,24 +2480,19 @@
 
     function updateTaskDeleteState() {
       const state = activeTaskDetail?.metadata?.state;
-      const blocked = Boolean(state && isActiveState(state));
       const available = Boolean(state);
       taskDeleteActions.hidden = !available;
       deleteTaskButton.hidden = !available;
-      deleteTaskButton.disabled = !available || blocked || taskDetailStale;
+      deleteTaskButton.disabled = !available || taskDetailStale;
       if (!available) {
         taskDeleteStatus.textContent = 'Deletion is only available when the task details finish loading.';
-        return;
-      }
-      if (blocked) {
-        taskDeleteStatus.textContent = 'Delete is blocked while this task is actively running. Wait for it to leave planning, implementing, reviewing, or human-verifying.';
         return;
       }
       if (taskDetailStale) {
         taskDeleteStatus.textContent = 'Task details are temporarily stale while the modal protects an unsaved PLAN.md edit. Save or leave the edit view to refresh before deleting.';
         return;
       }
-      taskDeleteStatus.textContent = 'This removes the task from the board and deletes its managed workspace artifacts.';
+      taskDeleteStatus.textContent = 'This stops any running task work, removes managed review/apply state, and deletes the task plus its managed artifacts.';
     }
 
     function renderStageTiming(stageTiming) {
@@ -2837,11 +2841,10 @@
 
     async function deleteTask() {
       if (!activeTaskId || !activeTaskDetail) return;
-      if (isActiveState(activeTaskDetail.metadata.state)) return;
-      const confirmed = window.confirm(`Delete task ${activeTaskDetail.metadata.title}? This also removes managed workspace artifacts for ${activeTaskId}.`);
+      const confirmed = window.confirm(`Delete task ${activeTaskDetail.metadata.title}? This stops any running task work and removes managed artifacts for ${activeTaskId}.`);
       if (!confirmed) return;
       deleteTaskButton.disabled = true;
-      taskDeleteStatus.textContent = 'Deleting task and managed workspace artifacts...';
+      taskDeleteStatus.textContent = 'Stopping task work and deleting managed artifacts...';
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}`, { method: 'DELETE' });
         let payload = null;
@@ -3168,10 +3171,7 @@
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); refreshRequestDerivedText(); });
     cancelComposerButton.addEventListener('click', () => { clearMessages(); resetFormState(); setModalOpen(false); });
     cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
-    modal.addEventListener('click', (event) => { if (event.target === modal) setModalOpen(false); });
-    settingsModal.addEventListener('click', (event) => { if (event.target === settingsModal) closeSettingsModal({ restore: true }); });
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
-    taskModal.addEventListener('click', (event) => { if (event.target === taskModal) { setTaskModalOpen(false); } });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
