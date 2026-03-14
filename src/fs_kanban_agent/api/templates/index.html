@@ -203,6 +203,7 @@
     .diff-thread-comment-meta-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
     .diff-thread-comment-meta-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
     .diff-thread-comment-badge { display: inline-flex; align-items: center; padding: 3px 8px; border: 1px solid rgba(33,115,73,0.2); background: rgba(33,115,73,0.1); color: var(--success); font-size: 0.72rem; font-weight: 700; }
+    .diff-thread-comment-badge.historical { border-color: rgba(24,32,38,0.12); background: rgba(24,32,38,0.05); color: var(--muted); }
     .diff-thread-comment-delete { padding: 4px 8px; min-height: 28px; border: 1px solid rgba(24,32,38,0.12); background: rgba(24,32,38,0.04); color: var(--muted); font-size: 0.72rem; line-height: 1; }
     .diff-thread-comment-delete:hover, .diff-thread-comment-delete:focus-visible { border-color: rgba(163,58,42,0.24); background: rgba(163,58,42,0.08); color: var(--danger); }
     .diff-thread-comment-body { border: 1px solid rgba(24,32,38,0.06); background: rgba(255,255,255,0.92); padding: 10px 12px; }
@@ -564,16 +565,6 @@
         <div class="log-layout">
           <div id="task-log-files" class="log-file-list"></div>
           <div class="log-stage">
-            <div class="log-toolbar">
-              <div>
-                <strong>Task logs</strong>
-                <div id="task-log-status" class="muted">Readable log hides low-level event metadata by default.</div>
-              </div>
-              <div class="log-toggle-group">
-                <button type="button" id="task-log-view-readable" class="active">Readable log</button>
-                <button type="button" id="task-log-view-debug">Debug log</button>
-              </div>
-            </div>
             <pre id="task-log-viewer" class="log-viewer">Select a log file.</pre>
           </div>
         </div>
@@ -753,15 +744,13 @@
     const taskHumanReviewPanel = document.getElementById('task-human-review-panel');
     const taskHumanReviewEditorHost = document.getElementById('task-human-review-editor-host');
     const taskHumanReviewEditorFallback = document.getElementById('task-human-review-editor-fallback');
+    const taskHumanReviewEditorShell = taskHumanReviewEditorHost.parentElement;
     const taskHumanReviewNoteStatus = document.getElementById('task-human-review-note-status');
     const taskHumanReviewApprovalStatus = document.getElementById('task-human-review-approval-status');
     const saveHumanReviewNoteButton = document.getElementById('save-human-review-note');
     const requestChangesButton = document.getElementById('request-changes-button');
     const approveHumanReviewButton = document.getElementById('approve-human-review-button');
     const taskLogFiles = document.getElementById('task-log-files');
-    const taskLogStatus = document.getElementById('task-log-status');
-    const taskLogViewReadable = document.getElementById('task-log-view-readable');
-    const taskLogViewDebug = document.getElementById('task-log-view-debug');
     const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
     const taskArtifactSubtabs = document.getElementById('task-artifact-subtabs');
@@ -1040,6 +1029,7 @@
         commentsReadyMobile: 'Tap the comment action on a line to leave an inline review comment.',
         commentsExistingOne: '{count} saved thread',
         commentsExistingMany: '{count} saved threads',
+        commentsHistory: 'Previous-round comments stay visible for context only.',
         commentAction: '+',
         commentActionMobile: 'Comment',
         commentComposerTitle: 'Line comment',
@@ -1051,6 +1041,7 @@
         commentComposerSaved: 'Line comment saved.',
         commentComposerError: 'Failed to save line comment.',
         commentThreadLabel: 'Saved comment',
+        commentHistorical: 'Previous round',
         commentDelete: 'Delete',
         commentDeleteBusy: 'Deleting...',
         commentDeleteError: 'Failed to delete line comment.',
@@ -1078,6 +1069,7 @@
         commentsReadyMobile: '줄의 코멘트 버튼을 눌러 인라인 코멘트를 남기세요.',
         commentsExistingOne: '저장된 스레드 {count}개',
         commentsExistingMany: '저장된 스레드 {count}개',
+        commentsHistory: '이전 라운드 코멘트는 참고용으로만 보이며 현재 라운드 승인에는 영향을 주지 않습니다.',
         commentAction: '+',
         commentActionMobile: '코멘트',
         commentComposerTitle: '줄 코멘트',
@@ -1089,6 +1081,7 @@
         commentComposerSaved: '줄 코멘트를 저장했습니다.',
         commentComposerError: '줄 코멘트를 저장하지 못했습니다.',
         commentThreadLabel: '저장된 코멘트',
+        commentHistorical: '이전 라운드',
         commentDelete: '삭제',
         commentDeleteBusy: '삭제 중...',
         commentDeleteError: '줄 코멘트를 삭제하지 못했습니다.',
@@ -1890,6 +1883,7 @@
       taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
       taskPanelLogs.hidden = tab !== 'logs';
+      if (tab === 'review-note') requestAnimationFrame(() => syncHumanReviewEditorHeight());
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
@@ -2033,11 +2027,12 @@
           <div class="diff-thread-comment-meta">
             <div class="diff-thread-comment-meta-main">
               <strong>${escapeHtml(translateHumanReview('commentThreadLabel'))}</strong>
+              ${comment.editable === false ? `<span class="diff-thread-comment-badge historical">${escapeHtml(translateHumanReview('commentHistorical'))}${comment.cycle ? ` #${escapeHtml(String(comment.cycle).padStart(3, '0'))}` : ''}</span>` : ''}
               <span>${escapeHtml(formatDateTime(comment.created_at || comment.updated_at || ''))}</span>
             </div>
             <div class="diff-thread-comment-meta-actions">
               ${comment.resolved ? `<span class="diff-thread-comment-badge">${escapeHtml(translateHumanReview('commentResolved'))}</span>` : ''}
-              ${canUseLineComments() ? `<button type="button" class="diff-thread-comment-delete" data-delete-comment-id="${escapeHtml(String(comment.id))}" ${(taskDetailStale || deletingCommentId === String(comment.id)) ? 'disabled' : ''}>${escapeHtml(deletingCommentId === String(comment.id) ? translateHumanReview('commentDeleteBusy') : translateHumanReview('commentDelete'))}</button>` : ''}
+              ${canUseLineComments() && comment.editable !== false ? `<button type="button" class="diff-thread-comment-delete" data-delete-comment-id="${escapeHtml(String(comment.id))}" ${(taskDetailStale || deletingCommentId === String(comment.id)) ? 'disabled' : ''}>${escapeHtml(deletingCommentId === String(comment.id) ? translateHumanReview('commentDeleteBusy') : translateHumanReview('commentDelete'))}</button>` : ''}
             </div>
           </div>
           <div class="diff-thread-comment-body" data-comment-body-id="${escapeHtml(String(comment.id))}"></div>
@@ -2129,6 +2124,7 @@
 
     function renderChangedFileSummaryCard(summary) {
       const commentCount = Array.isArray(activeChangedFileDetail?.comments) ? activeChangedFileDetail.comments.length : 0;
+      const historicalCount = commentCount ? activeChangedFileDetail.comments.filter((comment) => comment.editable === false).length : 0;
       const threadCount = commentCount ? new Set((activeChangedFileDetail.comments || []).map((comment) => buildLineAnchorKey(comment.anchor || {}))).size : 0;
       const commentBadge = activeTaskDetail?.metadata?.state === 'human-verifying'
         ? `<span class="diff-badge">${escapeHtml(translateHumanReview('commentsBadge'))}</span>`
@@ -2139,7 +2135,7 @@
       taskChangedFileSummary.innerHTML = `
         <div>
           <strong>${escapeHtml(summary.display_path)}</strong>
-          <span>${summary.hunk_count} hunk${summary.hunk_count === 1 ? '' : 's'} from the stored review patch. ${escapeHtml(canUseLineComments() ? (window.innerWidth <= 900 ? translateHumanReview('commentsReadyMobile') : translateHumanReview('commentsReady')) : '')}</span>
+          <span>${summary.hunk_count} hunk${summary.hunk_count === 1 ? '' : 's'} from the stored review patch. ${escapeHtml(canUseLineComments() ? (window.innerWidth <= 900 ? translateHumanReview('commentsReadyMobile') : translateHumanReview('commentsReady')) : '')}${historicalCount ? ` ${escapeHtml(translateHumanReview('commentsHistory'))}` : ''}</span>
         </div>
         <div class="diff-badges">
           <span class="diff-badge">${escapeHtml(summary.change_type)}</span>
@@ -2339,14 +2335,30 @@
       if (humanReviewEditor || !window.toastui || !window.toastui.Editor) return humanReviewEditor;
       humanReviewEditor = new window.toastui.Editor({
         el: taskHumanReviewEditorHost,
-        height: '320px',
+        height: `${calculateHumanReviewEditorHeight()}px`,
         initialEditType: 'markdown',
         previewStyle: 'tab',
         hideModeSwitch: true,
         usageStatistics: false,
       });
       humanReviewEditor.on('change', updateHumanReviewPanel);
+      syncHumanReviewEditorHeight();
       return humanReviewEditor;
+    }
+
+    function calculateHumanReviewEditorHeight() {
+      if (!taskHumanReviewEditorShell) return 320;
+      const shellHeight = Math.floor(taskHumanReviewEditorShell.getBoundingClientRect().height || 0);
+      return Math.max(220, shellHeight || 320);
+    }
+
+    function syncHumanReviewEditorHeight() {
+      const nextHeight = calculateHumanReviewEditorHeight();
+      taskHumanReviewEditorHost.style.height = `${nextHeight}px`;
+      taskHumanReviewEditorFallback.style.height = `${nextHeight}px`;
+      if (humanReviewEditor && typeof humanReviewEditor.setHeight === 'function') {
+        humanReviewEditor.setHeight(`${nextHeight}px`);
+      }
     }
 
     function setHumanReviewEditorContent(value) {
@@ -2354,12 +2366,14 @@
       const editor = ensureHumanReviewEditor();
       if (editor) {
         editor.setMarkdown(humanReviewSourceMarkdown);
+        requestAnimationFrame(() => syncHumanReviewEditorHeight());
         taskHumanReviewEditorFallback.hidden = true;
         updateHumanReviewPanel();
         return;
       }
       taskHumanReviewEditorFallback.hidden = false;
       taskHumanReviewEditorFallback.value = humanReviewSourceMarkdown;
+      requestAnimationFrame(() => syncHumanReviewEditorHeight());
       updateHumanReviewPanel();
     }
 
@@ -2622,6 +2636,8 @@
     }
 
     function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {
+      const currentHumanReviewNote = activeTaskDetail?.human_review?.note_path || metadata?.human_verification?.note_path || null;
+      if (metadata?.state === 'human-verifying' && currentHumanReviewNote && files.includes(currentHumanReviewNote)) return currentHumanReviewNote;
       if (['waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')) return 'PLAN.md';
       return files[0] || null;
     }
@@ -2692,7 +2708,7 @@
       taskMarkdownFiles.innerHTML = entries.map((entry) => {
         if (entry.type === 'family') {
           const active = entry.files.some((item) => item.file === activeArtifactName);
-          const defaultFile = entry.files[0]?.file || '';
+          const defaultFile = active ? activeArtifactName : (entry.files[0]?.file || '');
           return `<button type="button" class="${active ? 'active' : ''}" data-artifact-file="${escapeHtml(defaultFile)}">${escapeHtml(entry.label)}</button>`;
         }
         return `<button type="button" class="${entry.file === activeArtifactName ? 'active' : ''}" data-artifact-file="${escapeHtml(entry.file)}">${escapeHtml(entry.label)}</button>`;
@@ -2707,7 +2723,6 @@
         activeLogName = null;
         taskLogFiles.innerHTML = '<div class="muted">No logs yet.</div>';
         taskLogViewer.textContent = 'No logs yet.';
-        taskLogStatus.textContent = 'Readable log hides low-level event metadata by default.';
         return;
       }
       if (!activeLogName || !entries.some((entry) => entry.name === activeLogName)) activeLogName = entries[entries.length - 1].name;
@@ -2716,12 +2731,7 @@
     }
 
     function updateLogViewState() {
-      const debugActive = activeLogView === 'debug';
-      taskLogViewReadable.classList.toggle('active', !debugActive);
-      taskLogViewDebug.classList.toggle('active', debugActive);
-      taskLogStatus.textContent = debugActive
-        ? 'Debug log includes raw event-derived metadata such as token accounting and reasoning counts when available.'
-        : 'Readable log hides low-level event metadata by default.';
+      activeLogView = 'readable';
     }
 
     function showLogEntry(index, scrollToBottom = false) {
@@ -3206,14 +3216,13 @@
     });
     taskDiffShell.addEventListener('input', (event) => { if (event.target.matches('[data-inline-comment-fallback]')) updateInlineCommentComposerState(); });
     taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
+    window.addEventListener('resize', () => { if (activeTaskTab === 'review-note') syncHumanReviewEditorHeight(); });
     saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
     requestChangesButton.addEventListener('click', rejectVerification);
     approveHumanReviewButton.addEventListener('click', approveVerification);
     taskMarkdownFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     taskArtifactSubtabs.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     taskLogFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-log-index]'); if (!button) return; showLogEntry(Number(button.dataset.logIndex)); });
-    taskLogViewReadable.addEventListener('click', () => { activeLogView = 'readable'; updateLogViewState(); showLogEntry(activeTaskLogs.findIndex((entry) => entry.name === activeLogName)); });
-    taskLogViewDebug.addEventListener('click', () => { activeLogView = 'debug'; updateLogViewState(); showLogEntry(activeTaskLogs.findIndex((entry) => entry.name === activeLogName)); });
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
