@@ -95,7 +95,7 @@ The easiest way to bind a task to a specific target project is the CLI helper:
 ```bash
 fs-kanban-agent request "Refactor login flow" \
   --target-repo /path/to/target-project \
-  --kanban-root ./ai-kanban \
+  --kanban-root ./.kanban-agent \
   --base-branch main
 ```
 
@@ -114,7 +114,7 @@ metadata first and a lazy-loaded log view for planner/implementer/reviewer outpu
 The same runtime logs are also available from the CLI:
 
 ```bash
-fs-kanban-agent logs TASK-0001 --kanban-root ./ai-kanban
+fs-kanban-agent logs TASK-0001 --kanban-root ./.kanban-agent
 ```
 
 Worker outputs are now dual-written in the task directory:

@@ -394,7 +394,7 @@ git clone --reference-if-able <repo_root> --dissociate <repo_root> <workspace_re
 ## 설정 파일 예시
 
 ```yaml
-kanban_root: ./ai-kanban
+kanban_root: ./.kanban-agent
 repo_root: .
 base_branch: main
 
@@ -413,7 +413,7 @@ opencode:
 
 workspace:
   strategy: clone-overlay
-  root: ./ai-kanban/_runtime/workspaces
+root: ./.kanban-agent/_runtime/workspaces
   overlay_copy:
     - .env
     - .env.local

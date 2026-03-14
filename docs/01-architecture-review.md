@@ -63,7 +63,7 @@ repo-root/
 │     ├─ fs-kanban-planner.md
 │     ├─ fs-kanban-implementer.md
 │     └─ fs-kanban-reviewer.md
-├─ ai-kanban/
+├─ .kanban-agent/
 │  ├─ requests/
 │  ├─ planning/
 │  ├─ waiting-check-plans/
@@ -334,7 +334,7 @@ Reviewer 결과.
 ### 권장 방식
 
 - **per-task lock file** 사용
-- 위치: `ai-kanban/_runtime/locks/{task_id}.lock`
+- 위치: `.kanban-agent/_runtime/locks/{task_id}.lock`
 - 라이브러리: `filelock`
 
 ### 중요한 이유
@@ -729,7 +729,7 @@ opencode run \
 ### 저장 위치 권장
 
 ```text
-ai-kanban/_runtime/runs/{task_id}/
+.kanban-agent/_runtime/runs/{task_id}/
 ├─ planner-001.jsonl
 ├─ implementer-001.jsonl
 ├─ reviewer-001.jsonl
