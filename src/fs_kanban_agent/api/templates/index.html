@@ -37,16 +37,25 @@
     .column h2 { margin-top: 0; }
     .column-cards { display: grid; gap: 10px; }
     .plan-board .column-cards, .implementation-board .column-cards, .final-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
-    .card { position: relative; background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-    .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0 28px 0 0; cursor: pointer; color: inherit; }
+    .card { position: relative; background: white; border-left: 4px solid var(--accent); padding: 11px 12px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
     .card:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
-    .card-title { display: block; padding-right: 8px; }
-    .card-meta { color: var(--muted); font-size: 0.95rem; }
-    .card-model { margin-top: 8px; padding: 7px 8px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.86rem; line-height: 1.35; }
+    .card-title { display: block; padding-right: 8px; line-height: 1.35; }
+    .card-meta-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: 8px; min-width: 0; }
+    .card-meta { color: var(--muted); font-size: 0.82rem; }
+    .card-runtime { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .card-tag-row { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; flex: 1 1 auto; }
+    .card-runtime-meta { flex: 0 0 auto; align-self: flex-end; display: inline-flex; align-items: flex-end; gap: 6px; justify-content: flex-end; text-align: right; }
+    .card-tag { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--tag-border, var(--border)); background: var(--tag-bg, rgba(255,249,239,0.9)); color: var(--tag-text, var(--accent-strong)); font-size: 0.76rem; line-height: 1.2; }
+    .card-tag-label { flex: 0 0 auto; opacity: 0.72; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.68rem; }
+    .card-tag-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-tag-id { --tag-bg: rgba(139,90,43,0.12); --tag-border: rgba(139,90,43,0.24); --tag-text: #7a4921; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }
+    .card-tag-branch { --tag-bg: rgba(82,96,107,0.1); --tag-border: rgba(82,96,107,0.18); --tag-text: #45525d; }
+    .card-model { margin-top: 8px; padding: 7px 8px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.82rem; line-height: 1.35; }
     .card-model strong { display: block; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }
-    .card-activity { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; justify-content: center; }
-    .activity-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: 1px solid rgba(24,32,38,0.12); border-radius: 999px; background: rgba(255,255,255,0.82); color: var(--accent-strong); box-shadow: 0 6px 14px rgba(24,32,38,0.08); }
-    .activity-dot { width: 8px; height: 8px; border-radius: 999px; background: currentColor; box-shadow: 0 0 0 0 rgba(24,32,38,0.12); }
+    .card-activity { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+    .activity-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 1px solid rgba(24,32,38,0.12); border-radius: 999px; background: rgba(255,255,255,0.82); color: var(--accent-strong); box-shadow: 0 5px 12px rgba(24,32,38,0.08); }
+    .activity-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; box-shadow: 0 0 0 0 rgba(24,32,38,0.12); }
     .activity-badge[data-activity-state="active"] { color: var(--success); border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.94); }
     .activity-badge[data-activity-state="active"] .activity-dot { animation: activity-pulse 1.8s ease-out infinite; }
     .activity-badge[data-activity-state="waiting"] { color: #9a6c2f; border-color: rgba(154,108,47,0.22); background: rgba(255,247,232,0.94); }
@@ -281,7 +290,7 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -643,8 +652,8 @@
         <button type="button" data-board-phase="implementation" class="active">Implementation</button>
         <button type="button" data-board-phase="final">Completed</button>
       </div>
+      <div id="board"></div>
     </div>
-    <div id="board"></div>
   </main>
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
   <script>
@@ -656,6 +665,7 @@
     const taskModal = document.getElementById('task-modal');
     const openComposerButton = document.getElementById('open-composer');
     const openSettingsButton = document.getElementById('open-settings');
+    const refreshButton = document.getElementById('refresh');
     const closeTaskModalButton = document.getElementById('close-task-modal');
     const cancelComposerButton = document.getElementById('cancel-composer');
     const cancelSettingsButton = document.getElementById('cancel-settings');
@@ -902,6 +912,7 @@
     const requestTranslations = {
       EN: {
         openComposer: 'New request',
+        refreshBoard: 'Refresh',
         title: 'Create request',
         description: 'Build a structured REQUEST.md with repo-aware defaults and editable planning fields.',
         copyTitle: 'Quick setup',
@@ -947,6 +958,7 @@
       },
       KO: {
         openComposer: '새 요청',
+        refreshBoard: '새로고침',
         title: '요청 생성',
         description: '저장소 기본값이 반영된 REQUEST.md를 빠르게 작성합니다.',
         copyTitle: '빠른 설정',
@@ -1206,6 +1218,7 @@
 
     function applyRequestTranslations() {
       openComposerButton.textContent = translateRequest('openComposer');
+      refreshButton.textContent = translateRequest('refreshBoard');
       setRequestText('request-modal-title', 'title');
       setRequestHtml('request-modal-description', 'description');
       setRequestText('request-copy-title', 'copyTitle');
@@ -1360,11 +1373,80 @@
       refreshRunningClocks();
     }
 
+    function boardCardLabel(key) {
+      const labels = currentUiLanguage() === 'KO'
+        ? {
+            repo: '저장소',
+            branch: '브랜치',
+            runtime: '총 시간',
+          }
+        : {
+            repo: 'Repo',
+            branch: 'Branch',
+            runtime: 'Total',
+          };
+      return labels[key] || key;
+    }
+
+    function hashText(value) {
+      let hash = 0;
+      const input = String(value || '');
+      for (let index = 0; index < input.length; index += 1) {
+        hash = ((hash << 5) - hash) + input.charCodeAt(index);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    }
+
+    function repoTagTone(path) {
+      const hash = hashText(normalizeRepoPath(path) || 'target-repo');
+      const hue = hash % 360;
+      const saturation = 48 + (hash % 10);
+      return {
+        background: `hsla(${hue}, ${saturation}%, 90%, 0.96)`,
+        border: `hsla(${hue}, ${Math.max(36, saturation - 10)}%, 46%, 0.26)`,
+        text: `hsl(${hue}, ${Math.max(42, saturation - 4)}%, 27%)`,
+      };
+    }
+
+    function renderTag(label, value, className = '', style = '', title = '') {
+      if (!value) return '';
+      const classes = ['card-tag'];
+      if (className) classes.push(className);
+      const styleAttr = style ? ` style="${style}"` : '';
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+      const labelHtml = label ? `<span class="card-tag-label">${escapeHtml(label)}</span>` : '';
+      return `<span class="${classes.join(' ')}"${styleAttr}${titleAttr}>${labelHtml}<span class="card-tag-value">${escapeHtml(value)}</span></span>`;
+    }
+
+    function renderCardTags(item) {
+      const repoPath = normalizeRepoPath(item.target_repo_root);
+      const repoLabel = item.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
+      const branchLabel = item.base_branch || '';
+      const repoTone = repoTagTone(repoPath);
+      const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};`;
+      const tags = [
+        renderTag('', item.task_id ? `#${item.task_id}` : '', 'card-tag-id', '', item.task_id || ''),
+        renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel),
+        renderTag('', branchLabel, 'card-tag-branch', '', branchLabel),
+      ].filter(Boolean);
+      const runtimeValue = renderCardRuntime(item);
+      const runtime = runtimeValue ? `<span class="card-meta card-runtime-meta">${renderCardActivity(item)}${runtimeValue}</span>` : '';
+      return `<div class="card-meta-row"><div class="card-tag-row">${tags.join('')}</div>${runtime}</div>`;
+    }
+
+    function renderCardRuntime(item) {
+      if (item.agent_status !== 'active') return '';
+      const currentStateDurationMs = Number(item.current_state_duration_ms || 0);
+      const activeSince = item.state_entered_at || '';
+      return `<span class="card-runtime" ${buildDurationAttributes(0, activeSince)}>${formatElapsed(currentStateDurationMs)}</span>`;
+    }
+
     function renderBoardColumn(column) {
       return `
         <section class="column">
           <h2>${stateLabel(column.state)}</h2>
-          <div class="column-cards">${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}">${renderCardActivity(item)}<strong class="card-title">${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderCardModelMeta(item)}</button></article>`).join('')}</div>
+          <div class="column-cards">${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong class="card-title">${item.title}</strong>${renderCardTags(item)}${renderCardModelMeta(item)}</button></article>`).join('')}</div>
         </section>`;
     }
 
@@ -2608,18 +2690,20 @@
       }
       const totalDurationMs = Number(stageTiming?.total_duration_ms || 0);
       const currentSummary = summaries.find((summary) => summary.is_current) || null;
-      const totalBaseDurationMs = currentSummary
+      const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');
+      const totalBaseDurationMs = currentSummaryIsLive
         ? Math.max(0, totalDurationMs - Number(currentSummary.latest_duration_ms || 0))
         : totalDurationMs;
-      const totalDurationAttrs = buildDurationAttributes(totalBaseDurationMs, currentSummary?.latest_entered_at || '', '', ' tracked');
+      const totalDurationAttrs = buildDurationAttributes(totalBaseDurationMs, currentSummaryIsLive ? currentSummary.latest_entered_at : '', '', ' tracked');
       const summaryCards = summaries.map((summary) => {
-        const totalBaseMs = summary.is_current
+        const summaryIsLive = summary.is_current && summary.state !== 'done';
+        const totalBaseMs = summaryIsLive
           ? Math.max(0, Number(summary.total_duration_ms || 0) - Number(summary.latest_duration_ms || 0))
           : Number(summary.total_duration_ms || 0);
         return `
           <article class="stage-timing-card${summary.is_current ? ' current' : ''}" style="--stage-color:${stageColor(summary.state)}">
             <span>${escapeHtml(stateLabel(summary.state))}</span>
-            <strong ${buildDurationAttributes(totalBaseMs, summary.is_current ? summary.latest_entered_at : '', 'total ')}>${`total ${formatElapsed(summary.total_duration_ms || 0)}`}</strong>
+            <strong ${buildDurationAttributes(totalBaseMs, summaryIsLive ? summary.latest_entered_at : '', 'total ')}>${`total ${formatElapsed(summary.total_duration_ms || 0)}`}</strong>
             <small>${summary.attempt_count ? `${summary.attempt_count} visit${summary.attempt_count === 1 ? '' : 's'}${summary.is_current ? ' - current' : ''}` : 'Not visited yet'}</small>
             <small>${summary.latest_entered_at ? `Latest entry ${escapeHtml(formatDateTime(summary.latest_entered_at))}` : 'No time recorded yet.'}</small>
           </article>
@@ -2638,7 +2722,7 @@
             <div class="stage-segment-row">
               <span class="stage-swatch" style="--stage-color:${stageColor(segment.state)}"></span>
               <strong>${escapeHtml(stateLabel(segment.state))} #${segment.visit_index}</strong>
-              <span class="stage-segment-duration" ${buildDurationAttributes(segment.is_current ? 0 : Number(segment.duration_ms || 0), segment.is_current ? segment.entered_at : '')}>${formatElapsed(segment.duration_ms || 0)}</span>
+              <span class="stage-segment-duration" ${buildDurationAttributes(segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0), segment.is_current && segment.state !== 'done' ? segment.entered_at : '')}>${formatElapsed(segment.duration_ms || 0)}</span>
               <span class="muted">${escapeHtml(formatDateTime(segment.entered_at))} -> ${escapeHtml(segment.exited_at ? formatDateTime(segment.exited_at) : 'now')}</span>
             </div>
           `).join('')}</div>`

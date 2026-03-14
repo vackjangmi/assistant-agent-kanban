@@ -927,6 +927,8 @@ def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_p
     planning.metadata.lease.owner = "planner"
     planning.metadata.lease.run_id = "planner-run-1"
     planning.metadata.lease.heartbeat_at = utc_now()
+    planning.metadata.target.repo_root = str((config.repo_root / "nested" / "demo-repo").resolve())
+    planning.metadata.target.base_branch = "feature/card-layout"
     (planning.task_dir / "PLAN.md").write_text("plan\n")
     metadata_store.save(planning.task_dir, planning.metadata)
     board_snapshot = scanner.board_snapshot()
@@ -939,6 +941,9 @@ def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_p
     assert planning_column["items"][0]["active_model"] == "openai/gpt-5.4"
     assert planning_column["items"][0]["agent_status"] == "active"
     assert planning_column["items"][0]["agent_owner"] == "planner"
+    assert planning_column["items"][0]["target_repo_label"] == "demo-repo"
+    assert planning_column["items"][0]["base_branch"] == "feature/card-layout"
+    assert planning_column["items"][0]["total_duration_ms"] >= 0
     assert detail.status_code == 200
     assert detail.json()["metadata"]["plan"]["resolved_model"] == "openai/gpt-5.4"
     assert detail.json()["metadata"]["implementation"]["resolved_model"] == "github-copilot/gpt-5"
@@ -1004,6 +1009,7 @@ def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
     stage_timing = payload["stage_timing"]
     assert len(stage_timing["summaries"]) == 10
     assert len(stage_timing["segments"]) == 4
+    assert stage_timing["total_duration_ms"] >= 360000
     requests_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.REQUESTS.value)
     planning_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.PLANNING.value)
     waiting_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.WAITING_CHECK_PLANS.value)
@@ -1306,6 +1312,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'data-board-phase="implementation"' in response.text
     assert 'data-board-phase="final"' in response.text
     assert "Runtime settings" in response.text
+    assert "Refresh" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
     assert "/api/requests" in response.text
@@ -1393,11 +1400,30 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
     assert "source.addEventListener('board_snapshot', async () => {\n      await loadBoard();\n    });" in response.text
     assert "function phaseLabel(phase)" in response.text
+    assert "function repoTagTone(path)" in response.text
+    assert "card-meta-row" in response.text
+    assert "card-tag-row" in response.text
+    assert "card-runtime-meta" in response.text
+    assert "const runtimeValue = renderCardRuntime(item);" in response.text
+    assert "if (item.agent_status !== 'active') return '';" in response.text
+    assert "card-tag-id" in response.text
+    assert "card-tag-branch" in response.text
+    assert "title=\"${escapeHtml(title)}\"" in response.text
+    assert "renderTag('', item.task_id ? `#${item.task_id}` : ''" in response.text
+    assert "renderTag('', repoLabel" in response.text
+    assert "renderTag('', branchLabel" in response.text
+    assert "const activeSince = item.state_entered_at || '';" in response.text
+    assert 'buildDurationAttributes(0, activeSince)' in response.text
+    assert 'class="card-meta card-runtime-meta">${renderCardActivity(item)}${runtimeValue}' in response.text
+    assert "iter ${item.iteration}" not in response.text
     assert "const boardPhaseStates = {" in response.text
     assert "const boardPhasePriorityRules = [" in response.text
     assert "function selectDefaultBoardPhase(columns)" in response.text
     assert "if (!boardPhaseManuallySelected) {" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
+    assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');" in response.text
+    assert "const summaryIsLive = summary.is_current && summary.state !== 'done';" in response.text
+    assert "segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0)" in response.text
     assert "/api/tasks/${taskId}/logs" not in response.text
     assert "debug_rendered_content" not in response.text
     assert "(no debug metadata for this log yet)" not in response.text
@@ -1487,6 +1513,7 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert "어시스턴트" in response.text
     assert "에이전트" in response.text
     assert "요청 생성" in response.text
+    assert "새로고침" in response.text
     assert "요청 기본값" in response.text
     assert "저장소 범위" in response.text
     assert "플랜 단계" in response.text
