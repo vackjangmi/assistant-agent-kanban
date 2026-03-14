@@ -36,7 +36,7 @@
     .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }
     .modal[hidden] { display: none; }
     .modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
-    .task-modal-panel { width: min(1380px, 100%); display: flex; flex-direction: column; overflow: hidden; }
+    .task-modal-panel { width: min(1380px, 100%); height: min(86vh, calc(100vh - 64px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .modal-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }
     .modal-copy p { margin: 6px 0 0; color: var(--muted); }
     .composer-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; }
@@ -128,8 +128,9 @@
     @keyframes stage-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.66; } }
      .task-tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
      .task-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
-     .task-panel { min-height: 0; flex: 1; overflow: auto; }
-     .task-panel[hidden] { display: none; }
+    .task-panel { min-height: 0; flex: 1; overflow: hidden; }
+    .task-panel[hidden] { display: none; }
+    .task-panel-scroll { height: 100%; overflow: auto; }
     .task-section { margin-bottom: 16px; }
     .task-section h3 { margin-bottom: 8px; }
     .task-list { margin: 0; padding-left: 18px; color: var(--muted); }
@@ -139,7 +140,7 @@
     .task-danger-actions[hidden] { display: none; }
     .danger-button { background: var(--danger); border-color: var(--danger); color: #fff; }
      .verification-actions textarea { width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
-     .log-layout { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: min(60vh, calc(100vh - 320px)); }
+    .log-layout { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
      .log-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }
      .log-file-list button { text-align: left; }
      .log-file-list button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
@@ -151,56 +152,50 @@
      .log-toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
      .log-toggle-group { display: inline-flex; gap: 8px; flex-wrap: wrap; }
      .log-viewer { min-height: 0; height: 100%; max-height: none; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }
-     .diff-layout { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: min(60vh, calc(100vh - 320px)); }
+    .diff-layout { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
      .diff-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }
      .diff-file-list button { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }
      .diff-file-list button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
      .diff-file-title { display: block; font-weight: 700; overflow-wrap: anywhere; }
      .diff-file-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.82rem; color: inherit; opacity: 0.82; }
-     .diff-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
+    .diff-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; align-content: start; }
      .diff-summary { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }
      .diff-summary strong { display: block; overflow-wrap: anywhere; }
      .diff-summary span { color: var(--muted); font-size: 0.92rem; }
      .diff-badges { display: flex; gap: 8px; flex-wrap: wrap; }
      .diff-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }
-    .diff-shell { border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: hidden; min-height: 0; }
-    .human-review-panel { display: grid; gap: 12px; }
-    .human-review-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr); gap: 12px; }
+    .diff-shell { border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: auto; min-height: 0; height: 100%; }
+    .human-review-panel { display: grid; gap: 12px; height: 100%; }
     .human-review-box { display: grid; gap: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; }
-    .human-review-comments { display: grid; gap: 10px; align-content: start; }
-    .human-review-comment-list { display: grid; gap: 8px; max-height: 280px; overflow: auto; }
-    .human-review-comment { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,249,239,0.8); }
-    .human-review-comment-meta { display: flex; justify-content: space-between; gap: 8px; align-items: center; color: var(--muted); font-size: 0.82rem; }
-    .human-review-comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .human-review-comment-form { display: grid; gap: 8px; }
-    .human-review-comment-form textarea { min-height: 88px; }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; }
-     .diff-desktop, .diff-mobile { height: 100%; max-height: none; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }
-     .diff-desktop { font-size: 0.62rem; }
-     .diff-mobile { font-size: 0.78rem; }
-     .diff-desktop[hidden], .diff-mobile[hidden] { display: none; }
-     .diff-hunk { border-top: 1px solid rgba(24,32,38,0.08); }
-     .diff-hunk:first-child { border-top: 0; }
-     .diff-hunk-header { padding: 8px 12px; background: rgba(124,79,44,0.1); color: var(--accent-strong); font-size: 0.84rem; overflow-wrap: anywhere; }
-     .diff-grid { display: grid; }
-     .diff-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-     .diff-cell { display: grid; grid-template-columns: 56px 22px minmax(0, 1fr); min-width: 0; border-top: 1px solid rgba(24,32,38,0.06); }
-     .diff-cell + .diff-cell { border-left: 1px solid rgba(24,32,38,0.08); }
-     .diff-cell.empty { background: rgba(24,32,38,0.03); }
-     .diff-cell.context { background: rgba(255,255,255,0.54); }
-     .diff-cell.add { background: rgba(33,115,73,0.1); }
-     .diff-cell.remove { background: rgba(163,58,42,0.1); }
-     .diff-line-number { padding: 0 10px; border-right: 1px solid rgba(24,32,38,0.08); color: var(--muted); text-align: right; user-select: none; }
-     .diff-marker { display: flex; align-items: start; justify-content: center; padding-top: 1px; color: var(--muted); user-select: none; }
-     .diff-content { display: block; min-width: 0; padding-right: 10px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
-     .diff-mobile-line { display: grid; grid-template-columns: 56px 56px 22px minmax(0, 1fr); border-top: 1px solid rgba(24,32,38,0.06); }
-     .diff-mobile-line.context { background: rgba(255,255,255,0.54); }
-     .diff-mobile-line.add { background: rgba(33,115,73,0.1); }
-     .diff-mobile-line.remove { background: rgba(163,58,42,0.1); }
+    .diff-desktop, .diff-mobile { height: 100%; max-height: none; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }
+    .diff-desktop { font-size: 0.82rem; }
+    .diff-mobile { font-size: 0.82rem; }
+    .diff-desktop[hidden], .diff-mobile[hidden] { display: none; }
+    .diff-hunk { border-top: 1px solid rgba(24,32,38,0.08); }
+    .diff-hunk:first-child { border-top: 0; }
+    .diff-hunk-header { padding: 8px 12px; background: rgba(124,79,44,0.1); color: var(--accent-strong); font-size: 0.84rem; overflow-wrap: anywhere; }
+    .diff-grid { display: grid; }
+    .diff-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .diff-cell { display: grid; grid-template-columns: 56px 22px minmax(0, 1fr); min-width: 0; border-top: 1px solid rgba(24,32,38,0.06); }
+    .diff-cell + .diff-cell { border-left: 1px solid rgba(24,32,38,0.08); }
+    .diff-cell.empty { background: rgba(24,32,38,0.03); }
+    .diff-cell.context { background: rgba(255,255,255,0.54); }
+    .diff-cell.add { background: rgba(33,115,73,0.1); }
+    .diff-cell.remove { background: rgba(163,58,42,0.1); }
+    .diff-line-number { padding: 0 10px; border-right: 1px solid rgba(24,32,38,0.08); color: var(--muted); text-align: right; user-select: none; }
+    .diff-marker { display: flex; align-items: start; justify-content: center; padding-top: 1px; color: var(--muted); user-select: none; }
+    .diff-content { display: block; min-width: 0; padding-right: 10px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+    .diff-unified { margin: 0; padding: 12px 14px; min-height: 100%; background: rgba(255,255,255,0.9); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+    .diff-unified-line { display: block; padding: 1px 0; }
+    .diff-unified-line.header { color: var(--accent-strong); font-weight: 700; }
+    .diff-unified-line.add { background: rgba(33,115,73,0.1); color: #1d5636; }
+    .diff-unified-line.remove { background: rgba(163,58,42,0.1); color: #7d2f21; }
+    .diff-unified-line.context { color: var(--text); }
      .diff-empty { padding: 18px; color: var(--muted); }
      .muted { color: var(--muted); }
     .editor-toolbar { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
-    .artifact-layout { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: min(60vh, calc(100vh - 320px)); }
+    .artifact-layout { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
     .artifact-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
     .editor-textarea { width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 12px; font: inherit; }
     .editor-host { min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; }
@@ -210,7 +205,7 @@
     .mode-pill { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }
     .toastui-editor-defaultUI, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .toastui-editor-contents { max-width: 100%; min-width: 0; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-     @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .human-review-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; } .human-review-actions button { width: 100%; } }
+     @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; } .human-review-actions button { width: 100%; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -487,36 +482,39 @@
         <button type="button" id="task-tab-timeline">Timeline</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
+        <button type="button" id="task-tab-review-note" hidden>Review note</button>
         <button type="button" id="task-tab-logs">Logs</button>
       </div>
       <section id="task-panel-overview" class="task-panel">
-        <section id="task-verification-actions" class="verification-actions" hidden>
-          <div class="editor-toolbar">
-            <div>
-              <strong id="task-verification-title">Human verification</strong>
-              <div id="task-verification-status" class="muted">Manual verification actions appear here.</div>
+        <div class="task-panel-scroll">
+          <section id="task-verification-actions" class="verification-actions" hidden>
+            <div class="editor-toolbar">
+              <div>
+                <strong id="task-verification-title">Human verification</strong>
+                <div id="task-verification-status" class="muted">Manual verification actions appear here.</div>
+              </div>
+              <div>
+                <button type="button" id="start-verification" hidden>Start verification</button>
+              </div>
             </div>
-            <div>
-              <button type="button" id="start-verification" hidden>Start verification</button>
+          </section>
+          <section id="task-delete-actions" class="task-danger-actions" hidden>
+            <div class="editor-toolbar">
+              <div>
+                <strong>Delete task</strong>
+                <div id="task-delete-status" class="muted">Deletion is only available when the task is not actively running.</div>
+              </div>
+              <div>
+                <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
+              </div>
             </div>
-          </div>
-        </section>
-        <section id="task-delete-actions" class="task-danger-actions" hidden>
-          <div class="editor-toolbar">
-            <div>
-              <strong>Delete task</strong>
-              <div id="task-delete-status" class="muted">Deletion is only available when the task is not actively running.</div>
-            </div>
-            <div>
-              <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
-            </div>
-          </div>
-          <div class="muted">This permanently removes the task directory and any managed workspace artifacts created for it.</div>
-        </section>
-        <div id="task-overview" class="muted">Select a task to inspect.</div>
+            <div class="muted">This permanently removes the task directory and any managed workspace artifacts created for it.</div>
+          </section>
+          <div id="task-overview" class="muted">Select a task to inspect.</div>
+        </div>
       </section>
       <section id="task-panel-timeline" class="task-panel" hidden>
-        <div id="task-timeline" class="muted">Select a task to inspect its stage timeline.</div>
+        <div id="task-timeline" class="task-panel-scroll muted">Select a task to inspect its stage timeline.</div>
       </section>
       <section id="task-panel-logs" class="task-panel" hidden>
         <div class="log-layout">
@@ -557,48 +555,26 @@
                 <div class="diff-empty">Select a changed file.</div>
               </div>
             </div>
-            <div id="task-human-review-panel" class="human-review-panel" hidden>
-              <div class="diff-summary">
-                <div>
-                  <strong id="task-human-review-title">Human review</strong>
-                  <span id="task-human-review-status">Review note and file comments live here.</span>
-                </div>
-                <div class="diff-badges">
-                  <span id="task-human-review-comment-count" class="diff-badge">0 comments</span>
-                </div>
+          </div>
+        </div>
+      </section>
+      <section id="task-panel-review-note" class="task-panel" hidden>
+        <div id="task-human-review-panel" class="human-review-panel" hidden>
+          <div class="human-review-box">
+            <div class="editor-toolbar">
+              <div>
+                <strong id="task-human-review-note-title">Review note</strong>
+                <div id="task-human-review-note-status" class="muted">Saved into the current HUMAN-VERIFY document.</div>
               </div>
-              <div class="human-review-layout">
-                <div class="human-review-box">
-                  <div class="editor-toolbar">
-                    <div>
-                      <strong id="task-human-review-note-title">Review note</strong>
-                      <div id="task-human-review-note-status" class="muted">Saved into the current HUMAN-VERIFY document.</div>
-                    </div>
-                    <div>
-                      <button type="button" id="save-human-review-note">Save note</button>
-                    </div>
-                  </div>
-                  <div id="task-human-review-editor-host" class="editor-host"></div>
-                  <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
-                </div>
-                <div class="human-review-box human-review-comments">
-                  <div>
-                    <strong id="task-human-review-comments-title">File comments</strong>
-                    <div id="task-human-review-comments-status" class="muted">Comments block approval until they are removed.</div>
-                  </div>
-                  <div id="task-human-review-comments" class="human-review-comment-list">
-                    <div class="muted">Select a changed file to add comments.</div>
-                  </div>
-                  <div class="human-review-comment-form">
-                    <textarea id="task-human-review-comment-input" placeholder="Leave a comment for this file..."></textarea>
-                    <button type="button" id="add-human-review-comment">Add comment</button>
-                  </div>
-                </div>
+              <div>
+                <button type="button" id="save-human-review-note">Save note</button>
               </div>
-              <div class="human-review-actions">
-                <button type="button" id="request-changes-button">Request changes</button>
-                <button type="button" id="approve-human-review-button" class="primary">Approve</button>
-              </div>
+            </div>
+            <div id="task-human-review-editor-host" class="editor-host"></div>
+            <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
+            <div class="human-review-actions">
+              <button type="button" id="request-changes-button">Request changes</button>
+              <button type="button" id="approve-human-review-button" class="primary">Approve</button>
             </div>
           </div>
         </div>
@@ -704,11 +680,13 @@
     const taskTabOverview = document.getElementById('task-tab-overview');
     const taskTabTimeline = document.getElementById('task-tab-timeline');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
+    const taskTabReviewNote = document.getElementById('task-tab-review-note');
     const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
     const taskPanelTimeline = document.getElementById('task-panel-timeline');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
+    const taskPanelReviewNote = document.getElementById('task-panel-review-note');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const taskTimeline = document.getElementById('task-timeline');
@@ -723,16 +701,10 @@
     const taskDiffDesktop = document.getElementById('task-diff-desktop');
     const taskDiffMobile = document.getElementById('task-diff-mobile');
     const taskHumanReviewPanel = document.getElementById('task-human-review-panel');
-    const taskHumanReviewStatus = document.getElementById('task-human-review-status');
-    const taskHumanReviewCommentCount = document.getElementById('task-human-review-comment-count');
     const taskHumanReviewEditorHost = document.getElementById('task-human-review-editor-host');
     const taskHumanReviewEditorFallback = document.getElementById('task-human-review-editor-fallback');
     const taskHumanReviewNoteStatus = document.getElementById('task-human-review-note-status');
     const saveHumanReviewNoteButton = document.getElementById('save-human-review-note');
-    const taskHumanReviewComments = document.getElementById('task-human-review-comments');
-    const taskHumanReviewCommentsStatus = document.getElementById('task-human-review-comments-status');
-    const taskHumanReviewCommentInput = document.getElementById('task-human-review-comment-input');
-    const addHumanReviewCommentButton = document.getElementById('add-human-review-comment');
     const requestChangesButton = document.getElementById('request-changes-button');
     const approveHumanReviewButton = document.getElementById('approve-human-review-button');
     const taskLogFiles = document.getElementById('task-log-files');
@@ -996,53 +968,32 @@
     const humanReviewTranslations = {
       EN: {
         title: 'Human review',
+        tab: 'Review note',
         status: 'Review note and file comments live here.',
         noteTitle: 'Review note',
         noteStatus: 'Saved into the current HUMAN-VERIFY document.',
-        commentsTitle: 'File comments',
-        commentsStatus: 'Comments block approval until they are removed.',
-        emptyComments: 'Select a changed file to add comments.',
-        commentPlaceholder: 'Leave a comment for this file...',
-        addComment: 'Add comment',
         saveNote: 'Save note',
         requestChanges: 'Request changes',
         approve: 'Approve',
-        commentCountOne: '{count} comment',
-        commentCountMany: '{count} comments',
-        approvalBlocked: 'Resolve all file comments before approval.',
         approvalReady: 'Approve creates the final commit from the current human-reviewed code.',
         noteSaving: 'Saving review note...',
         noteSaved: 'Review note saved.',
-        commentSaving: 'Saving comment...',
-        commentDeleting: 'Deleting comment...',
         requestingChanges: 'Sending task back to TODO with the current reviewed code state...',
         approving: 'Creating the final commit from the current reviewed code and task documents...',
-        commentMeta: '{by} · {createdAt}',
       },
       KO: {
         title: '인간 리뷰',
-        status: '리뷰 노트와 파일 댓글을 여기에서 관리합니다.',
+        tab: '리뷰 노트',
         noteTitle: '리뷰 노트',
         noteStatus: '현재 HUMAN-VERIFY 문서에 저장됩니다.',
-        commentsTitle: '파일 댓글',
-        commentsStatus: '댓글이 남아 있으면 승인할 수 없습니다.',
-        emptyComments: '변경 파일을 선택하면 댓글을 달 수 있습니다.',
-        commentPlaceholder: '이 파일에 대한 댓글을 남기세요...',
-        addComment: '댓글 추가',
         saveNote: '노트 저장',
         requestChanges: '재요청',
         approve: '승인',
-        commentCountOne: '댓글 {count}개',
-        commentCountMany: '댓글 {count}개',
-        approvalBlocked: '모든 파일 댓글을 정리해야 승인할 수 있습니다.',
         approvalReady: '승인하면 현재 인간 리뷰 기준 코드와 문서로 최종 커밋을 만듭니다.',
         noteSaving: '리뷰 노트를 저장하는 중...',
         noteSaved: '리뷰 노트를 저장했습니다.',
-        commentSaving: '댓글을 저장하는 중...',
-        commentDeleting: '댓글을 삭제하는 중...',
         requestingChanges: '현재 검토한 코드 상태를 다음 구현 단계로 넘기면서 TODO로 되돌리는 중...',
         approving: '현재 검토한 코드와 작업 문서를 기준으로 최종 커밋을 만드는 중...',
-        commentMeta: '{by} · {createdAt}',
       },
     };
 
@@ -1105,19 +1056,11 @@
     }
 
     function applyHumanReviewTranslations() {
-      taskHumanReviewStatus.textContent = translateHumanReview('status');
-      document.getElementById('task-human-review-title').textContent = translateHumanReview('title');
+      taskTabReviewNote.textContent = translateHumanReview('tab');
       document.getElementById('task-human-review-note-title').textContent = translateHumanReview('noteTitle');
-      document.getElementById('task-human-review-comments-title').textContent = translateHumanReview('commentsTitle');
-      taskHumanReviewCommentsStatus.textContent = translateHumanReview('commentsStatus');
-      taskHumanReviewCommentInput.placeholder = translateHumanReview('commentPlaceholder');
-      addHumanReviewCommentButton.textContent = translateHumanReview('addComment');
       saveHumanReviewNoteButton.textContent = translateHumanReview('saveNote');
       requestChangesButton.textContent = translateHumanReview('requestChanges');
       approveHumanReviewButton.textContent = translateHumanReview('approve');
-      if (!activeChangedFileDetail?.comments?.length) {
-        taskHumanReviewComments.innerHTML = `<div class="muted">${escapeHtml(translateHumanReview('emptyComments'))}</div>`;
-      }
     }
 
     function applyRuntimeSettingsTranslations() {
@@ -1830,11 +1773,13 @@
       taskTabOverview.classList.toggle('active', tab === 'overview');
       taskTabTimeline.classList.toggle('active', tab === 'timeline');
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
+      taskTabReviewNote.classList.toggle('active', tab === 'review-note');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskTabLogs.classList.toggle('active', tab === 'logs');
       taskPanelOverview.hidden = tab !== 'overview';
       taskPanelTimeline.hidden = tab !== 'timeline';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
+      taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
       taskPanelLogs.hidden = tab !== 'logs';
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
@@ -1888,6 +1833,47 @@
       taskDiffMobile.innerHTML = `<div class="diff-empty">${escapeHtml(message)}</div>`;
     }
 
+    function buildUnifiedDiffLines(detail) {
+      if (detail.summary.is_binary) {
+        return null;
+      }
+      if (!detail.hunks.length) {
+        return [];
+      }
+      const lines = [
+        `diff --git a/${detail.summary.path} b/${detail.summary.path}`,
+        detail.summary.change_type === 'added' ? 'new file mode 100644' : null,
+        detail.summary.change_type === 'removed' ? 'deleted file mode 100644' : null,
+        `--- ${detail.summary.change_type === 'added' ? '/dev/null' : `a/${detail.summary.path}`}`,
+        `+++ ${detail.summary.change_type === 'removed' ? '/dev/null' : `b/${detail.summary.path}`}`,
+      ].filter(Boolean);
+      detail.hunks.forEach((hunk) => {
+        lines.push(hunk.header);
+        hunk.unified_lines.forEach((line) => {
+          const marker = diffMarker(line.kind);
+          lines.push(`${marker}${line.content || ''}`);
+        });
+      });
+      return lines;
+    }
+
+    function renderUnifiedDiff(detail) {
+      const lines = buildUnifiedDiffLines(detail);
+      if (lines === null) {
+        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
+      }
+      if (!lines.length) {
+        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
+      }
+      return `<pre class="diff-unified">${lines.map((line) => {
+        let kind = 'context';
+        if (line.startsWith('@@') || line.startsWith('diff --git') || line.startsWith('--- ') || line.startsWith('+++ ') || line.endsWith('mode 100644')) kind = 'header';
+        else if (line.startsWith('+')) kind = 'add';
+        else if (line.startsWith('-')) kind = 'remove';
+        return `<span class="diff-unified-line ${kind}">${escapeHtml(line)}</span>`;
+      }).join('')}</pre>`;
+    }
+
     function renderDiffDesktop(detail) {
       if (detail.summary.is_binary) {
         return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
@@ -1917,25 +1903,7 @@
     }
 
     function renderDiffMobile(detail) {
-      if (detail.summary.is_binary) {
-        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
-      }
-      if (!detail.hunks.length) {
-        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
-      }
-      return detail.hunks.map((hunk) => `
-        <section class="diff-hunk">
-          <div class="diff-hunk-header">${escapeHtml(hunk.header)}</div>
-          <div class="diff-grid">${hunk.unified_lines.map((line) => `
-            <div class="diff-mobile-line ${line.kind}">
-              <span class="diff-line-number">${diffLineNumber(line.old_line_number)}</span>
-              <span class="diff-line-number">${diffLineNumber(line.new_line_number)}</span>
-              <span class="diff-marker">${diffMarker(line.kind)}</span>
-              <span class="diff-content">${escapeHtml(line.content || ' ')}</span>
-            </div>
-          `).join('')}</div>
-        </section>
-      `).join('');
+      return renderUnifiedDiff(detail);
     }
 
     function renderChangedFileDetail(detail) {
@@ -2082,52 +2050,14 @@
       updateHumanReviewPanel();
     }
 
-    function renderHumanReviewComments(detail) {
-      const comments = Array.isArray(detail?.comments) ? detail.comments : [];
-      if (!comments.length) {
-        taskHumanReviewComments.innerHTML = `<div class="muted">${escapeHtml(translateHumanReview('emptyComments'))}</div>`;
-        return;
-      }
-      taskHumanReviewComments.innerHTML = comments.map((comment) => `
-        <article class="human-review-comment">
-          <div class="human-review-comment-meta">
-            <span>${escapeHtml(translateHumanReview('commentMeta', { by: comment.created_by, createdAt: formatDateTime(comment.created_at) }))}</span>
-            <button type="button" data-human-review-comment-id="${escapeHtml(comment.comment_id)}">Delete</button>
-          </div>
-          <div class="human-review-comment-body">${escapeHtml(comment.body)}</div>
-        </article>
-      `).join('');
-    }
-
     function updateHumanReviewPanel() {
       const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
       taskHumanReviewPanel.hidden = !canVerify;
       if (!canVerify) return;
-      const unresolved = Number(activeTaskDetail?.human_review?.unresolved_comment_count || 0);
-      taskHumanReviewCommentCount.textContent = translateHumanReview(unresolved === 1 ? 'commentCountOne' : 'commentCountMany', { count: unresolved });
-      taskHumanReviewCommentsStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('commentsStatus');
-      taskHumanReviewStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('approvalReady');
       taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
       saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
-      addHumanReviewCommentButton.disabled = !activeChangedFileDetail || !taskHumanReviewCommentInput.value.trim() || taskDetailStale;
       requestChangesButton.disabled = taskDetailStale;
-      approveHumanReviewButton.disabled = taskDetailStale || unresolved > 0;
-      renderHumanReviewComments(activeChangedFileDetail);
-    }
-
-    async function saveHumanReviewNoteIfNeeded() {
-      if (!activeTaskId || activeTaskDetail?.metadata?.state !== 'human-verifying') return;
-      if (!humanReviewNoteDirty()) return;
-      taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaving');
-      const response = await fetch(`/api/tasks/${activeTaskId}/human-review-note`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: getHumanReviewEditorContent() }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || 'Failed to save human review note.');
-      humanReviewSourceMarkdown = getHumanReviewEditorContent();
-      taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaved');
+      approveHumanReviewButton.disabled = taskDetailStale;
     }
 
     function setArtifactMode(editing) {
@@ -2165,38 +2095,6 @@
       togglePlanEditButton.textContent = planEditMode ? 'Back to viewer' : 'Edit PLAN.md';
       savePlanButton.disabled = !editableArtifact || !planEditMode;
        approvePlanButton.disabled = !editableArtifact || taskDetailStale;
-    }
-
-    function renderHumanReviewComments(detail) {
-      const comments = Array.isArray(detail?.comments) ? detail.comments : [];
-      if (!comments.length) {
-        taskHumanReviewComments.innerHTML = `<div class="muted">${escapeHtml(translateHumanReview('emptyComments'))}</div>`;
-        return;
-      }
-      taskHumanReviewComments.innerHTML = comments.map((comment) => `
-        <article class="human-review-comment">
-          <div class="human-review-comment-meta">
-            <span>${escapeHtml(translateHumanReview('commentMeta', { by: comment.created_by, createdAt: formatDateTime(comment.created_at) }))}</span>
-            <button type="button" data-human-review-comment-id="${escapeHtml(comment.comment_id)}">Delete</button>
-          </div>
-          <div class="human-review-comment-body">${escapeHtml(comment.body)}</div>
-        </article>
-      `).join('');
-    }
-
-    function updateHumanReviewPanel() {
-      const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
-      taskHumanReviewPanel.hidden = !canVerify;
-      if (!canVerify) return;
-      const unresolved = Number(activeTaskDetail?.human_review?.unresolved_comment_count || 0);
-      taskHumanReviewCommentCount.textContent = translateHumanReview(unresolved === 1 ? 'commentCountOne' : 'commentCountMany', { count: unresolved });
-      taskHumanReviewCommentsStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('commentsStatus');
-      taskHumanReviewStatus.textContent = unresolved ? translateHumanReview('approvalBlocked') : translateHumanReview('approvalReady');
-      taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
-      addHumanReviewCommentButton.disabled = !activeChangedFileDetail || !taskHumanReviewCommentInput.value.trim() || taskDetailStale;
-      requestChangesButton.disabled = taskDetailStale;
-      approveHumanReviewButton.disabled = taskDetailStale || unresolved > 0;
-      renderHumanReviewComments(activeChangedFileDetail);
     }
 
     function updateHumanVerificationState() {
@@ -2307,6 +2205,7 @@
       setTaskDetailStale(false);
       const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
       const changedFilesVisible = detail.changed_files.length > 0;
+      const reviewNoteVisible = metadata.state === 'human-verifying';
       const viewerVisible = detail.markdown_files.length > 0;
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
       const stageModels = [
@@ -2315,8 +2214,10 @@
         { label: 'Reviewer model used', value: metadata.review.resolved_model, note: 'Captured from the AI review run.', tokens: metadata.review.last_run_tokens, sessionTokens: metadata.review.session_tokens },
       ];
       taskTabChangedFiles.hidden = !changedFilesVisible;
+      taskTabReviewNote.hidden = !reviewNoteVisible;
       taskTabEditor.hidden = !viewerVisible;
       if (!changedFilesVisible && taskTabChangedFiles.classList.contains('active')) setTaskTab('overview');
+      if (!reviewNoteVisible && taskTabReviewNote.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
       if (planEditable && activeArtifactName !== 'PLAN.md') activeArtifactName = 'PLAN.md';
       if (!activeChangedFileId || !detail.changed_files.some((file) => file.id === activeChangedFileId)) activeChangedFileId = detail.changed_files[0]?.id || null;
@@ -2328,7 +2229,6 @@
       updateHumanVerificationState();
       updateTaskDeleteState();
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
-      taskHumanReviewCommentInput.value = '';
       activeChangedFileDetail = null;
       renderChangedFileButtons(detail.changed_files);
       renderDiffPlaceholder(changedFilesVisible ? 'Select a changed file.' : 'Changed files appear here when a stored review patch is available for this task.');
@@ -2524,8 +2424,6 @@
         taskTimeline.innerHTML = '<div class="muted">Loading stage timeline...</div>';
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder('Select the Changed files tab to inspect the stored review patch.');
-        taskHumanReviewComments.innerHTML = '<div class="muted">Select a changed file to add comments.</div>';
-        taskHumanReviewCommentInput.value = '';
         setHumanReviewEditorContent('');
         taskLogFiles.innerHTML = '';
         updateLogViewState();
@@ -2648,52 +2546,6 @@
       }
     }
 
-    async function addHumanReviewComment() {
-      if (!activeTaskId || !activeChangedFileDetail) return;
-      const body = taskHumanReviewCommentInput.value.trim();
-      if (!body) return;
-      addHumanReviewCommentButton.disabled = true;
-      taskHumanReviewStatus.textContent = translateHumanReview('commentSaving');
-      try {
-        await saveHumanReviewNoteIfNeeded();
-        const response = await fetch(`/api/tasks/${activeTaskId}/human-review-comments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file_path: activeChangedFileDetail.summary.path, body }),
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to save human review comment.');
-        taskHumanReviewCommentInput.value = '';
-        await loadTaskDetail(activeTaskId, true, { softRefresh: true });
-        await loadChangedFile(activeTaskId, activeChangedFileId, true);
-      } catch (error) {
-        taskModalError.hidden = false;
-        taskModalError.textContent = error.message;
-        taskHumanReviewStatus.textContent = error.message;
-      } finally {
-        updateHumanReviewPanel();
-      }
-    }
-
-    async function deleteHumanReviewComment(commentId) {
-      if (!activeTaskId || !commentId) return;
-      taskHumanReviewStatus.textContent = translateHumanReview('commentDeleting');
-      try {
-        await saveHumanReviewNoteIfNeeded();
-        const response = await fetch(`/api/tasks/${activeTaskId}/human-review-comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to delete human review comment.');
-        await loadTaskDetail(activeTaskId, true, { softRefresh: true });
-        await loadChangedFile(activeTaskId, activeChangedFileId, true);
-      } catch (error) {
-        taskModalError.hidden = false;
-        taskModalError.textContent = error.message;
-        taskHumanReviewStatus.textContent = error.message;
-      } finally {
-        updateHumanReviewPanel();
-      }
-    }
-
     async function loadMarkdownArtifact(taskId, filename = null) {
       if (!activeTaskDetail || !activeTaskDetail.markdown_files.length) return;
       const resolvedArtifactName = filename && activeTaskDetail.markdown_files.includes(filename) ? filename : preferredArtifact(activeTaskDetail.markdown_files);
@@ -2806,7 +2658,7 @@
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
       requestChangesButton.disabled = true;
       approveHumanReviewButton.disabled = true;
-      taskHumanReviewStatus.textContent = translateHumanReview('requestingChanges');
+      taskHumanReviewNoteStatus.textContent = translateHumanReview('requestingChanges');
       try {
         await saveHumanReviewNoteIfNeeded();
         const response = await fetch(`/api/tasks/${activeTaskId}/reject-verification`, {
@@ -2821,7 +2673,7 @@
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskHumanReviewStatus.textContent = error.message;
+        taskHumanReviewNoteStatus.textContent = error.message;
       } finally {
         updateHumanVerificationState();
       }
@@ -2831,7 +2683,7 @@
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
       requestChangesButton.disabled = true;
       approveHumanReviewButton.disabled = true;
-      taskHumanReviewStatus.textContent = translateHumanReview('approving');
+      taskHumanReviewNoteStatus.textContent = translateHumanReview('approving');
       try {
         await saveHumanReviewNoteIfNeeded();
         const response = await fetch(`/api/tasks/${activeTaskId}/approve-verification`, { method: 'POST' });
@@ -2842,7 +2694,7 @@
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskHumanReviewStatus.textContent = error.message;
+        taskHumanReviewNoteStatus.textContent = error.message;
       } finally {
         updateHumanVerificationState();
       }
@@ -2922,14 +2774,12 @@
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
     taskTabTimeline.addEventListener('click', () => setTaskTab('timeline'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
+    taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
-    taskHumanReviewComments.addEventListener('click', (event) => { const button = event.target.closest('[data-human-review-comment-id]'); if (!button) return; deleteHumanReviewComment(button.dataset.humanReviewCommentId); });
     taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
-    taskHumanReviewCommentInput.addEventListener('input', updateHumanReviewPanel);
-    saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; taskHumanReviewStatus.textContent = error.message; updateHumanReviewPanel(); }));
-    addHumanReviewCommentButton.addEventListener('click', addHumanReviewComment);
+    saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
     requestChangesButton.addEventListener('click', rejectVerification);
     approveHumanReviewButton.addEventListener('click', approveVerification);
     taskMarkdownFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });

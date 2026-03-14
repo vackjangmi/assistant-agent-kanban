@@ -392,8 +392,6 @@ def test_api_exposes_changed_files_for_human_verifying_tasks(configured_paths):
         assert payload["hunks"][0]["unified_lines"][1]["content"] == "review me"
         assert payload["hunks"][0]["rows"][0]["left"]["kind"] == "remove"
         assert payload["hunks"][0]["rows"][0]["right"]["kind"] == "add"
-        assert payload["comments"] == []
-        assert detail.json()["human_review"]["unresolved_comment_count"] == 0
 
 
 def test_api_rejects_changed_file_access_outside_human_verifying(configured_paths):
@@ -430,48 +428,6 @@ def test_api_exposes_changed_files_for_done_tasks(configured_paths):
 
         diff = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}")
         assert diff.status_code == 200
-
-
-def test_api_supports_human_review_comment_crud_and_approval_block(configured_paths):
-    config, _, _ = configured_paths
-    config.runtime.auto_dispatch = False
-    create_request_task(config, "human-review-comments-task")
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
-    _, completed = _task_ready_for_completed_reviews(config, "human-review-comments-task")
-
-    with TestClient(app) as client:
-        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
-        assert start.status_code == 200
-
-        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
-        changed_file = detail.json()["changed_files"][0]
-
-        add_comment = client.post(
-            f"/api/tasks/{completed.metadata.task_id}/human-review-comments",
-            json={"file_path": changed_file["path"], "body": "Need another pass"},
-        )
-        assert add_comment.status_code == 200
-
-        refreshed = client.get(f"/api/tasks/{completed.metadata.task_id}")
-        assert refreshed.json()["human_review"]["unresolved_comment_count"] == 1
-        assert refreshed.json()["human_review"]["approval_block_reason"] == "Resolve all file comments before approval."
-        assert refreshed.json()["changed_files"][0]["comment_count"] == 1
-
-        changed = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_file['id']}")
-        assert changed.status_code == 200
-        assert changed.json()["comments"][0]["file_path"] == changed_file["path"]
-        comment_id = changed.json()["comments"][0]["comment_id"]
-
-        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
-        assert approve.status_code == 409
-        assert "resolve all human review comments" in approve.json()["detail"]
-
-        delete_comment = client.delete(f"/api/tasks/{completed.metadata.task_id}/human-review-comments/{comment_id}")
-        assert delete_comment.status_code == 200
-
-        refreshed_again = client.get(f"/api/tasks/{completed.metadata.task_id}")
-        assert refreshed_again.json()["human_review"]["unresolved_comment_count"] == 0
-        assert refreshed_again.json()["changed_files"][0]["comment_count"] == 0
 
 
 def test_api_saves_human_review_note(configured_paths):
@@ -1229,7 +1185,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request-changes-button" in response.text
     assert "approve-human-review-button" in response.text
     assert "/api/tasks/${activeTaskId}/human-review-note" in response.text
-    assert "/api/tasks/${activeTaskId}/human-review-comments" in response.text
+    assert 'id="task-tab-review-note"' in response.text
+    assert 'id="task-panel-review-note"' in response.text
+    assert 'class="diff-grid"' in response.text
+    assert 'class="diff-row"' in response.text
+    assert 'class="diff-cell ${row.left.kind}"' in response.text
+    assert 'class="diff-unified"' in response.text
     assert "translateRequest('validationGoal')" in response.text
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
@@ -1263,8 +1224,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
     assert "Final branch" in response.text
     assert "width: min(1380px, 100%)" in response.text
-    assert ".diff-desktop { font-size: 0.62rem; }" in response.text
-    assert ".diff-mobile { font-size: 0.78rem; }" in response.text
+    assert "height: min(86vh, calc(100vh - 64px))" in response.text
+    assert ".diff-desktop { font-size: 0.82rem; }" in response.text
+    assert ".diff-mobile { font-size: 0.82rem; }" in response.text
     assert "setTaskTab('changed-files');" in response.text
     assert "worker_log" in response.text
     assert "loadTaskLogs(activeTaskId, true)" not in response.text
