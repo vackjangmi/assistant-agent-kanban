@@ -299,6 +299,27 @@ def test_human_verification_approval_is_blocked_when_line_comments_remain(config
         service.approve(completed.metadata.task_id, by="human")
 
 
+def test_human_verification_reject_requires_note_or_line_comment(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-reject-requires-feedback-task")
+    _, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    with pytest.raises(TransitionError, match="request changes is only available after adding a review note or line comment"):
+        service.reject(completed.metadata.task_id, by="human", note="")
+
+
+def test_human_verification_approval_is_blocked_when_review_note_exists(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-approval-blocked-by-note-task")
+    _, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    service.save_note(completed.metadata.task_id, by="human", content="Please revisit the edge case handling.")
+
+    with pytest.raises(TransitionError, match="approval is blocked until the review note is cleared"):
+        service.approve(completed.metadata.task_id, by="human")
+
+
 def test_human_verification_reject_supports_relative_workspace_path(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-relative-workspace-reject-task")

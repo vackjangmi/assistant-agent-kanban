@@ -158,6 +158,8 @@ class HumanVerificationService:
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("human verification rejection is only allowed from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-reject"):
+            if not self._has_current_human_review_feedback(context.task_dir, context.metadata, note=note):
+                raise TransitionError("request changes is only available after adding a review note or line comment")
             if note.strip():
                 context.metadata.human_verification.note_markdown = note.strip()
             self._capture_review_branch_to_workspace(context.metadata)
@@ -177,6 +179,12 @@ class HumanVerificationService:
             raise TransitionError("human verification approval is only allowed from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
             try:
+                if context.metadata.human_verification.note_markdown.strip():
+                    raise TransitionError("approval is blocked until the review note is cleared")
+                current_comments = self._load_comments_artifact(context.task_dir, context.metadata).comments
+                if current_comments:
+                    count = len(current_comments)
+                    raise TransitionError(f"approval is blocked until all inline comments are removed ({count} remaining)")
                 unresolved_comments = [comment for comment in self._load_comments_artifact(context.task_dir, context.metadata).comments if not comment.resolved]
                 if unresolved_comments:
                     count = len(unresolved_comments)
@@ -220,6 +228,11 @@ class HumanVerificationService:
             metadata.human_verification.comments_path = expected_comments_path
         self._save_comments_artifact(task_dir, metadata, self._load_comments_artifact(task_dir, metadata))
         self._write_human_verification_artifact(task_dir, metadata, verdict=verdict)
+
+    def _has_current_human_review_feedback(self, task_dir: Path, metadata, *, note: str = "") -> bool:
+        if note.strip() or metadata.human_verification.note_markdown.strip():
+            return True
+        return bool(self._load_comments_artifact(task_dir, metadata).comments)
 
     def _write_human_verification_artifact(self, task_dir: Path, metadata, *, verdict: str) -> None:
         note_path = metadata.human_verification.note_path or f"HUMAN-VERIFY-{metadata.cycle:03d}.md"

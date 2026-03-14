@@ -315,6 +315,26 @@ def test_api_supports_human_verification_start_and_reject(configured_paths):
         assert (repo_root / "app.txt").read_text() == "hello\n"
 
 
+def test_api_blocks_reject_without_note_or_line_comment(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-reject-needs-feedback-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-verify-reject-needs-feedback-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        reject = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/reject-verification",
+            json={"note": ""},
+        )
+
+    assert reject.status_code == 409
+    assert "request changes is only available after adding a review note or line comment" in reject.json()["detail"]
+
+
 def test_api_supports_human_verification_approve(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -568,6 +588,29 @@ def test_api_blocks_approval_when_line_comments_remain(configured_paths):
         approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
         assert approve.status_code == 409
         assert "approval is blocked until all inline comments are removed" in approve.json()["detail"]
+
+
+def test_api_blocks_approval_when_review_note_exists(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-note-approval-block-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-note-approval-block-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        save_note = client.put(
+            f"/api/tasks/{completed.metadata.task_id}/human-review-note",
+            json={"content": "Please revisit the edge case handling."},
+        )
+        assert save_note.status_code == 200
+
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+
+    assert approve.status_code == 409
+    assert "approval is blocked until the review note is cleared" in approve.json()["detail"]
 
 
 def test_api_hides_changed_files_when_patch_path_is_outside_managed_runs_root(configured_paths, tmp_path):
