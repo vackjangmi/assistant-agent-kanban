@@ -1311,7 +1311,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'data-board-phase="plan"' in response.text
     assert 'data-board-phase="implementation"' in response.text
     assert 'data-board-phase="final"' in response.text
-    assert "Runtime settings" in response.text
+    assert "Settings" in response.text
     assert "Refresh" in response.text
     assert "Acceptance criteria" in response.text
     assert "JSON files" in response.text
@@ -1342,7 +1342,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_coding_assistant" in response.text
     assert "const settingsTranslations = {" in response.text
     assert "applyRuntimeSettingsTranslations();" in response.text
-    assert "runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); refreshRequestDerivedText(); });" in response.text
+    assert "const taskTranslations = {" in response.text
+    assert "applyTaskTranslations();" in response.text
+    assert "runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });" in response.text
     assert 'class="settings-sections"' in response.text
     assert 'id="settings-basics-heading"' in response.text
     assert 'id="settings-agents-heading"' in response.text
@@ -1366,7 +1368,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "readNumericSettingInput" in response.text
     assert "opencode-model-options" in response.text
     assert "Refresh discovered models" in response.text
-    assert "Save runtime settings" in response.text
+    assert "Save settings" in response.text
     assert "window.location.reload();" in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
@@ -1459,7 +1461,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;" in response.text
     assert "encodeURIComponent(activeArtifactName)" in response.text
     assert "if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;" in response.text
-    assert "setTaskDetailStale(true, 'Task state changed while you were editing PLAN.md locally. Save the draft or leave edit mode to refresh the latest task status.');" in response.text
+    assert "translateTask('stalePlanMessage')" in response.text
     assert "source.addEventListener('board_snapshot', async () => {" in response.text
     assert "scheduleActiveTaskRefresh();" in response.text
     assert "data-active-since" in response.text
@@ -1507,7 +1509,7 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
 
     assert response.status_code == 200
     assert 'const initialRuntimeLanguage = "KO";' in response.text
-    assert "런타임 설정" in response.text
+    assert "설정" in response.text
     assert "기본값" in response.text
     assert "런타임 역할" in response.text
     assert "어시스턴트" in response.text
@@ -1519,6 +1521,9 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert "플랜 단계" in response.text
     assert "구현 단계" in response.text
     assert "최종 완료" in response.text
+    assert "작업 상세" in response.text
+    assert "에이전트 활동" in response.text
+    assert "변경 파일" in response.text
     assert "요구사항" in response.text
     assert "계획 작성중" in response.text
     assert "계획 승인 대기" in response.text

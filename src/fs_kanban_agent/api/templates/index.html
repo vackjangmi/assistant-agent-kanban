@@ -299,7 +299,7 @@
     <h1>Kanban Agent</h1>
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
-      <button id="open-settings" class="ghost-button">Runtime settings</button>
+      <button id="open-settings" class="ghost-button">Settings</button>
       <button id="refresh">Refresh</button>
     </div>
   </header>
@@ -405,11 +405,11 @@
     <div class="modal-panel stacked-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
       <div class="modal-head">
         <div class="modal-copy">
-          <h2 id="settings-modal-title">Runtime settings</h2>
+    <h2 id="settings-modal-title">Settings</h2>
           <p id="settings-modal-description">Update runtime defaults and model choices.</p>
         </div>
         <div class="modal-head-actions">
-          <button type="submit" id="save-settings" class="primary" form="settings-form">Save runtime settings</button>
+    <button type="submit" id="save-settings" class="primary" form="settings-form">Save settings</button>
           <button type="button" id="cancel-settings">Close</button>
         </div>
       </div>
@@ -794,8 +794,8 @@
 
     const settingsTranslations = {
       EN: {
-        openSettings: 'Runtime settings',
-        settingsTitle: 'Runtime settings',
+        openSettings: 'Settings',
+        settingsTitle: 'Settings',
         settingsDescription: 'Update runtime defaults and model choices.',
         closeSettings: 'Close',
         settingsCopyTitle: 'Quick setup',
@@ -836,23 +836,23 @@
         cancel: 'Close',
         saveSettings: 'Save',
         statusIdle: 'Current values load when you open this panel.',
-        statusLoading: 'Loading current runtime settings...',
+        statusLoading: 'Loading current settings...',
         statusRefreshing: 'Refreshing discovered model options...',
-        statusSaving: 'Saving runtime settings...',
+        statusSaving: 'Saving settings...',
         statusLoaded: 'Current runtime overrides and discovered model suggestions are loaded.',
         statusLoadedHint: 'Current runtime overrides are loaded. Refresh discovery when you want fresh model suggestions.',
         statusFallback: 'Using cached model suggestions. Refresh failed: {error}',
         statusDiscoveryFailed: 'Model discovery failed: {error}. Manual entry still works.',
         statusDiscoveryEmpty: 'OpenCode responded, but no model options were returned. Manual entry still works.',
-        statusSaved: 'Saved runtime settings.',
+        statusSaved: 'Saved settings.',
         summaryAvailableOne: '{count} model loaded · {refreshedAt}',
         summaryAvailableMany: '{count} models loaded · {refreshedAt}',
         summaryEmpty: 'No cached models yet.',
         justNow: 'just now',
       },
       KO: {
-        openSettings: '런타임 설정',
-        settingsTitle: '런타임 설정',
+        openSettings: '설정',
+        settingsTitle: '설정',
         settingsDescription: '런타임 기본값과 모델을 정리합니다.',
         closeSettings: '닫기',
         settingsCopyTitle: '빠른 설정',
@@ -893,15 +893,15 @@
         cancel: '닫기',
         saveSettings: '저장',
         statusIdle: '패널을 열면 현재 값을 불러옵니다.',
-        statusLoading: '현재 런타임 설정을 불러오는 중...',
+        statusLoading: '현재 설정을 불러오는 중...',
         statusRefreshing: '발견된 모델 옵션을 새로고침하는 중...',
-        statusSaving: '런타임 설정을 저장하는 중...',
+        statusSaving: '설정을 저장하는 중...',
         statusLoaded: '현재 런타임 오버라이드와 발견된 모델 제안을 불러왔습니다.',
         statusLoadedHint: '현재 런타임 오버라이드를 불러왔습니다. 새 모델 제안이 필요하면 새로고침하세요.',
         statusFallback: '캐시된 모델 제안을 사용합니다. 새로고침 실패: {error}',
         statusDiscoveryFailed: '모델 탐색에 실패했습니다: {error}. 직접 입력은 계속 사용할 수 있습니다.',
         statusDiscoveryEmpty: 'OpenCode는 응답했지만 모델 옵션을 돌려주지 않았습니다. 직접 입력은 계속 사용할 수 있습니다.',
-        statusSaved: '런타임 설정을 저장했습니다.',
+        statusSaved: '설정을 저장했습니다.',
         summaryAvailableOne: '모델 {count}개 로드됨 · {refreshedAt}',
         summaryAvailableMany: '모델 {count}개 로드됨 · {refreshedAt}',
         summaryEmpty: '캐시된 모델이 없습니다.',
@@ -1088,6 +1088,269 @@
       },
     };
 
+    const taskTranslations = {
+      EN: {
+        modalTitle: 'Task details',
+        modalSubtitle: 'Inspect task metadata, current agent activity, and task artifacts.',
+        startVerification: 'Start verification',
+        approvePlan: 'Approve plan',
+        deleteTask: 'Delete task',
+        close: 'Close',
+        closeAria: 'Close task details',
+        tabOverview: 'Overview',
+        tabTimeline: 'Timeline',
+        tabViewer: 'Viewer',
+        tabChangedFiles: 'Changed files',
+        reviewNoteTitle: 'Review note',
+        changedFilesHeading: 'Changed files',
+        readOnlyPatch: 'Read-only patch view',
+        selectTask: 'Select a task to inspect.',
+        selectTaskTimeline: 'Select a task to inspect its stage timeline.',
+        selectChangedFile: 'Select a changed file.',
+        noDocumentSelected: 'No document selected',
+        viewerMode: 'Viewer mode',
+        editMode: 'Edit mode',
+        selectMarkdownArtifact: 'Select a markdown artifact to view.',
+        noChangedFilesCaptured: 'No changed files captured.',
+        noChangedFilesForState: 'No changed files captured for this task state.',
+        noMarkdownArtifactsYet: 'No markdown artifacts yet.',
+        noMarkdownArtifactSelected: 'No markdown artifact selected.',
+        loadingTaskDetails: 'Loading task details...',
+        loadingStageTimeline: 'Loading stage timeline...',
+        loadingStoredPatch: 'Loading stored patch...',
+        failedLoadChangedFileDiff: 'Failed to load changed file diff.',
+        failedLoadTaskDetails: 'Failed to load task details.',
+        unableLoadTaskDetails: 'Unable to load task details.',
+        stalePlanMessage: 'Task state changed while you were editing PLAN.md locally. Save the draft or leave edit mode to refresh the latest task status.',
+        titleLabel: 'Title',
+        taskIdLabel: 'Task ID',
+        stateLabel: 'State',
+        requestLanguageLabel: 'Request language',
+        updatedLabel: 'Updated',
+        targetRepoLabel: 'Target repo',
+        baseBranchLabel: 'Base branch',
+        finalBranchLabel: 'Final branch',
+        requestPathLabel: 'REQUEST.md path',
+        finalBranchNotCreated: 'Not created yet',
+        capturedStageModels: 'Captured stage models',
+        plannerModelUsed: 'Planner model used',
+        implementerModelUsed: 'Implementer model used',
+        reviewerModelUsed: 'Reviewer model used',
+        plannerModelNote: 'Captured from the plan run output.',
+        implementerModelNote: 'Captured from the workspace implementation run.',
+        reviewerModelNote: 'Captured from the AI review run.',
+        modelUsageSuffix: 'This is the actual model used, separate from runtime override settings. Last run tokens: {tokens}. Session tokens: {sessionTokens}.',
+        notCapturedYet: 'Not captured yet',
+        markdownFiles: 'Markdown files',
+        jsonFiles: 'JSON files',
+        latestError: 'Latest error',
+        noMarkdownFiles: 'No markdown files',
+        noJsonFiles: 'No JSON files',
+        noRecordedErrors: 'No recorded errors.',
+        taskSubtitleFormat: '{taskId} in {state}',
+        taskActivity: 'Agent activity',
+        leaseOwner: 'Lease owner',
+        leaseRun: 'Lease run',
+        heartbeat: 'Heartbeat',
+        logArtifacts: 'Log artifacts',
+        noLeaseOwner: 'No lease owner',
+        noActiveRun: 'No active run',
+        noHeartbeatYet: 'No heartbeat yet',
+        noneYet: 'None yet',
+        heartbeatAppearsLater: 'A worker heartbeat appears here once a lease is active.',
+        activityCopyActive: 'A worker currently holds the task lease for this agent-run stage.',
+        activityCopyWaiting: 'This task is in an agent-run stage, but no worker lease is attached right now.',
+        activityCopyIdle: 'No worker lease is currently attached to this task.',
+        runtimeLogSummaryOne: '{count} runtime log file recorded. Latest: {latest}.',
+        runtimeLogSummaryMany: '{count} runtime log files recorded. Latest: {latest}.',
+        runtimeLogSummaryEmpty: 'No runtime log files recorded for this task yet.',
+        leaseOwnerHelpActive: 'Current task lease owner from metadata.',
+        leaseOwnerHelpEmpty: 'No worker currently owns the task lease.',
+        leaseRunHelpActive: 'Worker run identifier for the current lease.',
+        leaseRunHelpEmpty: 'Run id appears once a worker claims the task.',
+        heartbeatLast: 'Last heartbeat {time}.',
+        stageTiming: 'Stage timing',
+        noStateHistory: 'No state history recorded yet.',
+        noTimeRecorded: 'No time recorded yet.',
+        noStageTransitions: 'No stage transitions recorded yet.',
+        noStageVisits: 'No stage visits recorded yet.',
+        timelineFromHistory: 'Timeline built from metadata history',
+        timelineFromHistoryBody: 'Every duration comes from the task\'s recorded state transitions, so repeated implement-review loops stay visible.',
+        totalTrackedTime: 'Total tracked time',
+        trackedSuffix: ' tracked',
+        totalPrefix: 'total ',
+        latestEntry: 'Latest entry {value}',
+        visitOne: '{count} visit',
+        visitMany: '{count} visits',
+        currentSuffix: ' - current',
+        notVisitedYet: 'Not visited yet',
+        now: 'now',
+        noRuntimeLogForCard: 'No heartbeat recorded for this task.',
+        waitingNoLeaseCard: 'This stage is active, but no worker lease is attached yet.',
+        noBinaryPreview: 'Binary patch preview is not available for this file.',
+        noTextHunks: 'No textual hunks were captured for this file.',
+        changedFilesPatchAvailable: 'Changed files appear here when a stored review patch is available for this task.',
+        selectChangedTabToInspect: 'Select the Changed files tab to inspect the stored review patch.',
+        attachedPlanImage: 'Attached {filename} to PLAN.md.',
+        imageUploadFailed: 'Image upload failed.',
+        imageAttachmentsRestricted: 'Image attachments are only available while editing PLAN.md in waiting-check-plans.',
+        uploadingImage: 'Uploading image attachment...',
+        failedImageUpload: 'Failed to upload image attachment.',
+        failedHumanReviewSave: 'Failed to save human review note.',
+        backToViewer: 'Back to viewer',
+        editPlan: 'Edit PLAN.md',
+        renderedPreviewEditable: 'Rendered markdown preview. Use Edit PLAN.md only when you want to change the document.',
+        renderedPreviewReadonly: 'Rendered markdown preview only for this task state.',
+        loadingArtifact: 'Loading {name}...',
+        viewingPlan: 'Viewing rendered PLAN.md. Use Edit PLAN.md to switch into editing.',
+        editingPlan: 'Editing PLAN.md markdown. Save your draft before approval.',
+        renderedArtifact: '{name} is shown as a rendered markdown document.',
+        unableLoadArtifact: 'Unable to load {name}.',
+        savingPlan: 'Saving PLAN.md...',
+        failedSavePlan: 'Failed to save PLAN.md.',
+        savedPlan: 'Saved PLAN.md.',
+        saveFailed: 'Save failed.',
+        savingBeforeApproval: 'Saving PLAN.md before approval...',
+        approvingPlan: 'Approving plan...',
+        failedApprovePlan: 'Failed to approve plan.',
+        planApproved: 'Plan approved.',
+        failedStartVerification: 'Failed to start verification.',
+        failedRejectVerification: 'Failed to reject verification.',
+        failedApproveVerification: 'Failed to approve verification.',
+        deleteConfirm: 'Delete task {title}? This stops any running task work and removes managed artifacts for {taskId}.',
+      },
+      KO: {
+        modalTitle: '작업 상세',
+        modalSubtitle: '작업 메타데이터, 현재 에이전트 활동, 산출물을 확인합니다.',
+        startVerification: '검증 시작',
+        approvePlan: '플랜 승인',
+        deleteTask: '작업 삭제',
+        close: '닫기',
+        closeAria: '작업 상세 닫기',
+        tabOverview: '개요',
+        tabTimeline: '타임라인',
+        tabViewer: '문서 보기',
+        tabChangedFiles: '변경 파일',
+        reviewNoteTitle: '리뷰 노트',
+        changedFilesHeading: '변경 파일',
+        readOnlyPatch: '읽기 전용 패치 보기',
+        selectTask: '확인할 작업을 선택하세요.',
+        selectTaskTimeline: '단계 타임라인을 볼 작업을 선택하세요.',
+        selectChangedFile: '변경 파일을 선택하세요.',
+        noDocumentSelected: '선택된 문서 없음',
+        viewerMode: '보기 모드',
+        editMode: '편집 모드',
+        selectMarkdownArtifact: '볼 markdown 산출물을 선택하세요.',
+        noChangedFilesCaptured: '기록된 변경 파일이 없습니다.',
+        noChangedFilesForState: '이 작업 상태에는 저장된 변경 파일이 없습니다.',
+        noMarkdownArtifactsYet: '아직 markdown 산출물이 없습니다.',
+        noMarkdownArtifactSelected: '선택된 markdown 산출물이 없습니다.',
+        loadingTaskDetails: '작업 상세를 불러오는 중...',
+        loadingStageTimeline: '단계 타임라인을 불러오는 중...',
+        loadingStoredPatch: '저장된 패치를 불러오는 중...',
+        failedLoadChangedFileDiff: '변경 파일 diff를 불러오지 못했습니다.',
+        failedLoadTaskDetails: '작업 상세를 불러오지 못했습니다.',
+        unableLoadTaskDetails: '작업 상세를 표시할 수 없습니다.',
+        stalePlanMessage: 'PLAN.md를 로컬에서 편집하는 동안 작업 상태가 바뀌었습니다. 초안을 저장하거나 편집 모드를 나가서 최신 상태를 다시 불러오세요.',
+        titleLabel: '제목',
+        taskIdLabel: '작업 ID',
+        stateLabel: '상태',
+        requestLanguageLabel: '요청 언어',
+        updatedLabel: '업데이트 시각',
+        targetRepoLabel: '대상 저장소',
+        baseBranchLabel: '기준 브랜치',
+        finalBranchLabel: '최종 브랜치',
+        requestPathLabel: 'REQUEST.md 경로',
+        finalBranchNotCreated: '아직 생성되지 않음',
+        capturedStageModels: '기록된 단계별 모델',
+        plannerModelUsed: 'Planner 사용 모델',
+        implementerModelUsed: 'Implementer 사용 모델',
+        reviewerModelUsed: 'Reviewer 사용 모델',
+        plannerModelNote: '플랜 실행 로그에서 기록했습니다.',
+        implementerModelNote: '워크스페이스 구현 실행에서 기록했습니다.',
+        reviewerModelNote: 'AI 리뷰 실행에서 기록했습니다.',
+        modelUsageSuffix: '런타임 오버라이드와 별개로 실제 사용된 모델입니다. 마지막 실행 토큰: {tokens}. 세션 토큰: {sessionTokens}.',
+        notCapturedYet: '아직 기록되지 않음',
+        markdownFiles: 'Markdown 파일',
+        jsonFiles: 'JSON 파일',
+        latestError: '최근 오류',
+        noMarkdownFiles: 'markdown 파일 없음',
+        noJsonFiles: 'JSON 파일 없음',
+        noRecordedErrors: '기록된 오류가 없습니다.',
+        taskSubtitleFormat: '{taskId} · {state}',
+        taskActivity: '에이전트 활동',
+        leaseOwner: 'Lease 소유자',
+        leaseRun: 'Lease 실행',
+        heartbeat: '하트비트',
+        logArtifacts: '로그 산출물',
+        noLeaseOwner: 'Lease 소유자 없음',
+        noActiveRun: '실행 중인 run 없음',
+        noHeartbeatYet: '아직 하트비트 없음',
+        noneYet: '없음',
+        heartbeatAppearsLater: 'worker가 lease를 잡으면 하트비트가 여기에 표시됩니다.',
+        activityCopyActive: '현재 이 agent-run 단계의 task lease를 worker가 보유하고 있습니다.',
+        activityCopyWaiting: '이 작업은 agent-run 단계에 있지만 현재 worker lease가 붙어 있지 않습니다.',
+        activityCopyIdle: '현재 이 작업에 연결된 worker lease가 없습니다.',
+        runtimeLogSummaryOne: '런타임 로그 파일 {count}개가 기록되었습니다. 최신 파일: {latest}.',
+        runtimeLogSummaryMany: '런타임 로그 파일 {count}개가 기록되었습니다. 최신 파일: {latest}.',
+        runtimeLogSummaryEmpty: '이 작업에는 아직 런타임 로그 파일이 없습니다.',
+        leaseOwnerHelpActive: 'metadata에 기록된 현재 task lease 소유자입니다.',
+        leaseOwnerHelpEmpty: '현재 task lease를 소유한 worker가 없습니다.',
+        leaseRunHelpActive: '현재 lease의 worker run 식별자입니다.',
+        leaseRunHelpEmpty: 'worker가 task를 잡으면 run id가 표시됩니다.',
+        heartbeatLast: '마지막 하트비트 {time}.',
+        stageTiming: '단계 시간',
+        noStateHistory: '기록된 상태 히스토리가 없습니다.',
+        noTimeRecorded: '기록된 시간이 없습니다.',
+        noStageTransitions: '기록된 단계 전환이 없습니다.',
+        noStageVisits: '기록된 단계 방문이 없습니다.',
+        timelineFromHistory: 'metadata history 기반 타임라인',
+        timelineFromHistoryBody: '모든 시간은 task에 기록된 상태 전이에서 계산되므로 implement-review 반복도 그대로 보입니다.',
+        totalTrackedTime: '총 추적 시간',
+        trackedSuffix: ' 추적됨',
+        totalPrefix: '총 ',
+        latestEntry: '최근 진입 {value}',
+        visitOne: '{count}회 방문',
+        visitMany: '{count}회 방문',
+        currentSuffix: ' - 현재',
+        notVisitedYet: '아직 방문하지 않음',
+        now: '지금',
+        noRuntimeLogForCard: '이 작업에는 하트비트 기록이 없습니다.',
+        waitingNoLeaseCard: '이 단계는 활성 상태지만 아직 worker lease가 붙어 있지 않습니다.',
+        noBinaryPreview: '이 파일은 바이너리라 패치 미리보기를 제공하지 않습니다.',
+        noTextHunks: '이 파일에는 기록된 텍스트 hunk가 없습니다.',
+        changedFilesPatchAvailable: '저장된 리뷰 패치가 있으면 변경 파일이 여기에 표시됩니다.',
+        selectChangedTabToInspect: '저장된 리뷰 패치를 보려면 변경 파일 탭을 선택하세요.',
+        attachedPlanImage: '{filename} 이미지를 PLAN.md에 첨부했습니다.',
+        imageUploadFailed: '이미지 업로드에 실패했습니다.',
+        imageAttachmentsRestricted: '이미지 첨부는 waiting-check-plans 상태에서 PLAN.md를 편집할 때만 가능합니다.',
+        uploadingImage: '이미지 첨부를 업로드하는 중...',
+        failedImageUpload: '이미지 첨부를 업로드하지 못했습니다.',
+        failedHumanReviewSave: '인간 리뷰 노트를 저장하지 못했습니다.',
+        backToViewer: '보기로 돌아가기',
+        editPlan: 'PLAN.md 편집',
+        renderedPreviewEditable: '렌더된 markdown 미리보기입니다. 문서를 바꾸려면 Edit PLAN.md를 사용하세요.',
+        renderedPreviewReadonly: '이 작업 상태에서는 렌더된 markdown 미리보기만 제공합니다.',
+        loadingArtifact: '{name} 불러오는 중...',
+        viewingPlan: '렌더된 PLAN.md를 보고 있습니다. Edit PLAN.md로 편집 모드로 전환하세요.',
+        editingPlan: 'PLAN.md markdown을 편집 중입니다. 승인 전에 초안을 저장하세요.',
+        renderedArtifact: '{name} 문서를 렌더된 markdown으로 표시합니다.',
+        unableLoadArtifact: '{name} 문서를 불러올 수 없습니다.',
+        savingPlan: 'PLAN.md 저장 중...',
+        failedSavePlan: 'PLAN.md를 저장하지 못했습니다.',
+        savedPlan: 'PLAN.md를 저장했습니다.',
+        saveFailed: '저장에 실패했습니다.',
+        savingBeforeApproval: '승인 전에 PLAN.md를 저장하는 중...',
+        approvingPlan: '플랜 승인 중...',
+        failedApprovePlan: '플랜 승인을 실패했습니다.',
+        planApproved: '플랜을 승인했습니다.',
+        failedStartVerification: '검증 시작에 실패했습니다.',
+        failedRejectVerification: '검증 반려에 실패했습니다.',
+        failedApproveVerification: '검증 승인에 실패했습니다.',
+        deleteConfirm: '작업 {title}을(를) 삭제할까요? 실행 중인 작업을 중단하고 {taskId}의 관리 산출물을 제거합니다.',
+      },
+    };
+
     targetRepoInput.value = defaultTargetRepo;
     runtimeLanguageInput.value = initialRuntimeLanguage;
     baseBranchInput.value = defaultBaseBranch;
@@ -1096,6 +1359,7 @@
     applyRuntimeSettingsTranslations();
     applyRequestTranslations();
     applyHumanReviewTranslations();
+    applyTaskTranslations();
 
     function currentUiLanguage() {
       return settingsTranslations[runtimeLanguageInput.value] ? runtimeLanguageInput.value : initialRuntimeLanguage;
@@ -1122,6 +1386,13 @@
       return Object.entries(variables).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, String(value)), template);
     }
 
+    function translateTask(key, variables = {}) {
+      const language = currentUiLanguage();
+      const table = taskTranslations[language] || taskTranslations.EN;
+      const template = table[key] || taskTranslations.EN[key] || '';
+      return Object.entries(variables).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, String(value)), template);
+    }
+
     function setRequestText(id, key) {
       const node = document.getElementById(id);
       if (!node) return;
@@ -1144,6 +1415,33 @@
       const node = document.getElementById(id);
       if (!node) return;
       node.innerHTML = translateSettings(key, variables);
+    }
+
+    function setTaskText(id, key, variables = {}) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.textContent = translateTask(key, variables);
+    }
+
+    function applyTaskTranslations() {
+      setTaskText('task-modal-title', 'modalTitle');
+      setTaskText('task-modal-subtitle', 'modalSubtitle');
+      startVerificationButton.textContent = translateTask('startVerification');
+      approvePlanButton.textContent = translateTask('approvePlan');
+      deleteTaskButton.textContent = translateTask('deleteTask');
+      closeTaskModalButton.textContent = translateTask('close');
+      closeTaskModalButton.setAttribute('aria-label', translateTask('closeAria'));
+      taskTabOverview.textContent = translateTask('tabOverview');
+      taskTabTimeline.textContent = translateTask('tabTimeline');
+      taskTabEditor.textContent = translateTask('tabViewer');
+      taskTabChangedFiles.textContent = translateTask('tabChangedFiles');
+      document.getElementById('task-human-review-note-title').textContent = translateTask('reviewNoteTitle');
+      document.querySelector('#task-changed-file-summary strong').textContent = translateTask('changedFilesHeading');
+      document.querySelector('#task-changed-file-summary .diff-badge').textContent = translateTask('readOnlyPatch');
+      if (!activeTaskDetail) {
+        taskOverview.innerHTML = `<div class="muted">${escapeHtml(translateTask('selectTask'))}</div>`;
+        taskTimeline.innerHTML = `<div class="task-panel-scroll muted">${escapeHtml(translateTask('selectTaskTimeline'))}</div>`;
+      }
     }
 
     function applyHumanReviewTranslations() {
@@ -1461,11 +1759,11 @@
     }
 
     function formatRelativeTime(value) {
-      if (!value) return 'No heartbeat yet';
+      if (!value) return translateTask('noHeartbeatYet');
       const parsed = new Date(value);
       if (Number.isNaN(parsed.getTime())) return String(value);
       const deltaSeconds = Math.max(0, Math.round((Date.now() - parsed.getTime()) / 1000));
-      if (deltaSeconds < 10) return 'just now';
+      if (deltaSeconds < 10) return translateSettings('justNow');
       if (deltaSeconds < 60) return `${deltaSeconds}s ago`;
       const deltaMinutes = Math.round(deltaSeconds / 60);
       if (deltaMinutes < 60) return `${deltaMinutes}m ago`;
@@ -1485,9 +1783,9 @@
     }
 
     function activityLabel(status) {
-      if (status === 'active') return 'Agent active';
-      if (status === 'waiting') return 'Agent waiting';
-      return 'Agent idle';
+      if (status === 'active') return currentUiLanguage() === 'KO' ? '에이전트 실행 중' : 'Agent active';
+      if (status === 'waiting') return currentUiLanguage() === 'KO' ? '에이전트 대기 중' : 'Agent waiting';
+      return currentUiLanguage() === 'KO' ? '에이전트 유휴' : 'Agent idle';
     }
 
     function buildActivityBadge(status, label = activityLabel(status)) {
@@ -1501,10 +1799,10 @@
         heartbeatAt: item.agent_heartbeat_at,
         state: item.state,
       });
-      const owner = item.agent_owner ? `Owned by ${item.agent_owner}` : 'No worker lease attached';
+      const owner = item.agent_owner ? `${currentUiLanguage() === 'KO' ? '소유자' : 'Owned by'} ${item.agent_owner}` : translateTask('noLeaseOwner');
       const meta = item.agent_heartbeat_at
-        ? `Heartbeat ${formatRelativeTime(item.agent_heartbeat_at)} · ${formatDateTime(item.agent_heartbeat_at)}`
-        : (status === 'waiting' ? 'This stage is active, but no worker lease is attached yet.' : 'No heartbeat recorded for this task.');
+        ? `${translateTask('heartbeat')} ${formatRelativeTime(item.agent_heartbeat_at)} · ${formatDateTime(item.agent_heartbeat_at)}`
+        : (status === 'waiting' ? translateTask('waitingNoLeaseCard') : translateTask('noRuntimeLogForCard'));
       const tooltip = `${activityLabel(status)} - ${owner}. ${meta}`;
       return `<span class="card-activity" title="${escapeHtml(tooltip)}">${buildActivityBadge(status, tooltip)}</span>`;
     }
@@ -1571,7 +1869,7 @@
     }
 
     function formatDateTime(value) {
-      if (!value) return 'now';
+      if (!value) return translateTask('now');
       const parsed = new Date(value);
       return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
     }
@@ -2020,21 +2318,21 @@
         heartbeatAt: lease.heartbeat_at,
         state: metadata.state,
       });
-      const owner = lease.owner || 'No lease owner';
-      const runId = lease.run_id || 'No active run';
-      const heartbeat = lease.heartbeat_at ? formatDateTime(lease.heartbeat_at) : 'No heartbeat yet';
-      const heartbeatNote = lease.heartbeat_at ? `Last heartbeat ${formatRelativeTime(lease.heartbeat_at)}.` : 'A worker heartbeat appears here once a lease is active.';
+      const owner = lease.owner || translateTask('noLeaseOwner');
+      const runId = lease.run_id || translateTask('noActiveRun');
+      const heartbeat = lease.heartbeat_at ? formatDateTime(lease.heartbeat_at) : translateTask('noHeartbeatYet');
+      const heartbeatNote = lease.heartbeat_at ? translateTask('heartbeatLast', { time: formatRelativeTime(lease.heartbeat_at) }) : translateTask('heartbeatAppearsLater');
       const activityCopy = status === 'active'
-        ? 'A worker currently holds the task lease for this agent-run stage.'
+        ? translateTask('activityCopyActive')
         : status === 'waiting'
-          ? 'This task is in an agent-run stage, but no worker lease is attached right now.'
-          : 'No worker lease is currently attached to this task.';
+          ? translateTask('activityCopyWaiting')
+          : translateTask('activityCopyIdle');
       const logSummary = detail.log_files.length
-        ? `${detail.log_files.length} runtime log file${detail.log_files.length === 1 ? '' : 's'} recorded. Latest: ${detail.log_files[detail.log_files.length - 1]}.`
-        : 'No runtime log files recorded for this task yet.';
+        ? translateTask(detail.log_files.length === 1 ? 'runtimeLogSummaryOne' : 'runtimeLogSummaryMany', { count: detail.log_files.length, latest: detail.log_files[detail.log_files.length - 1] })
+        : translateTask('runtimeLogSummaryEmpty');
       return `
         <div class="task-section">
-          <h3>Agent activity</h3>
+          <h3>${escapeHtml(translateTask('taskActivity'))}</h3>
           <div class="task-activity-shell">
             <div class="task-activity-hero">
               <div class="task-activity-copy">
@@ -2045,23 +2343,23 @@
             </div>
             <div class="task-activity-grid">
               <div class="task-activity-card">
-                <span>Lease owner</span>
+                <span>${escapeHtml(translateTask('leaseOwner'))}</span>
                 <strong>${escapeHtml(owner)}</strong>
-                <small>${escapeHtml(lease.owner ? 'Current task lease owner from metadata.' : 'No worker currently owns the task lease.')}</small>
+                <small>${escapeHtml(lease.owner ? translateTask('leaseOwnerHelpActive') : translateTask('leaseOwnerHelpEmpty'))}</small>
               </div>
               <div class="task-activity-card">
-                <span>Lease run</span>
+                <span>${escapeHtml(translateTask('leaseRun'))}</span>
                 <strong>${escapeHtml(runId)}</strong>
-                <small>${escapeHtml(lease.run_id ? 'Worker run identifier for the current lease.' : 'Run id appears once a worker claims the task.')}</small>
+                <small>${escapeHtml(lease.run_id ? translateTask('leaseRunHelpActive') : translateTask('leaseRunHelpEmpty'))}</small>
               </div>
               <div class="task-activity-card">
-                <span>Heartbeat</span>
+                <span>${escapeHtml(translateTask('heartbeat'))}</span>
                 <strong>${escapeHtml(heartbeat)}</strong>
                 <small>${escapeHtml(heartbeatNote)}</small>
               </div>
               <div class="task-activity-card">
-                <span>Log artifacts</span>
-                <strong>${escapeHtml(detail.log_files.length ? detail.log_files.join(', ') : 'None yet')}</strong>
+                <span>${escapeHtml(translateTask('logArtifacts'))}</span>
+                <strong>${escapeHtml(detail.log_files.length ? detail.log_files.join(', ') : translateTask('noneYet'))}</strong>
                 <small>${escapeHtml(logSummary)}</small>
               </div>
             </div>
@@ -2287,7 +2585,7 @@
 
     function renderChangedFileButtons(files) {
       if (!files.length) {
-        taskChangedFiles.innerHTML = '<div class="muted">No changed files captured.</div>';
+        taskChangedFiles.innerHTML = `<div class="muted">${escapeHtml(translateTask('noChangedFilesCaptured'))}</div>`;
         return;
       }
       taskChangedFiles.innerHTML = files.map((file) => `
@@ -2358,10 +2656,10 @@
     function renderUnifiedDiff(detail) {
       const lines = buildUnifiedDiffLines(detail);
       if (lines === null) {
-        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
+        return `<div class="diff-empty">${escapeHtml(translateTask('noBinaryPreview'))}</div>`;
       }
       if (!lines.length) {
-        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
+        return `<div class="diff-empty">${escapeHtml(translateTask('noTextHunks'))}</div>`;
       }
       return `<pre class="diff-unified">${lines.map((line) => {
         let kind = 'context';
@@ -2374,10 +2672,10 @@
 
     function renderDiffDesktop(detail) {
       if (detail.summary.is_binary) {
-        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
+        return `<div class="diff-empty">${escapeHtml(translateTask('noBinaryPreview'))}</div>`;
       }
       if (!detail.hunks.length) {
-        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
+        return `<div class="diff-empty">${escapeHtml(translateTask('noTextHunks'))}</div>`;
       }
       const threads = commentThreadsByAnchor(detail);
       return detail.hunks.map((hunk) => `
@@ -2395,10 +2693,10 @@
 
     function renderDiffMobile(detail) {
       if (detail.summary.is_binary) {
-        return `<div class="diff-empty">Binary patch preview is not available for this file.</div>`;
+        return `<div class="diff-empty">${escapeHtml(translateTask('noBinaryPreview'))}</div>`;
       }
       if (!detail.hunks.length) {
-        return `<div class="diff-empty">No textual hunks were captured for this file.</div>`;
+        return `<div class="diff-empty">${escapeHtml(translateTask('noTextHunks'))}</div>`;
       }
       const threads = commentThreadsByAnchor(detail);
       return detail.hunks.map((hunk) => `
@@ -2467,11 +2765,11 @@
             try {
               const uploaded = await uploadPlanAttachment(blob);
               callback(uploaded.relative_path, uploaded.filename);
-              taskEditorStatus.textContent = `Attached ${uploaded.filename} to PLAN.md.`;
+              taskEditorStatus.textContent = translateTask('attachedPlanImage', { filename: uploaded.filename });
             } catch (error) {
               taskModalError.hidden = false;
               taskModalError.textContent = error.message;
-              taskEditorStatus.textContent = 'Image upload failed.';
+              taskEditorStatus.textContent = translateTask('imageUploadFailed');
             }
           },
         },
@@ -2482,19 +2780,19 @@
 
     async function uploadPlanAttachment(blob) {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans' || activeArtifactName !== 'PLAN.md') {
-        throw new Error('Image attachments are only available while editing PLAN.md in waiting-check-plans.');
+        throw new Error(translateTask('imageAttachmentsRestricted'));
       }
       const formData = new FormData();
       const fallbackExtension = blob.type === 'image/jpeg' ? '.jpg' : blob.type === 'image/gif' ? '.gif' : blob.type === 'image/webp' ? '.webp' : '.png';
       const fallbackName = blob.name && /\.[a-zA-Z0-9]+$/.test(blob.name) ? blob.name : `image${fallbackExtension}`;
       formData.append('file', blob, fallbackName);
-      taskEditorStatus.textContent = 'Uploading image attachment...';
+      taskEditorStatus.textContent = translateTask('uploadingImage');
       const response = await fetch(`/api/tasks/${activeTaskId}/attachments?artifact=PLAN.md`, {
         method: 'POST',
         body: formData,
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || 'Failed to upload image attachment.');
+      if (!response.ok) throw new Error(payload.detail || translateTask('failedImageUpload'));
       return payload;
     }
 
@@ -2577,7 +2875,7 @@
         body: JSON.stringify({ content: getHumanReviewEditorContent() }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || 'Failed to save human review note.');
+      if (!response.ok) throw new Error(payload.detail || translateTask('failedHumanReviewSave'));
       humanReviewSourceMarkdown = getHumanReviewEditorContent();
       taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaved');
       updateHumanReviewPanel();
@@ -2627,7 +2925,7 @@
     }
 
     function setArtifactMode(editing) {
-      taskModeBadge.textContent = editing ? 'Edit mode' : 'Viewer mode';
+      taskModeBadge.textContent = editing ? translateTask('editMode') : translateTask('viewerMode');
       taskViewerHost.hidden = editing;
       taskEditorHost.hidden = !editing;
       if (editing) {
@@ -2658,7 +2956,7 @@
       togglePlanEditButton.hidden = !editableArtifact;
       savePlanButton.hidden = !editableArtifact || !planEditMode;
       approvePlanButton.hidden = !editableArtifact;
-      togglePlanEditButton.textContent = planEditMode ? 'Back to viewer' : 'Edit PLAN.md';
+      togglePlanEditButton.textContent = planEditMode ? translateTask('backToViewer') : translateTask('editPlan');
       savePlanButton.disabled = !editableArtifact || !planEditMode;
        approvePlanButton.disabled = !editableArtifact || taskDetailStale;
     }
@@ -2681,12 +2979,18 @@
       deleteTaskButton.disabled = !available || taskDetailStale;
     }
 
+    function taskVisitText(summary) {
+      if (!summary.attempt_count) return translateTask('notVisitedYet');
+      const base = translateTask(summary.attempt_count === 1 ? 'visitOne' : 'visitMany', { count: summary.attempt_count });
+      return `${base}${summary.is_current ? translateTask('currentSuffix') : ''}`;
+    }
+
     function renderStageTiming(stageTiming) {
       const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries : [];
       const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];
       const hasRecordedTime = segments.length > 0 || summaries.some((summary) => Number(summary.attempt_count || 0) > 0);
       if (!summaries.length || !hasRecordedTime) {
-        return `<div class="task-section"><h3>Stage timing</h3><div class="muted">No state history recorded yet.</div></div>`;
+        return `<div class="task-section"><h3>${escapeHtml(translateTask('stageTiming'))}</h3><div class="muted">${escapeHtml(translateTask('noStateHistory'))}</div></div>`;
       }
       const totalDurationMs = Number(stageTiming?.total_duration_ms || 0);
       const currentSummary = summaries.find((summary) => summary.is_current) || null;
@@ -2703,9 +3007,9 @@
         return `
           <article class="stage-timing-card${summary.is_current ? ' current' : ''}" style="--stage-color:${stageColor(summary.state)}">
             <span>${escapeHtml(stateLabel(summary.state))}</span>
-            <strong ${buildDurationAttributes(totalBaseMs, summaryIsLive ? summary.latest_entered_at : '', 'total ')}>${`total ${formatElapsed(summary.total_duration_ms || 0)}`}</strong>
-            <small>${summary.attempt_count ? `${summary.attempt_count} visit${summary.attempt_count === 1 ? '' : 's'}${summary.is_current ? ' - current' : ''}` : 'Not visited yet'}</small>
-            <small>${summary.latest_entered_at ? `Latest entry ${escapeHtml(formatDateTime(summary.latest_entered_at))}` : 'No time recorded yet.'}</small>
+            <strong ${buildDurationAttributes(totalBaseMs, summaryIsLive ? summary.latest_entered_at : '', translateTask('totalPrefix'))}>${`${translateTask('totalPrefix')}${formatElapsed(summary.total_duration_ms || 0)}`}</strong>
+            <small>${escapeHtml(taskVisitText(summary))}</small>
+            <small>${summary.latest_entered_at ? escapeHtml(translateTask('latestEntry', { value: formatDateTime(summary.latest_entered_at) })) : escapeHtml(translateTask('noTimeRecorded'))}</small>
           </article>
         `;
       }).join('');
@@ -2716,7 +3020,7 @@
             const title = `${stateLabel(segment.state)} #${segment.visit_index} - ${formatElapsed(segment.duration_ms || 0)}`;
             return `<div class="stage-timeline-segment${segment.is_current ? ' current' : ''}" style="--stage-color:${stageColor(segment.state)}; flex: ${flexBasis} 1 0%;" title="${escapeHtml(title)}"></div>`;
           }).join('')}</div>`
-        : '<div class="muted">No stage transitions recorded yet.</div>';
+        : `<div class="muted">${escapeHtml(translateTask('noStageTransitions'))}</div>`;
       const segmentRows = segments.length
         ? `<div class="stage-segment-list">${segments.map((segment) => `
             <div class="stage-segment-row">
@@ -2726,19 +3030,19 @@
               <span class="muted">${escapeHtml(formatDateTime(segment.entered_at))} -> ${escapeHtml(segment.exited_at ? formatDateTime(segment.exited_at) : 'now')}</span>
             </div>
           `).join('')}</div>`
-        : '<div class="muted">No stage visits recorded yet.</div>';
+        : `<div class="muted">${escapeHtml(translateTask('noStageVisits'))}</div>`;
       return `
         <div class="task-section">
-          <h3>Stage timing</h3>
+          <h3>${escapeHtml(translateTask('stageTiming'))}</h3>
           <div class="stage-timing-shell">
             <div class="stage-timing-head">
               <div>
-                <strong>Timeline built from metadata history</strong>
-                <p>Every duration comes from the task's recorded state transitions, so repeated implement-review loops stay visible.</p>
+                <strong>${escapeHtml(translateTask('timelineFromHistory'))}</strong>
+                <p>${escapeHtml(translateTask('timelineFromHistoryBody'))}</p>
               </div>
               <div class="stage-timing-total">
-                <span>Total tracked time</span>
-                <strong ${totalDurationAttrs}>${formatElapsed(totalDurationMs)} tracked</strong>
+                <span>${escapeHtml(translateTask('totalTrackedTime'))}</span>
+                <strong ${totalDurationAttrs}>${formatElapsed(totalDurationMs)}${escapeHtml(translateTask('trackedSuffix'))}</strong>
               </div>
             </div>
             <div class="stage-timing-grid">${summaryCards}</div>
@@ -2759,9 +3063,9 @@
       const viewerVisible = detail.markdown_files.length > 0;
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
       const stageModels = [
-        { label: 'Planner model used', value: metadata.plan.resolved_model, note: 'Captured from the plan run output.', tokens: metadata.plan.last_run_tokens, sessionTokens: metadata.plan.session_tokens },
-        { label: 'Implementer model used', value: metadata.implementation.resolved_model, note: 'Captured from the workspace implementation run.', tokens: metadata.implementation.last_run_tokens, sessionTokens: metadata.implementation.session_tokens },
-        { label: 'Reviewer model used', value: metadata.review.resolved_model, note: 'Captured from the AI review run.', tokens: metadata.review.last_run_tokens, sessionTokens: metadata.review.session_tokens },
+        { label: translateTask('plannerModelUsed'), value: metadata.plan.resolved_model, note: translateTask('plannerModelNote'), tokens: metadata.plan.last_run_tokens, sessionTokens: metadata.plan.session_tokens },
+        { label: translateTask('implementerModelUsed'), value: metadata.implementation.resolved_model, note: translateTask('implementerModelNote'), tokens: metadata.implementation.last_run_tokens, sessionTokens: metadata.implementation.session_tokens },
+        { label: translateTask('reviewerModelUsed'), value: metadata.review.resolved_model, note: translateTask('reviewerModelNote'), tokens: metadata.review.last_run_tokens, sessionTokens: metadata.review.session_tokens },
       ];
       taskTabChangedFiles.hidden = !changedFilesVisible;
       taskTabReviewNote.hidden = !reviewNoteVisible;
@@ -2773,53 +3077,53 @@
       if (!activeChangedFileId || !detail.changed_files.some((file) => file.id === activeChangedFileId)) activeChangedFileId = detail.changed_files[0]?.id || null;
       if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files, metadata);
       planEditMode = false;
-      taskModeBadge.textContent = 'Viewer mode';
-      taskEditorStatus.textContent = planEditable ? 'Rendered markdown preview. Use Edit PLAN.md only when you want to change the document.' : 'Rendered markdown preview only for this task state.';
+      taskModeBadge.textContent = translateTask('viewerMode');
+      taskEditorStatus.textContent = planEditable ? translateTask('renderedPreviewEditable') : translateTask('renderedPreviewReadonly');
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
       activeChangedFileDetail = null;
       renderChangedFileButtons(detail.changed_files);
-      renderDiffPlaceholder(changedFilesVisible ? 'Select a changed file.' : 'Changed files appear here when a stored review patch is available for this task.');
+      renderDiffPlaceholder(changedFilesVisible ? translateTask('selectChangedFile') : translateTask('changedFilesPatchAvailable'));
       renderArtifactButtons(detail.markdown_files);
       taskTimeline.innerHTML = renderStageTiming(detail.stage_timing);
       taskOverview.innerHTML = `
-        <div class="task-meta-grid">
-          <div class="meta-item"><span>Title</span><strong>${escapeHtml(metadata.title)}</strong></div>
-          <div class="meta-item"><span>Task ID</span><strong>${escapeHtml(metadata.task_id)}</strong></div>
-          <div class="meta-item"><span>State</span><strong>${escapeHtml(metadata.state)}</strong></div>
-          <div class="meta-item"><span>Request language</span><strong>${escapeHtml(metadata.request.language || 'en')}</strong></div>
-          <div class="meta-item"><span>Updated</span><strong>${escapeHtml(metadata.updated_at)}</strong></div>
-          <div class="meta-item"><span>Target repo</span><strong>${escapeHtml(metadata.target.repo_root)}</strong></div>
-          <div class="meta-item"><span>Base branch</span><strong>${escapeHtml(metadata.target.base_branch)}</strong></div>
-          <div class="meta-item"><span>Final branch</span><strong>${escapeHtml(metadata.integration.final_branch || 'Not created yet')}</strong></div>
-          <div class="meta-item"><span>REQUEST.md path</span><strong>${escapeHtml(detail.request_markdown_path)}</strong></div>
+          <div class="task-meta-grid">
+          <div class="meta-item"><span>${escapeHtml(translateTask('titleLabel'))}</span><strong>${escapeHtml(metadata.title)}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('taskIdLabel'))}</span><strong>${escapeHtml(metadata.task_id)}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('stateLabel'))}</span><strong>${escapeHtml(stateLabel(metadata.state))}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('requestLanguageLabel'))}</span><strong>${escapeHtml(metadata.request.language || 'en')}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('updatedLabel'))}</span><strong>${escapeHtml(metadata.updated_at)}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('targetRepoLabel'))}</span><strong>${escapeHtml(metadata.target.repo_root)}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('baseBranchLabel'))}</span><strong>${escapeHtml(metadata.target.base_branch)}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('finalBranchLabel'))}</span><strong>${escapeHtml(metadata.integration.final_branch || translateTask('finalBranchNotCreated'))}</strong></div>
+          <div class="meta-item"><span>${escapeHtml(translateTask('requestPathLabel'))}</span><strong>${escapeHtml(detail.request_markdown_path)}</strong></div>
         </div>
         ${renderTaskActivity(detail)}
         <div class="task-section">
-          <h3>Captured stage models</h3>
-          <div class="task-model-grid">${stageModels.map((item) => `<div class="task-model-row"><span>${escapeHtml(item.label)}</span><div><strong>${escapeHtml(item.value || 'Not captured yet')}</strong><small>${escapeHtml(item.note)} This is the actual model used, separate from runtime override settings. Last run tokens: ${escapeHtml(String(item.tokens || 0))}. Session tokens: ${escapeHtml(String(item.sessionTokens || 0))}.</small></div></div>`).join('')}</div>
+          <h3>${escapeHtml(translateTask('capturedStageModels'))}</h3>
+          <div class="task-model-grid">${stageModels.map((item) => `<div class="task-model-row"><span>${escapeHtml(item.label)}</span><div><strong>${escapeHtml(item.value || translateTask('notCapturedYet'))}</strong><small>${escapeHtml(item.note)} ${escapeHtml(translateTask('modelUsageSuffix', { tokens: String(item.tokens || 0), sessionTokens: String(item.sessionTokens || 0) }))}</small></div></div>`).join('')}</div>
         </div>
         <div class="task-section">
-          <h3>Markdown files</h3>
-          <ul class="task-list">${detail.markdown_files.length ? detail.markdown_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : '<li>No markdown files</li>'}</ul>
+          <h3>${escapeHtml(translateTask('markdownFiles'))}</h3>
+          <ul class="task-list">${detail.markdown_files.length ? detail.markdown_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : `<li>${escapeHtml(translateTask('noMarkdownFiles'))}</li>`}</ul>
         </div>
         <div class="task-section">
-          <h3>JSON files</h3>
-          <ul class="task-list">${detail.json_files.length ? detail.json_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : '<li>No JSON files</li>'}</ul>
+          <h3>${escapeHtml(translateTask('jsonFiles'))}</h3>
+          <ul class="task-list">${detail.json_files.length ? detail.json_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : `<li>${escapeHtml(translateTask('noJsonFiles'))}</li>`}</ul>
         </div>
         <div class="task-section">
-          <h3>Changed files</h3>
-          <ul class="task-list">${detail.changed_files.length ? detail.changed_files.map((file) => `<li>${escapeHtml(file.display_path)} (+${file.additions} / -${file.deletions})</li>`).join('') : '<li>No changed files captured for this task state.</li>'}</ul>
+          <h3>${escapeHtml(translateTask('changedFilesHeading'))}</h3>
+          <ul class="task-list">${detail.changed_files.length ? detail.changed_files.map((file) => `<li>${escapeHtml(file.display_path)} (+${file.additions} / -${file.deletions})</li>`).join('') : `<li>${escapeHtml(translateTask('noChangedFilesForState'))}</li>`}</ul>
         </div>
         <div class="task-section">
-          <h3>Latest error</h3>
-          <div class="muted">${latestError ? escapeHtml(latestError.message) : 'No recorded errors.'}</div>
+          <h3>${escapeHtml(translateTask('latestError'))}</h3>
+          <div class="muted">${latestError ? escapeHtml(latestError.message) : escapeHtml(translateTask('noRecordedErrors'))}</div>
         </div>
       `;
       document.getElementById('task-modal-title').textContent = metadata.title;
-      document.getElementById('task-modal-subtitle').textContent = `${metadata.task_id} in ${metadata.state}`;
+      document.getElementById('task-modal-subtitle').textContent = translateTask('taskSubtitleFormat', { taskId: metadata.task_id, state: stateLabel(metadata.state) });
     }
 
     function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {
@@ -2840,7 +3144,7 @@
     }
 
     function formatArtifactFamilyLabel(cycle) {
-      return `Implement&Review-${cycle}`;
+      return currentUiLanguage() === 'KO' ? `구현&리뷰-${cycle}` : `Implement&Review-${cycle}`;
     }
 
     function buildArtifactEntries(files) {
@@ -2885,10 +3189,10 @@
 
     function renderArtifactButtons(files) {
       if (!files.length) {
-        taskMarkdownFiles.innerHTML = '<div class="muted">No markdown artifacts yet.</div>';
+        taskMarkdownFiles.innerHTML = `<div class="muted">${escapeHtml(translateTask('noMarkdownArtifactsYet'))}</div>`;
         taskArtifactSubtabs.hidden = true;
         taskArtifactSubtabs.innerHTML = '';
-        taskArtifactName.textContent = 'No document selected';
+        taskArtifactName.textContent = translateTask('noDocumentSelected');
         return;
       }
       const entries = buildArtifactEntries(files);
@@ -2901,7 +3205,7 @@
         return `<button type="button" class="${entry.file === activeArtifactName ? 'active' : ''}" data-artifact-file="${escapeHtml(entry.file)}">${escapeHtml(entry.label)}</button>`;
       }).join('');
       renderArtifactSubtabs(entries);
-      taskArtifactName.textContent = activeArtifactName || 'No document selected';
+      taskArtifactName.textContent = activeArtifactName || translateTask('noDocumentSelected');
     }
 
     async function loadTaskDetail(taskId, preserveTab = false, options = {}) {
@@ -2917,20 +3221,20 @@
         activeChangedFileId = null;
         activeChangedFileDetail = null;
         activeInlineCommentAnchor = null;
-        taskOverview.innerHTML = '<div class="muted">Loading task details...</div>';
-        taskTimeline.innerHTML = '<div class="muted">Loading stage timeline...</div>';
+        taskOverview.innerHTML = `<div class="muted">${escapeHtml(translateTask('loadingTaskDetails'))}</div>`;
+        taskTimeline.innerHTML = `<div class="muted">${escapeHtml(translateTask('loadingStageTimeline'))}</div>`;
         taskChangedFiles.innerHTML = '';
-        renderDiffPlaceholder('Select the Changed files tab to inspect the stored review patch.');
+        renderDiffPlaceholder(translateTask('selectChangedTabToInspect'));
         setHumanReviewEditorContent('');
         taskMarkdownFiles.innerHTML = '';
-        taskArtifactName.textContent = 'No document selected';
+        taskArtifactName.textContent = translateTask('noDocumentSelected');
         setPlanEditorContent('');
         setArtifactMode(false);
         activeArtifactName = null;
         planEditMode = false;
         savePlanButton.disabled = true;
-        taskModeBadge.textContent = 'Viewer mode';
-        taskEditorStatus.textContent = 'Select a markdown artifact to view.';
+        taskModeBadge.textContent = translateTask('viewerMode');
+        taskEditorStatus.textContent = translateTask('selectMarkdownArtifact');
         updateHumanVerificationState();
         updateTaskDeleteState();
         taskTabChangedFiles.hidden = true;
@@ -2941,7 +3245,7 @@
       try {
         const response = await fetch(`/api/tasks/${taskId}`);
         const detail = await response.json();
-        if (!response.ok) throw new Error(detail.detail || 'Failed to load task details.');
+        if (!response.ok) throw new Error(detail.detail || translateTask('failedLoadTaskDetails'));
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         renderTaskOverview(detail);
         const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
@@ -2953,7 +3257,7 @@
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        if (!softRefresh) taskOverview.innerHTML = '<div class="muted">Unable to load task details.</div>';
+        if (!softRefresh) taskOverview.innerHTML = `<div class="muted">${escapeHtml(translateTask('unableLoadTaskDetails'))}</div>`;
         updateTaskDeleteState();
       }
     }
@@ -2961,7 +3265,7 @@
     function scheduleActiveTaskRefresh() {
       if (taskModal.hidden || !activeTaskId) return;
       if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md' && isPlanDirty()) {
-        setTaskDetailStale(true, 'Task state changed while you were editing PLAN.md locally. Save the draft or leave edit mode to refresh the latest task status.');
+        setTaskDetailStale(true, translateTask('stalePlanMessage'));
         return;
       }
       clearTaskRefreshTimer();
@@ -2976,7 +3280,7 @@
 
     async function deleteTask() {
       if (!activeTaskId || !activeTaskDetail) return;
-      const confirmed = window.confirm(`Delete task ${activeTaskDetail.metadata.title}? This stops any running task work and removes managed artifacts for ${activeTaskId}.`);
+      const confirmed = window.confirm(translateTask('deleteConfirm', { title: activeTaskDetail.metadata.title, taskId: activeTaskId }));
       if (!confirmed) return;
       deleteTaskButton.disabled = true;
       try {
@@ -3084,14 +3388,14 @@
       activeArtifactName = resolvedArtifactName;
       renderArtifactButtons(activeTaskDetail.markdown_files);
       const family = activeArtifactFamily(buildArtifactEntries(activeTaskDetail.markdown_files));
-      taskArtifactName.textContent = family ? `${family.label} / ${activeArtifactName || 'No document selected'}` : (activeArtifactName || 'No document selected');
-      taskEditorStatus.textContent = activeArtifactName ? `Loading ${activeArtifactName}...` : 'No markdown artifact selected.';
+      taskArtifactName.textContent = family ? `${family.label} / ${activeArtifactName || translateTask('noDocumentSelected')}` : (activeArtifactName || translateTask('noDocumentSelected'));
+      taskEditorStatus.textContent = activeArtifactName ? translateTask('loadingArtifact', { name: activeArtifactName }) : translateTask('noMarkdownArtifactSelected');
       setArtifactMode(false);
       updatePlanActionState();
       try {
         const response = await fetch(`/api/tasks/${taskId}/artifacts/${encodeURIComponent(activeArtifactName)}`);
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || `Failed to load ${activeArtifactName}.`);
+        if (!response.ok) throw new Error(payload.detail || translateTask('unableLoadArtifact', { name: activeArtifactName || 'artifact' }));
         if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;
         planSourceMarkdown = payload.content;
         setPlanEditorContent(payload.content);
@@ -3099,14 +3403,14 @@
         setArtifactMode(editable);
         updatePlanActionState();
         if (activeArtifactName === 'PLAN.md' && activeTaskDetail.metadata.state === 'waiting-check-plans') {
-          taskEditorStatus.textContent = planEditMode ? 'Editing PLAN.md markdown. Save your draft before approval.' : 'Viewing rendered PLAN.md. Use Edit PLAN.md to switch into editing.';
+          taskEditorStatus.textContent = planEditMode ? translateTask('editingPlan') : translateTask('viewingPlan');
         } else {
-          taskEditorStatus.textContent = `${activeArtifactName} is shown as a rendered markdown document.`;
+          taskEditorStatus.textContent = translateTask('renderedArtifact', { name: activeArtifactName });
         }
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskEditorStatus.textContent = `Unable to load ${activeArtifactName || 'artifact'}.`;
+        taskEditorStatus.textContent = translateTask('unableLoadArtifact', { name: activeArtifactName || 'artifact' });
       }
     }
 
@@ -3122,7 +3426,7 @@
     async function savePlanArtifact() {
       if (!activeTaskId) return;
       savePlanButton.disabled = true;
-      taskEditorStatus.textContent = 'Saving PLAN.md...';
+      taskEditorStatus.textContent = translateTask('savingPlan');
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}/artifacts/PLAN.md`, {
           method: 'PUT',
@@ -3130,14 +3434,14 @@
           body: JSON.stringify({ content: getPlanEditorContent() }),
         });
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to save PLAN.md.');
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedSavePlan'));
         planSourceMarkdown = getPlanEditorContent();
-        taskEditorStatus.textContent = 'Saved PLAN.md.';
+        taskEditorStatus.textContent = translateTask('savedPlan');
         if (taskDetailStale) scheduleActiveTaskRefresh();
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskEditorStatus.textContent = 'Save failed.';
+        taskEditorStatus.textContent = translateTask('saveFailed');
       } finally {
         updatePlanActionState();
       }
@@ -3147,19 +3451,19 @@
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans') return;
       savePlanButton.disabled = true;
       approvePlanButton.disabled = true;
-      taskEditorStatus.textContent = isPlanDirty() ? 'Saving PLAN.md before approval...' : 'Approving plan...';
+      taskEditorStatus.textContent = isPlanDirty() ? translateTask('savingBeforeApproval') : translateTask('approvingPlan');
       try {
         if (isPlanDirty()) await savePlanArtifact();
         const response = await fetch(`/api/tasks/${activeTaskId}/approve-plan`, { method: 'POST' });
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to approve plan.');
-        taskEditorStatus.textContent = 'Plan approved.';
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedApprovePlan'));
+        taskEditorStatus.textContent = translateTask('planApproved');
         await loadBoard();
         setTaskModalOpen(false);
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskEditorStatus.textContent = 'Approval failed.';
+        taskEditorStatus.textContent = translateTask('failedApprovePlan');
       } finally {
         updatePlanActionState();
       }
@@ -3171,7 +3475,7 @@
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}/start-verification`, { method: 'POST' });
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to start verification.');
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedStartVerification'));
         await loadBoard();
         await loadTaskDetail(activeTaskId, true);
         if (!taskTabChangedFiles.hidden) setTaskTab('changed-files');
@@ -3196,7 +3500,7 @@
           body: JSON.stringify({ note: getHumanReviewEditorContent() }),
         });
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to reject verification.');
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedRejectVerification'));
         await loadBoard();
         setTaskModalOpen(false);
       } catch (error) {
@@ -3217,7 +3521,7 @@
         await saveHumanReviewNoteIfNeeded();
         const response = await fetch(`/api/tasks/${activeTaskId}/approve-verification`, { method: 'POST' });
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || 'Failed to approve verification.');
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
         await loadBoard();
         setTaskModalOpen(false);
       } catch (error) {
@@ -3278,7 +3582,7 @@
     document.getElementById('refresh').addEventListener('click', loadBoard);
     openComposerButton.addEventListener('click', async () => { clearMessages(); applyRequestTranslations(); resetFormState(); setModalOpen(true); await loadTargetRepoBranches(); });
     openSettingsButton.addEventListener('click', openSettingsModal);
-    runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); refreshRequestDerivedText(); });
+    runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });
     cancelComposerButton.addEventListener('click', () => { clearMessages(); resetFormState(); setModalOpen(false); });
     cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
