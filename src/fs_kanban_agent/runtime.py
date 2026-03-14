@@ -23,6 +23,8 @@ from .workers.planner import PlanningWorker
 from .workers.reviewer import ReviewerWorker
 from watchfiles import awatch
 
+from .opencode_adapter import OpenCodeAdapter
+
 
 class DispatchWorker(Protocol):
     def candidate_tasks(self) -> list[TaskContext]: ...
@@ -82,6 +84,7 @@ class RuntimeSupervisor:
             "reviewer": set(),
         }
         self._inflight_task_ids: set[str] = set()
+        self._task_adapters = [adapter for adapter in self._collect_task_adapters() if adapter is not None]
 
     async def start(self) -> None:
         self._stop_event.clear()
@@ -113,6 +116,24 @@ class RuntimeSupervisor:
     async def rescan_and_publish(self) -> None:
         board = self.board_service.get_board()
         await self.events.publish(board_to_event(board))
+
+    async def force_delete(self, task_id: str, *, by: str) -> None:
+        await self.cancel_task(task_id)
+        await asyncio.to_thread(self.deletion_service.delete, task_id, by=by)
+
+    async def cancel_task(self, task_id: str) -> None:
+        tasks_to_cancel: list[asyncio.Task[None]] = []
+        for role_tasks in self._role_tasks.values():
+            for task in list(role_tasks):
+                if task.get_name().endswith(f"-{task_id}"):
+                    tasks_to_cancel.append(task)
+        for adapter in self._task_adapters:
+            adapter.cancel_task(task_id)
+        for task in tasks_to_cancel:
+            task.cancel()
+        if tasks_to_cancel:
+            await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+        self._inflight_task_ids.discard(task_id)
 
     async def dispatch_once(self) -> bool:
         scheduled = False
@@ -167,6 +188,22 @@ class RuntimeSupervisor:
             ("implementer", self.implementer, self.config.runtime.implementer_agent_count),
             ("reviewer", self.reviewer, self.config.runtime.reviewer_agent_count),
         )
+
+    def _collect_task_adapters(self) -> Iterable[OpenCodeAdapter | None]:
+        seen: set[int] = set()
+        for adapter in (
+            getattr(self.planner, "adapter", None),
+            getattr(self.implementer, "adapter", None),
+            getattr(self.reviewer, "adapter", None),
+            getattr(self.committer, "adapter", None),
+        ):
+            if adapter is None:
+                continue
+            identifier = id(adapter)
+            if identifier in seen:
+                continue
+            seen.add(identifier)
+            yield adapter
 
     async def _run_worker_task(self, role_name: str, task_id: str, worker: DispatchWorker, task: TaskContext) -> None:
         try:
@@ -223,7 +260,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
     verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter)
-    deletion_service = TaskDeletionService(config, scanner, locks)
+    deletion_service = TaskDeletionService(config, scanner, locks, integration_manager)
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = OpenCodeModelRegistry(adapter=planner_adapter, config=config)

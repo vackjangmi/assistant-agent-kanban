@@ -476,8 +476,8 @@ def build_router() -> APIRouter:
     async def delete_task(task_id: str, request: Request):
         runtime = request.app.state.runtime
         try:
-            await asyncio.to_thread(runtime.deletion_service.delete, task_id, by="human")
-        except (TransitionError, TaskNotFoundError) as exc:
+            await runtime.force_delete(task_id, by="human")
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
             status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         await runtime.rescan_and_publish()

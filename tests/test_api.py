@@ -654,7 +654,7 @@ def test_api_deletes_task_and_owned_runtime_artifacts(configured_paths):
     assert all(item["task_id"] != task.metadata.task_id for column in board["columns"] for item in column["items"])
 
 
-def test_api_rejects_delete_for_active_task_state(configured_paths):
+def test_api_deletes_active_task_state(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
     task_dir = config.state_dir(TaskState.HUMAN_VERIFYING) / "delete-blocked-task"
@@ -666,8 +666,8 @@ def test_api_rejects_delete_for_active_task_state(configured_paths):
     with TestClient(app) as client:
         response = client.delete(f"/api/tasks/{task.metadata.task_id}")
 
-    assert response.status_code == 409
-    assert "blocked while state is human-verifying" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json() == {"deleted": True, "task_id": task.metadata.task_id}
 
 
 def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):

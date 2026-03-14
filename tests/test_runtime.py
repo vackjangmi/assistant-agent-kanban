@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 from fs_kanban_agent.events import EventBus
 from fs_kanban_agent.models import BoardSnapshot
@@ -24,6 +25,14 @@ class DummyRecoveryService:
 class DummyModelRegistry:
     def __init__(self) -> None:
         self.adapter = object()
+
+
+class RecordingDeletionService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def delete(self, task_id: str, *, by: str) -> None:
+        self.calls.append((task_id, by))
 
 
 class BlockingWorker:
@@ -125,5 +134,49 @@ def test_runtime_supervisor_schedules_per_role_parallelism_without_duplicate_tas
 
         trailing_tasks = list(supervisor._role_tasks["planner"])
         await asyncio.gather(*trailing_tasks)
+
+    asyncio.run(scenario())
+
+
+def test_runtime_supervisor_force_delete_cancels_task_and_deletes(configured_paths):
+    config, _, _ = configured_paths
+    adapter = SimpleNamespace(cancelled_task_ids=[])
+
+    def cancel_task(task_id: str) -> None:
+        adapter.cancelled_task_ids.append(task_id)
+
+    adapter.cancel_task = cancel_task
+    deletion_service = RecordingDeletionService()
+    supervisor = RuntimeSupervisor(
+        config,
+        SimpleNamespace(adapter=adapter),
+        SimpleNamespace(adapter=adapter),
+        SimpleNamespace(adapter=adapter),
+        SimpleNamespace(adapter=adapter),
+        KanbanScanner(config, MetadataStore()),
+        DummyBoardService(),
+        object(),
+        deletion_service,
+        object(),
+        DummyRecoveryService(),
+        EventBus(),
+        DummyModelRegistry(),
+    )
+
+    async def sleeper() -> None:
+        await asyncio.sleep(60)
+
+    async def scenario() -> None:
+        task_id = "abc1234"
+        running = asyncio.create_task(sleeper(), name=f"fs-kanban-planner-{task_id}")
+        supervisor._role_tasks["planner"].add(running)
+        supervisor._inflight_task_ids.add(task_id)
+
+        await supervisor.force_delete(task_id, by="human")
+
+        assert adapter.cancelled_task_ids == [task_id]
+        assert deletion_service.calls == [(task_id, "human")]
+        assert task_id not in supervisor._inflight_task_ids
+        assert running.cancelled() or running.done()
 
     asyncio.run(scenario())
