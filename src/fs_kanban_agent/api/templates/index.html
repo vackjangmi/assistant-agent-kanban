@@ -31,10 +31,10 @@
     .implementation-board-row { display: grid; gap: 12px; grid-template-columns: repeat(var(--implementation-row-columns, 1), minmax(0, 1fr)); min-height: 0; height: 100%; }
     .column { background: var(--panel); border: 1px solid var(--border); padding: 12px; min-height: 160px; }
     .implementation-board .column { min-width: 0; }
-    .plan-board .column, .implementation-board .column { min-height: 0; height: 100%; display: flex; flex-direction: column; }
+    .plan-board .column, .implementation-board .column, .final-board .column { min-height: 0; height: 100%; display: flex; flex-direction: column; }
     .column h2 { margin-top: 0; }
     .column-cards { display: grid; gap: 10px; }
-    .plan-board .column-cards, .implementation-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
+    .plan-board .column-cards, .implementation-board .column-cards, .final-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
     .card { background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
     .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
     .card:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
