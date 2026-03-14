@@ -4,7 +4,6 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-import uuid
 
 from ..commit_manager import CommitManager
 from ..enums import TaskState
@@ -13,7 +12,7 @@ from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
 from ..opencode_adapter import OpenCodeAdapter, AdapterRunError
-from ..models import HumanReviewComment, TaskContext, TaskErrorInfo
+from ..models import TaskContext, TaskErrorInfo
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
@@ -90,46 +89,6 @@ class HumanVerificationService:
             self.metadata_store.save(context.task_dir, context.metadata)
             return context
 
-    def add_comment(self, task_id: str, *, by: str, file_path: str, body: str) -> TaskContext:
-        context = self._find_task(task_id)
-        if context.state != TaskState.HUMAN_VERIFYING:
-            raise TransitionError("human review comments are only allowed from human-verifying")
-        cleaned_body = body.strip()
-        cleaned_path = file_path.strip()
-        if not cleaned_path:
-            raise TransitionError("file path is required")
-        if not cleaned_body:
-            raise TransitionError("comment body is required")
-        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-comment-add"):
-            context.metadata.human_verification.comments.append(
-                HumanReviewComment(
-                    comment_id=uuid.uuid4().hex[:12],
-                    file_path=cleaned_path,
-                    body=cleaned_body,
-                    created_by=by,
-                )
-            )
-            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
-            self.metadata_store.save(context.task_dir, context.metadata)
-            return context
-
-    def delete_comment(self, task_id: str, *, by: str, comment_id: str) -> TaskContext:
-        context = self._find_task(task_id)
-        if context.state != TaskState.HUMAN_VERIFYING:
-            raise TransitionError("human review comments are only allowed from human-verifying")
-        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-comment-delete"):
-            before_count = len(context.metadata.human_verification.comments)
-            context.metadata.human_verification.comments = [
-                comment
-                for comment in context.metadata.human_verification.comments
-                if comment.comment_id != comment_id
-            ]
-            if len(context.metadata.human_verification.comments) == before_count:
-                raise TaskNotFoundError(comment_id)
-            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
-            self.metadata_store.save(context.task_dir, context.metadata)
-            return context
-
     def reject(self, task_id: str, *, by: str, note: str = "") -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
@@ -154,8 +113,6 @@ class HumanVerificationService:
             raise TransitionError("human verification approval is only allowed from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
             try:
-                if context.metadata.human_verification.comments:
-                    raise TransitionError("resolve all human review comments before approval")
                 if context.metadata.commit.review_sha is None:
                     context.metadata.commit.review_sha = context.metadata.commit.sha
                 self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="APPROVED")
@@ -196,23 +153,12 @@ class HumanVerificationService:
         artifact_path = task_dir / note_path
         sections = ["# Human Verification", "", f"Verdict: {verdict}", ""]
         sections.extend(["## Notes", metadata.human_verification.note_markdown.strip() or "No notes yet.", ""])
-        sections.extend(["## File Comments", self._render_comment_section(metadata), ""])
         artifact_path.write_text("\n".join(sections))
-
-    def _render_comment_section(self, metadata) -> str:
-        if not metadata.human_verification.comments:
-            return "No unresolved comments."
-        lines: list[str] = []
-        for comment in metadata.human_verification.comments:
-            lines.append(f"- `{comment.file_path}`: {comment.body}")
-        return "\n".join(lines)
 
     def _human_review_summary(self, metadata) -> str:
         note = metadata.human_verification.note_markdown.strip()
         if note:
             return note.splitlines()[0].strip()
-        if metadata.human_verification.comments:
-            return metadata.human_verification.comments[0].body
         return ""
 
     def _capture_review_branch_to_workspace(self, metadata) -> None:

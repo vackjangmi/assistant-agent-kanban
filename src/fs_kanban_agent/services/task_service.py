@@ -228,12 +228,9 @@ class TaskService:
         )
 
     def _build_human_review_state(self, metadata: TaskMetadata) -> HumanReviewState:
-        unresolved_count = len(metadata.human_verification.comments)
         return HumanReviewState(
             note_path=metadata.human_verification.note_path,
             note_markdown=metadata.human_verification.note_markdown,
-            unresolved_comment_count=unresolved_count,
-            approval_block_reason="Resolve all file comments before approval." if unresolved_count else None,
         )
 
     def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
@@ -263,7 +260,7 @@ class TaskService:
         patch_text = self._resolve_changed_files_patch(task.metadata, require_available=require_available)
         if patch_text is None:
             return []
-        return self._apply_human_review_comments(self._parse_patch(patch_text), task.metadata)
+        return self._parse_patch(patch_text)
 
     def _resolve_changed_files_patch(self, metadata: TaskMetadata, *, require_available: bool) -> str | None:
         if metadata.integration.patch_path:
@@ -301,15 +298,6 @@ class TaskService:
             return None
         return diff.stdout
 
-    def _apply_human_review_comments(self, details: list[ChangedFileDetail], metadata: TaskMetadata) -> list[ChangedFileDetail]:
-        comments_by_path: dict[str, list] = {}
-        for comment in metadata.human_verification.comments:
-            comments_by_path.setdefault(comment.file_path, []).append(comment)
-        for detail in details:
-            file_comments = comments_by_path.get(detail.summary.path, [])
-            detail.summary.comment_count = len(file_comments)
-            detail.comments = list(file_comments)
-        return details
 
     def _resolve_patch_path(self, task_id: str, raw_path: str | None) -> Path | None:
         if not raw_path:

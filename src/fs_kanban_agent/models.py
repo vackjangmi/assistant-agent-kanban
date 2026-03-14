@@ -93,18 +93,9 @@ class RequestInfo(BaseModel):
     language: str | None = None
 
 
-class HumanReviewComment(BaseModel):
-    comment_id: str
-    file_path: str
-    body: str
-    created_at: datetime = Field(default_factory=utc_now)
-    created_by: str = "human"
-
-
 class HumanVerificationInfo(BaseModel):
     note_path: str | None = None
     note_markdown: str = ""
-    comments: list[HumanReviewComment] = Field(default_factory=list)
 
 
 class TargetRepoInfo(BaseModel):
@@ -205,7 +196,6 @@ class ChangedFileSummary(BaseModel):
     deletions: int = 0
     hunk_count: int = 0
     is_binary: bool = False
-    comment_count: int = 0
 
 
 class ChangedFileLine(BaseModel):
@@ -237,14 +227,11 @@ class ChangedFileHunk(BaseModel):
 class ChangedFileDetail(BaseModel):
     summary: ChangedFileSummary
     hunks: list[ChangedFileHunk] = Field(default_factory=list)
-    comments: list[HumanReviewComment] = Field(default_factory=list)
 
 
 class HumanReviewState(BaseModel):
     note_path: str | None = None
     note_markdown: str = ""
-    unresolved_comment_count: int = 0
-    approval_block_reason: str | None = None
 
 
 class TaskLogEntry(BaseModel):

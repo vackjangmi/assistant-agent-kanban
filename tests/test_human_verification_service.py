@@ -421,24 +421,6 @@ def test_human_verification_approve_stages_manual_review_changes_before_commit(t
     assert status == ""
 
 
-def test_human_verification_approve_blocks_when_comments_exist(tmp_path):
-    target_repo = tmp_path / "target-repo"
-    target_repo.mkdir()
-    init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
-    config.bootstrap()
-    create_request_task(config, "verify-approve-comment-block-task", target_repo_root=target_repo)
-    scanner, service, completed = _task_ready_for_human_verification(config)
-    service.start(completed.metadata.task_id, by="human")
-    service.add_comment(completed.metadata.task_id, by="human", file_path="app.txt", body="Need one more tweak")
-
-    with pytest.raises(TransitionError, match="resolve all human review comments"):
-        service.approve(completed.metadata.task_id, by="human")
-
-    refreshed = scanner.find_task(completed.metadata.task_id)
-    assert refreshed.state == TaskState.HUMAN_VERIFYING
-
-
 def test_human_verification_approve_returns_to_todos_on_rebase_conflict(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
