@@ -19,6 +19,7 @@
     .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
     button { padding: 9px 14px; border: 1px solid var(--text); background: #fff9ef; cursor: pointer; font: inherit; }
     button.primary { background: var(--accent); border-color: var(--accent-strong); color: #fff; }
+    .accent-button { background: #8b5a2b; border-color: #72461f; color: #fff; }
     .ghost-button { background: transparent; border-color: var(--border); }
     button:disabled { opacity: 0.7; cursor: progress; }
     .board-phase-shell { padding: 0 20px 12px; flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; }
@@ -43,7 +44,7 @@
     .card-meta.running { color: var(--accent-strong); font-variant-numeric: tabular-nums; }
     .card-model { margin-top: 8px; padding: 7px 8px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.86rem; line-height: 1.35; }
     .card-model strong { display: block; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }
-    .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }
+    .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }
     .modal[hidden] { display: none; }
     .modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
     .task-modal-panel { width: min(1380px, 100%); height: min(86vh, calc(100vh - 64px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
@@ -529,8 +530,8 @@
           <p id="task-modal-subtitle">Inspect task metadata, markdown artifacts, and live agent logs.</p>
         </div>
         <div class="task-modal-actions">
-          <button type="button" id="start-verification" hidden>Start verification</button>
-          <button type="button" id="approve-plan" hidden disabled>Approve plan</button>
+          <button type="button" id="start-verification" class="accent-button" hidden>Start verification</button>
+          <button type="button" id="approve-plan" class="primary" hidden disabled>Approve plan</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
           <span id="approve-human-review-shell" class="header-action-shell" hidden><button type="button" id="approve-human-review-button" class="primary">Approve</button></span>
           <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
@@ -548,15 +549,6 @@
       </div>
       <section id="task-panel-overview" class="task-panel">
         <div class="task-panel-scroll">
-          <section id="task-verification-actions" class="verification-actions" hidden>
-            <strong id="task-verification-title">Human verification</strong>
-            <div id="task-verification-status" class="muted">Manual verification actions appear here.</div>
-          </section>
-          <section id="task-delete-actions" class="task-danger-actions" hidden>
-            <strong>Delete task</strong>
-            <div id="task-delete-status" class="muted">Deletion is only available when the task is not actively running.</div>
-            <div class="muted">This permanently removes the task directory and any managed workspace artifacts created for it.</div>
-          </section>
           <div id="task-overview" class="muted">Select a task to inspect.</div>
         </div>
       </section>
@@ -730,11 +722,7 @@
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const taskTimeline = document.getElementById('task-timeline');
-    const taskVerificationActions = document.getElementById('task-verification-actions');
-    const taskVerificationStatus = document.getElementById('task-verification-status');
     const startVerificationButton = document.getElementById('start-verification');
-    const taskDeleteActions = document.getElementById('task-delete-actions');
-    const taskDeleteStatus = document.getElementById('task-delete-status');
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');
     const taskChangedFileSummary = document.getElementById('task-changed-file-summary');
@@ -2504,34 +2492,18 @@
       const state = activeTaskDetail?.metadata?.state;
       const canStart = state === 'completed-reviews';
       const canApproveOrReject = state === 'human-verifying';
-      taskVerificationActions.hidden = !canStart;
       startVerificationButton.hidden = !canStart;
       startVerificationButton.disabled = !canStart || taskDetailStale;
       requestChangesButton.hidden = !canApproveOrReject;
       approveHumanReviewButton.hidden = !canApproveOrReject;
-      if (canStart) {
-        taskVerificationStatus.textContent = taskDetailStale ? 'Task state changed while this modal was paused for a local PLAN.md edit. Save or exit the edit view so the modal can refresh before starting verification.' : 'AI review passed. Start verification to apply the workspace patch to the target repo for manual checking.';
-      } else {
-        taskVerificationStatus.textContent = 'Manual verification actions appear here.';
-      }
       updateHumanReviewPanel();
     }
 
     function updateTaskDeleteState() {
       const state = activeTaskDetail?.metadata?.state;
       const available = Boolean(state);
-      taskDeleteActions.hidden = !available;
       deleteTaskButton.hidden = !available;
       deleteTaskButton.disabled = !available || taskDetailStale;
-      if (!available) {
-        taskDeleteStatus.textContent = 'Deletion is only available when the task details finish loading.';
-        return;
-      }
-      if (taskDetailStale) {
-        taskDeleteStatus.textContent = 'Task details are temporarily stale while the modal protects an unsaved PLAN.md edit. Save or leave the edit view to refresh before deleting.';
-        return;
-      }
-      taskDeleteStatus.textContent = 'This stops any running task work, removes managed review/apply state, and deletes the task plus its managed artifacts.';
     }
 
     function renderStageTiming(stageTiming) {
@@ -2884,7 +2856,6 @@
       const confirmed = window.confirm(`Delete task ${activeTaskDetail.metadata.title}? This stops any running task work and removes managed artifacts for ${activeTaskId}.`);
       if (!confirmed) return;
       deleteTaskButton.disabled = true;
-      taskDeleteStatus.textContent = 'Stopping task work and deleting managed artifacts...';
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}`, { method: 'DELETE' });
         let payload = null;
@@ -2899,7 +2870,6 @@
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskDeleteStatus.textContent = 'Delete failed. The task stays open so you can review the error.';
         updateTaskDeleteState();
       }
     }
@@ -3094,7 +3064,6 @@
     async function startVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'completed-reviews') return;
       startVerificationButton.disabled = true;
-      taskVerificationStatus.textContent = 'Applying patch to target repo and starting human verification...';
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}/start-verification`, { method: 'POST' });
         const payload = await response.json();
@@ -3105,7 +3074,6 @@
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskVerificationStatus.textContent = 'Failed to start verification.';
       } finally {
         updateHumanVerificationState();
       }
