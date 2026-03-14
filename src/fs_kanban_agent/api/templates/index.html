@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FS Kanban Agent</title>
+  <title>Kanban Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
   <style>
     :root { --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --panel-strong: rgba(255,252,247,0.95); --border: rgba(24,32,38,0.15); --accent: #7c4f2c; --accent-strong: #5f3417; --accent-soft: rgba(124,79,44,0.12); --success: #217349; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }
     * { box-sizing: border-box; }
-    body { font-family: "Nanum Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }
+    body { font-family: "Nanum Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }
     body.modal-open { overflow: hidden; }
     header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -23,13 +23,19 @@
     .board-phase-shell { padding: 0 20px 12px; }
     .board-phase-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
     .board-phase-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
-    #board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 20px; }
-    #board.implementation-board { grid-template-columns: 1fr; }
-    .implementation-board-row { display: grid; gap: 12px; grid-template-columns: repeat(var(--implementation-row-columns, 1), minmax(0, 1fr)); }
+    main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    #board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 20px; flex: 1 1 auto; min-height: 0; }
+    #board.implementation-board { grid-template-columns: 1fr; flex: 1 1 auto; min-height: 0; align-items: stretch; grid-template-rows: repeat(2, minmax(0, 1fr)); }
+    #board.plan-board { flex: 1 1 auto; min-height: 0; align-items: stretch; grid-auto-rows: minmax(0, 1fr); }
+    #board.final-board { flex: 1 1 auto; min-height: 0; align-items: stretch; grid-auto-rows: minmax(0, 1fr); }
+    .implementation-board-row { display: grid; gap: 12px; grid-template-columns: repeat(var(--implementation-row-columns, 1), minmax(0, 1fr)); min-height: 0; height: 100%; }
     .column { background: var(--panel); border: 1px solid var(--border); padding: 12px; min-height: 160px; }
     .implementation-board .column { min-width: 0; }
+    .plan-board .column, .implementation-board .column { min-height: 0; height: 100%; display: flex; flex-direction: column; }
     .column h2 { margin-top: 0; }
-    .card { background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 10px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .column-cards { display: grid; gap: 10px; }
+    .plan-board .column-cards, .implementation-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
+    .card { background: white; border-left: 4px solid var(--accent); padding: 10px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
     .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
     .card:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
     .card-meta { color: var(--muted); font-size: 0.95rem; }
@@ -264,7 +270,7 @@
 </head>
 <body>
   <header>
-    <h1>Filesystem Kanban Agent</h1>
+    <h1>Kanban Agent</h1>
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Runtime settings</button>
@@ -523,6 +529,8 @@
         </div>
         <div class="task-modal-actions">
           <button type="button" id="start-verification" hidden>Start verification</button>
+          <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
+          <span id="approve-human-review-shell" class="header-action-shell" hidden><button type="button" id="approve-human-review-button" class="primary">Approve</button></span>
           <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
           <button type="button" id="close-task-modal" aria-label="Close task details">Close</button>
         </div>
@@ -601,11 +609,7 @@
               <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
             </div>
             <div class="human-review-footer">
-              <div id="task-human-review-approval-status" class="human-review-approval-status">Approve creates the final commit from the current human-reviewed code.</div>
-              <div class="human-review-actions">
-                <button type="button" id="request-changes-button">Request changes</button>
-                <button type="button" id="approve-human-review-button" class="primary">Approve</button>
-              </div>
+              <div id="task-human-review-approval-status" class="human-review-approval-status" hidden></div>
             </div>
           </div>
         </div>
@@ -744,7 +748,9 @@
     const taskHumanReviewApprovalStatus = document.getElementById('task-human-review-approval-status');
     const saveHumanReviewNoteButton = document.getElementById('save-human-review-note');
     const requestChangesButton = document.getElementById('request-changes-button');
+    const requestChangesShell = document.getElementById('request-changes-shell');
     const approveHumanReviewButton = document.getElementById('approve-human-review-button');
+    const approveHumanReviewShell = document.getElementById('approve-human-review-shell');
     const taskLogFiles = document.getElementById('task-log-files');
     const taskLogViewer = document.getElementById('task-log-viewer');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
@@ -1005,14 +1011,14 @@
     const humanReviewTranslations = {
       EN: {
         title: 'Human review',
-        tab: 'Review note',
+        tab: 'Request change note',
         status: 'Review note and file comments live here.',
-        noteTitle: 'Review note',
+        noteTitle: 'Request change note',
         noteStatus: 'Saved into the current HUMAN-VERIFY document. Inline file comments stay attached to changed lines.',
         saveNote: 'Save note',
         requestChanges: 'Request changes',
         approve: 'Approve',
-        approvalReady: 'Approve creates the final commit from the current human-reviewed code.',
+        approvalReady: '',
         approvalBlockedOne: 'Approval is blocked until {count} inline comment is resolved.',
         approvalBlockedMany: 'Approval is blocked until {count} inline comments are resolved.',
         noteSaving: 'Saving review note...',
@@ -1046,13 +1052,13 @@
       },
       KO: {
         title: '인간 리뷰',
-        tab: '리뷰 노트',
-        noteTitle: '리뷰 노트',
+        tab: '재요청 노트',
+        noteTitle: '재요청 노트',
         noteStatus: '현재 HUMAN-VERIFY 문서에 저장됩니다. 파일 줄 코멘트는 변경된 줄 아래에 바로 붙습니다.',
         saveNote: '노트 저장',
         requestChanges: '재요청',
         approve: '승인',
-        approvalReady: '승인하면 현재 인간 리뷰 기준 코드와 문서로 최종 커밋을 만듭니다.',
+        approvalReady: '',
         approvalBlockedOne: '해결되지 않은 줄 코멘트 {count}개가 남아 있어 승인이 막혀 있습니다.',
         approvalBlockedMany: '해결되지 않은 줄 코멘트 {count}개가 남아 있어 승인이 막혀 있습니다.',
         noteSaving: '리뷰 노트를 저장하는 중...',
@@ -1356,6 +1362,8 @@
       const visibleStates = new Set(boardPhaseStates[activeBoardPhase] || []);
       const visibleColumns = data.columns.filter((column) => visibleStates.has(column.state));
       board.classList.toggle('implementation-board', activeBoardPhase === 'implementation');
+      board.classList.toggle('plan-board', activeBoardPhase === 'plan');
+      board.classList.toggle('final-board', activeBoardPhase === 'final');
       if (activeBoardPhase === 'implementation') {
         const columnsByState = new Map(visibleColumns.map((column) => [column.state, column]));
         board.innerHTML = implementationBoardRows.map((states) => `
@@ -1372,7 +1380,7 @@
       return `
         <section class="column">
           <h2>${stateLabel(column.state)}</h2>
-          ${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong>${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderRunningMeta(item)}${renderCardModelMeta(item)}</button></article>`).join('')}
+          <div class="column-cards">${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong>${item.title}</strong><div class="card-meta">${item.task_id}</div><div class="card-meta">iter ${item.iteration}</div>${renderRunningMeta(item)}${renderCardModelMeta(item)}</button></article>`).join('')}</div>
         </section>`;
     }
 
@@ -2413,18 +2421,45 @@
 
     function updateHumanReviewPanel() {
       const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
-      const unresolvedCommentCount = Number(activeTaskDetail?.human_review?.unresolved_comment_count || 0);
-      const approvalBlockedByComments = unresolvedCommentCount > 0;
+      const currentCommentCount = Number(activeTaskDetail?.human_review?.total_comment_count || 0);
+      const noteExists = canVerify && getHumanReviewEditorContent().trim().length > 0;
+      const hasFeedback = noteExists || currentCommentCount > 0;
+      const approvalBlockedByContent = noteExists || currentCommentCount > 0;
       taskHumanReviewPanel.hidden = !canVerify;
+      requestChangesShell.hidden = !canVerify;
+      approveHumanReviewShell.hidden = !canVerify;
       if (!canVerify) return;
       taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
       saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
-      requestChangesButton.disabled = taskDetailStale;
-      approveHumanReviewButton.disabled = taskDetailStale || approvalBlockedByComments;
-      taskHumanReviewApprovalStatus.textContent = approvalBlockedByComments
-        ? translateHumanReview(unresolvedCommentCount === 1 ? 'approvalBlockedOne' : 'approvalBlockedMany', { count: unresolvedCommentCount })
-        : translateHumanReview('approvalReady');
-      taskHumanReviewApprovalStatus.dataset.tone = approvalBlockedByComments ? 'warning' : 'neutral';
+      requestChangesButton.disabled = taskDetailStale || !hasFeedback;
+      approveHumanReviewButton.disabled = taskDetailStale || approvalBlockedByContent;
+
+      let requestChangesReason = '';
+      if (taskDetailStale) {
+        requestChangesReason = translateHumanReview('actionBlockedStale');
+      } else if (!hasFeedback) {
+        requestChangesReason = translateHumanReview('requestChangesNeedsFeedback');
+      }
+
+      let approvalReason = '';
+      if (taskDetailStale) {
+        approvalReason = translateHumanReview('actionBlockedStale');
+      } else if (noteExists && currentCommentCount > 0) {
+        approvalReason = translateHumanReview(currentCommentCount === 1 ? 'approvalBlockedNoteAndCommentsOne' : 'approvalBlockedNoteAndCommentsMany', { count: currentCommentCount });
+      } else if (noteExists) {
+        approvalReason = translateHumanReview('approvalBlockedNoteOnly');
+      } else if (currentCommentCount > 0) {
+        approvalReason = translateHumanReview(currentCommentCount === 1 ? 'approvalBlockedCommentsOnlyOne' : 'approvalBlockedCommentsOnlyMany', { count: currentCommentCount });
+      }
+
+      requestChangesShell.title = requestChangesReason;
+      requestChangesButton.title = requestChangesReason;
+      approveHumanReviewShell.title = approvalReason;
+      approveHumanReviewButton.title = approvalReason;
+
+      taskHumanReviewApprovalStatus.hidden = !approvalReason;
+      taskHumanReviewApprovalStatus.textContent = approvalReason || '';
+      taskHumanReviewApprovalStatus.dataset.tone = approvalReason ? 'warning' : 'neutral';
     }
 
     function setArtifactMode(editing) {
@@ -2467,9 +2502,12 @@
     function updateHumanVerificationState() {
       const state = activeTaskDetail?.metadata?.state;
       const canStart = state === 'completed-reviews';
+      const canApproveOrReject = state === 'human-verifying';
       taskVerificationActions.hidden = !canStart;
       startVerificationButton.hidden = !canStart;
       startVerificationButton.disabled = !canStart || taskDetailStale;
+      requestChangesButton.hidden = !canApproveOrReject;
+      approveHumanReviewButton.hidden = !canApproveOrReject;
       if (canStart) {
         taskVerificationStatus.textContent = taskDetailStale ? 'Task state changed while this modal was paused for a local PLAN.md edit. Save or exit the edit view so the modal can refresh before starting verification.' : 'AI review passed. Start verification to apply the workspace patch to the target repo for manual checking.';
       } else {
