@@ -201,6 +201,102 @@ def test_human_verification_reject_preserves_human_reviewed_code_in_workspace(tm
     assert (workspace_repo / "extra.txt").read_text() == "keep this for next iteration\n"
 
 
+def test_human_verification_adds_line_comments_and_rewrites_artifacts(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-line-comment-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    moved = service.add_line_comment(
+        completed.metadata.task_id,
+        by="human",
+        path="app.txt",
+        side="right",
+        line_number=1,
+        line_kind="add",
+        hunk_header="@@ -1 +1 @@",
+        body_markdown="Please keep this rename but adjust the copy.",
+    )
+
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.human_verification.comments_path == "HUMAN-VERIFY-001.comments.json"
+    comments_path = refreshed.task_dir / "HUMAN-VERIFY-001.comments.json"
+    assert comments_path.exists()
+    artifact = (refreshed.task_dir / "HUMAN-VERIFY-001.md").read_text()
+    assert "## Line Comments" in artifact
+    assert "Please keep this rename but adjust the copy." in artifact
+
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+    detail = task_service.get_task(completed.metadata.task_id)
+    assert detail.human_review.total_comment_count == 1
+    assert detail.human_review.unresolved_comment_count == 1
+    changed_file = next(file for file in detail.changed_files if file.path == "app.txt")
+    diff = task_service.get_changed_file(completed.metadata.task_id, changed_file.id)
+    assert len(diff.comments) == 1
+    assert diff.comments[0].anchor.path == "app.txt"
+    assert diff.comments[0].anchor.side == "right"
+    assert diff.comments[0].anchor.line_number == 1
+    assert diff.comments[0].body_markdown == "Please keep this rename but adjust the copy."
+
+
+def test_human_verification_deletes_line_comments_and_rewrites_artifacts(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-line-comment-delete-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    service.add_line_comment(
+        completed.metadata.task_id,
+        by="human",
+        path="app.txt",
+        side="right",
+        line_number=1,
+        line_kind="add",
+        hunk_header="@@ -1 +1 @@",
+        body_markdown="Please keep this rename but adjust the copy.",
+    )
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+    detail_before = task_service.get_task(completed.metadata.task_id)
+    changed_file = next(file for file in detail_before.changed_files if file.path == "app.txt")
+    diff_before = task_service.get_changed_file(completed.metadata.task_id, changed_file.id)
+
+    moved = service.delete_line_comment(
+        completed.metadata.task_id,
+        by="human",
+        comment_id=diff_before.comments[0].id,
+    )
+
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    artifact = (refreshed.task_dir / "HUMAN-VERIFY-001.md").read_text()
+    assert "No unresolved comments." in artifact
+    diff_after = task_service.get_changed_file(completed.metadata.task_id, changed_file.id)
+    assert diff_after.comments == []
+    detail_after = task_service.get_task(completed.metadata.task_id)
+    assert detail_after.human_review.total_comment_count == 0
+    assert detail_after.human_review.unresolved_comment_count == 0
+
+
+def test_human_verification_approval_is_blocked_when_line_comments_remain(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-line-comment-approval-block-task")
+    _, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    service.add_line_comment(
+        completed.metadata.task_id,
+        by="human",
+        path="app.txt",
+        side="right",
+        line_number=1,
+        line_kind="add",
+        hunk_header="@@ -1 +1 @@",
+        body_markdown="Please fix this before approval.",
+    )
+
+    with pytest.raises(TransitionError, match="approval is blocked until all inline comments are removed"):
+        service.approve(completed.metadata.task_id, by="human")
+
+
 def test_human_verification_start_cleans_up_review_branch_on_apply_failure(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-start-failure-task")

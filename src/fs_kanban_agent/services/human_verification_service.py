@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
+import uuid
 
 from ..commit_manager import CommitManager
 from ..enums import TaskState
@@ -12,7 +16,7 @@ from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
 from ..opencode_adapter import OpenCodeAdapter, AdapterRunError
-from ..models import TaskContext, TaskErrorInfo
+from ..models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, TaskContext, TaskErrorInfo, utc_now
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
@@ -89,6 +93,61 @@ class HumanVerificationService:
             self.metadata_store.save(context.task_dir, context.metadata)
             return context
 
+    def add_line_comment(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        path: str,
+        side: Literal["left", "right"],
+        line_number: int,
+        line_kind: Literal["context", "add", "remove"],
+        hunk_header: str | None,
+        body_markdown: str,
+    ) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("line comments can only be added from human-verifying")
+        body = body_markdown.rstrip()
+        if not body.strip():
+            raise TransitionError("line comment body cannot be empty")
+        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-line-comment"):
+            artifact = self._load_comments_artifact(context.task_dir, context.metadata)
+            artifact.comments.append(
+                HumanLineComment(
+                    id=f"comment-{uuid.uuid4().hex[:12]}",
+                    anchor=HumanLineCommentAnchor(
+                        path=path,
+                        side=side,
+                        line_number=line_number,
+                        line_kind=line_kind,
+                        hunk_header=hunk_header,
+                    ),
+                    body_markdown=body,
+                    author=by,
+                    updated_at=utc_now(),
+                )
+            )
+            self._save_comments_artifact(context.task_dir, context.metadata, artifact)
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
+            self.metadata_store.save(context.task_dir, context.metadata)
+            return context
+
+    def delete_line_comment(self, task_id: str, *, by: str, comment_id: str) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("line comments can only be deleted from human-verifying")
+        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-line-comment-delete"):
+            artifact = self._load_comments_artifact(context.task_dir, context.metadata)
+            remaining_comments = [comment for comment in artifact.comments if comment.id != comment_id]
+            if len(remaining_comments) == len(artifact.comments):
+                raise TaskNotFoundError(comment_id)
+            artifact.comments = remaining_comments
+            self._save_comments_artifact(context.task_dir, context.metadata, artifact)
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
+            self.metadata_store.save(context.task_dir, context.metadata)
+            return context
+
     def reject(self, task_id: str, *, by: str, note: str = "") -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
@@ -113,6 +172,10 @@ class HumanVerificationService:
             raise TransitionError("human verification approval is only allowed from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
             try:
+                unresolved_comments = [comment for comment in self._load_comments_artifact(context.task_dir, context.metadata).comments if not comment.resolved]
+                if unresolved_comments:
+                    count = len(unresolved_comments)
+                    raise TransitionError(f"approval is blocked until all inline comments are removed ({count} remaining)")
                 if context.metadata.commit.review_sha is None:
                     context.metadata.commit.review_sha = context.metadata.commit.sha
                 self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="APPROVED")
@@ -145,14 +208,29 @@ class HumanVerificationService:
     def _ensure_human_verification_note(self, task_dir: Path, metadata, *, verdict: str) -> None:
         if not metadata.human_verification.note_path:
             metadata.human_verification.note_path = f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
+        if not metadata.human_verification.comments_path:
+            metadata.human_verification.comments_path = self._default_comments_path(metadata)
+        self._save_comments_artifact(task_dir, metadata, self._load_comments_artifact(task_dir, metadata))
         self._write_human_verification_artifact(task_dir, metadata, verdict=verdict)
 
     def _write_human_verification_artifact(self, task_dir: Path, metadata, *, verdict: str) -> None:
         note_path = metadata.human_verification.note_path or f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
         metadata.human_verification.note_path = note_path
+        if not metadata.human_verification.comments_path:
+            metadata.human_verification.comments_path = self._default_comments_path(metadata)
+        comments = self._load_comments_artifact(task_dir, metadata).comments
+        unresolved_comments = [comment for comment in comments if not comment.resolved]
         artifact_path = task_dir / note_path
         sections = ["# Human Verification", "", f"Verdict: {verdict}", ""]
         sections.extend(["## Notes", metadata.human_verification.note_markdown.strip() or "No notes yet.", ""])
+        sections.append("## Line Comments")
+        if unresolved_comments:
+            sections.append("")
+            for comment in unresolved_comments:
+                location = f"{comment.anchor.path}:{comment.anchor.line_number} ({comment.anchor.side})"
+                sections.extend([f"### {location}", comment.body_markdown.strip(), ""])
+        else:
+            sections.extend(["", "No unresolved comments.", ""])
         artifact_path.write_text("\n".join(sections))
 
     def _human_review_summary(self, metadata) -> str:
@@ -233,6 +311,36 @@ class HumanVerificationService:
         docs_root.mkdir(parents=True, exist_ok=True)
         for path in sorted(task_dir.glob("*.md")):
             shutil.copy2(path, docs_root / path.name)
+        comments_path = self._comments_artifact_path(task_dir, metadata)
+        if comments_path.exists():
+            shutil.copy2(comments_path, docs_root / comments_path.name)
+
+    def _default_comments_path(self, metadata) -> str:
+        note_path = metadata.human_verification.note_path or f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
+        if note_path.endswith(".md"):
+            return f"{note_path[:-3]}.comments.json"
+        return f"{note_path}.comments.json"
+
+    def _comments_artifact_path(self, task_dir: Path, metadata) -> Path:
+        comments_path = metadata.human_verification.comments_path or self._default_comments_path(metadata)
+        metadata.human_verification.comments_path = comments_path
+        resolved_task_dir = task_dir.resolve()
+        resolved = (resolved_task_dir / comments_path).resolve()
+        if resolved.parent != resolved_task_dir:
+            raise TransitionError("human verification comments must stay inside the task directory")
+        return resolved
+
+    def _load_comments_artifact(self, task_dir: Path, metadata) -> HumanLineCommentsArtifact:
+        path = self._comments_artifact_path(task_dir, metadata)
+        if not path.exists():
+            return HumanLineCommentsArtifact()
+        return HumanLineCommentsArtifact.model_validate_json(path.read_text())
+
+    def _save_comments_artifact(self, task_dir: Path, metadata, artifact: HumanLineCommentsArtifact) -> None:
+        path = self._comments_artifact_path(task_dir, metadata)
+        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+        tmp_path.write_text(json.dumps(artifact.model_dump(mode="json"), indent=2) + "\n")
+        os.replace(tmp_path, path)
 
     def _generate_branch_summary(self, context: TaskContext) -> str:
         fallback = self.commit_manager.sanitize_branch_summary(None, fallback_title=context.metadata.title)
