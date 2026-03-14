@@ -29,7 +29,7 @@ from ..models import (
     TaskMetadata,
     TaskStageTiming,
 )
-from ..scanner import KanbanScanner
+from ..scanner import KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
 
 
@@ -66,6 +66,7 @@ class TaskService:
             changed_files=[entry.summary for entry in changed_files],
             stage_timing=self._build_stage_timing(task.metadata),
             human_review=self._build_human_review_state(task.metadata),
+            agent_status=derive_agent_status(task.metadata, task.state),
         )
 
     def get_logs(self, task_id: str) -> TaskLogs:

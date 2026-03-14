@@ -161,3 +161,64 @@ def test_board_snapshot_includes_active_state_entered_at(configured_paths):
 
     assert planning_item.task_id == planning.metadata.task_id
     assert planning_item.state_entered_at is not None
+
+
+def test_board_snapshot_derives_agent_activity_from_state_and_lease(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "agent-activity-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    planning.metadata.lease.owner = "planner"
+    planning.metadata.lease.run_id = "planner-run-1"
+    metadata_store.save(planning.task_dir, planning.metadata)
+
+    snapshot = scanner.board_snapshot()
+    planning_item = next(item for column in snapshot.columns if column.state == TaskState.PLANNING for item in column.items)
+
+    assert planning_item.agent_status == "active"
+    assert planning_item.agent_owner == "planner"
+
+
+def test_board_snapshot_marks_active_state_without_lease_as_waiting(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "agent-waiting-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    transitions.move(scanner.find_task(waiting.metadata.task_id), TaskState.IMPLEMENTING, by="implementer")
+
+    snapshot = scanner.board_snapshot()
+    implementing_item = next(item for column in snapshot.columns if column.state == TaskState.IMPLEMENTING for item in column.items)
+
+    assert implementing_item.agent_status == "waiting"
+    assert implementing_item.agent_owner is None
+
+
+def test_board_snapshot_keeps_human_verifying_out_of_agent_active(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "human-verifying-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    todos_task = scanner.find_task(waiting.metadata.task_id)
+    implementing = transitions.move(todos_task, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    human_verifying = transitions.move(completed, TaskState.HUMAN_VERIFYING, by="human")
+    human_verifying.metadata.lease.owner = "human"
+    metadata_store.save(human_verifying.task_dir, human_verifying.metadata)
+
+    snapshot = scanner.board_snapshot()
+    human_item = next(item for column in snapshot.columns if column.state == TaskState.HUMAN_VERIFYING for item in column.items)
+
+    assert human_item.agent_status == "idle"

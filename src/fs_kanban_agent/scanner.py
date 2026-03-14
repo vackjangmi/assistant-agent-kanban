@@ -3,12 +3,28 @@ from __future__ import annotations
 import re
 import secrets
 from pathlib import Path
+from typing import Literal
 
 from .config import AppConfig
 from .enums import STATE_ORDER, TaskState
 from .metadata_store import MetadataStore, slugify
 from .models import BoardColumn, BoardSnapshot, TaskContext, TaskMetadata, TaskSnapshot
 from .request_parser import parse_request_markdown, resolve_repo_root
+
+
+AGENT_ACTIVE_STATES = {
+    TaskState.PLANNING,
+    TaskState.IMPLEMENTING,
+    TaskState.REVIEWING,
+}
+
+
+def derive_agent_status(metadata: TaskMetadata, state: TaskState) -> Literal["active", "waiting", "idle"]:
+    if state not in AGENT_ACTIVE_STATES:
+        return "idle"
+    if metadata.lease.owner:
+        return "active"
+    return "waiting"
 
 
 class TaskIdSequence:
@@ -92,6 +108,9 @@ class KanbanScanner:
                     iteration=item.metadata.cycle,
                     has_error=bool(item.metadata.errors),
                     active_model=self._active_model(item.metadata, state),
+                    agent_status=derive_agent_status(item.metadata, state),
+                    agent_owner=item.metadata.lease.owner,
+                    agent_heartbeat_at=item.metadata.lease.heartbeat_at,
                 )
                 for item in tasks
                 if item.state == state

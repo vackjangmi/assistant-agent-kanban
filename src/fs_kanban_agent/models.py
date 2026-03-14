@@ -139,6 +139,9 @@ class TaskSnapshot(BaseModel):
     iteration: int
     has_error: bool
     active_model: str | None = None
+    agent_status: Literal["active", "waiting", "idle"] = "idle"
+    agent_owner: str | None = None
+    agent_heartbeat_at: datetime | None = None
 
 
 class BoardColumn(BaseModel):
@@ -185,6 +188,7 @@ class TaskDetail(BaseModel):
     changed_files: list[ChangedFileSummary] = Field(default_factory=list)
     stage_timing: TaskStageTiming = Field(default_factory=TaskStageTiming)
     human_review: HumanReviewState = Field(default_factory=lambda: HumanReviewState())
+    agent_status: Literal["active", "waiting", "idle"] = "idle"
 
 
 class HumanLineCommentAnchor(BaseModel):
