@@ -159,11 +159,11 @@
      .diff-file-title { display: block; font-weight: 700; overflow-wrap: anywhere; }
      .diff-file-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.82rem; color: inherit; opacity: 0.82; }
     .diff-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; align-content: start; }
-     .diff-summary { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }
-     .diff-summary strong { display: block; overflow-wrap: anywhere; }
-     .diff-summary span { color: var(--muted); font-size: 0.92rem; }
-     .diff-badges { display: flex; gap: 8px; flex-wrap: wrap; }
-     .diff-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }
+     .diff-summary { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }
+      .diff-summary-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+      .diff-summary strong { display: block; min-width: 0; overflow-wrap: anywhere; }
+      .diff-badges { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; align-items: center; min-width: 0; margin-left: auto; }
+      .diff-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }
     .diff-shell { border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: auto; min-height: 0; height: 100%; }
     .human-review-panel { display: grid; gap: 12px; height: 100%; min-height: 0; }
     .human-review-box { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; min-height: 0; height: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; overflow: hidden; }
@@ -573,15 +573,14 @@
         <div class="diff-layout">
           <div id="task-changed-files" class="diff-file-list"></div>
           <div class="diff-stage">
-            <div id="task-changed-file-summary" class="diff-summary">
-              <div>
-                <strong>Changed files</strong>
-                <span>Select a file to inspect the stored review patch.</span>
-              </div>
-              <div class="diff-badges">
-                <span class="diff-badge">Read-only patch view</span>
-              </div>
-            </div>
+             <div id="task-changed-file-summary" class="diff-summary">
+               <div class="diff-summary-main">
+                 <strong>Changed files</strong>
+                 <div class="diff-badges">
+                   <span class="diff-badge">Read-only patch view</span>
+                 </div>
+               </div>
+             </div>
             <div id="task-diff-shell" class="diff-shell">
               <div id="task-diff-desktop" class="diff-desktop">
                 <div class="diff-empty">Select a changed file.</div>
@@ -2126,23 +2125,22 @@
       const commentCount = Array.isArray(activeChangedFileDetail?.comments) ? activeChangedFileDetail.comments.length : 0;
       const historicalCount = commentCount ? activeChangedFileDetail.comments.filter((comment) => comment.editable === false).length : 0;
       const threadCount = commentCount ? new Set((activeChangedFileDetail.comments || []).map((comment) => buildLineAnchorKey(comment.anchor || {}))).size : 0;
-      const commentBadge = activeTaskDetail?.metadata?.state === 'human-verifying'
-        ? `<span class="diff-badge">${escapeHtml(translateHumanReview('commentsBadge'))}</span>`
-        : '';
       const threadBadge = threadCount
         ? `<span class="diff-badge">${escapeHtml(translateHumanReview(threadCount === 1 ? 'commentsExistingOne' : 'commentsExistingMany', { count: threadCount }))}</span>`
         : '';
+      const historyBadge = historicalCount
+        ? `<span class="diff-badge">${escapeHtml(translateHumanReview('commentHistorical'))}</span>`
+        : '';
       taskChangedFileSummary.innerHTML = `
-        <div>
+        <div class="diff-summary-main">
           <strong>${escapeHtml(summary.display_path)}</strong>
-          <span>${summary.hunk_count} hunk${summary.hunk_count === 1 ? '' : 's'} from the stored review patch. ${escapeHtml(canUseLineComments() ? (window.innerWidth <= 900 ? translateHumanReview('commentsReadyMobile') : translateHumanReview('commentsReady')) : '')}${historicalCount ? ` ${escapeHtml(translateHumanReview('commentsHistory'))}` : ''}</span>
-        </div>
-        <div class="diff-badges">
-          <span class="diff-badge">${escapeHtml(summary.change_type)}</span>
-          <span class="diff-badge">+${summary.additions}</span>
-          <span class="diff-badge">-${summary.deletions}</span>
-          ${commentBadge}
-          ${threadBadge}
+          <div class="diff-badges">
+            <span class="diff-badge">${escapeHtml(summary.change_type)}</span>
+            <span class="diff-badge">+${summary.additions}</span>
+            <span class="diff-badge">-${summary.deletions}</span>
+            ${threadBadge}
+            ${historyBadge}
+          </div>
         </div>
       `;
     }
