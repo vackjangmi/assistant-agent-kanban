@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import threading
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,12 +28,16 @@ class OpenCodeAdapter:
         run_log_path: Path,
         config: AppConfig,
         session_id: str | None = None,
+        cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> RunResult:
         raise NotImplementedError
 
     def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:
         return []
+
+    def cancel_task(self, task_id: str) -> None:
+        return None
 
 
 @dataclass(slots=True)
@@ -99,6 +104,10 @@ class OpenCodeModelRegistry:
 
 
 class SubprocessOpenCodeAdapter(OpenCodeAdapter):
+    def __init__(self) -> None:
+        self._process_lock = threading.Lock()
+        self._task_processes: dict[str, set[subprocess.Popen[str]]] = defaultdict(set)
+
     def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:
         command = [config.opencode.binary, "models", "--verbose"]
         if refresh:
@@ -133,6 +142,7 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         run_log_path: Path,
         config: AppConfig,
         session_id: str | None = None,
+        cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> RunResult:
         command = [config.opencode.binary, "run"]
@@ -160,6 +170,9 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
             )
         except OSError as exc:
             raise AdapterRunError(f"failed to start opencode for agent {agent}") from exc
+        if cancel_key:
+            with self._process_lock:
+                self._task_processes[cancel_key].add(process)
 
         stdout_chunks: list[str] = []
         stderr_chunks: list[str] = []
@@ -185,31 +198,47 @@ class SubprocessOpenCodeAdapter(OpenCodeAdapter):
         stderr_thread.start()
 
         try:
-            returncode = process.wait(timeout=config.opencode.timeout_seconds)
-        except subprocess.TimeoutExpired as exc:
-            process.kill()
+            try:
+                returncode = process.wait(timeout=config.opencode.timeout_seconds)
+            except subprocess.TimeoutExpired as exc:
+                process.kill()
+                stdout_thread.join(timeout=1)
+                stderr_thread.join(timeout=1)
+                raise AdapterRunError(f"opencode timed out for agent {agent}") from exc
+
             stdout_thread.join(timeout=1)
             stderr_thread.join(timeout=1)
-            raise AdapterRunError(f"opencode timed out for agent {agent}") from exc
+            stdout = "".join(stdout_chunks)
+            stderr = "".join(stderr_chunks)
+            assistant_text = _extract_assistant_text(stdout)
+            resolved_session_id = _extract_session_id(stdout) or session_id
+            return RunResult(
+                ok=returncode == 0,
+                returncode=returncode,
+                assistant_text=assistant_text,
+                stdout=stdout,
+                stderr=stderr,
+                raw_events_path=str(run_log_path),
+                command=command,
+                resolved_model=resolved_model,
+                session_id=resolved_session_id,
+                total_tokens=_extract_total_tokens(stdout),
+            )
+        finally:
+            if cancel_key:
+                with self._process_lock:
+                    processes = self._task_processes.get(cancel_key)
+                    if processes is not None:
+                        processes.discard(process)
+                        if not processes:
+                            self._task_processes.pop(cancel_key, None)
 
-        stdout_thread.join(timeout=1)
-        stderr_thread.join(timeout=1)
-        stdout = "".join(stdout_chunks)
-        stderr = "".join(stderr_chunks)
-        assistant_text = _extract_assistant_text(stdout)
-        resolved_session_id = _extract_session_id(stdout) or session_id
-        return RunResult(
-            ok=returncode == 0,
-            returncode=returncode,
-            assistant_text=assistant_text,
-            stdout=stdout,
-            stderr=stderr,
-            raw_events_path=str(run_log_path),
-            command=command,
-            resolved_model=resolved_model,
-            session_id=resolved_session_id,
-            total_tokens=_extract_total_tokens(stdout),
-        )
+    def cancel_task(self, task_id: str) -> None:
+        with self._process_lock:
+            processes = list(self._task_processes.pop(task_id, set()))
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
 
 
 def _extract_assistant_text(stdout: str) -> str:

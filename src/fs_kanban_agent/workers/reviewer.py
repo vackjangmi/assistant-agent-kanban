@@ -84,6 +84,7 @@ class ReviewerWorker(WorkerBase):
                 run_log_path=run_log_path,
                 config=run_config,
                 session_id=session_id,
+                cancel_key=reviewing.metadata.task_id,
                 on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, run_log_path.name),
             )
             reviewing.metadata.review.resolved_model = result.resolved_model

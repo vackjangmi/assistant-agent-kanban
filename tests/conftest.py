@@ -39,6 +39,7 @@ class FakeAdapter(OpenCodeAdapter):
         self.session_ids = session_ids or []
         self.total_tokens = total_tokens or []
         self.run_calls: list[dict[str, object]] = []
+        self.cancelled_task_ids: list[str] = []
 
     def run(
         self,
@@ -49,6 +50,7 @@ class FakeAdapter(OpenCodeAdapter):
         run_log_path: Path,
         config: AppConfig,
         session_id: str | None = None,
+        cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> RunResult:
         self.run_calls.append(
@@ -58,6 +60,7 @@ class FakeAdapter(OpenCodeAdapter):
                 "cwd": cwd,
                 "run_log_path": run_log_path,
                 "session_id": session_id,
+                "cancel_key": cancel_key,
             }
         )
         if self.side_effect is not None:
@@ -93,6 +96,9 @@ class FakeAdapter(OpenCodeAdapter):
         if isinstance(response, Exception):
             raise AdapterRunError(str(response)) from response
         return list(response)
+
+    def cancel_task(self, task_id: str) -> None:
+        self.cancelled_task_ids.append(task_id)
 
 
 def init_git_repo(path: Path) -> None:
