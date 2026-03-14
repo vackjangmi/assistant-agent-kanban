@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import re
 import secrets
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import Literal
 from .config import AppConfig
 from .enums import STATE_ORDER, TaskState
 from .metadata_store import MetadataStore, slugify
-from .models import BoardColumn, BoardSnapshot, TaskContext, TaskMetadata, TaskSnapshot
+from .models import BoardColumn, BoardSnapshot, HistoryEntry, TaskContext, TaskMetadata, TaskSnapshot, utc_now
 from .request_parser import parse_request_markdown, resolve_repo_root
 
 
@@ -18,6 +19,10 @@ AGENT_ACTIVE_STATES = {
     TaskState.REVIEWING,
 }
 
+TERMINAL_STATES = {
+    TaskState.DONE,
+}
+
 
 def derive_agent_status(metadata: TaskMetadata, state: TaskState) -> Literal["active", "waiting", "idle"]:
     if state not in AGENT_ACTIVE_STATES:
@@ -25,6 +30,42 @@ def derive_agent_status(metadata: TaskMetadata, state: TaskState) -> Literal["ac
     if metadata.lease.owner:
         return "active"
     return "waiting"
+
+
+def target_repo_label(repo_root: str) -> str:
+    path = Path(repo_root)
+    return path.name or path.anchor or repo_root
+
+
+def total_task_duration_ms(metadata: TaskMetadata, current_state: TaskState) -> int:
+    if not metadata.history:
+        return 0
+    history = sorted(metadata.history, key=lambda entry: entry.entered_at)
+    now = datetime.now(timezone.utc)
+    total_duration_ms = 0
+    for index, entry in enumerate(history):
+        is_current = index == len(history) - 1 and entry.state == current_state
+        if entry.state in TERMINAL_STATES:
+            continue
+        if entry.state not in AGENT_ACTIVE_STATES and not is_current:
+            continue
+        next_entry = history[index + 1] if index + 1 < len(history) else None
+        end_time = next_entry.entered_at if next_entry else now
+        total_duration_ms += max(0, int((end_time - entry.entered_at).total_seconds() * 1000))
+    return total_duration_ms
+
+
+def current_state_duration_ms(metadata: TaskMetadata, state: TaskState) -> int:
+    if state in TERMINAL_STATES:
+        return 0
+    entered_at = None
+    for entry in reversed(metadata.history):
+        if entry.state == state:
+            entered_at = entry.entered_at
+            break
+    if entered_at is None:
+        return 0
+    return max(0, int((datetime.now(timezone.utc) - entered_at).total_seconds() * 1000))
 
 
 class TaskIdSequence:
@@ -52,9 +93,12 @@ class KanbanScanner:
             for task_dir in sorted([path for path in state_dir.iterdir() if path.is_dir()]):
                 metadata, task_dir = self._ensure_metadata(task_dir, state, existing_ids)
                 existing_ids.add(metadata.task_id)
+                should_save = False
                 if metadata.state != state:
                     metadata.state = state
-                should_save = False
+                    if not metadata.history or metadata.history[-1].state != state:
+                        metadata.history.append(HistoryEntry(state=state, entered_at=utc_now(), by="scanner", note="state-sync"))
+                    should_save = True
                 request_path = task_dir / metadata.request.path
                 if request_path.exists():
                     parsed = parse_request_markdown(request_path.read_text())
@@ -88,7 +132,7 @@ class KanbanScanner:
                 if metadata.integration.base_branch != metadata.target.base_branch:
                     metadata.integration.base_branch = metadata.target.base_branch
                     should_save = True
-                if metadata.state != state or should_save:
+                if should_save:
                     self.metadata_store.save(task_dir, metadata)
                 tasks.append(TaskContext(metadata=metadata, task_dir=task_dir, state=state))
         return tasks
@@ -111,6 +155,11 @@ class KanbanScanner:
                     agent_status=derive_agent_status(item.metadata, state),
                     agent_owner=item.metadata.lease.owner,
                     agent_heartbeat_at=item.metadata.lease.heartbeat_at,
+                    target_repo_root=item.metadata.target.repo_root,
+                    target_repo_label=target_repo_label(item.metadata.target.repo_root),
+                    base_branch=item.metadata.target.base_branch,
+                    total_duration_ms=total_task_duration_ms(item.metadata, state),
+                    current_state_duration_ms=current_state_duration_ms(item.metadata, state),
                 )
                 for item in tasks
                 if item.state == state

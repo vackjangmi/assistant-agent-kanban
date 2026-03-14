@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.locks import TaskLockManager
+from fs_kanban_agent.models import HistoryEntry
 
 from .conftest import create_request_task
 
@@ -222,3 +225,91 @@ def test_board_snapshot_keeps_human_verifying_out_of_agent_active(configured_pat
     human_item = next(item for column in snapshot.columns if column.state == TaskState.HUMAN_VERIFYING for item in column.items)
 
     assert human_item.agent_status == "idle"
+
+
+def test_board_snapshot_includes_repo_branch_and_total_duration(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    target_repo = tmp_path / "sample-repo"
+    target_repo.mkdir()
+    create_request_task(config, "repo-metadata-task", target_repo_root=target_repo, base_branch="release/v1")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    now = datetime.now(timezone.utc)
+    planning.metadata.history = [
+        HistoryEntry(state=TaskState.REQUESTS, entered_at=now - timedelta(minutes=12), by="human"),
+        HistoryEntry(state=TaskState.PLANNING, entered_at=now - timedelta(minutes=7), by="planner"),
+    ]
+    metadata_store.save(planning.task_dir, planning.metadata)
+
+    snapshot = scanner.board_snapshot()
+    planning_item = next(item for column in snapshot.columns if column.state == TaskState.PLANNING for item in column.items)
+
+    assert planning_item.target_repo_root == str(target_repo.resolve())
+    assert planning_item.target_repo_label == "sample-repo"
+    assert planning_item.base_branch == "release/v1"
+    assert planning_item.total_duration_ms >= 7 * 60 * 1000 - 2000
+    assert planning_item.total_duration_ms < 8 * 60 * 1000
+    assert planning_item.current_state_duration_ms >= 7 * 60 * 1000 - 2000
+
+
+def test_board_snapshot_includes_current_non_agent_stage_duration(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "idle-time-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    now = datetime.now(timezone.utc)
+    task = scanner.scan()[0]
+    task.metadata.history = [
+        HistoryEntry(state=TaskState.REQUESTS, entered_at=now - timedelta(minutes=20), by="human"),
+    ]
+    metadata_store.save(task.task_dir, task.metadata)
+
+    snapshot = scanner.board_snapshot()
+    request_item = next(item for column in snapshot.columns if column.state == TaskState.REQUESTS for item in column.items)
+
+    assert request_item.total_duration_ms >= 20 * 60 * 1000 - 2000
+    assert request_item.current_state_duration_ms >= 20 * 60 * 1000 - 2000
+
+
+def test_scanner_appends_history_when_directory_state_and_metadata_state_diverge(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "state-sync-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    task.metadata.state = TaskState.PLANNING
+    task.metadata.history = [HistoryEntry(state=TaskState.PLANNING, entered_at=datetime.now(timezone.utc) - timedelta(minutes=5), by="planner")]
+    metadata_store.save(task.task_dir, task.metadata)
+
+    scanned = scanner.scan()[0]
+
+    assert scanned.metadata.state == TaskState.REQUESTS
+    assert scanned.metadata.history[-1].state == TaskState.REQUESTS
+    assert scanned.metadata.history[-1].by == "scanner"
+
+
+def test_board_snapshot_does_not_keep_running_time_for_done_tasks(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "done-time-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    now = datetime.now(timezone.utc)
+    task_dir = task.task_dir
+    done_dir = config.state_dir(TaskState.DONE) / task_dir.name
+    task_dir.rename(done_dir)
+    task.metadata.state = TaskState.DONE
+    task.metadata.history = [
+        HistoryEntry(state=TaskState.PLANNING, entered_at=now - timedelta(minutes=15), by="planner"),
+        HistoryEntry(state=TaskState.DONE, entered_at=now - timedelta(minutes=4), by="human"),
+    ]
+    metadata_store.save(done_dir, task.metadata)
+
+    snapshot = scanner.board_snapshot()
+    done_item = next(item for column in snapshot.columns if column.state == TaskState.DONE for item in column.items)
+
+    assert done_item.total_duration_ms >= 11 * 60 * 1000 - 2000
+    assert done_item.total_duration_ms < 12 * 60 * 1000
+    assert done_item.current_state_duration_ms == 0

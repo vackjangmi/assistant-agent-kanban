@@ -29,7 +29,7 @@ from ..models import (
     TaskMetadata,
     TaskStageTiming,
 )
-from ..scanner import KanbanScanner, derive_agent_status
+from ..scanner import AGENT_ACTIVE_STATES, TERMINAL_STATES, KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
 
 
@@ -212,7 +212,8 @@ class TaskService:
             next_entry = history[index + 1] if index + 1 < len(history) else None
             exited_at = next_entry.entered_at if next_entry else None
             end_time = exited_at or now
-            duration_ms = max(0, int((end_time - entry.entered_at).total_seconds() * 1000))
+            raw_duration_ms = max(0, int((end_time - entry.entered_at).total_seconds() * 1000))
+            duration_ms = 0 if entry.state in TERMINAL_STATES else raw_duration_ms
             is_current = next_entry is None and entry.state == metadata.state
             visit_counts[entry.state] = visit_counts.get(entry.state, 0) + 1
             segment = StageTimingSegment(
@@ -230,7 +231,10 @@ class TaskService:
             summary.latest_entered_at = entry.entered_at
             summary.attempt_count += 1
             summary.is_current = is_current
-            total_duration_ms += duration_ms
+            if entry.state in TERMINAL_STATES:
+                continue
+            if entry.state in AGENT_ACTIVE_STATES or is_current:
+                total_duration_ms += duration_ms
 
         ordered_summaries = [summaries_by_state[state] for state in STATE_ORDER]
         return TaskStageTiming(

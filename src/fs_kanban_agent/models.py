@@ -142,6 +142,11 @@ class TaskSnapshot(BaseModel):
     agent_status: Literal["active", "waiting", "idle"] = "idle"
     agent_owner: str | None = None
     agent_heartbeat_at: datetime | None = None
+    target_repo_root: str = "."
+    target_repo_label: str = "."
+    base_branch: str = "main"
+    total_duration_ms: int = 0
+    current_state_duration_ms: int = 0
 
 
 class BoardColumn(BaseModel):
