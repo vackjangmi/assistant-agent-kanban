@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 import subprocess
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from fs_kanban_agent.exceptions import IntegrationError, TransitionError
 from fs_kanban_agent.integration_manager import IntegrationManager
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
+from fs_kanban_agent.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.services.task_service import TaskService
 from fs_kanban_agent.services.human_verification_service import HumanVerificationService
@@ -295,6 +297,93 @@ def test_human_verification_approval_is_blocked_when_line_comments_remain(config
 
     with pytest.raises(TransitionError, match="approval is blocked until all inline comments are removed"):
         service.approve(completed.metadata.task_id, by="human")
+
+
+def test_human_verification_reject_supports_relative_workspace_path(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-relative-workspace-reject-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    started = service.start(completed.metadata.task_id, by="human")
+
+    workspace = started.metadata.implementation.workspace
+    assert workspace is not None
+    relative_workspace = os.path.relpath(Path(workspace).resolve(), Path.cwd())
+    started.metadata.implementation.workspace = relative_workspace
+    scanner.metadata_store.save(started.task_dir, started.metadata)
+
+    moved = service.reject(started.metadata.task_id, by="human", note="Please revise the copy.")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(started.metadata.task_id)
+    assert refreshed.metadata.human_verification.note_markdown == "Please revise the copy."
+
+
+def test_human_verification_start_rolls_note_artifacts_to_current_cycle(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-human-note-cycle-rollover-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    completed.metadata.cycle = 2
+    completed.metadata.human_verification.note_path = "HUMAN-VERIFY-001.md"
+    completed.metadata.human_verification.comments_path = "HUMAN-VERIFY-001.comments.json"
+    completed.metadata.human_verification.note_markdown = "Old review note"
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+
+    started = service.start(completed.metadata.task_id, by="human")
+
+    assert started.metadata.human_verification.note_path == "HUMAN-VERIFY-002.md"
+    assert started.metadata.human_verification.comments_path == "HUMAN-VERIFY-002.comments.json"
+    assert started.metadata.human_verification.note_markdown == ""
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert (refreshed.task_dir / "HUMAN-VERIFY-002.md").exists()
+
+
+def test_human_verification_shows_previous_cycle_comments_as_read_only_context(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-historical-line-comments-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    completed.metadata.cycle = 2
+    completed.metadata.human_verification.note_path = "HUMAN-VERIFY-002.md"
+    completed.metadata.human_verification.comments_path = "HUMAN-VERIFY-002.comments.json"
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+    old_comments = HumanLineCommentsArtifact(
+        comments=[
+            HumanLineComment(
+                id="comment-old-001",
+                anchor=HumanLineCommentAnchor(
+                    path="app.txt",
+                    side="right",
+                    line_number=1,
+                    line_kind="add",
+                    hunk_header="@@ -1 +1 @@",
+                ),
+                body_markdown="Old round comment",
+                cycle=1,
+            )
+        ]
+    )
+    (completed.task_dir / "HUMAN-VERIFY-001.comments.json").write_text(old_comments.model_dump_json(indent=2) + "\n")
+
+    started = service.start(completed.metadata.task_id, by="human")
+
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+    detail = task_service.get_task(started.metadata.task_id)
+    assert detail.human_review.total_comment_count == 0
+    assert detail.human_review.unresolved_comment_count == 0
+    assert detail.human_review.historical_comment_count == 1
+    changed_file = next(file for file in detail.changed_files if file.path == "app.txt")
+    diff = task_service.get_changed_file(started.metadata.task_id, changed_file.id)
+    assert len(diff.comments) == 1
+    assert diff.comments[0].body_markdown == "Old round comment"
+    assert diff.comments[0].cycle == 1
+    assert diff.comments[0].editable is False
+
+    with pytest.raises(TransitionError, match="historical line comments are read-only"):
+        service.delete_line_comment(started.metadata.task_id, by="human", comment_id="comment-old-001")
+
+    moved = service.approve(started.metadata.task_id, by="human")
+    assert moved.state == TaskState.DONE
 
 
 def test_human_verification_start_cleans_up_review_branch_on_apply_failure(configured_paths):

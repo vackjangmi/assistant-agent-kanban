@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from datetime import datetime, timezone
 import mimetypes
 from pathlib import Path
@@ -238,13 +239,15 @@ class TaskService:
         )
 
     def _build_human_review_state(self, metadata: TaskMetadata) -> HumanReviewState:
-        comments = self._load_line_comments(metadata)
+        comments = self._load_current_cycle_line_comments(metadata)
+        all_comments = self._load_all_line_comments(metadata)
         return HumanReviewState(
             note_path=metadata.human_verification.note_path,
             comments_path=metadata.human_verification.comments_path,
             note_markdown=metadata.human_verification.note_markdown,
             total_comment_count=len(comments),
             unresolved_comment_count=sum(1 for comment in comments if not comment.resolved),
+            historical_comment_count=max(0, len(all_comments) - len(comments)),
         )
 
     def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
@@ -300,13 +303,30 @@ class TaskService:
             return None
         return patch_path.read_text()
 
-    def _load_line_comments(self, metadata: TaskMetadata) -> list[HumanLineComment]:
+    def _load_current_cycle_line_comments(self, metadata: TaskMetadata) -> list[HumanLineComment]:
         task = self._find_task(metadata.task_id)
         comments_path = self._resolve_comments_path(task.task_dir, metadata)
         if comments_path is None or not comments_path.exists():
             return []
         artifact = HumanLineCommentsArtifact.model_validate_json(comments_path.read_text())
-        return artifact.comments
+        return [self._annotate_comment(comment, metadata.cycle, editable=True) for comment in artifact.comments]
+
+    def _load_all_line_comments(self, metadata: TaskMetadata) -> list[HumanLineComment]:
+        task = self._find_task(metadata.task_id)
+        comments_by_id: OrderedDict[str, HumanLineComment] = OrderedDict()
+        for path in sorted(task.task_dir.glob("HUMAN-VERIFY-*.comments.json")):
+            cycle = self._cycle_from_comment_artifact_name(path.name)
+            if cycle is None:
+                continue
+            artifact = HumanLineCommentsArtifact.model_validate_json(path.read_text())
+            editable = cycle == metadata.cycle
+            for comment in artifact.comments:
+                annotated = self._annotate_comment(comment, cycle, editable=editable)
+                comments_by_id[annotated.id] = annotated
+        return list(comments_by_id.values())
+
+    def _annotate_comment(self, comment: HumanLineComment, cycle: int, *, editable: bool) -> HumanLineComment:
+        return comment.model_copy(update={"cycle": comment.cycle or cycle, "editable": editable})
 
     def _resolve_comments_path(self, task_dir: Path, metadata: TaskMetadata) -> Path | None:
         raw_path = metadata.human_verification.comments_path
@@ -321,7 +341,13 @@ class TaskService:
         return resolved
 
     def _comments_for_file(self, metadata: TaskMetadata, path: str) -> list[HumanLineComment]:
-        return [comment for comment in self._load_line_comments(metadata) if comment.anchor.path == path]
+        return [comment for comment in self._load_all_line_comments(metadata) if comment.anchor.path == path]
+
+    def _cycle_from_comment_artifact_name(self, filename: str) -> int | None:
+        match = re.match(r"^HUMAN-VERIFY-(\d{3})\.comments\.json$", filename)
+        if not match:
+            return None
+        return int(match.group(1))
 
     def _target_repo_diff_against_base(self, metadata: TaskMetadata, *, ref: str | None) -> str | None:
         try:

@@ -124,6 +124,7 @@ class HumanVerificationService:
                         hunk_header=hunk_header,
                     ),
                     body_markdown=body,
+                    cycle=context.metadata.cycle,
                     author=by,
                     updated_at=utc_now(),
                 )
@@ -139,6 +140,10 @@ class HumanVerificationService:
             raise TransitionError("line comments can only be deleted from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-line-comment-delete"):
             artifact = self._load_comments_artifact(context.task_dir, context.metadata)
+            current_comment_ids = {comment.id for comment in artifact.comments}
+            all_comment_ids = {comment.id for comment in self._load_all_comments(context.task_dir)}
+            if comment_id in all_comment_ids and comment_id not in current_comment_ids:
+                raise TransitionError("historical line comments are read-only")
             remaining_comments = [comment for comment in artifact.comments if comment.id != comment_id]
             if len(remaining_comments) == len(artifact.comments):
                 raise TaskNotFoundError(comment_id)
@@ -206,10 +211,13 @@ class HumanVerificationService:
             raise TaskNotFoundError(task_id) from exc
 
     def _ensure_human_verification_note(self, task_dir: Path, metadata, *, verdict: str) -> None:
-        if not metadata.human_verification.note_path:
-            metadata.human_verification.note_path = f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
-        if not metadata.human_verification.comments_path:
-            metadata.human_verification.comments_path = self._default_comments_path(metadata)
+        expected_note_path = f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
+        expected_comments_path = f"HUMAN-VERIFY-{metadata.cycle:03d}.comments.json"
+        if metadata.human_verification.note_path != expected_note_path:
+            metadata.human_verification.note_path = expected_note_path
+            metadata.human_verification.note_markdown = ""
+        if metadata.human_verification.comments_path != expected_comments_path:
+            metadata.human_verification.comments_path = expected_comments_path
         self._save_comments_artifact(task_dir, metadata, self._load_comments_artifact(task_dir, metadata))
         self._write_human_verification_artifact(task_dir, metadata, verdict=verdict)
 
@@ -259,7 +267,7 @@ class HumanVerificationService:
         subprocess.run(["git", "-C", str(target_repo_root), "reset"], capture_output=True, text=True, check=False)
         if patch.returncode != 0:
             raise IntegrationError(patch.stderr.strip() or "failed to capture review branch state")
-        workspace_path = Path(workspace_repo)
+        workspace_path = Path(workspace_repo).expanduser().resolve()
         base_ref = self._resolve_workspace_base_ref(workspace_path, metadata.target.base_branch)
         reset_branch = subprocess.run(
             ["git", "-C", str(workspace_path), "checkout", "-B", f"task/{metadata.task_id.lower()}", base_ref],
@@ -273,7 +281,8 @@ class HumanVerificationService:
         clean = subprocess.run(["git", "-C", str(workspace_path), "clean", "-fd"], capture_output=True, text=True, check=False)
         if reset.returncode != 0 or clean.returncode != 0:
             raise IntegrationError((reset.stderr or clean.stderr).strip() or "failed to reset workspace")
-        patch_path = workspace_path.parent / ".human-review-reject.patch"
+        patch_path = (workspace_path.parent / ".human-review-reject.patch").resolve()
+        patch_path.parent.mkdir(parents=True, exist_ok=True)
         patch_path.write_text(patch.stdout)
         try:
             if patch.stdout.strip():
@@ -335,6 +344,12 @@ class HumanVerificationService:
         if not path.exists():
             return HumanLineCommentsArtifact()
         return HumanLineCommentsArtifact.model_validate_json(path.read_text())
+
+    def _load_all_comments(self, task_dir: Path) -> list[HumanLineComment]:
+        comments: list[HumanLineComment] = []
+        for path in sorted(task_dir.glob("HUMAN-VERIFY-*.comments.json")):
+            comments.extend(HumanLineCommentsArtifact.model_validate_json(path.read_text()).comments)
+        return comments
 
     def _save_comments_artifact(self, task_dir: Path, metadata, artifact: HumanLineCommentsArtifact) -> None:
         path = self._comments_artifact_path(task_dir, metadata)
