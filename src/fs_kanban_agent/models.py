@@ -95,6 +95,7 @@ class RequestInfo(BaseModel):
 
 class HumanVerificationInfo(BaseModel):
     note_path: str | None = None
+    comments_path: str | None = None
     note_markdown: str = ""
 
 
@@ -186,6 +187,29 @@ class TaskDetail(BaseModel):
     human_review: HumanReviewState = Field(default_factory=lambda: HumanReviewState())
 
 
+class HumanLineCommentAnchor(BaseModel):
+    path: str
+    side: Literal["left", "right"]
+    line_number: int = Field(ge=1)
+    line_kind: Literal["context", "add", "remove"]
+    hunk_header: str | None = None
+
+
+class HumanLineComment(BaseModel):
+    id: str
+    anchor: HumanLineCommentAnchor
+    body_markdown: str
+    author: str = "human"
+    resolved: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    resolved_at: datetime | None = None
+
+
+class HumanLineCommentsArtifact(BaseModel):
+    comments: list[HumanLineComment] = Field(default_factory=list)
+
+
 class ChangedFileSummary(BaseModel):
     id: str
     path: str
@@ -227,11 +251,15 @@ class ChangedFileHunk(BaseModel):
 class ChangedFileDetail(BaseModel):
     summary: ChangedFileSummary
     hunks: list[ChangedFileHunk] = Field(default_factory=list)
+    comments: list[HumanLineComment] = Field(default_factory=list)
 
 
 class HumanReviewState(BaseModel):
     note_path: str | None = None
+    comments_path: str | None = None
     note_markdown: str = ""
+    total_comment_count: int = 0
+    unresolved_comment_count: int = 0
 
 
 class TaskLogEntry(BaseModel):

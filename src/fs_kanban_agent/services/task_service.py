@@ -17,6 +17,8 @@ from ..models import (
     ChangedFileRow,
     ChangedFileSide,
     ChangedFileSummary,
+    HumanLineComment,
+    HumanLineCommentsArtifact,
     HumanReviewState,
     StageTimingSegment,
     StageTimingSummary,
@@ -98,8 +100,16 @@ class TaskService:
         changed_files = self._load_changed_files_for_task(task, require_available=True)
         for entry in changed_files:
             if entry.summary.id == changed_file_id:
-                return entry
+                return entry.model_copy(update={"comments": self._comments_for_file(task.metadata, entry.summary.path)})
         raise TaskNotFoundError(changed_file_id)
+
+    def get_changed_file_by_path(self, task_id: str, path: str) -> ChangedFileDetail:
+        task = self._find_task(task_id)
+        changed_files = self._load_changed_files_for_task(task, require_available=True)
+        for entry in changed_files:
+            if entry.summary.path == path:
+                return entry.model_copy(update={"comments": self._comments_for_file(task.metadata, entry.summary.path)})
+        raise TaskNotFoundError(path)
 
     def get_markdown_artifact(self, task_id: str, filename: str) -> str:
         task = self._find_task(task_id)
@@ -228,9 +238,13 @@ class TaskService:
         )
 
     def _build_human_review_state(self, metadata: TaskMetadata) -> HumanReviewState:
+        comments = self._load_line_comments(metadata)
         return HumanReviewState(
             note_path=metadata.human_verification.note_path,
+            comments_path=metadata.human_verification.comments_path,
             note_markdown=metadata.human_verification.note_markdown,
+            total_comment_count=len(comments),
+            unresolved_comment_count=sum(1 for comment in comments if not comment.resolved),
         )
 
     def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
@@ -285,6 +299,29 @@ class TaskService:
                 raise TaskNotFoundError(f"patch for {metadata.task_id}")
             return None
         return patch_path.read_text()
+
+    def _load_line_comments(self, metadata: TaskMetadata) -> list[HumanLineComment]:
+        task = self._find_task(metadata.task_id)
+        comments_path = self._resolve_comments_path(task.task_dir, metadata)
+        if comments_path is None or not comments_path.exists():
+            return []
+        artifact = HumanLineCommentsArtifact.model_validate_json(comments_path.read_text())
+        return artifact.comments
+
+    def _resolve_comments_path(self, task_dir: Path, metadata: TaskMetadata) -> Path | None:
+        raw_path = metadata.human_verification.comments_path
+        if not raw_path and metadata.human_verification.note_path:
+            raw_path = f"{metadata.human_verification.note_path[:-3]}.comments.json"
+        if not raw_path:
+            return None
+        resolved_task_dir = task_dir.resolve()
+        resolved = (resolved_task_dir / raw_path).resolve()
+        if resolved.parent != resolved_task_dir:
+            raise TransitionError("human verification comments are unavailable because comments path is outside the task directory")
+        return resolved
+
+    def _comments_for_file(self, metadata: TaskMetadata, path: str) -> list[HumanLineComment]:
+        return [comment for comment in self._load_line_comments(metadata) if comment.anchor.path == path]
 
     def _target_repo_diff_against_base(self, metadata: TaskMetadata, *, ref: str | None) -> str | None:
         try:
