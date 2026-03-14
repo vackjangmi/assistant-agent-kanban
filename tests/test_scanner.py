@@ -115,7 +115,7 @@ def test_scanner_refreshes_request_metadata_after_initial_bootstrap(configured_p
 def test_scanner_backfills_cycle_from_legacy_iterations(tmp_path):
     from fs_kanban_agent.config import AppConfig
 
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
     task_dir = config.state_dir(TaskState.TODOS) / "legacy-task"
     task_dir.mkdir(parents=True)

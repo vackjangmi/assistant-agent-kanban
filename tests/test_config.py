@@ -7,7 +7,7 @@ from fs_kanban_agent.enums import STATE_ORDER
 
 
 def test_app_config_bootstrap_creates_state_and_runtime_dirs(tmp_path):
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
 
     for state in STATE_ORDER:
@@ -83,7 +83,7 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
 
 def test_resolve_repo_discovery_root_defaults_from_project_root_when_unloaded(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
 
     assert config.resolve_repo_discovery_root() == (PROJECT_ROOT / "../").resolve()

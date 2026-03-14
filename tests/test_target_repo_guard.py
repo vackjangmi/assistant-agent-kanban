@@ -12,7 +12,7 @@ from fs_kanban_agent.request_creator import RequestTemplateData, create_request
 
 
 def test_create_request_rejects_orchestrator_project_as_target(tmp_path):
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
 
     with pytest.raises(ValueError, match="overlaps with the orchestrator project root"):
@@ -24,7 +24,7 @@ def test_create_request_rejects_orchestrator_project_as_target(tmp_path):
 
 
 def test_integration_manager_rejects_orchestrator_project_as_target(tmp_path):
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
     task_dir = config.state_dir(TaskState.COMPLETED_REVIEWS) / "unsafe-task"
     task_dir.mkdir(parents=True)
@@ -43,7 +43,7 @@ def test_integration_manager_rejects_orchestrator_project_as_target(tmp_path):
 
 
 def test_commit_manager_rejects_orchestrator_project_as_target(tmp_path):
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
     task_dir = config.state_dir(TaskState.HUMAN_VERIFYING) / "unsafe-task"
     task_dir.mkdir(parents=True)

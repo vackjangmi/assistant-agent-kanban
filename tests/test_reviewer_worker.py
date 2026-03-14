@@ -103,7 +103,7 @@ def test_reviewer_worker_leaves_target_repo_clean_until_human_verification(tmp_p
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "review-target-task", target_repo_root=target_repo)
     metadata_store, scanner, locks, transitions = _task_ready_for_review(config)

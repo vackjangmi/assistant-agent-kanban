@@ -115,7 +115,7 @@ def configured_paths(tmp_path: Path) -> tuple[AppConfig, Path, Path]:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     init_git_repo(repo_root)
-    kanban_root = tmp_path / "ai-kanban"
+    kanban_root = tmp_path / ".kanban-agent"
     config = AppConfig(kanban_root=kanban_root, repo_root=repo_root)
     config.bootstrap()
     return config, repo_root, kanban_root

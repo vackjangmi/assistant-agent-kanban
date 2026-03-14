@@ -91,10 +91,10 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     monkeypatch.chdir(tmp_path)
     adapter = SubprocessOpenCodeAdapter()
-    config = AppConfig(kanban_root=Path("ai-kanban"), repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=Path(".kanban-agent"), repo_root=tmp_path / "repo")
     config.opencode.planner_model = "openai/gpt-5.4"
     config.bootstrap()
-    nested_cwd = tmp_path / "ai-kanban" / "planning" / "abc1234"
+    nested_cwd = tmp_path / ".kanban-agent" / "planning" / "abc1234"
     nested_cwd.mkdir(parents=True)
 
     adapter.run(
@@ -114,12 +114,12 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     assert command[-1] == "---\ntitle: sample\n---\n"
     env = cast(dict[str, str], recorded["env"])
     xdg_config_home = env["XDG_CONFIG_HOME"]
-    assert xdg_config_home == str((tmp_path / "ai-kanban" / "_runtime" / "opencode-config").resolve())
-    agent_file = tmp_path / "ai-kanban" / "_runtime" / "opencode-config" / "opencode" / "agents" / "fs-kanban-planner.md"
+    assert xdg_config_home == str((tmp_path / ".kanban-agent" / "_runtime" / "opencode-config").resolve())
+    agent_file = tmp_path / ".kanban-agent" / "_runtime" / "opencode-config" / "opencode" / "agents" / "fs-kanban-planner.md"
     assert agent_file.exists()
     assert agent_file.read_text().startswith("---\nmodel: openai/gpt-5.4\n---\n")
     assert "FS Kanban Planner" in agent_file.read_text()
-    assert not (nested_cwd / "ai-kanban").exists()
+    assert not (nested_cwd / ".kanban-agent").exists()
 
 
 def test_discover_models_uses_absolute_runtime_config_home_from_relative_kanban_root(monkeypatch, tmp_path):
@@ -139,14 +139,14 @@ def test_discover_models_uses_absolute_runtime_config_home_from_relative_kanban_
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.chdir(tmp_path)
     adapter = SubprocessOpenCodeAdapter()
-    config = AppConfig(kanban_root=Path("ai-kanban"), repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=Path(".kanban-agent"), repo_root=tmp_path / "repo")
     config.bootstrap()
 
     models = adapter.discover_models(config=config)
 
     assert models == ["openai/gpt-5.4"]
     env = cast(dict[str, str], recorded["env"])
-    assert env["XDG_CONFIG_HOME"] == str((tmp_path / "ai-kanban" / "_runtime" / "opencode-config").resolve())
+    assert env["XDG_CONFIG_HOME"] == str((tmp_path / ".kanban-agent" / "_runtime" / "opencode-config").resolve())
 
 
 def test_subprocess_adapter_reports_resolved_model_from_materialized_agent(monkeypatch, tmp_path):
@@ -166,7 +166,7 @@ def test_subprocess_adapter_reports_resolved_model_from_materialized_agent(monke
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     adapter = SubprocessOpenCodeAdapter()
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.opencode.planner_model = "openai/gpt-5.4"
     config.bootstrap()
 
@@ -203,7 +203,7 @@ def test_subprocess_adapter_skips_model_flag_when_no_override(monkeypatch, tmp_p
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     adapter = SubprocessOpenCodeAdapter()
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
 
     result = adapter.run(
@@ -240,7 +240,7 @@ def test_subprocess_adapter_reuses_explicit_session_id(monkeypatch, tmp_path):
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     adapter = SubprocessOpenCodeAdapter()
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "repo")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()
 
     result = adapter.run(

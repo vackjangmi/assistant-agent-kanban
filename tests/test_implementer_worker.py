@@ -173,7 +173,7 @@ def test_implementer_worker_clones_task_target_repo(tmp_path):
     subprocess.run(["git", "-C", str(target_repo), "add", "target.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add target file"], check=True, capture_output=True, text=True)
 
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "target-repo-task", target_repo_root=target_repo)
     metadata_store = MetadataStore()
@@ -220,7 +220,7 @@ def test_implementer_worker_supports_named_base_branch_in_cloned_workspace(tmp_p
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "release branch commit"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(target_repo), "checkout", "main"], check=True, capture_output=True, text=True)
 
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "named-base-branch-task", target_repo_root=target_repo, base_branch="v1.0.8")
     metadata_store = MetadataStore()
@@ -300,7 +300,7 @@ def test_implementer_worker_keeps_task_in_todos_on_base_sync_conflict(tmp_path):
     subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add app file"], check=True, capture_output=True, text=True)
 
-    config = AppConfig(kanban_root=tmp_path / "ai-kanban", repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "implement-conflict-task", target_repo_root=target_repo)
     metadata_store = MetadataStore()
@@ -353,7 +353,7 @@ def test_workspace_manager_refreshes_existing_workspace_with_relative_kanban_roo
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add app file"], check=True, capture_output=True, text=True)
     monkeypatch.chdir(tmp_path)
 
-    config = AppConfig(kanban_root=Path("ai-kanban"), repo_root=tmp_path / "unused-default")
+    config = AppConfig(kanban_root=Path(".kanban-agent"), repo_root=tmp_path / "unused-default")
     config.bootstrap()
     create_request_task(config, "implement-relative-refresh-task", target_repo_root=target_repo)
     task = KanbanScanner(config, MetadataStore()).scan()[0]

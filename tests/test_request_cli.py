@@ -11,7 +11,7 @@ from .conftest import init_git_repo
 
 
 def test_request_cli_creates_request_with_target_repo(tmp_path, capsys):
-    kanban_root = tmp_path / "ai-kanban"
+    kanban_root = tmp_path / ".kanban-agent"
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
 
@@ -44,7 +44,7 @@ def test_request_cli_creates_request_with_target_repo(tmp_path, capsys):
 
 
 def test_request_cli_defaults_target_repo_and_branch_from_current_directory(tmp_path, capsys, monkeypatch):
-    kanban_root = tmp_path / "ai-kanban"
+    kanban_root = tmp_path / ".kanban-agent"
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
@@ -71,7 +71,7 @@ def test_request_cli_defaults_target_repo_and_branch_from_current_directory(tmp_
 
 
 def test_logs_cli_prints_task_logs(tmp_path, capsys):
-    kanban_root = tmp_path / "ai-kanban"
+    kanban_root = tmp_path / ".kanban-agent"
     config = AppConfig(kanban_root=kanban_root, repo_root=tmp_path / "repo")
     config.bootstrap()
     log_dir = config.runs_dir / "TASK-0001"
@@ -111,7 +111,7 @@ def test_logs_cli_prints_task_logs(tmp_path, capsys):
 
 
 def test_logs_cli_reports_missing_logs(tmp_path, capsys):
-    kanban_root = tmp_path / "ai-kanban"
+    kanban_root = tmp_path / ".kanban-agent"
     config = AppConfig(kanban_root=kanban_root, repo_root=tmp_path / "repo")
     config.bootstrap()
     task_dir = config.state_dir(TaskState.REQUESTS) / "task"
