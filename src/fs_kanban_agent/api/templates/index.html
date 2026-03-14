@@ -141,17 +141,17 @@
     .danger-button { background: var(--danger); border-color: var(--danger); color: #fff; }
      .verification-actions textarea { width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
     .log-layout { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
-     .log-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }
+     .log-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding: 5px 4px 0 0; }
      .log-file-list button { text-align: left; }
      .log-file-list button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
      .artifact-group-label { margin-top: 8px; padding: 2px 2px 0; color: var(--accent-strong); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
      .artifact-subtabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
      .artifact-subtabs[hidden] { display: none; }
      .artifact-subtabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
-     .log-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; align-content: start; }
+     .log-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
      .log-toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
      .log-toggle-group { display: inline-flex; gap: 8px; flex-wrap: wrap; }
-     .log-viewer { min-height: 0; height: 100%; max-height: none; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }
+     .log-viewer { min-height: 0; height: 100%; max-height: none; margin: 0; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }
     .diff-layout { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
      .diff-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }
      .diff-file-list button { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }
