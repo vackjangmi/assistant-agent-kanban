@@ -530,6 +530,7 @@
         </div>
         <div class="task-modal-actions">
           <button type="button" id="start-verification" hidden>Start verification</button>
+          <button type="button" id="approve-plan" hidden disabled>Approve plan</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
           <span id="approve-human-review-shell" class="header-action-shell" hidden><button type="button" id="approve-human-review-button" class="primary">Approve</button></span>
           <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
@@ -622,12 +623,11 @@
             <div class="editor-toolbar">
               <div>
                 <strong id="task-artifact-name">No document selected</strong>
-                <div><span id="task-mode-badge" class="mode-pill">Viewer mode</span><span id="task-editor-status" class="muted">Select a markdown artifact to view.</span></div>
+                <div hidden><span id="task-mode-badge" class="mode-pill">Viewer mode</span><span id="task-editor-status" class="muted">Select a markdown artifact to view.</span></div>
               </div>
               <div>
                 <button type="button" id="toggle-plan-edit" hidden>Edit draft</button>
                 <button type="button" id="save-plan" class="primary" hidden disabled>Save draft</button>
-                <button type="button" id="approve-plan" hidden disabled>Approve plan</button>
               </div>
             </div>
             <div id="task-artifact-subtabs" class="artifact-subtabs" hidden></div>
@@ -2848,7 +2848,8 @@
         if (!response.ok) throw new Error(detail.detail || 'Failed to load task details.');
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         renderTaskOverview(detail);
-        const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files.length ? 'changed-files' : nextTab;
+        const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
+        const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files.length ? 'changed-files' : preferredInitialTab;
         if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab);
         if (resolvedTab === 'changed-files' && detail.changed_files.length) await loadChangedFile(taskId, activeChangedFileId, true);
         if (resolvedTab === 'editor' && detail.markdown_files.length) await loadMarkdownArtifact(taskId, activeArtifactName);
