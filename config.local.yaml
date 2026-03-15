@@ -29,7 +29,8 @@ locks:
 runtime:
   poll_interval_seconds: 0.2
   auto_dispatch: true
-  language: EN
+  language: KO
+  coding_assistant: opencode
   planner_agent_count: 2
   implementer_agent_count: 2
   reviewer_agent_count: 2
