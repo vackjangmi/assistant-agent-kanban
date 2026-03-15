@@ -860,7 +860,8 @@
     let runningTimerHandle = null;
     let activeTaskRequestToken = 0;
     let activeTaskRefreshTimer = null;
-    let activeRetrospectiveTaskIds = [];
+    let activeRetrospectiveTargetRepoRoot = '';
+    let activeRetrospectiveBaseBranch = '';
     let activeRetrospectiveRecord = null;
     let taskDetailStale = false;
     let planSourceMarkdown = '';
@@ -1938,7 +1939,7 @@
           </div>
           <div class="final-project-branches">${branchGroups.map(([branch, branchItems], index) => `
             <section class="target-branch-group" data-expanded="${index === 0 ? 'true' : 'false'}">
-              <div class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? 'true' : 'false'}"><span class="target-branch-label-main"><span class="target-branch-title">${branchIconSvg('target-branch-icon')}<span class="target-branch-name">${escapeHtml(branch)}</span></span></span><span class="target-branch-label-side"><button type="button" class="target-branch-retrospective" data-task-ids="${escapeHtml(branchItems.map((item) => item.task_id).join(','))}">${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>${caretIconSvg('target-branch-caret')}</span></div>
+              <div class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? 'true' : 'false'}"><span class="target-branch-label-main"><span class="target-branch-title">${branchIconSvg('target-branch-icon')}<span class="target-branch-name">${escapeHtml(branch)}</span></span></span><span class="target-branch-label-side"><button type="button" class="target-branch-retrospective" data-target-repo="${escapeHtml(branchItems[0].target_repo_root || '')}" data-base-branch="${escapeHtml(branch)}">${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>${caretIconSvg('target-branch-caret')}</span></div>
               <div class="column-cards">${branchItems.map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong class="card-title">${item.title}</strong>${renderCardTags(item, { compactFinal: true })}${renderCardModelMeta(item)}</button></article>`).join('')}</div>
             </section>`).join('')}</div>
         </section>`;
@@ -2431,7 +2432,8 @@
       retrospectiveModal.hidden = !isOpen;
       retrospectiveModal.setAttribute('aria-hidden', String(!isOpen));
       if (!isOpen) {
-        activeRetrospectiveTaskIds = [];
+        activeRetrospectiveTargetRepoRoot = '';
+        activeRetrospectiveBaseBranch = '';
         activeRetrospectiveRecord = null;
         retrospectiveCreateTargetButton.hidden = true;
         retrospectiveCreateBranchButton.hidden = true;
@@ -2455,7 +2457,7 @@
     }
 
     function updateRetrospectiveButtons(record) {
-      const shouldOfferCreate = !record?.exists && record?.can_create !== false && activeRetrospectiveTaskIds.length > 0;
+      const shouldOfferCreate = !record?.exists && record?.can_create !== false && !!activeRetrospectiveTargetRepoRoot && !!activeRetrospectiveBaseBranch;
       retrospectiveCreateTargetButton.hidden = !shouldOfferCreate;
       retrospectiveCreateBranchButton.hidden = !shouldOfferCreate;
       retrospectiveCreateTargetButton.disabled = false;
@@ -2471,15 +2473,11 @@
       updateRetrospectiveButtons(record || {});
     }
 
-    function parseRetrospectiveTaskIds(value) {
-      return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
-    }
-
-    async function inspectRetrospective(taskIds) {
+    async function inspectRetrospective(targetRepoRoot, baseBranch) {
       const response = await fetch('/api/retrospectives/inspect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_ids: taskIds }),
+        body: JSON.stringify({ target_repo_root: targetRepoRoot, base_branch: baseBranch }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
@@ -2495,7 +2493,7 @@
       const response = await fetch('/api/retrospectives/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_ids: activeRetrospectiveTaskIds, completion_mode: completionMode }),
+        body: JSON.stringify({ target_repo_root: activeRetrospectiveTargetRepoRoot, base_branch: activeRetrospectiveBaseBranch, completion_mode: completionMode }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
@@ -2506,8 +2504,9 @@
       await loadBoard();
     }
 
-    async function openRetrospectiveModal(taskIds) {
-      activeRetrospectiveTaskIds = [...taskIds];
+    async function openRetrospectiveModal(targetRepoRoot, baseBranch) {
+      activeRetrospectiveTargetRepoRoot = targetRepoRoot;
+      activeRetrospectiveBaseBranch = baseBranch;
       retrospectiveStatus.dataset.tone = 'neutral';
       retrospectiveStatus.textContent = translateTask('retrospectiveLoading');
       retrospectiveMeta.innerHTML = '';
@@ -2516,7 +2515,7 @@
       retrospectiveCreateBranchButton.hidden = true;
       setRetrospectiveModalOpen(true);
       try {
-        const record = await inspectRetrospective(taskIds);
+        const record = await inspectRetrospective(targetRepoRoot, baseBranch);
         const statusKey = record.exists ? 'retrospectiveExisting' : (record.can_create === false ? 'retrospectiveUnavailable' : 'retrospectiveMissing');
         const tone = record.exists ? 'success' : (record.can_create === false ? 'error' : 'neutral');
         renderRetrospective(record, statusKey, tone);
@@ -3937,7 +3936,7 @@
     board.addEventListener('click', (event) => {
       const retrospectiveButton = event.target.closest('.target-branch-retrospective');
       if (retrospectiveButton) {
-        openRetrospectiveModal(parseRetrospectiveTaskIds(retrospectiveButton.dataset.taskIds)).catch((error) => {
+        openRetrospectiveModal(retrospectiveButton.dataset.targetRepo || '', retrospectiveButton.dataset.baseBranch || '').catch((error) => {
           retrospectiveStatus.dataset.tone = 'error';
           retrospectiveStatus.textContent = error.message;
           setRetrospectiveModalOpen(true);
