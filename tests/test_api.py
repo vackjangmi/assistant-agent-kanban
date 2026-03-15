@@ -1403,17 +1403,24 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "source.addEventListener('board_snapshot', async () => {\n      await loadBoard();\n    });" in response.text
     assert "function phaseLabel(phase)" in response.text
     assert "function repoTagTone(path)" in response.text
+    assert "function renderFinalBoard(columns)" in response.text
+    assert "function renderFinalProjectColumn(projectPath, items)" in response.text
+    assert "function groupFinalItemsByBranch(items)" in response.text
+    assert "board.innerHTML = renderFinalBoard(visibleColumns);" in response.text
     assert "card-meta-row" in response.text
     assert "card-tag-row" in response.text
     assert "card-runtime-meta" in response.text
     assert "const runtimeValue = renderCardRuntime(item);" in response.text
     assert "if (item.agent_status !== 'active') return '';" in response.text
     assert "card-tag-id" in response.text
+    assert "card-repo-icon" in response.text
     assert "card-tag-branch" in response.text
+    assert "card-branch-icon" in response.text
     assert "title=\"${escapeHtml(title)}\"" in response.text
     assert "renderTag('', item.task_id ? `#${item.task_id}` : ''" in response.text
-    assert "renderTag('', repoLabel" in response.text
-    assert "renderTag('', branchLabel" in response.text
+    assert "renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon'))" in response.text
+    assert "renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon'))" in response.text
+    assert "renderCardTags(item, { compactFinal: true })" in response.text
     assert "const activeSince = item.state_entered_at || '';" in response.text
     assert 'buildDurationAttributes(0, activeSince)' in response.text
     assert 'class="card-meta card-runtime-meta">${renderCardActivity(item)}${runtimeValue}' in response.text
@@ -1422,6 +1429,15 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const boardPhasePriorityRules = [" in response.text
     assert "function selectDefaultBoardPhase(columns)" in response.text
     assert "if (!boardPhaseManuallySelected) {" in response.text
+    assert "#board.final-board { display: flex;" in response.text
+    assert ".final-board .column { flex: 0 0 min(320px, calc(100vw - 56px)); min-width: 280px; }" in response.text
+    assert "final-project-path" in response.text
+    assert "final-project-branches" in response.text
+    assert "final-branch-group" in response.text
+    assert "final-branch-label" in response.text
+    assert "final-branch-icon" in response.text
+    assert ".final-branch-group { display: grid; gap: 10px; padding: 10px;" in response.text
+    assert "const branch = item.base_branch || 'unknown';" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');" in response.text
     assert "const summaryIsLive = summary.is_current && summary.state !== 'done';" in response.text
@@ -1462,6 +1478,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "encodeURIComponent(activeArtifactName)" in response.text
     assert "if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;" in response.text
     assert "translateTask('stalePlanMessage')" in response.text
+    assert "activeBoardPhase = 'implementation';" in response.text
+    assert "boardPhaseManuallySelected = true;" in response.text
     assert "source.addEventListener('board_snapshot', async () => {" in response.text
     assert "scheduleActiveTaskRefresh();" in response.text
     assert "data-active-since" in response.text
