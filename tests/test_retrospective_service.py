@@ -27,6 +27,18 @@ def _done_task_for_retrospective(config, task_name: str, *, commit_adapter=None)
     return scanner.find_task(completed.metadata.task_id), service
 
 
+def _done_task_for_retrospective_with_request(config, task_name: str, *, commit_adapter=None, language: str | None = None, body: str | None = None):
+    create_request_task(config, task_name, language=language, body=body)
+    _, verification_service, completed = _task_ready_for_human_verification(config)
+    verification_service.start(completed.metadata.task_id, by="human")
+    verification_service.approve(completed.metadata.task_id, by="human", completion_mode="target-branch")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    service = RetrospectiveService(scanner, config, locks, CommitManager(), adapter=commit_adapter)
+    return scanner.find_task(completed.metadata.task_id), service
+
+
 def test_retrospective_service_creates_target_branch_retrospective(configured_paths):
     config, repo_root, _ = configured_paths
     adapter = FakeAdapter(["# Retrospective\n\n## Summary\nTarget branch retro\n"], resolved_models=["openai/gpt-5-commit"])
@@ -71,7 +83,7 @@ def test_retrospective_service_creates_new_branch_when_requested(configured_path
     assert record.exists is True
     assert record.created is True
     assert record.committed_branch is not None
-    assert record.committed_branch.startswith("retro/main")
+    assert record.committed_branch.startswith("retro/main-")
     current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == record.committed_branch
 
@@ -105,3 +117,60 @@ def test_retrospective_service_rejects_mismatched_group_artifacts(configured_pat
     assert inspected.exists is True
     assert inspected.created is False
     assert inspected.content == "# Retrospective\n\n## Summary\nDrifted content\n"
+
+
+def test_retrospective_service_builds_korean_prompt_when_request_language_is_korean(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["# 회고\n\n## 요약\n좋음\n"])
+            self.prompts: list[str] = []
+
+        def run(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            return super().run(**kwargs)
+
+    config, repo_root, _ = configured_paths
+    adapter = PromptCapturingAdapter()
+    done, service = _done_task_for_retrospective_with_request(
+        config,
+        "retro-korean-task",
+        commit_adapter=adapter,
+        language="ko",
+        body="한국어로 회고를 작성합니다.",
+    )
+
+    service.create(str(repo_root), "main", by="human", completion_mode="target-branch")
+
+    prompt = adapter.prompts[0]
+    assert "엔지니어링 회고를 마크다운으로 간결하게 작성하세요." in prompt
+    assert "회고는 반드시 Korean로 작성하세요." in prompt
+    assert "대상 저장소:" in prompt
+    assert "대상 브랜치:" in prompt
+    assert "완료된 작업:" in prompt
+
+
+def test_retrospective_service_falls_back_to_english_for_unsupported_language(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["# Retrospective\n\n## Summary\nGood\n"])
+            self.prompts: list[str] = []
+
+        def run(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            return super().run(**kwargs)
+
+    config, repo_root, _ = configured_paths
+    adapter = PromptCapturingAdapter()
+    _, service = _done_task_for_retrospective_with_request(
+        config,
+        "retro-japanese-task",
+        commit_adapter=adapter,
+        language="ja",
+        body="日本語の回顧です。",
+    )
+
+    service.create(str(repo_root), "main", by="human", completion_mode="target-branch")
+
+    prompt = adapter.prompts[0]
+    assert "Write a concise engineering retrospective in markdown." in prompt
+    assert "Return the retrospective in English." in prompt

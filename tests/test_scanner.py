@@ -115,6 +115,36 @@ def test_scanner_refreshes_request_metadata_after_initial_bootstrap(configured_p
     assert refreshed_task.metadata.integration.base_branch == "feature/rescanned"
 
 
+def test_scanner_preserves_bootstrapped_request_language_after_request_edits(configured_paths):
+    config, _, _ = configured_paths
+    task_dir = create_request_task(config, "stable-language-task", language="ko", body="한국어 요청입니다.")
+    scanner = KanbanScanner(config)
+
+    first_task = scanner.scan()[0]
+    assert first_task.metadata.request.language == "ko"
+
+    (first_task.task_dir / "REQUEST.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "title: stable-language-task",
+                "target:",
+                f"  repo_root: {config.repo_root}",
+                f"  base_branch: {config.base_branch}",
+                "---",
+                "",
+                "# stable-language-task",
+                "",
+                "This body changed to English later.",
+            ]
+        )
+    )
+
+    rescanned_task = scanner.scan()[0]
+
+    assert rescanned_task.metadata.request.language == "ko"
+
+
 def test_scanner_backfills_cycle_from_legacy_iterations(tmp_path):
     from fs_kanban_agent.config import AppConfig
 

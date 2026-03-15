@@ -269,3 +269,75 @@ def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_path
     assert updated.metadata.retry_gate.reason == "review-needs-changes"
     assert updated.metadata.retry_gate.consecutive_count == 2
     assert updated.metadata.retry_gate.not_before is not None
+
+
+def test_reviewer_worker_localizes_review_source_for_korean_requests(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["Verdict: PASS\n준비 완료"])
+            self.prompts: list[str] = []
+
+        def run(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            return super().run(**kwargs)
+
+    config, _, _ = configured_paths
+    create_request_task(config, "review-korean-task", language="ko", body="한국어로 작업합니다.")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    task = scanner.scan()[0]
+    task.metadata.request.language = "ko"
+    metadata_store.save(task.task_dir, task.metadata)
+
+    adapter = PromptCapturingAdapter()
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    prompt = adapter.prompts[0]
+    assert "Return the markdown artifact in Korean." in prompt
+    assert "# 계획" in prompt
+    assert "# 리뷰 지침" in prompt
+    assert "판단하기 전에 전체 작업 이력" in prompt
+
+
+def test_reviewer_worker_falls_back_to_english_for_unsupported_request_language(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["Verdict: PASS\nLooks good"])
+            self.prompts: list[str] = []
+
+        def run(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            return super().run(**kwargs)
+
+    config, _, _ = configured_paths
+    create_request_task(config, "review-japanese-task", language="ja", body="日本語の依頼です。")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    task = scanner.scan()[0]
+    task.metadata.request.language = "ja"
+    metadata_store.save(task.task_dir, task.metadata)
+
+    adapter = PromptCapturingAdapter()
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    prompt = adapter.prompts[0]
+    assert "Return the markdown artifact in English." in prompt
+    assert "# Review Instructions" in prompt
