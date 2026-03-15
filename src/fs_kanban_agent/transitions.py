@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
 import shutil
 
 from .config import AppConfig
@@ -29,13 +31,15 @@ class TransitionManager:
 
     def _move(self, context: TaskContext, target: TaskState, by: str, note: str | None = None) -> TaskContext:
         source_dir = context.task_dir
-        target_dir = self.config.state_dir(target) / source_dir.name
+        entered_at = utc_now()
+        target_dir = self._target_dir_for_state(source_dir.name, target, entered_at)
         metadata = context.metadata
         previous_state = metadata.state
         previous_history_len = len(metadata.history)
+        target_dir.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(source_dir), str(target_dir))
         metadata.state = target
-        metadata.history.append(HistoryEntry(state=target, entered_at=utc_now(), by=by, note=note))
+        metadata.history.append(HistoryEntry(state=target, entered_at=entered_at, by=by, note=note))
         try:
             self.metadata_store.save(target_dir, metadata)
         except Exception:
@@ -44,6 +48,13 @@ class TransitionManager:
             shutil.move(str(target_dir), str(source_dir))
             raise
         return TaskContext(metadata=metadata, task_dir=target_dir, state=target)
+
+    def _target_dir_for_state(self, task_dir_name: str, target: TaskState, entered_at: datetime) -> Path:
+        state_root = self.config.state_dir(target)
+        if target is not TaskState.DONE:
+            return state_root / task_dir_name
+        local_stamp = entered_at.astimezone()
+        return state_root / local_stamp.strftime("%Y") / local_stamp.strftime("%m") / local_stamp.strftime("%d") / task_dir_name
 
     def manual_move(self, task_id: str, target: TaskState, by: str) -> TaskContext:
         context = self.scanner.find_task(task_id)

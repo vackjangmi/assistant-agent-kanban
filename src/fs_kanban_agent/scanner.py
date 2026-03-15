@@ -89,8 +89,7 @@ class KanbanScanner:
         tasks: list[TaskContext] = []
         existing_ids = self._existing_task_ids()
         for state in STATE_ORDER:
-            state_dir = self.config.state_dir(state)
-            for task_dir in sorted([path for path in state_dir.iterdir() if path.is_dir()]):
+            for task_dir in self._task_dirs_for_state(state):
                 metadata, task_dir = self._ensure_metadata(task_dir, state, existing_ids)
                 existing_ids.add(metadata.task_id)
                 should_save = False
@@ -136,6 +135,13 @@ class KanbanScanner:
                     self.metadata_store.save(task_dir, metadata)
                 tasks.append(TaskContext(metadata=metadata, task_dir=task_dir, state=state))
         return tasks
+
+    def _task_dirs_for_state(self, state: TaskState) -> list[Path]:
+        state_dir = self.config.state_dir(state)
+        if state is not TaskState.DONE:
+            return sorted([path for path in state_dir.iterdir() if path.is_dir()])
+        task_dirs = {metadata_path.parent for metadata_path in state_dir.glob("**/metadata.json")}
+        return sorted(task_dirs)
 
     def board_snapshot(self) -> BoardSnapshot:
         tasks = self.scan()

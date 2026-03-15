@@ -298,7 +298,8 @@ def test_board_snapshot_does_not_keep_running_time_for_done_tasks(configured_pat
     task = scanner.scan()[0]
     now = datetime.now(timezone.utc)
     task_dir = task.task_dir
-    done_dir = config.state_dir(TaskState.DONE) / task_dir.name
+    done_dir = config.state_dir(TaskState.DONE) / now.astimezone().strftime("%Y") / now.astimezone().strftime("%m") / now.astimezone().strftime("%d") / task_dir.name
+    done_dir.parent.mkdir(parents=True, exist_ok=True)
     task_dir.rename(done_dir)
     task.metadata.state = TaskState.DONE
     task.metadata.history = [
@@ -313,3 +314,21 @@ def test_board_snapshot_does_not_keep_running_time_for_done_tasks(configured_pat
     assert done_item.total_duration_ms >= 11 * 60 * 1000 - 2000
     assert done_item.total_duration_ms < 12 * 60 * 1000
     assert done_item.current_state_duration_ms == 0
+
+
+def test_scanner_discovers_nested_done_tasks(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "nested-done-scan-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    nested_done_dir = config.state_dir(TaskState.DONE) / "2026" / "03" / "15" / task.metadata.task_id
+    nested_done_dir.parent.mkdir(parents=True, exist_ok=True)
+    task.task_dir.rename(nested_done_dir)
+    task.metadata.state = TaskState.DONE
+    metadata_store.save(nested_done_dir, task.metadata)
+
+    scanned = scanner.find_task(task.metadata.task_id)
+
+    assert scanned.state == TaskState.DONE
+    assert scanned.task_dir == nested_done_dir
