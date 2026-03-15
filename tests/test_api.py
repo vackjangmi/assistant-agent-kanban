@@ -396,13 +396,16 @@ def test_api_creates_and_reads_retrospective(configured_paths):
         client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
         client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification", json={"completion_mode": "target-branch"})
 
-        inspect_missing = client.post("/api/retrospectives/inspect", json={"task_ids": [completed.metadata.task_id]})
+        inspect_missing = client.post(
+            "/api/retrospectives/inspect",
+            json={"target_repo_root": str(repo_root), "base_branch": config.base_branch},
+        )
         assert inspect_missing.status_code == 200
         assert inspect_missing.json()["exists"] is False
 
         created = client.post(
             "/api/retrospectives/create",
-            json={"task_ids": [completed.metadata.task_id], "completion_mode": "target-branch"},
+            json={"target_repo_root": str(repo_root), "base_branch": config.base_branch, "completion_mode": "target-branch"},
         )
         assert created.status_code == 200
         payload = created.json()
@@ -413,7 +416,10 @@ def test_api_creates_and_reads_retrospective(configured_paths):
         assert payload["resolved_model"] == "openai/gpt-5-commit"
         assert (repo_root / payload["repo_relative_path"]).exists()
 
-        inspect_existing = client.post("/api/retrospectives/inspect", json={"task_ids": [completed.metadata.task_id]})
+        inspect_existing = client.post(
+            "/api/retrospectives/inspect",
+            json={"target_repo_root": str(repo_root), "base_branch": config.base_branch},
+        )
         assert inspect_existing.status_code == 200
         assert inspect_existing.json()["exists"] is True
         assert inspect_existing.json()["created"] is False
@@ -1524,8 +1530,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospectiveCountLabel: '{count} retrospectives'" in response.text
     assert "retrospectiveCountLabel: '{count}건 회고'" in response.text
     assert "${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>" in response.text
-    assert 'data-task-ids="${escapeHtml(branchItems.map((item) => item.task_id).join(','))}"' in response.text
-    assert "function openRetrospectiveModal(taskIds)" in response.text
+    assert "data-target-repo=\"${escapeHtml(branchItems[0].target_repo_root || '')}\"" in response.text
+    assert 'data-base-branch="${escapeHtml(branch)}"' in response.text
+    assert "function openRetrospectiveModal(targetRepoRoot, baseBranch)" in response.text
     assert "function createRetrospective(completionMode)" in response.text
     assert "retrospectiveUnavailable" in response.text
     assert "payload.created" in response.text
