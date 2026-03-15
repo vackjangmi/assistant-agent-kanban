@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -111,6 +111,7 @@ class AppConfig(BaseModel):
             "_runtime/locks",
             "_runtime/workspaces",
             "_runtime/runs",
+            "_runtime/retrospectives",
             "_runtime/events",
             "_runtime/board-cache",
         ]:
@@ -163,11 +164,15 @@ class AppConfig(BaseModel):
     def events_dir(self) -> Path:
         return self.kanban_root / "_runtime/events"
 
+    @property
+    def retrospectives_dir(self) -> Path:
+        return self.kanban_root / "_runtime/retrospectives"
+
 
 def load_config(path: str | Path | None = None) -> AppConfig:
     loaded_from: Path | None = None
     loaded_local_from: Path | None = None
-    raw: dict = {}
+    raw: dict[str, Any] = {}
     if path is None:
         if DEFAULT_CONFIG_PATH.exists():
             loaded_from = DEFAULT_CONFIG_PATH.expanduser().resolve()
@@ -193,14 +198,14 @@ def load_config(path: str | Path | None = None) -> AppConfig:
     return config
 
 
-def _read_yaml_dict(path: Path) -> dict:
+def _read_yaml_dict(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
         raise ValueError(f"config file must contain a mapping: {path}")
     return data
 
 
-def _merge_dicts(base: dict, override: dict) -> dict:
+def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):

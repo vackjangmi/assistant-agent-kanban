@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from contextlib import ExitStack
@@ -38,9 +39,9 @@ class RetrospectiveService:
         self.commit_manager = commit_manager
         self.adapter = adapter
 
-    def inspect(self, task_ids: list[str]) -> RetrospectiveRecord:
-        group = self._load_group(task_ids)
-        existing = self._load_existing_record(group)
+    def inspect(self, target_repo_root: str, base_branch: str) -> RetrospectiveRecord:
+        resolved_repo_root, group = self._load_group(target_repo_root, base_branch)
+        existing = self._load_existing_record(resolved_repo_root, base_branch, group)
         if existing is not None:
             return existing
         return RetrospectiveRecord(
@@ -48,22 +49,29 @@ class RetrospectiveService:
             created=False,
             can_create=self.adapter is not None,
             task_ids=[task.metadata.task_id for task in group],
-            target_repo_root=group[0].metadata.target.repo_root,
-            target_repo_label=Path(group[0].metadata.target.repo_root).name or group[0].metadata.target.repo_root,
-            base_branch=group[0].metadata.target.base_branch,
+            target_repo_root=str(resolved_repo_root),
+            target_repo_label=resolved_repo_root.name or str(resolved_repo_root),
+            base_branch=base_branch,
         )
 
-    def create(self, task_ids: list[str], *, by: str, completion_mode: Literal["new-branch", "target-branch"]) -> RetrospectiveRecord:
+    def create(
+        self,
+        target_repo_root: str,
+        base_branch: str,
+        *,
+        by: str,
+        completion_mode: Literal["new-branch", "target-branch"],
+    ) -> RetrospectiveRecord:
         if completion_mode not in {"new-branch", "target-branch"}:
             raise TransitionError(f"unsupported retrospective completion mode: {completion_mode}")
-        group = self._load_group(task_ids)
+        resolved_repo_root, group = self._load_group(target_repo_root, base_branch)
         if self.adapter is None:
             raise TransitionError("retrospective generation is unavailable because no commit adapter is configured")
 
         with ExitStack() as stack:
             for task in group:
                 stack.enter_context(self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-retrospective"))
-            existing = self._load_existing_record(group)
+            existing = self._load_existing_record(resolved_repo_root, base_branch, group)
             if existing is not None:
                 return existing.model_copy(update={"created": False, "can_create": True})
             generated_at = datetime.now(timezone.utc)
@@ -73,7 +81,8 @@ class RetrospectiveService:
                 raise CommitError("retrospective generation returned empty content")
             normalized_content = content.rstrip() + "\n"
             repo_relative_path, committed_branch, commit_sha = self._commit_retrospective_document(
-                group,
+                resolved_repo_root,
+                base_branch,
                 content=normalized_content,
                 completion_mode=completion_mode,
                 generated_at=generated_at,
@@ -83,13 +92,13 @@ class RetrospectiveService:
                 created=True,
                 can_create=True,
                 task_ids=[task.metadata.task_id for task in group],
-                target_repo_root=group[0].metadata.target.repo_root,
-                target_repo_label=Path(group[0].metadata.target.repo_root).name or group[0].metadata.target.repo_root,
-                base_branch=group[0].metadata.target.base_branch,
+                target_repo_root=str(resolved_repo_root),
+                target_repo_label=resolved_repo_root.name or str(resolved_repo_root),
+                base_branch=base_branch,
                 committed_branch=committed_branch,
                 completion_mode=completion_mode,
                 repo_relative_path=repo_relative_path,
-                artifact_filename=self._artifact_markdown_name(group[0].metadata.target.base_branch),
+                artifact_filename=self._canonical_markdown_name(base_branch),
                 content=normalized_content,
                 resolved_model=result.resolved_model,
                 session_id=result.session_id,
@@ -97,55 +106,63 @@ class RetrospectiveService:
                 commit_sha=commit_sha,
                 generated_at=generated_at,
             )
-            self._write_group_artifacts(group, record, result)
+            self._write_canonical_artifacts(resolved_repo_root, base_branch, record, result)
             return record
 
-    def _load_group(self, task_ids: list[str]) -> list[TaskContext]:
-        normalized_ids = [task_id.strip() for task_id in task_ids if task_id and task_id.strip()]
-        if not normalized_ids:
-            raise TransitionError("retrospective requires at least one completed task")
-        tasks: list[TaskContext] = []
-        for task_id in normalized_ids:
-            try:
-                task = self.scanner.find_task(task_id)
-            except FileNotFoundError as exc:
-                raise TaskNotFoundError(task_id) from exc
-            if str(task.state) != "done":
-                raise TransitionError("retrospective is only available for done tasks")
-            tasks.append(task)
-        repo_roots = {Path(task.metadata.target.repo_root).expanduser().resolve() for task in tasks}
-        if len(repo_roots) != 1:
-            raise TransitionError("retrospective tasks must share the same target repository")
-        base_branches = {task.metadata.target.base_branch for task in tasks}
-        if len(base_branches) != 1:
-            raise TransitionError("retrospective tasks must share the same target branch")
-        return sorted(tasks, key=lambda item: item.metadata.task_id)
+    def _load_group(self, target_repo_root: str, base_branch: str) -> tuple[Path, list[TaskContext]]:
+        normalized_branch = base_branch.strip()
+        if not normalized_branch:
+            raise TransitionError("retrospective requires a target branch")
+        resolved_repo_root = resolve_safe_target_repo_root(Path(target_repo_root))
+        tasks = [
+            task
+            for task in self.scanner.scan()
+            if str(task.state) == "done"
+            and task.metadata.target.base_branch == normalized_branch
+            and resolve_safe_target_repo_root(Path(task.metadata.target.repo_root)) == resolved_repo_root
+        ]
+        if not tasks:
+            raise TransitionError("retrospective requires at least one done task for the selected project and branch")
+        return resolved_repo_root, sorted(tasks, key=lambda item: item.metadata.task_id)
 
-    def _load_existing_record(self, group: list[TaskContext]) -> RetrospectiveRecord | None:
-        artifact_name = self._artifact_json_name(group[0].metadata.target.base_branch)
-        expected_task_ids = [task.metadata.task_id for task in group]
-        records: list[RetrospectiveRecord] = []
-        markdown_contents: list[str] = []
+    def _load_existing_record(self, target_repo_root: Path, base_branch: str, group: list[TaskContext]) -> RetrospectiveRecord | None:
+        canonical = self._load_canonical_record(target_repo_root, base_branch)
+        if canonical is not None:
+            return canonical.model_copy(update={"created": False, "can_create": self.adapter is not None})
+        legacy = self._load_legacy_task_record(group, base_branch)
+        if legacy is not None:
+            return legacy.model_copy(update={"created": False, "can_create": self.adapter is not None})
+        return None
+
+    def _load_canonical_record(self, target_repo_root: Path, base_branch: str) -> RetrospectiveRecord | None:
+        json_path = self._latest_canonical_json_path(target_repo_root, base_branch)
+        if json_path is None or not json_path.exists():
+            return None
+        record = RetrospectiveRecord.model_validate_json(json_path.read_text())
+        markdown_path = self._canonical_root(target_repo_root) / (record.artifact_filename or self._canonical_markdown_name(base_branch))
+        if not markdown_path.exists():
+            return None
+        return record.model_copy(update={"content": markdown_path.read_text()})
+
+    def _load_legacy_task_record(self, group: list[TaskContext], base_branch: str) -> RetrospectiveRecord | None:
+        artifact_name = self._legacy_artifact_json_name(base_branch)
+        candidate_records: list[tuple[float, RetrospectiveRecord, str]] = []
         for task in group:
             path = task.task_dir / artifact_name
             if not path.exists():
-                return None
+                continue
             record = RetrospectiveRecord.model_validate_json(path.read_text())
-            records.append(record)
-            markdown_name = record.artifact_filename or self._artifact_markdown_name(group[0].metadata.target.base_branch)
+            if not record.exists:
+                continue
+            markdown_name = record.artifact_filename or self._legacy_artifact_markdown_name(base_branch)
             markdown_path = task.task_dir / markdown_name
             if not markdown_path.exists():
-                return None
-            markdown_contents.append(markdown_path.read_text())
-        reference = records[0]
-        if not reference.exists or reference.task_ids != expected_task_ids:
+                continue
+            candidate_records.append((path.stat().st_mtime, record, markdown_path.read_text()))
+        if not candidate_records:
             return None
-        for record in records[1:]:
-            if record.model_dump(mode="json", exclude={"content"}) != reference.model_dump(mode="json", exclude={"content"}):
-                return None
-        if any(content != markdown_contents[0] for content in markdown_contents[1:]):
-            return None
-        return reference.model_copy(update={"content": markdown_contents[0], "created": False, "can_create": self.adapter is not None})
+        _, reference, content = sorted(candidate_records, key=lambda item: item[0])[-1]
+        return reference.model_copy(update={"content": content})
 
     def _generate_retrospective(self, group: list[TaskContext]) -> RunResult:
         primary = group[0]
@@ -197,35 +214,34 @@ class RetrospectiveService:
 
     def _commit_retrospective_document(
         self,
-        group: list[TaskContext],
+        target_repo_root: Path,
+        base_branch: str,
         *,
         content: str,
         completion_mode: Literal["new-branch", "target-branch"],
         generated_at: datetime,
     ) -> tuple[str, str, str]:
-        primary = group[0]
-        target_repo_root = resolve_safe_target_repo_root(Path(primary.metadata.target.repo_root))
-        base_branch = primary.metadata.target.base_branch
+        primary_branch = base_branch
         self._ensure_clean_repo(target_repo_root)
-        self.commit_manager._switch_to_branch(target_repo_root, base_branch)
-        committed_branch = base_branch if completion_mode == "target-branch" else self._ensure_retro_branch(target_repo_root, primary, base_branch)
+        self.commit_manager._switch_to_branch(target_repo_root, primary_branch)
+        committed_branch = primary_branch if completion_mode == "target-branch" else self._ensure_retro_branch(target_repo_root, primary_branch)
         if completion_mode == "new-branch":
             switch = subprocess.run(
-                ["git", "-C", str(target_repo_root), "switch", "-C", committed_branch, base_branch],
+                ["git", "-C", str(target_repo_root), "switch", "-C", committed_branch, primary_branch],
                 capture_output=True,
                 text=True,
                 check=False,
             )
             if switch.returncode != 0:
                 raise CommitError(switch.stderr.strip() or "failed to create retrospective branch")
-        repo_relative_path = self._repo_relative_path(primary, generated_at)
+        repo_relative_path = self._repo_relative_path(primary_branch, generated_at)
         repo_path = target_repo_root / repo_relative_path
         repo_path.parent.mkdir(parents=True, exist_ok=True)
         repo_path.write_text(content.rstrip() + "\n")
         add_result = subprocess.run(["git", "-C", str(target_repo_root), "add", repo_relative_path], capture_output=True, text=True, check=False)
         if add_result.returncode != 0:
             raise CommitError(add_result.stderr.strip() or "failed to stage retrospective artifact")
-        commit_message = f"docs: add retrospective for {base_branch} tasks"
+        commit_message = f"docs: add retrospective for {primary_branch} branch"
         commit_result = subprocess.run(
             ["git", "-C", str(target_repo_root), "commit", "-m", commit_message],
             capture_output=True,
@@ -237,9 +253,8 @@ class RetrospectiveService:
         commit_sha = self.commit_manager._current_head(target_repo_root) or ""
         return repo_relative_path.as_posix(), committed_branch, commit_sha
 
-    def _ensure_retro_branch(self, repo_root: Path, primary: TaskContext, base_branch: str) -> str:
-        summary = self.commit_manager.sanitize_branch_summary(None, fallback_title=primary.metadata.title)
-        candidate = f"retro/{base_branch}-{summary}"
+    def _ensure_retro_branch(self, repo_root: Path, base_branch: str) -> str:
+        candidate = f"retro/{self._branch_slug(base_branch)}"
         if not self.commit_manager._branch_exists(repo_root, candidate):
             return candidate
         suffix = 2
@@ -247,9 +262,11 @@ class RetrospectiveService:
             suffix += 1
         return f"{candidate}-{suffix}"
 
-    def _write_group_artifacts(self, group: list[TaskContext], record: RetrospectiveRecord, result: RunResult) -> None:
-        markdown_name = record.artifact_filename or self._artifact_markdown_name(group[0].metadata.target.base_branch)
-        json_name = self._artifact_json_name(group[0].metadata.target.base_branch)
+    def _write_canonical_artifacts(self, target_repo_root: Path, base_branch: str, record: RetrospectiveRecord, result: RunResult) -> None:
+        root = self._canonical_root(target_repo_root)
+        root.mkdir(parents=True, exist_ok=True)
+        markdown_name = record.artifact_filename or self._canonical_markdown_name(base_branch)
+        json_name = self._canonical_json_name(base_branch)
         payload = {
             "ok": result.ok,
             "returncode": result.returncode,
@@ -263,9 +280,8 @@ class RetrospectiveService:
             "total_tokens": result.total_tokens,
             **record.model_dump(mode="json"),
         }
-        for task in group:
-            (task.task_dir / markdown_name).write_text(record.content.rstrip() + "\n")
-            (task.task_dir / json_name).write_text(json.dumps(payload, indent=2) + "\n")
+        (root / markdown_name).write_text(record.content.rstrip() + "\n")
+        (root / json_name).write_text(json.dumps(payload, indent=2) + "\n")
 
     def _ensure_clean_repo(self, repo_root: Path) -> None:
         status = subprocess.run(
@@ -279,17 +295,35 @@ class RetrospectiveService:
         if status.stdout.strip():
             raise CommitError("target repository must be clean before creating a retrospective commit")
 
-    def _repo_relative_path(self, primary: TaskContext, generated_at: datetime) -> Path:
-        date_prefix = generated_at.strftime("%Y/%m/%d")
-        base_slug = self._branch_slug(primary.metadata.target.base_branch)
-        filename = f"{generated_at.strftime('%Y-%m-%d')}-{base_slug}-{primary.metadata.task_id.lower()}.md"
+    def _repo_relative_path(self, base_branch: str, generated_at: datetime) -> Path:
+        date_prefix = generated_at.strftime("%Y/%m")
+        filename = self._canonical_markdown_name(base_branch)
         return Path("docs") / "kanban-agent" / "retrospectives" / date_prefix / filename
 
-    def _artifact_markdown_name(self, base_branch: str) -> str:
+    def _canonical_markdown_name(self, base_branch: str) -> str:
+        return f"{self._branch_slug(base_branch)}.md"
+
+    def _canonical_json_name(self, base_branch: str) -> str:
+        return f"{self._branch_slug(base_branch)}.json"
+
+    def _legacy_artifact_markdown_name(self, base_branch: str) -> str:
         return f"RETRO-{self._branch_slug(base_branch)}.md"
 
-    def _artifact_json_name(self, base_branch: str) -> str:
+    def _legacy_artifact_json_name(self, base_branch: str) -> str:
         return f"RETRO-{self._branch_slug(base_branch)}.json"
+
+    def _canonical_root(self, target_repo_root: Path) -> Path:
+        return self.config.retrospectives_dir / self._repo_key(target_repo_root)
+
+    def _latest_canonical_json_path(self, target_repo_root: Path, base_branch: str) -> Path | None:
+        path = self._canonical_root(target_repo_root) / self._canonical_json_name(base_branch)
+        return path if path.exists() else None
+
+    def _repo_key(self, target_repo_root: Path) -> str:
+        resolved = str(target_repo_root.expanduser().resolve())
+        digest = hashlib.sha1(resolved.encode("utf-8")).hexdigest()[:10]
+        name = target_repo_root.name or "repo"
+        return f"{self.commit_manager.sanitize_branch_summary(name, fallback_title='repo')}-{digest}"
 
     def _branch_slug(self, branch: str) -> str:
         return self.commit_manager.sanitize_branch_summary(branch, fallback_title=branch)
