@@ -1475,9 +1475,20 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".final-board .card-button { display: block; min-width: 0; max-width: 100%; padding-right: 0; }" in response.text
     assert ".final-board .card-meta-row { min-width: 0; max-width: 100%; }" in response.text
     assert ".final-board .card-tag-row { min-width: 0; max-width: 100%; overflow: hidden; }" in response.text
-    assert ".final-board .card-tag-final-branch { display: flex; flex: 1 1 100%; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }" in response.text
+    assert ".final-board .card-tag-final-branch { display: inline-flex; flex: 0 1 auto; min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }" in response.text
     assert ".final-board .card-tag-final-branch .card-tag-value { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
-    assert ".target-branch-group { display: grid; gap: 10px; padding: 10px;" in response.text
+    assert '.target-branch-group[data-expanded="false"] .column-cards { display: none; }' in response.text
+    assert 'class="target-branch-retrospective"' in response.text
+    assert "retrospectiveCountLabel: '{count} retrospectives'" in response.text
+    assert "retrospectiveCountLabel: '{count}건 회고'" in response.text
+    assert "${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>" in response.text
+    assert 'class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? ' in response.text
+    assert '.target-branch-caret { flex: 0 0 auto; width: 20px; height: 20px; margin-left: 2px;' in response.text
+    assert ".final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
+    assert ".final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
+    assert "function toggleFinalBranchGroup(branchLabel)" in response.text
+    assert "const branchLabel = event.target.closest('.target-branch-label');" in response.text
+    assert "toggleFinalBranchGroup(branchLabel);" in response.text
     assert "const branch = item.base_branch || 'unknown';" in response.text
     assert "title=\"${escapeHtml(projectPath)}\"" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
