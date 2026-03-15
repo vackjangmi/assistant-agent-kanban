@@ -114,7 +114,7 @@ class KanbanScanner:
                         if metadata.target.base_branch != parsed_base_branch:
                             metadata.target.base_branch = parsed_base_branch
                             should_save = True
-                    if metadata.request.language != parsed.language:
+                    if not metadata.request.language:
                         metadata.request.language = parsed.language
                         should_save = True
                 normalized_repo_root = str(resolve_repo_root(metadata.target.repo_root, self.config.repo_root))
