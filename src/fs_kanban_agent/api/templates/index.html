@@ -2499,10 +2499,10 @@
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
-      const statusKey = payload.created
+      const resultStatusKey = payload.created
         ? (completionMode === 'target-branch' ? 'retrospectiveCreatedTarget' : 'retrospectiveCreatedBranch')
         : (payload.completion_mode === 'target-branch' ? 'retrospectiveLoadedTarget' : 'retrospectiveLoadedBranch');
-      renderRetrospective(payload, statusKey, 'success');
+      renderRetrospective(payload, resultStatusKey, 'success');
       await loadBoard();
     }
 
