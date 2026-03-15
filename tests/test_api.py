@@ -384,6 +384,42 @@ def test_api_supports_human_verification_approve_to_target_branch(configured_pat
     assert current_branch == config.base_branch
 
 
+def test_api_creates_and_reads_retrospective(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "retrospective-api-task")
+    commit_adapter = FakeAdapter(["# Retrospective\n\n## Summary\nAPI retrospective\n"], resolved_models=["openai/gpt-5-commit"])
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), commit_adapter=commit_adapter)
+    _, completed = _task_ready_for_completed_reviews(config, "retrospective-api-task")
+
+    with TestClient(app) as client:
+        client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification", json={"completion_mode": "target-branch"})
+
+        inspect_missing = client.post("/api/retrospectives/inspect", json={"task_ids": [completed.metadata.task_id]})
+        assert inspect_missing.status_code == 200
+        assert inspect_missing.json()["exists"] is False
+
+        created = client.post(
+            "/api/retrospectives/create",
+            json={"task_ids": [completed.metadata.task_id], "completion_mode": "target-branch"},
+        )
+        assert created.status_code == 200
+        payload = created.json()
+        assert payload["exists"] is True
+        assert payload["created"] is True
+        assert payload["can_create"] is True
+        assert payload["committed_branch"] == "main"
+        assert payload["resolved_model"] == "openai/gpt-5-commit"
+        assert (repo_root / payload["repo_relative_path"]).exists()
+
+        inspect_existing = client.post("/api/retrospectives/inspect", json={"task_ids": [completed.metadata.task_id]})
+        assert inspect_existing.status_code == 200
+        assert inspect_existing.json()["exists"] is True
+        assert inspect_existing.json()["created"] is False
+        assert "API retrospective" in inspect_existing.json()["content"]
+
+
 def test_api_returns_todos_when_human_verification_rebase_fails(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -1357,7 +1393,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request-repo-heading" in response.text
     assert 'class="field span-full"' in response.text
     assert "task-modal" in response.text
+    assert "retrospective-modal" in response.text
     assert "task-modal-panel" in response.text
+    assert "retrospective-modal-title" in response.text
+    assert "retrospective-create-target" in response.text
+    assert "retrospective-create-branch" in response.text
     assert "Viewer" in response.text
     assert "Viewer mode" in response.text
     assert "Changed files" in response.text
@@ -1418,6 +1458,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request-changes-button" in response.text
     assert "approve-human-review-button" in response.text
     assert "/api/tasks/${activeTaskId}/human-review-note" in response.text
+    assert "/api/retrospectives/inspect" in response.text
+    assert "/api/retrospectives/create" in response.text
     assert 'id="task-tab-review-note"' in response.text
     assert 'id="task-panel-review-note"' in response.text
     assert 'class="diff-grid"' in response.text
@@ -1482,6 +1524,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospectiveCountLabel: '{count} retrospectives'" in response.text
     assert "retrospectiveCountLabel: '{count}건 회고'" in response.text
     assert "${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>" in response.text
+    assert 'data-task-ids="${escapeHtml(branchItems.map((item) => item.task_id).join(','))}"' in response.text
+    assert "function openRetrospectiveModal(taskIds)" in response.text
+    assert "function createRetrospective(completionMode)" in response.text
+    assert "retrospectiveUnavailable" in response.text
+    assert "payload.created" in response.text
     assert 'class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? ' in response.text
     assert '.target-branch-caret { flex: 0 0 auto; width: 20px; height: 20px; margin-left: 2px;' in response.text
     assert ".final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
