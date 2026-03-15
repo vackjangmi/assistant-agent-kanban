@@ -50,6 +50,14 @@ class HumanReviewNotePayload(BaseModel):
     content: str = ""
 
 
+class RetrospectivePayload(BaseModel):
+    task_ids: list[str] = Field(default_factory=list)
+
+
+class RetrospectiveCreatePayload(RetrospectivePayload):
+    completion_mode: Literal["new-branch", "target-branch"]
+
+
 class CreateLineCommentPayload(BaseModel):
     path: str
     side: Literal["left", "right"]
@@ -485,6 +493,32 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return moved.metadata
+
+    @router.post("/api/retrospectives/inspect")
+    async def inspect_retrospective(payload: RetrospectivePayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            record = await asyncio.to_thread(runtime.retrospective_service.inspect, payload.task_ids)
+        except (TransitionError, TaskNotFoundError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        return record.model_dump(mode="json")
+
+    @router.post("/api/retrospectives/create")
+    async def create_retrospective(payload: RetrospectiveCreatePayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            record = await asyncio.to_thread(
+                runtime.retrospective_service.create,
+                payload.task_ids,
+                by="human",
+                completion_mode=payload.completion_mode,
+            )
+        except (TransitionError, TaskNotFoundError, CommitError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return record.model_dump(mode="json")
 
     @router.delete("/api/tasks/{task_id}")
     async def delete_task(task_id: str, request: Request):

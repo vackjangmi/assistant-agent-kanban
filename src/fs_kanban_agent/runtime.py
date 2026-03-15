@@ -13,6 +13,7 @@ from .recovery import RecoveryService
 from .scanner import KanbanScanner
 from .services.board_service import BoardService
 from .services.human_verification_service import HumanVerificationService
+from .services.retrospective_service import RetrospectiveService
 from .services.task_deletion_service import TaskDeletionService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
@@ -59,6 +60,7 @@ class RuntimeSupervisor:
         verification_service: Any,
         deletion_service: Any,
         task_service: Any,
+        retrospective_service: Any,
         recovery: RecoveryProvider,
         events: EventBus,
         model_registry: ModelRegistryProvider,
@@ -73,6 +75,7 @@ class RuntimeSupervisor:
         self.verification_service = verification_service
         self.deletion_service = deletion_service
         self.task_service = task_service
+        self.retrospective_service = retrospective_service
         self.recovery = recovery
         self.events = events
         self.model_registry = model_registry
@@ -262,6 +265,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter)
     deletion_service = TaskDeletionService(config, scanner, locks, integration_manager)
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+    retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = OpenCodeModelRegistry(adapter=planner_adapter, config=config)
     return RuntimeSupervisor(
@@ -275,6 +279,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
         verification_service,
         deletion_service,
         task_service,
+        retrospective_service,
         recovery,
         events,
         model_registry,

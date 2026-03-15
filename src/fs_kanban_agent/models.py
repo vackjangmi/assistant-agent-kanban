@@ -197,6 +197,26 @@ class TaskDetail(BaseModel):
     agent_status: Literal["active", "waiting", "idle"] = "idle"
 
 
+class RetrospectiveRecord(BaseModel):
+    exists: bool = False
+    created: bool = False
+    can_create: bool = False
+    task_ids: list[str] = Field(default_factory=list)
+    target_repo_root: str = "."
+    target_repo_label: str = "."
+    base_branch: str = "main"
+    committed_branch: str | None = None
+    completion_mode: Literal["new-branch", "target-branch"] | None = None
+    repo_relative_path: str | None = None
+    artifact_filename: str | None = None
+    content: str = ""
+    resolved_model: str | None = None
+    session_id: str | None = None
+    total_tokens: int = 0
+    commit_sha: str | None = None
+    generated_at: datetime | None = None
+
+
 class HumanLineCommentAnchor(BaseModel):
     path: str
     side: Literal["left", "right"]
