@@ -734,3 +734,30 @@ def test_human_verification_approve_uses_stored_english_branch_summary(tmp_path)
     assert moved.state == TaskState.DONE
     refreshed = scanner.find_task(completed.metadata.task_id)
     assert refreshed.metadata.integration.final_branch == f"feature/{completed.metadata.task_id.lower()}-add-area-game-mode"
+
+
+def test_human_verification_approve_releases_lock_when_done_cleanup_save_fails(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-approve-lock-release-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    original_save = service.metadata_store.save
+
+    def fail_done_cleanup_save(task_dir, metadata):
+        if TaskState.DONE.value in task_dir.parts and task_dir.name == metadata.task_id and metadata.lease.owner is None:
+            raise RuntimeError("done cleanup save failed")
+        return original_save(task_dir, metadata)
+
+    service.metadata_store.save = fail_done_cleanup_save
+    service.locks.metadata_store.save = fail_done_cleanup_save
+
+    with pytest.raises(RuntimeError, match="done cleanup save failed"):
+        service.approve(completed.metadata.task_id, by="human")
+
+    with service.locks.acquire_by_task_id(completed.metadata.task_id, owner="tester", run_id="retry"):
+        pass

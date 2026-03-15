@@ -29,11 +29,13 @@ class TaskLockManager:
             self.metadata_store.save(task_dir, metadata)
             yield
         finally:
-            metadata.lease.owner = None
-            metadata.lease.run_id = None
-            metadata.lease.heartbeat_at = None
-            self.metadata_store.save(self._resolve_task_dir(task_dir, metadata.task_id), metadata)
-            lock.release()
+            try:
+                metadata.lease.owner = None
+                metadata.lease.run_id = None
+                metadata.lease.heartbeat_at = None
+                self.metadata_store.save(self._resolve_task_dir(task_dir, metadata.task_id), metadata)
+            finally:
+                lock.release()
 
     @contextmanager
     def acquire_by_task_id(self, task_id: str, owner: str, run_id: str):
@@ -52,13 +54,11 @@ class TaskLockManager:
     def _resolve_task_dir(self, original_task_dir: Path, task_id: str) -> Path:
         if original_task_dir.exists():
             return original_task_dir
-        for state_dir in self.config.kanban_root.iterdir():
-            if not state_dir.is_dir() or state_dir.name == "_runtime":
+        for metadata_path in self.config.kanban_root.glob("*/**/metadata.json"):
+            if metadata_path.parent.parent.name == "_runtime":
                 continue
-            candidate = state_dir / original_task_dir.name
-            metadata_path = candidate / "metadata.json"
-            if metadata_path.exists() and task_id in metadata_path.read_text():
-                return candidate
+            if metadata_path.parent.name == task_id:
+                return metadata_path.parent
         return original_task_dir
 
     def _acquire_file_lock(self, task_id: str):
