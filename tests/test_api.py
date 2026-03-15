@@ -1436,7 +1436,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function repoTagTone(path)" in response.text
     assert "function renderFinalBoard(columns)" in response.text
     assert "function renderFinalProjectColumn(projectPath, items)" in response.text
-    assert "function groupFinalItemsByBranch(items)" in response.text
+    assert "function groupFinalItemsByTargetBranch(items)" in response.text
     assert "board.innerHTML = renderFinalBoard(visibleColumns);" in response.text
     assert "card-meta-row" in response.text
     assert "card-tag-row" in response.text
@@ -1451,8 +1451,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "renderTag('', item.task_id ? `#${item.task_id}` : ''" in response.text
     assert "renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon'))" in response.text
     assert "renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon'))" in response.text
-    assert "renderTag(boardCardLabel('branch'), branchLabel, 'card-tag-branch card-tag-base-branch'" in response.text
-    assert "renderTag(translateTask('finalBranchLabel'), finalBranchLabel, 'card-tag-branch card-tag-final-branch'" in response.text
+    assert "renderTag('', finalBranchLabel, 'card-tag-branch card-tag-final-branch'" in response.text
     assert "renderCardTags(item, { compactFinal: true })" in response.text
     assert "const activeSince = item.state_entered_at || '';" in response.text
     assert 'buildDurationAttributes(0, activeSince)' in response.text
@@ -1468,11 +1467,18 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "final-project-title" in response.text
     assert "final-project-path" not in response.text
     assert "final-project-branches" in response.text
-    assert "final-branch-group" in response.text
-    assert "final-branch-label" in response.text
-    assert "final-branch-icon" in response.text
-    assert ".final-branch-group { display: grid; gap: 10px; padding: 10px;" in response.text
-    assert "const branch = item.final_branch || item.base_branch || 'unknown';" in response.text
+    assert "target-branch-group" in response.text
+    assert "target-branch-label" in response.text
+    assert "target-branch-icon" in response.text
+    assert ".final-board .column-cards { overflow-x: hidden; }" in response.text
+    assert ".final-board .card { min-width: 0; max-width: 100%; overflow: hidden; }" in response.text
+    assert ".final-board .card-button { display: block; min-width: 0; max-width: 100%; padding-right: 0; }" in response.text
+    assert ".final-board .card-meta-row { min-width: 0; max-width: 100%; }" in response.text
+    assert ".final-board .card-tag-row { min-width: 0; max-width: 100%; overflow: hidden; }" in response.text
+    assert ".final-board .card-tag-final-branch { display: flex; flex: 1 1 100%; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }" in response.text
+    assert ".final-board .card-tag-final-branch .card-tag-value { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
+    assert ".target-branch-group { display: grid; gap: 10px; padding: 10px;" in response.text
+    assert "const branch = item.base_branch || 'unknown';" in response.text
     assert "title=\"${escapeHtml(projectPath)}\"" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');" in response.text
