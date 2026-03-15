@@ -268,6 +268,8 @@ class TaskService:
             return (2, cycle, kind_order, filename)
         if filename == "COMMIT.md":
             return (4, 0, 0, filename)
+        if filename.startswith("RETRO-") and filename.endswith(".md"):
+            return (5, 0, 0, filename)
         return (3, 0, 0, filename)
 
     def _load_changed_files(self, task_id: str, *, require_available: bool) -> list[ChangedFileDetail]:
