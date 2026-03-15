@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent Kanban</title>
+  <title>Kanban Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
@@ -252,12 +252,21 @@
     .human-review-box { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; min-height: 0; height: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; overflow: hidden; }
     .human-review-editor-shell { min-height: 0; height: 100%; display: grid; }
     .human-review-footer { display: grid; gap: 8px; }
-    .human-review-controls { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
-    .human-review-mode { display: inline-grid; grid-template-columns: auto auto; gap: 8px; align-items: center; width: fit-content; margin-left: auto; color: var(--accent-strong); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
-    .human-review-mode select { min-width: 144px; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 7px 10px; font: inherit; color: var(--text); text-transform: none; letter-spacing: normal; }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+    .approval-choice-panel { width: min(860px, 100%); }
+    .approval-choice-shell { display: grid; gap: 14px; }
+    .approval-choice-copy { padding: 14px 16px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,249,239,0.96), rgba(247,242,232,0.84)); }
+    .approval-choice-copy p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
+    .approval-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .approval-choice-card { display: grid; grid-template-rows: auto 1fr auto; gap: 12px; padding: 16px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }
+    .approval-choice-card strong { font-size: 1rem; color: var(--accent-strong); }
+    .approval-choice-card p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .approval-choice-card button { width: 100%; }
+    .approval-choice-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.86); color: var(--muted); line-height: 1.45; }
+    .approval-choice-status[hidden] { display: none; }
+    .approval-choice-status[data-tone="error"] { border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
     .diff-desktop, .diff-mobile { height: 100%; max-height: none; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.45; }
     .diff-desktop { font-size: 0.82rem; }
     .diff-mobile { font-size: 0.82rem; }
@@ -336,13 +345,13 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .human-review-controls { justify-content: stretch; } .human-review-mode { width: 100%; grid-template-columns: 1fr; margin-left: 0; } .human-review-mode select { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
 <body>
   <header>
-    <h1>Agent Kanban</h1>
+    <h1>Kanban Agent</h1>
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Settings</button>
@@ -663,15 +672,6 @@
               <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
             </div>
             <div class="human-review-footer">
-              <div class="human-review-controls">
-                <label class="human-review-mode" for="human-review-completion-mode">
-                  <span id="task-human-review-completion-mode-label">Completion mode</span>
-                  <select id="human-review-completion-mode">
-                    <option value="new-branch" selected>New branch</option>
-                    <option value="target-branch">Target branch</option>
-                  </select>
-                </label>
-              </div>
               <div id="task-human-review-approval-status" class="human-review-approval-status" hidden></div>
             </div>
           </div>
@@ -720,6 +720,42 @@
       </div>
     </div>
   </section>
+  <section id="approval-choice-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel approval-choice-panel" role="dialog" aria-modal="true" aria-labelledby="approval-choice-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="approval-choice-title">Finalize review</h2>
+          <p id="approval-choice-description">Choose how this reviewed task should be completed in the target repository.</p>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="close-approval-choice">Close</button>
+        </div>
+      </div>
+      <div class="approval-choice-shell">
+        <div class="approval-choice-copy">
+          <strong id="approval-choice-copy-title">Final approval mode</strong>
+          <p id="approval-choice-copy-body">Pick the completion path that matches how you want the reviewed patch finalized.</p>
+        </div>
+        <div class="approval-choice-grid">
+          <section class="approval-choice-card">
+            <div>
+              <strong id="approval-choice-target-title">Commit on target branch</strong>
+            </div>
+             <p id="approval-choice-target-description">Apply the reviewed result directly onto the configured target branch and finish there.</p>
+             <button type="button" id="approval-choice-target-button" class="accent-button">Commit on target branch</button>
+          </section>
+          <section class="approval-choice-card">
+            <div>
+              <strong id="approval-choice-new-branch-title">Finalize on new branch</strong>
+            </div>
+             <p id="approval-choice-new-branch-description">Keep the reviewed result isolated by finishing it on a dedicated branch.</p>
+             <button type="button" id="approval-choice-new-branch-button" class="primary">Finalize on new branch</button>
+          </section>
+        </div>
+        <div id="approval-choice-status" class="approval-choice-status" hidden></div>
+      </div>
+    </div>
+  </section>
   <main>
     <div class="board-phase-shell">
       <div id="board-phase-tabs" class="board-phase-tabs">
@@ -739,11 +775,13 @@
     const settingsModal = document.getElementById('settings-modal');
     const taskModal = document.getElementById('task-modal');
     const retrospectiveModal = document.getElementById('retrospective-modal');
+    const approvalChoiceModal = document.getElementById('approval-choice-modal');
     const openComposerButton = document.getElementById('open-composer');
     const openSettingsButton = document.getElementById('open-settings');
     const refreshButton = document.getElementById('refresh');
     const closeTaskModalButton = document.getElementById('close-task-modal');
     const closeRetrospectiveModalButton = document.getElementById('close-retrospective-modal');
+    const closeApprovalChoiceButton = document.getElementById('close-approval-choice');
     const cancelComposerButton = document.getElementById('cancel-composer');
     const cancelSettingsButton = document.getElementById('cancel-settings');
     const requestForm = document.getElementById('request-form');
@@ -824,13 +862,14 @@
     const taskHumanReviewEditorShell = taskHumanReviewEditorHost.parentElement;
     const taskHumanReviewNoteStatus = document.getElementById('task-human-review-note-status');
     const taskHumanReviewApprovalStatus = document.getElementById('task-human-review-approval-status');
-    const humanReviewCompletionModeLabel = document.getElementById('task-human-review-completion-mode-label');
-    const humanReviewCompletionModeSelect = document.getElementById('human-review-completion-mode');
     const saveHumanReviewNoteButton = document.getElementById('save-human-review-note');
     const requestChangesButton = document.getElementById('request-changes-button');
     const requestChangesShell = document.getElementById('request-changes-shell');
     const approveHumanReviewButton = document.getElementById('approve-human-review-button');
     const approveHumanReviewShell = document.getElementById('approve-human-review-shell');
+    const approvalChoiceTargetButton = document.getElementById('approval-choice-target-button');
+    const approvalChoiceNewBranchButton = document.getElementById('approval-choice-new-branch-button');
+    const approvalChoiceStatus = document.getElementById('approval-choice-status');
     const retrospectiveStatus = document.getElementById('retrospective-status');
     const retrospectiveMeta = document.getElementById('retrospective-meta');
     const retrospectiveContent = document.getElementById('retrospective-content');
@@ -878,6 +917,7 @@
     let lastLoadedSettingsState = null;
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
+    let approvalSubmissionInFlight = false;
 
     const settingsTranslations = {
       EN: {
@@ -1114,9 +1154,17 @@
         commentsExistingOne: '{count} saved thread',
         commentsExistingMany: '{count} saved threads',
         commentsHistory: 'Previous-round comments stay visible for context only.',
-        completionModeLabel: 'Completion mode',
-        completionModeNewBranch: 'New branch',
-        completionModeTargetBranch: 'Target branch',
+        approvalChoiceTitle: 'Finalize review',
+        approvalChoiceDescription: 'Choose how this reviewed task should be completed in the target repository.',
+        approvalChoiceCopyTitle: 'Final approval mode',
+        approvalChoiceCopyBody: 'Pick the completion path that matches how you want the reviewed patch finalized.',
+        approvalChoiceTargetTitle: 'Commit on target branch',
+        approvalChoiceTargetDescription: 'Apply the reviewed result directly onto the configured target branch and finish there.',
+        approvalChoiceTargetAction: 'Commit on target branch',
+        approvalChoiceNewBranchTitle: 'Finalize on new branch',
+        approvalChoiceNewBranchDescription: 'Keep the reviewed result isolated by finishing it on a dedicated branch.',
+        approvalChoiceNewBranchAction: 'Finalize on new branch',
+        approvalChoiceClose: 'Close',
         commentAction: '+',
         commentActionMobile: 'Comment',
         commentComposerTitle: 'Line comment',
@@ -1157,9 +1205,17 @@
         commentsExistingOne: '저장된 스레드 {count}개',
         commentsExistingMany: '저장된 스레드 {count}개',
         commentsHistory: '이전 라운드 코멘트는 참고용으로만 보이며 현재 라운드 승인에는 영향을 주지 않습니다.',
-        completionModeLabel: '완료 방식',
-        completionModeNewBranch: '새 브랜치',
-        completionModeTargetBranch: '대상 브랜치',
+        approvalChoiceTitle: '리뷰 최종 확정',
+        approvalChoiceDescription: '검토가 끝난 이 작업을 대상 저장소에서 어떤 방식으로 마무리할지 선택하세요.',
+        approvalChoiceCopyTitle: '최종 승인 방식',
+        approvalChoiceCopyBody: '현재 검증된 패치를 어떤 흐름으로 확정할지 선택합니다.',
+        approvalChoiceTargetTitle: '대상 브랜치에 병합',
+        approvalChoiceTargetDescription: '현재 검증된 결과를 설정된 대상 브랜치에 바로 반영하고 그 브랜치에서 마무리합니다.',
+        approvalChoiceTargetAction: '대상 브랜치에 병합',
+        approvalChoiceNewBranchTitle: '신규 브랜치에서 확정',
+        approvalChoiceNewBranchDescription: '검토된 결과를 분리된 새 브랜치에서 확정합니다.',
+        approvalChoiceNewBranchAction: '신규 브랜치 생성',
+        approvalChoiceClose: '닫기',
         commentAction: '+',
         commentActionMobile: '코멘트',
         commentComposerTitle: '줄 코멘트',
@@ -1596,11 +1652,19 @@
       taskTabReviewNote.textContent = translateHumanReview('tab');
       document.getElementById('task-human-review-note-title').textContent = translateHumanReview('noteTitle');
       saveHumanReviewNoteButton.textContent = translateHumanReview('saveNote');
-      humanReviewCompletionModeLabel.textContent = translateHumanReview('completionModeLabel');
-      humanReviewCompletionModeSelect.querySelector('option[value="new-branch"]').textContent = translateHumanReview('completionModeNewBranch');
-      humanReviewCompletionModeSelect.querySelector('option[value="target-branch"]').textContent = translateHumanReview('completionModeTargetBranch');
       requestChangesButton.textContent = translateHumanReview('requestChanges');
       approveHumanReviewButton.textContent = translateHumanReview('approve');
+      document.getElementById('approval-choice-title').textContent = translateHumanReview('approvalChoiceTitle');
+      document.getElementById('approval-choice-description').textContent = translateHumanReview('approvalChoiceDescription');
+      document.getElementById('approval-choice-copy-title').textContent = translateHumanReview('approvalChoiceCopyTitle');
+      document.getElementById('approval-choice-copy-body').textContent = translateHumanReview('approvalChoiceCopyBody');
+      document.getElementById('approval-choice-target-title').textContent = translateHumanReview('approvalChoiceTargetTitle');
+      document.getElementById('approval-choice-target-description').textContent = translateHumanReview('approvalChoiceTargetDescription');
+      document.getElementById('approval-choice-new-branch-title').textContent = translateHumanReview('approvalChoiceNewBranchTitle');
+      document.getElementById('approval-choice-new-branch-description').textContent = translateHumanReview('approvalChoiceNewBranchDescription');
+      approvalChoiceTargetButton.textContent = translateHumanReview('approvalChoiceTargetAction');
+      approvalChoiceNewBranchButton.textContent = translateHumanReview('approvalChoiceNewBranchAction');
+      closeApprovalChoiceButton.textContent = translateHumanReview('approvalChoiceClose');
       if (!activeTaskDetail || activeTaskDetail?.metadata?.state !== 'human-verifying') {
         taskHumanReviewApprovalStatus.textContent = translateHumanReview('approvalReady');
         taskHumanReviewApprovalStatus.dataset.tone = 'neutral';
@@ -2420,10 +2484,26 @@
       taskModal.hidden = !isOpen;
       taskModal.setAttribute('aria-hidden', String(!isOpen));
       if (!isOpen) {
+        setApprovalChoiceModalOpen(false, { force: true });
         clearTaskRefreshTimer();
         activeTaskRequestToken += 1;
         taskDetailStale = false;
         activeInlineCommentAnchor = null;
+      }
+      syncBodyModalState();
+    }
+
+    function setApprovalChoiceModalOpen(isOpen, { force = false } = {}) {
+      if (!isOpen && approvalSubmissionInFlight && !force) return;
+      approvalChoiceModal.hidden = !isOpen;
+      approvalChoiceModal.setAttribute('aria-hidden', String(!isOpen));
+      if (!isOpen) {
+        approvalChoiceStatus.hidden = true;
+        approvalChoiceStatus.textContent = '';
+        approvalChoiceStatus.dataset.tone = 'neutral';
+        approvalChoiceTargetButton.disabled = false;
+        approvalChoiceNewBranchButton.disabled = false;
+        closeApprovalChoiceButton.disabled = false;
       }
       syncBodyModalState();
     }
@@ -2442,7 +2522,7 @@
     }
 
     function syncBodyModalState() {
-      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden);
     }
 
     function renderRetrospectiveMeta(record) {
@@ -3220,15 +3300,11 @@
       taskHumanReviewPanel.hidden = !canVerify;
       requestChangesShell.hidden = !canVerify;
       approveHumanReviewShell.hidden = !canVerify;
-      if (!canVerify) {
-        humanReviewCompletionModeSelect.value = 'new-branch';
-        return;
-      }
+      if (!canVerify) return;
       taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
       saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
       requestChangesButton.disabled = taskDetailStale || !hasFeedback;
       approveHumanReviewButton.disabled = taskDetailStale || approvalBlockedByContent;
-      humanReviewCompletionModeSelect.disabled = taskDetailStale;
 
       let requestChangesReason = '';
       if (taskDetailStale) {
@@ -3302,7 +3378,10 @@
       startVerificationButton.hidden = !canStart;
       startVerificationButton.disabled = !canStart || taskDetailStale;
       requestChangesButton.hidden = !canApproveOrReject;
+      requestChangesShell.hidden = !canApproveOrReject;
       approveHumanReviewButton.hidden = !canApproveOrReject;
+      approveHumanReviewShell.hidden = !canApproveOrReject;
+      if (!canApproveOrReject) setApprovalChoiceModalOpen(false);
       updateHumanReviewPanel();
     }
 
@@ -3825,6 +3904,7 @@
 
     async function rejectVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
+      setApprovalChoiceModalOpen(false);
       requestChangesButton.disabled = true;
       approveHumanReviewButton.disabled = true;
       taskHumanReviewNoteStatus.textContent = translateHumanReview('requestingChanges');
@@ -3848,28 +3928,55 @@
       }
     }
 
-    async function approveVerification() {
+    function openApprovalChoiceModal() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
+      if (approveHumanReviewButton.disabled) return;
+      taskModalError.hidden = true;
+      taskModalError.textContent = '';
+      setApprovalChoiceModalOpen(true);
+    }
+
+    async function approveVerification(completionMode) {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
+      approvalSubmissionInFlight = true;
       requestChangesButton.disabled = true;
       approveHumanReviewButton.disabled = true;
-      taskHumanReviewNoteStatus.textContent = translateHumanReview('approving');
+      approvalChoiceTargetButton.disabled = true;
+      approvalChoiceNewBranchButton.disabled = true;
+      closeApprovalChoiceButton.disabled = true;
+      approvalChoiceStatus.hidden = false;
+      approvalChoiceStatus.dataset.tone = 'neutral';
+      const approvalMessage = translateHumanReview('approving');
+      approvalChoiceStatus.textContent = approvalMessage;
+      taskHumanReviewNoteStatus.textContent = approvalMessage;
       try {
         await saveHumanReviewNoteIfNeeded();
         const response = await fetch(`/api/tasks/${activeTaskId}/approve-verification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ completion_mode: humanReviewCompletionModeSelect.value || 'new-branch' }),
+          body: JSON.stringify({ completion_mode: completionMode || 'new-branch' }),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
+        approvalSubmissionInFlight = false;
         await loadBoard();
+        setApprovalChoiceModalOpen(false, { force: true });
         setTaskModalOpen(false);
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
         taskHumanReviewNoteStatus.textContent = error.message;
+        approvalChoiceStatus.hidden = false;
+        approvalChoiceStatus.dataset.tone = 'error';
+        approvalChoiceStatus.textContent = error.message;
       } finally {
+        approvalSubmissionInFlight = false;
         updateHumanVerificationState();
+        if (!approvalChoiceModal.hidden) {
+          approvalChoiceTargetButton.disabled = false;
+          approvalChoiceNewBranchButton.disabled = false;
+          closeApprovalChoiceButton.disabled = false;
+        }
       }
     }
 
@@ -3927,9 +4034,10 @@
     cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
     closeRetrospectiveModalButton.addEventListener('click', () => { setRetrospectiveModalOpen(false); });
+    closeApprovalChoiceButton.addEventListener('click', () => { setApprovalChoiceModalOpen(false); });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
@@ -3999,7 +4107,9 @@
     window.addEventListener('resize', () => { if (activeTaskTab === 'review-note') syncHumanReviewEditorHeight(); });
     saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
     requestChangesButton.addEventListener('click', rejectVerification);
-    approveHumanReviewButton.addEventListener('click', approveVerification);
+    approveHumanReviewButton.addEventListener('click', openApprovalChoiceModal);
+    approvalChoiceTargetButton.addEventListener('click', () => { approveVerification('target-branch'); });
+    approvalChoiceNewBranchButton.addEventListener('click', () => { approveVerification('new-branch'); });
     taskMarkdownFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     taskArtifactSubtabs.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);

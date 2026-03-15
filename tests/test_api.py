@@ -1598,8 +1598,15 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
-    assert "human-review-completion-mode" in response.text
-    assert "completion_mode: humanReviewCompletionModeSelect.value || 'new-branch'" in response.text
+    assert 'id="approval-choice-modal"' in response.text
+    assert 'id="approval-choice-target-button"' in response.text
+    assert 'id="approval-choice-new-branch-button"' in response.text
+    assert "function openApprovalChoiceModal()" in response.text
+    assert "approveVerification('target-branch');" in response.text
+    assert "approveVerification('new-branch');" in response.text
+    assert "body: JSON.stringify({ completion_mode: completionMode || 'new-branch' })" in response.text
+    assert "function setApprovalChoiceModalOpen(isOpen, { force = false } = {})" in response.text
+    assert "setApprovalChoiceModalOpen(false, { force: true });" in response.text
     assert "Approve" in response.text
     assert "Request changes" in response.text
     assert "Agent active" in response.text
