@@ -6,11 +6,12 @@ import subprocess
 from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
 from ..commit_manager import CommitManager
 from ..config import AppConfig
 from ..exceptions import AdapterRunError, CommitError, TaskNotFoundError, TransitionError
+from ..language import generation_language_code, language_name
 from ..locks import TaskLockManager
 from ..models import RetrospectiveRecord, RunResult, TaskContext
 from ..opencode_adapter import OpenCodeAdapter
@@ -186,31 +187,38 @@ class RetrospectiveService:
         return result
 
     def _build_prompt(self, group: list[TaskContext]) -> str:
+        language_code = self._group_language(group)
+        text = RETROSPECTIVE_TEXT[language_code]
+        requested_language = language_name(language_code)
         sections = [
-            "Write a concise engineering retrospective in markdown.",
-            "Requirements:",
-            "- Keep it practical and specific to the completed tasks.",
-            "- Include these sections in order: # Retrospective, ## Summary, ## Completed tasks, ## What went well, ## Risks and follow-ups.",
-            "- Use bullet lists where helpful.",
-            "- Do not mention unavailable information.",
-            "- Do not include fenced code blocks.",
+            text["intro"],
+            text["language_line"].format(language=requested_language),
+            text["requirements_heading"],
+            *text["requirements"],
             "",
-            f"Target repo: {group[0].metadata.target.repo_root}",
-            f"Target branch: {group[0].metadata.target.base_branch}",
+            f"{text['target_repo_label']}: {group[0].metadata.target.repo_root}",
+            f"{text['target_branch_label']}: {group[0].metadata.target.base_branch}",
             "",
-            "Completed tasks:",
+            text["completed_tasks_heading"],
         ]
         for task in group:
             sections.extend(
                 [
-                    f"- Task ID: {task.metadata.task_id}",
-                    f"  Title: {task.metadata.title}",
-                    f"  Plan: {self._artifact_summary(task.task_dir / 'PLAN.md') or 'n/a'}",
-                    f"  Review: {self._latest_artifact_summary(task.task_dir, 'REVIEW-*.md') or 'n/a'}",
-                    f"  Human verification: {self._latest_artifact_summary(task.task_dir, 'HUMAN-VERIFY-*.md') or 'n/a'}",
+                    f"- {text['task_id_label']}: {task.metadata.task_id}",
+                    f"  {text['title_label']}: {task.metadata.title}",
+                    f"  {text['plan_label']}: {self._artifact_summary(task.task_dir / 'PLAN.md') or text['not_available']}",
+                    f"  {text['review_label']}: {self._latest_artifact_summary(task.task_dir, 'REVIEW-*.md') or text['not_available']}",
+                    f"  {text['human_verification_label']}: {self._latest_artifact_summary(task.task_dir, 'HUMAN-VERIFY-*.md') or text['not_available']}",
                 ]
             )
         return "\n".join(sections)
+
+    def _group_language(self, group: list[TaskContext]) -> str:
+        counts = {"en": 0, "ko": 0}
+        for task in group:
+            code = generation_language_code(task.metadata.request.language)
+            counts["ko" if code == "ko" else "en"] += 1
+        return "ko" if counts["ko"] > counts["en"] else "en"
 
     def _commit_retrospective_document(
         self,
@@ -224,7 +232,7 @@ class RetrospectiveService:
         primary_branch = base_branch
         self._ensure_clean_repo(target_repo_root)
         self.commit_manager._switch_to_branch(target_repo_root, primary_branch)
-        committed_branch = primary_branch if completion_mode == "target-branch" else self._ensure_retro_branch(target_repo_root, primary_branch)
+        committed_branch = primary_branch if completion_mode == "target-branch" else self._ensure_retro_branch(target_repo_root, primary_branch, generated_at)
         if completion_mode == "new-branch":
             switch = subprocess.run(
                 ["git", "-C", str(target_repo_root), "switch", "-C", committed_branch, primary_branch],
@@ -253,8 +261,9 @@ class RetrospectiveService:
         commit_sha = self.commit_manager._current_head(target_repo_root) or ""
         return repo_relative_path.as_posix(), committed_branch, commit_sha
 
-    def _ensure_retro_branch(self, repo_root: Path, base_branch: str) -> str:
-        candidate = f"retro/{self._branch_slug(base_branch)}"
+    def _ensure_retro_branch(self, repo_root: Path, base_branch: str, generated_at: datetime) -> str:
+        date_suffix = generated_at.strftime("%y%m%d")
+        candidate = f"retro/{self._branch_slug(base_branch)}-{date_suffix}"
         if not self.commit_manager._branch_exists(repo_root, candidate):
             return candidate
         suffix = 2
@@ -345,3 +354,65 @@ class RetrospectiveService:
                 continue
             return " ".join(line.split())
         return None
+
+
+class RetrospectiveText(TypedDict):
+    intro: str
+    language_line: str
+    requirements_heading: str
+    requirements: list[str]
+    completed_tasks_heading: str
+    task_id_label: str
+    title_label: str
+    target_repo_label: str
+    target_branch_label: str
+    plan_label: str
+    review_label: str
+    human_verification_label: str
+    not_available: str
+
+
+RETROSPECTIVE_TEXT: dict[str, RetrospectiveText] = {
+    "en": {
+        "intro": "Write a concise engineering retrospective in markdown.",
+        "language_line": "Return the retrospective in {language}.",
+        "requirements_heading": "Requirements:",
+        "requirements": [
+            "- Keep it practical and specific to the completed tasks.",
+            "- Include these sections in order: # Retrospective, ## Summary, ## Completed tasks, ## What went well, ## Risks and follow-ups.",
+            "- Use bullet lists where helpful.",
+            "- Do not mention unavailable information.",
+            "- Do not include fenced code blocks.",
+        ],
+        "completed_tasks_heading": "Completed tasks:",
+        "task_id_label": "Task ID",
+        "title_label": "Title",
+        "target_repo_label": "Target repo",
+        "target_branch_label": "Target branch",
+        "plan_label": "Plan",
+        "review_label": "Review",
+        "human_verification_label": "Human verification",
+        "not_available": "n/a",
+    },
+    "ko": {
+        "intro": "엔지니어링 회고를 마크다운으로 간결하게 작성하세요.",
+        "language_line": "회고는 반드시 {language}로 작성하세요.",
+        "requirements_heading": "요구사항:",
+        "requirements": [
+            "- 완료된 작업에 구체적으로 연결된 실용적인 내용만 작성하세요.",
+            "- 섹션 순서는 다음을 따르세요: # 회고, ## 요약, ## 완료된 작업, ## 잘된 점, ## 리스크와 후속 조치.",
+            "- 필요하면 bullet list를 사용하세요.",
+            "- 확인할 수 없는 정보는 추측해서 쓰지 마세요.",
+            "- fenced code block은 포함하지 마세요.",
+        ],
+        "completed_tasks_heading": "완료된 작업:",
+        "task_id_label": "태스크 ID",
+        "title_label": "제목",
+        "target_repo_label": "대상 저장소",
+        "target_branch_label": "대상 브랜치",
+        "plan_label": "계획",
+        "review_label": "리뷰",
+        "human_verification_label": "사람 검증",
+        "not_available": "없음",
+    },
+}

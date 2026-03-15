@@ -61,6 +61,15 @@ def runtime_language_code_to_request_language(value: str | None) -> str:
     return normalized.lower()
 
 
+def generation_language_code(value: str | None) -> str:
+    normalized = normalize_language(value)
+    return "ko" if normalized == "ko" else "en"
+
+
+def generation_language_name(value: str | None) -> str:
+    return "Korean" if generation_language_code(value) == "ko" else "English"
+
+
 def detect_primary_language(text: str) -> str:
     counts = {
         "ko": len(re.findall(r"[\uac00-\ud7a3]", text)),

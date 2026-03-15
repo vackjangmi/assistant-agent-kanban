@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..enums import TaskState
 from ..integration_manager import IntegrationManager
+from ..language import generation_language_code
 from ..models import TaskErrorInfo
 from ..opencode_adapter import OpenCodeAdapter
 from ..retry_policy import apply_retry_gate, clear_retry_gate
@@ -63,7 +64,7 @@ class ReviewerWorker(WorkerBase):
                 return True
             run_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{reviewing.metadata.cycle:03d}.jsonl"
             prompt = self.build_prompt(
-                self._build_reviewer_source(reviewing.task_dir, reviewing.metadata.cycle),
+                self._build_reviewer_source(reviewing.task_dir, reviewing.metadata),
                 reviewing.metadata,
                 phase="reviewer",
             )
@@ -123,40 +124,72 @@ class ReviewerWorker(WorkerBase):
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
 
-    def _build_reviewer_source(self, task_dir: Path, implementation_iteration: int) -> str:
-        sections = ["# Plan", "", (task_dir / "PLAN.md").read_text().rstrip()]
+    def _build_reviewer_source(self, task_dir: Path, metadata) -> str:
+        language = generation_language_code(metadata.request.language)
+        implementation_iteration = metadata.cycle
+        strings = REVIEWER_TEXT[language]
+        sections = [f"# {strings['plan']}", "", (task_dir / "PLAN.md").read_text().rstrip()]
 
         work_files = sorted(task_dir.glob("WORK-*.md"))
         if work_files:
-            sections.extend(["", "# Work History"])
+            sections.extend(["", f"# {strings['work_history']}"])
             for work_file in work_files:
                 sections.extend(["", f"## {work_file.name}", "", work_file.read_text().rstrip()])
 
         review_files = sorted(task_dir.glob("REVIEW-*.md"))
         if review_files:
-            sections.extend(["", "# Previous AI Reviews"])
+            sections.extend(["", f"# {strings['previous_reviews']}"])
             for review_file in review_files:
                 sections.extend(["", f"## {review_file.name}", "", review_file.read_text().rstrip()])
 
         human_verify_files = sorted(task_dir.glob("HUMAN-VERIFY-*.md"))
         if human_verify_files:
-            sections.extend(["", "# Human Verification History"])
+            sections.extend(["", f"# {strings['human_verification_history']}"])
             for verify_file in human_verify_files:
                 sections.extend(["", f"## {verify_file.name}", "", verify_file.read_text().rstrip()])
 
         current_work = task_dir / f"WORK-{implementation_iteration:03d}.md"
         if current_work.exists():
-            sections.extend(["", "# Current Work Artifact", "", current_work.read_text().rstrip()])
+            sections.extend(["", f"# {strings['current_work_artifact']}", "", current_work.read_text().rstrip()])
 
         sections.extend(
             [
                 "",
-                "# Review Instructions",
+                f"# {strings['review_instructions']}",
                 "",
-                "- Check the full work history, previous AI reviews, and human verification history before deciding.",
-                "- Do not repeat earlier findings unless they still apply; explain why they remain unresolved.",
-                "- Use `Verdict: NEEDS_CHANGES` only when implementation changes are still required.",
-                "- If the work is acceptable with only minor notes, prefer `Verdict: PASS` and list the notes under follow-ups.",
+                *strings["instructions"],
             ]
         )
         return "\n".join(section for section in sections if section is not None)
+
+
+REVIEWER_TEXT = {
+    "en": {
+        "plan": "Plan",
+        "work_history": "Work History",
+        "previous_reviews": "Previous AI Reviews",
+        "human_verification_history": "Human Verification History",
+        "current_work_artifact": "Current Work Artifact",
+        "review_instructions": "Review Instructions",
+        "instructions": [
+            "- Check the full work history, previous AI reviews, and human verification history before deciding.",
+            "- Do not repeat earlier findings unless they still apply; explain why they remain unresolved.",
+            "- Use `Verdict: NEEDS_CHANGES` only when implementation changes are still required.",
+            "- If the work is acceptable with only minor notes, prefer `Verdict: PASS` and list the notes under follow-ups.",
+        ],
+    },
+    "ko": {
+        "plan": "계획",
+        "work_history": "작업 이력",
+        "previous_reviews": "이전 AI 리뷰",
+        "human_verification_history": "사람 검증 이력",
+        "current_work_artifact": "현재 작업 산출물",
+        "review_instructions": "리뷰 지침",
+        "instructions": [
+            "- 판단하기 전에 전체 작업 이력, 이전 AI 리뷰, 사람 검증 이력을 모두 확인하세요.",
+            "- 예전 지적을 그대로 반복하지 말고, 아직 유효하다면 왜 해결되지 않았는지 설명하세요.",
+            "- 실제 구현 수정이 더 필요할 때만 `Verdict: NEEDS_CHANGES`를 사용하세요.",
+            "- 사소한 후속 메모만 남는 수준이면 `Verdict: PASS`를 우선하고 후속 항목 아래에 정리하세요.",
+        ],
+    },
+}

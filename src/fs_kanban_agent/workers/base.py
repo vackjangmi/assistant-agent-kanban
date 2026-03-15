@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ..config import AppConfig
 from ..events import EventBus
-from ..language import language_name
+from ..language import generation_language_name
 from ..locks import TaskLockManager
 from ..log_parser import render_opencode_log
 from ..metadata_store import MetadataStore
@@ -48,7 +48,7 @@ class WorkerBase:
         return path
 
     def build_prompt(self, source_text: str, metadata: TaskMetadata, *, phase: str) -> str:
-        requested_language = language_name(metadata.request.language)
+        requested_language = generation_language_name(metadata.request.language)
         instructions = [
             f"You are the fs-kanban {phase} worker.",
             f"Return the markdown artifact in {requested_language}.",
