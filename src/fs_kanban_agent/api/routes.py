@@ -467,7 +467,7 @@ def build_router() -> APIRouter:
         runtime = request.app.state.runtime
         try:
             moved = await asyncio.to_thread(runtime.verification_service.approve, task_id, by="human")
-        except (TransitionError, TaskNotFoundError, CommitError) as exc:
+        except (TransitionError, TaskNotFoundError, CommitError, IntegrationError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return moved.metadata
