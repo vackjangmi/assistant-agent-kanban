@@ -603,6 +603,31 @@ def test_human_verification_approve_switches_back_to_review_branch_before_commit
     assert current_branch == f"feature/{moved.metadata.task_id.lower()}-{moved.metadata.slug}"
 
 
+def test_human_verification_approve_can_commit_to_target_branch(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-approve-target-branch-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    review_sha = scanner.find_task(completed.metadata.task_id).metadata.commit.sha
+
+    moved = service.approve(completed.metadata.task_id, by="human", completion_mode="target-branch")
+
+    assert moved.state == TaskState.DONE
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.commit.review_sha == review_sha
+    assert refreshed.metadata.integration.final_branch == "main"
+    current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == "main"
+    review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{completed.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
+    final_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"feature/{completed.metadata.task_id.lower()}-{completed.metadata.slug}"], check=True, capture_output=True, text=True).stdout.strip()
+    assert review_branch == ""
+    assert final_branch == ""
+
+
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()

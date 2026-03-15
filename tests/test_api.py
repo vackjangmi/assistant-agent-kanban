@@ -345,12 +345,43 @@ def test_api_supports_human_verification_approve(configured_paths):
 
     with TestClient(app) as client:
         client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
-        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+        approve = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/approve-verification",
+            json={"completion_mode": "new-branch"},
+        )
         assert approve.status_code == 200
         assert approve.json()["state"] == TaskState.DONE.value
         detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
         assert detail.status_code == 200
         assert detail.json()["metadata"]["integration"]["final_branch"] == f"feature/{completed.metadata.task_id.lower()}-{completed.metadata.slug}"
+
+
+def test_api_supports_human_verification_approve_to_target_branch(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-approve-target-branch-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-verify-approve-target-branch-task")
+
+    with TestClient(app) as client:
+        client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        approve = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/approve-verification",
+            json={"completion_mode": "target-branch"},
+        )
+        assert approve.status_code == 200
+        assert approve.json()["state"] == TaskState.DONE.value
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["metadata"]["integration"]["final_branch"] == config.base_branch
+
+    current_branch = subprocess.run(
+        ["git", "-C", str(repo_root), "branch", "--show-current"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert current_branch == config.base_branch
 
 
 def test_api_returns_todos_when_human_verification_rebase_fails(configured_paths):
@@ -1420,6 +1451,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "renderTag('', item.task_id ? `#${item.task_id}` : ''" in response.text
     assert "renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon'))" in response.text
     assert "renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon'))" in response.text
+    assert "renderTag(boardCardLabel('branch'), branchLabel, 'card-tag-branch card-tag-base-branch'" in response.text
+    assert "renderTag(translateTask('finalBranchLabel'), finalBranchLabel, 'card-tag-branch card-tag-final-branch'" in response.text
     assert "renderCardTags(item, { compactFinal: true })" in response.text
     assert "const activeSince = item.state_entered_at || '';" in response.text
     assert 'buildDurationAttributes(0, activeSince)' in response.text
@@ -1431,13 +1464,16 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "if (!boardPhaseManuallySelected) {" in response.text
     assert "#board.final-board { display: flex;" in response.text
     assert ".final-board .column { flex: 0 0 min(320px, calc(100vw - 56px)); min-width: 280px; }" in response.text
-    assert "final-project-path" in response.text
+    assert ".final-project-column { border-top: 6px solid var(--repo-accent, var(--accent));" in response.text
+    assert "final-project-title" in response.text
+    assert "final-project-path" not in response.text
     assert "final-project-branches" in response.text
     assert "final-branch-group" in response.text
     assert "final-branch-label" in response.text
     assert "final-branch-icon" in response.text
     assert ".final-branch-group { display: grid; gap: 10px; padding: 10px;" in response.text
-    assert "const branch = item.base_branch || 'unknown';" in response.text
+    assert "const branch = item.final_branch || item.base_branch || 'unknown';" in response.text
+    assert "title=\"${escapeHtml(projectPath)}\"" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');" in response.text
     assert "const summaryIsLive = summary.is_current && summary.state !== 'done';" in response.text
@@ -1491,6 +1527,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
+    assert "human-review-completion-mode" in response.text
+    assert "completion_mode: humanReviewCompletionModeSelect.value || 'new-branch'" in response.text
     assert "Approve" in response.text
     assert "Request changes" in response.text
     assert "Agent active" in response.text

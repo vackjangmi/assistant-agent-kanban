@@ -36,7 +36,9 @@
     .plan-board .column, .implementation-board .column, .final-board .column { min-height: 0; height: 100%; display: flex; flex-direction: column; }
     .final-board .column { flex: 0 0 min(320px, calc(100vw - 56px)); min-width: 280px; }
     .column h2 { margin-top: 0; }
-    .final-project-path { margin: -6px 0 10px; color: var(--muted); font-size: 0.76rem; line-height: 1.35; word-break: break-all; }
+    .final-project-column { border-top: 6px solid var(--repo-accent, var(--accent)); background: linear-gradient(180deg, var(--repo-accent-soft, rgba(255,255,255,0.82)) 0, rgba(255,255,255,0) 64px), var(--panel); }
+    .final-project-heading { margin-bottom: 10px; }
+    .final-project-title { display: inline-block; margin: 0; }
     .final-project-branches { display: grid; gap: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
     .final-branch-group { display: grid; gap: 10px; padding: 10px; border: 1px solid rgba(82,96,107,0.14); background: rgba(255,255,255,0.62); box-shadow: inset 0 1px 0 rgba(255,255,255,0.55); }
     .final-branch-label { display: inline-flex; align-items: center; gap: 6px; width: fit-content; max-width: 100%; padding: 4px 8px; border: 1px solid rgba(82,96,107,0.18); background: rgba(82,96,107,0.08); color: #45525d; font-size: 0.76rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-shadow: 0 1px 0 rgba(255,255,255,0.7); }
@@ -58,6 +60,8 @@
     .card-tag-id { --tag-bg: rgba(139,90,43,0.12); --tag-border: rgba(139,90,43,0.24); --tag-text: #7a4921; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }
     .card-repo-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .card-tag-branch { --tag-bg: rgba(82,96,107,0.1); --tag-border: rgba(82,96,107,0.18); --tag-text: #45525d; }
+    .card-tag-base-branch { --tag-bg: rgba(82,96,107,0.08); --tag-border: rgba(82,96,107,0.18); --tag-text: #45525d; }
+    .card-tag-final-branch { --tag-bg: rgba(124,79,44,0.14); --tag-border: rgba(124,79,44,0.26); --tag-text: #6c3b16; }
     .card-branch-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .card-model { margin-top: 8px; padding: 7px 8px; border: 1px solid var(--border); background: var(--accent-soft); color: var(--text); font-size: 0.82rem; line-height: 1.35; }
     .card-model strong { display: block; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }
@@ -217,6 +221,9 @@
     .human-review-box { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; min-height: 0; height: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; overflow: hidden; }
     .human-review-editor-shell { min-height: 0; height: 100%; display: grid; }
     .human-review-footer { display: grid; gap: 8px; }
+    .human-review-controls { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+    .human-review-mode { display: inline-grid; grid-template-columns: auto auto; gap: 8px; align-items: center; width: fit-content; margin-left: auto; color: var(--accent-strong); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .human-review-mode select { min-width: 144px; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 7px 10px; font: inherit; color: var(--text); text-transform: none; letter-spacing: normal; }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -298,7 +305,7 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .human-review-controls { justify-content: stretch; } .human-review-mode { width: 100%; grid-template-columns: 1fr; margin-left: 0; } .human-review-mode select { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -625,6 +632,15 @@
               <textarea id="task-human-review-editor-fallback" class="editor-textarea" spellcheck="false" hidden></textarea>
             </div>
             <div class="human-review-footer">
+              <div class="human-review-controls">
+                <label class="human-review-mode" for="human-review-completion-mode">
+                  <span id="task-human-review-completion-mode-label">Completion mode</span>
+                  <select id="human-review-completion-mode">
+                    <option value="new-branch" selected>New branch</option>
+                    <option value="target-branch">Target branch</option>
+                  </select>
+                </label>
+              </div>
               <div id="task-human-review-approval-status" class="human-review-approval-status" hidden></div>
             </div>
           </div>
@@ -755,6 +771,8 @@
     const taskHumanReviewEditorShell = taskHumanReviewEditorHost.parentElement;
     const taskHumanReviewNoteStatus = document.getElementById('task-human-review-note-status');
     const taskHumanReviewApprovalStatus = document.getElementById('task-human-review-approval-status');
+    const humanReviewCompletionModeLabel = document.getElementById('task-human-review-completion-mode-label');
+    const humanReviewCompletionModeSelect = document.getElementById('human-review-completion-mode');
     const saveHumanReviewNoteButton = document.getElementById('save-human-review-note');
     const requestChangesButton = document.getElementById('request-changes-button');
     const requestChangesShell = document.getElementById('request-changes-shell');
@@ -1035,6 +1053,9 @@
         commentsExistingOne: '{count} saved thread',
         commentsExistingMany: '{count} saved threads',
         commentsHistory: 'Previous-round comments stay visible for context only.',
+        completionModeLabel: 'Completion mode',
+        completionModeNewBranch: 'New branch',
+        completionModeTargetBranch: 'Target branch',
         commentAction: '+',
         commentActionMobile: 'Comment',
         commentComposerTitle: 'Line comment',
@@ -1075,6 +1096,9 @@
         commentsExistingOne: '저장된 스레드 {count}개',
         commentsExistingMany: '저장된 스레드 {count}개',
         commentsHistory: '이전 라운드 코멘트는 참고용으로만 보이며 현재 라운드 승인에는 영향을 주지 않습니다.',
+        completionModeLabel: '완료 방식',
+        completionModeNewBranch: '새 브랜치',
+        completionModeTargetBranch: '대상 브랜치',
         commentAction: '+',
         commentActionMobile: '코멘트',
         commentComposerTitle: '줄 코멘트',
@@ -1456,6 +1480,9 @@
       taskTabReviewNote.textContent = translateHumanReview('tab');
       document.getElementById('task-human-review-note-title').textContent = translateHumanReview('noteTitle');
       saveHumanReviewNoteButton.textContent = translateHumanReview('saveNote');
+      humanReviewCompletionModeLabel.textContent = translateHumanReview('completionModeLabel');
+      humanReviewCompletionModeSelect.querySelector('option[value="new-branch"]').textContent = translateHumanReview('completionModeNewBranch');
+      humanReviewCompletionModeSelect.querySelector('option[value="target-branch"]').textContent = translateHumanReview('completionModeTargetBranch');
       requestChangesButton.textContent = translateHumanReview('requestChanges');
       approveHumanReviewButton.textContent = translateHumanReview('approve');
       if (!activeTaskDetail || activeTaskDetail?.metadata?.state !== 'human-verifying') {
@@ -1740,12 +1767,16 @@
       const repoPath = normalizeRepoPath(item.target_repo_root);
       const repoLabel = item.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
       const branchLabel = item.base_branch || '';
+      const finalBranchLabel = item.final_branch || '';
       const repoTone = repoTagTone(repoPath);
       const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};`;
       const tags = [
         renderTag('', item.task_id ? `#${item.task_id}` : '', 'card-tag-id', '', item.task_id || ''),
         compactFinal ? '' : renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
-        compactFinal ? '' : renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon')),
+        compactFinal
+          ? renderTag(boardCardLabel('branch'), branchLabel, 'card-tag-branch card-tag-base-branch', '', branchLabel, branchIconSvg('card-branch-icon'))
+          : renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon')),
+        compactFinal ? renderTag(translateTask('finalBranchLabel'), finalBranchLabel, 'card-tag-branch card-tag-final-branch', '', finalBranchLabel, branchIconSvg('card-branch-icon')) : '',
       ].filter(Boolean);
       const runtimeValue = renderCardRuntime(item);
       const runtime = runtimeValue ? `<span class="card-meta card-runtime-meta">${renderCardActivity(item)}${runtimeValue}</span>` : '';
@@ -1766,7 +1797,7 @@
     function groupFinalItemsByBranch(items) {
       const grouped = new Map();
       sortBoardItemsByUpdatedAt(items).forEach((item) => {
-        const branch = item.base_branch || 'unknown';
+        const branch = item.final_branch || item.base_branch || 'unknown';
         if (!grouped.has(branch)) grouped.set(branch, []);
         grouped.get(branch).push(item);
       });
@@ -1781,10 +1812,13 @@
       const sortedItems = sortBoardItemsByUpdatedAt(items);
       const projectLabel = sortedItems[0]?.target_repo_label || deriveRepoContext(projectPath).repoName || projectPath || stateLabel('done');
       const branchGroups = groupFinalItemsByBranch(sortedItems);
+      const repoTone = repoTagTone(projectPath);
+      const columnStyle = `--repo-accent:${repoTone.text};--repo-accent-soft:${repoTone.background};`;
       return `
-        <section class="column final-project-column">
-          <h2>${escapeHtml(projectLabel)}</h2>
-          <div class="final-project-path" title="${escapeHtml(projectPath)}">${escapeHtml(projectPath)}</div>
+        <section class="column final-project-column" style="${columnStyle}">
+          <div class="final-project-heading">
+            <h2 class="final-project-title" title="${escapeHtml(projectPath)}">${escapeHtml(projectLabel)}</h2>
+          </div>
           <div class="final-project-branches">${branchGroups.map(([branch, branchItems]) => `
             <section class="final-branch-group">
               <div class="final-branch-label" title="${escapeHtml(branch)}">${branchIconSvg('final-branch-icon')}<span>${escapeHtml(branch)}</span></div>
@@ -2962,11 +2996,15 @@
       taskHumanReviewPanel.hidden = !canVerify;
       requestChangesShell.hidden = !canVerify;
       approveHumanReviewShell.hidden = !canVerify;
-      if (!canVerify) return;
+      if (!canVerify) {
+        humanReviewCompletionModeSelect.value = 'new-branch';
+        return;
+      }
       taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
       saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
       requestChangesButton.disabled = taskDetailStale || !hasFeedback;
       approveHumanReviewButton.disabled = taskDetailStale || approvalBlockedByContent;
+      humanReviewCompletionModeSelect.disabled = taskDetailStale;
 
       let requestChangesReason = '';
       if (taskDetailStale) {
@@ -3593,7 +3631,11 @@
       taskHumanReviewNoteStatus.textContent = translateHumanReview('approving');
       try {
         await saveHumanReviewNoteIfNeeded();
-        const response = await fetch(`/api/tasks/${activeTaskId}/approve-verification`, { method: 'POST' });
+        const response = await fetch(`/api/tasks/${activeTaskId}/approve-verification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completion_mode: humanReviewCompletionModeSelect.value || 'new-branch' }),
+        });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
         await loadBoard();

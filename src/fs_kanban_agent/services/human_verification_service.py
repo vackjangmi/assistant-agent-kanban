@@ -173,10 +173,12 @@ class HumanVerificationService:
             self.metadata_store.save(context.task_dir, context.metadata)
             return self.transitions.move(context, TaskState.TODOS, by=by, note=summary or "human verification requested changes")
 
-    def approve(self, task_id: str, *, by: str) -> TaskContext:
+    def approve(self, task_id: str, *, by: str, completion_mode: str = "new-branch") -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("human verification approval is only allowed from human-verifying")
+        if completion_mode not in {"new-branch", "target-branch"}:
+            raise TransitionError(f"unsupported completion mode: {completion_mode}")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
             try:
                 if context.metadata.human_verification.note_markdown.strip():
@@ -194,11 +196,16 @@ class HumanVerificationService:
                 self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="APPROVED")
                 self._sync_task_documents_to_target_repo(context.task_dir, context.metadata)
                 self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
-                sha = self.commit_manager.finalize_review_branch(context.task_dir, context.metadata)
+                sha = self.commit_manager.finalize_review_branch(
+                    context.task_dir,
+                    context.metadata,
+                    completion_mode=completion_mode,
+                )
                 self.integration_manager.finalize_workspace(context.metadata)
                 context.metadata.commit.status = "committed"
                 context.metadata.commit.sha = sha
-                return self.transitions.move(context, TaskState.DONE, by=by, note="human verification approved")
+                completion_label = "new branch" if completion_mode == "new-branch" else "target branch"
+                return self.transitions.move(context, TaskState.DONE, by=by, note=f"human verification approved ({completion_label})")
             except TransitionError:
                 raise
             except Exception as exc:

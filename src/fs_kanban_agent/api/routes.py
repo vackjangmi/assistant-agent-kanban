@@ -42,6 +42,10 @@ class HumanVerificationPayload(BaseModel):
     note: str = ""
 
 
+class HumanVerificationApprovePayload(BaseModel):
+    completion_mode: Literal["new-branch", "target-branch"] = "new-branch"
+
+
 class HumanReviewNotePayload(BaseModel):
     content: str = ""
 
@@ -463,10 +467,20 @@ def build_router() -> APIRouter:
         return moved.metadata
 
     @router.post("/api/tasks/{task_id}/approve-verification")
-    async def approve_verification(task_id: str, request: Request):
+    async def approve_verification(
+        task_id: str,
+        request: Request,
+        payload: HumanVerificationApprovePayload | None = None,
+    ):
         runtime = request.app.state.runtime
+        approval_payload = payload or HumanVerificationApprovePayload()
         try:
-            moved = await asyncio.to_thread(runtime.verification_service.approve, task_id, by="human")
+            moved = await asyncio.to_thread(
+                runtime.verification_service.approve,
+                task_id,
+                by="human",
+                completion_mode=approval_payload.completion_mode,
+            )
         except (TransitionError, TaskNotFoundError, CommitError, IntegrationError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()

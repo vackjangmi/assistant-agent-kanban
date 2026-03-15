@@ -30,7 +30,9 @@ class CommitManager:
     def commit_task(self, task_dir: Path, metadata: TaskMetadata) -> str:
         return self._commit_review_branch(task_dir, metadata, allow_existing_commit=False)
 
-    def finalize_review_branch(self, task_dir: Path, metadata: TaskMetadata) -> str:
+    def finalize_review_branch(self, task_dir: Path, metadata: TaskMetadata, *, completion_mode: str = "new-branch") -> str:
+        if completion_mode not in {"new-branch", "target-branch"}:
+            raise CommitError(f"unsupported completion mode: {completion_mode}")
         review_sha = self._commit_review_branch(task_dir, metadata, allow_existing_commit=True)
         if metadata.commit.review_sha is None:
             metadata.commit.review_sha = review_sha
@@ -38,6 +40,10 @@ class CommitManager:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise CommitError(str(exc)) from exc
+        if completion_mode == "target-branch":
+            final_sha = self._commit_to_target_branch(target_repo_root, metadata, review_sha)
+            metadata.integration.final_branch = metadata.target.base_branch
+            return final_sha
         final_branch = self._ensure_final_branch(target_repo_root, metadata, review_sha)
         metadata.integration.final_branch = final_branch
         rebase = subprocess.run(
@@ -49,6 +55,20 @@ class CommitManager:
         if rebase.returncode != 0:
             raise CommitError(rebase.stderr.strip() or "failed to rebase final branch")
         return self._current_head(target_repo_root) or review_sha
+
+    def _commit_to_target_branch(self, repo_root: Path, metadata: TaskMetadata, review_sha: str) -> str:
+        target_branch = metadata.target.base_branch
+        self._switch_to_branch(repo_root, target_branch)
+        cherry_pick = subprocess.run(
+            ["git", "-C", str(repo_root), "cherry-pick", review_sha],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if cherry_pick.returncode != 0:
+            subprocess.run(["git", "-C", str(repo_root), "cherry-pick", "--abort"], capture_output=True, text=True, check=False)
+            raise CommitError(cherry_pick.stderr.strip() or "failed to cherry-pick reviewed commit onto target branch")
+        return self._current_head(repo_root) or review_sha
 
     def _commit_review_branch(self, task_dir: Path, metadata: TaskMetadata, *, allow_existing_commit: bool) -> str:
         try:
@@ -183,6 +203,16 @@ class CommitManager:
             return None
         sha = result.stdout.strip()
         return sha or None
+
+    def _switch_to_branch(self, repo_root: Path, branch: str) -> None:
+        for command in (
+            ["git", "-C", str(repo_root), "switch", branch],
+            ["git", "-C", str(repo_root), "switch", "-C", branch, f"origin/{branch}"],
+        ):
+            result = subprocess.run(command, capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                return
+        raise CommitError(f"failed to switch to target branch '{branch}'")
 
     def _ensure_final_branch(self, repo_root: Path, metadata: TaskMetadata, start_point: str) -> str:
         branch = self._preferred_final_branch(metadata)

@@ -145,6 +145,7 @@ class TaskSnapshot(BaseModel):
     target_repo_root: str = "."
     target_repo_label: str = "."
     base_branch: str = "main"
+    final_branch: str | None = None
     total_duration_ms: int = 0
     current_state_duration_ms: int = 0
 

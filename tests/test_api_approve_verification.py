@@ -16,7 +16,7 @@ def test_api_returns_json_conflict_when_approve_verification_raises_integration_
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
     _, completed = _task_ready_for_completed_reviews(config, "human-verify-approve-integration-error-task")
 
-    def fail_approve(task_id: str, *, by: str):
+    def fail_approve(task_id: str, *, by: str, completion_mode: str = "new-branch"):
         raise IntegrationError("finalize exploded")
 
     app.state.runtime.verification_service.approve = fail_approve

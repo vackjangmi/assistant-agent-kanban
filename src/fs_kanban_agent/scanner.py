@@ -164,6 +164,7 @@ class KanbanScanner:
                     target_repo_root=item.metadata.target.repo_root,
                     target_repo_label=target_repo_label(item.metadata.target.repo_root),
                     base_branch=item.metadata.target.base_branch,
+                    final_branch=item.metadata.integration.final_branch,
                     total_duration_ms=total_task_duration_ms(item.metadata, state),
                     current_state_duration_ms=current_state_duration_ms(item.metadata, state),
                 )
