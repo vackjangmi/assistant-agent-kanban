@@ -180,6 +180,9 @@ class StageTimingSegment(BaseModel):
 
 class TaskStageTiming(BaseModel):
     total_duration_ms: int = 0
+    ai_work_duration_ms: int = 0
+    human_work_duration_ms: int = 0
+    waiting_duration_ms: int = 0
     summaries: list[StageTimingSummary] = Field(default_factory=list)
     segments: list[StageTimingSegment] = Field(default_factory=list)
 

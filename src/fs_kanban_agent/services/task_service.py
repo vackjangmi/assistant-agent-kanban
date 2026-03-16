@@ -29,7 +29,7 @@ from ..models import (
     TaskMetadata,
     TaskStageTiming,
 )
-from ..scanner import AGENT_ACTIVE_STATES, TERMINAL_STATES, KanbanScanner, derive_agent_status
+from ..scanner import TERMINAL_STATES, KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
 
 
@@ -37,6 +37,18 @@ HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+
 ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
 ATTACHMENT_NAME_RE = re.compile(r"[^a-zA-Z0-9]+")
 ALLOWED_ATTACHMENT_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+AI_ACTIVE_STATES = {
+    TaskState.PLANNING,
+    TaskState.IMPLEMENTING,
+    TaskState.REVIEWING,
+}
+WAITING_STATES = {
+    TaskState.REQUESTS,
+    TaskState.WAITING_CHECK_PLANS,
+    TaskState.TODOS,
+    TaskState.WAITING_REVIEWS,
+    TaskState.COMPLETED_REVIEWS,
+}
 
 
 PatchFileState = dict[str, str | int | bool | list[ChangedFileHunk] | None]
@@ -209,6 +221,9 @@ class TaskService:
         segments: list[StageTimingSegment] = []
         visit_counts: dict[TaskState, int] = {state: 0 for state in STATE_ORDER}
         total_duration_ms = 0
+        ai_work_duration_ms = 0
+        human_work_duration_ms = 0
+        waiting_duration_ms = 0
 
         for index, entry in enumerate(history):
             next_entry = history[index + 1] if index + 1 < len(history) else None
@@ -235,12 +250,20 @@ class TaskService:
             summary.is_current = is_current
             if entry.state in TERMINAL_STATES:
                 continue
-            if entry.state in AGENT_ACTIVE_STATES or is_current:
-                total_duration_ms += duration_ms
+            total_duration_ms += duration_ms
+            if entry.state in AI_ACTIVE_STATES:
+                ai_work_duration_ms += duration_ms
+            elif entry.state == TaskState.HUMAN_VERIFYING:
+                human_work_duration_ms += duration_ms
+            elif entry.state in WAITING_STATES:
+                waiting_duration_ms += duration_ms
 
         ordered_summaries = [summaries_by_state[state] for state in STATE_ORDER]
         return TaskStageTiming(
             total_duration_ms=total_duration_ms,
+            ai_work_duration_ms=ai_work_duration_ms,
+            human_work_duration_ms=human_work_duration_ms,
+            waiting_duration_ms=waiting_duration_ms,
             summaries=ordered_summaries,
             segments=segments,
         )

@@ -1088,7 +1088,10 @@ def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
     stage_timing = payload["stage_timing"]
     assert len(stage_timing["summaries"]) == 10
     assert len(stage_timing["segments"]) == 4
-    assert stage_timing["total_duration_ms"] >= 360000
+    assert stage_timing["total_duration_ms"] >= 720000
+    assert stage_timing["ai_work_duration_ms"] == 180000
+    assert stage_timing["human_work_duration_ms"] == 0
+    assert stage_timing["waiting_duration_ms"] >= 540000
     requests_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.REQUESTS.value)
     planning_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.PLANNING.value)
     waiting_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.WAITING_CHECK_PLANS.value)
