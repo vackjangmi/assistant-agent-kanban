@@ -191,6 +191,7 @@ class TaskDetail(BaseModel):
     markdown_files: list[str]
     json_files: list[str]
     log_files: list[str]
+    changed_files_available: bool = False
     changed_files: list[ChangedFileSummary] = Field(default_factory=list)
     stage_timing: TaskStageTiming = Field(default_factory=TaskStageTiming)
     human_review: HumanReviewState = Field(default_factory=lambda: HumanReviewState())

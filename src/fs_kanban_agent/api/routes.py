@@ -281,10 +281,10 @@ def build_router() -> APIRouter:
         }
 
     @router.get("/api/tasks/{task_id}")
-    async def task_detail(task_id: str, request: Request):
+    async def task_detail(task_id: str, request: Request, include_changed_files: bool = False):
         runtime = request.app.state.runtime
         try:
-            return runtime.task_service.get_task(task_id)
+            return runtime.task_service.get_task(task_id, include_changed_files=include_changed_files)
         except TaskNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

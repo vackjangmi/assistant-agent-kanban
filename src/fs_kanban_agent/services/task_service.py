@@ -48,14 +48,14 @@ class TaskService:
         self.runs_root = runs_root
         self.kanban_root = kanban_root
 
-    def get_task(self, task_id: str) -> TaskDetail:
+    def get_task(self, task_id: str, *, include_changed_files: bool = True) -> TaskDetail:
         task = self._find_task(task_id)
         request_markdown_path = str((task.task_dir / task.metadata.request.path).resolve())
         markdown_files = self._sorted_markdown_files(task.task_dir)
         json_files = sorted(path.name for path in task.task_dir.glob("*.json") if path.name != "metadata.json")
         log_dir = self.runs_root / task.metadata.task_id
         log_files = sorted(path.name for path in log_dir.glob("*")) if log_dir.exists() else []
-        changed_files = self._load_changed_files(task.metadata.task_id, require_available=False)
+        changed_files = self._load_changed_files_for_task(task, require_available=False) if include_changed_files else []
         return TaskDetail(
             metadata=task.metadata,
             task_path=str(task.task_dir),
@@ -63,9 +63,10 @@ class TaskService:
             markdown_files=markdown_files,
             json_files=json_files,
             log_files=log_files,
+            changed_files_available=self._changed_files_available_for_task(task),
             changed_files=[entry.summary for entry in changed_files],
             stage_timing=self._build_stage_timing(task.metadata),
-            human_review=self._build_human_review_state(task.metadata),
+            human_review=self._build_human_review_state(task),
             agent_status=derive_agent_status(task.metadata, task.state),
         )
 
@@ -102,7 +103,7 @@ class TaskService:
         changed_files = self._load_changed_files_for_task(task, require_available=True)
         for entry in changed_files:
             if entry.summary.id == changed_file_id:
-                return entry.model_copy(update={"comments": self._comments_for_file(task.metadata, entry.summary.path)})
+                return entry.model_copy(update={"comments": self._comments_for_file(task, entry.summary.path)})
         raise TaskNotFoundError(changed_file_id)
 
     def get_changed_file_by_path(self, task_id: str, path: str) -> ChangedFileDetail:
@@ -110,7 +111,7 @@ class TaskService:
         changed_files = self._load_changed_files_for_task(task, require_available=True)
         for entry in changed_files:
             if entry.summary.path == path:
-                return entry.model_copy(update={"comments": self._comments_for_file(task.metadata, entry.summary.path)})
+                return entry.model_copy(update={"comments": self._comments_for_file(task, entry.summary.path)})
         raise TaskNotFoundError(path)
 
     def get_markdown_artifact(self, task_id: str, filename: str) -> str:
@@ -243,9 +244,10 @@ class TaskService:
             segments=segments,
         )
 
-    def _build_human_review_state(self, metadata: TaskMetadata) -> HumanReviewState:
-        comments = self._load_current_cycle_line_comments(metadata)
-        all_comments = self._load_all_line_comments(metadata)
+    def _build_human_review_state(self, task) -> HumanReviewState:
+        metadata = task.metadata
+        comments = self._load_current_cycle_line_comments(task, metadata)
+        all_comments = self._load_all_line_comments(task, metadata)
         return HumanReviewState(
             note_path=metadata.human_verification.note_path,
             comments_path=metadata.human_verification.comments_path,
@@ -275,6 +277,20 @@ class TaskService:
     def _load_changed_files(self, task_id: str, *, require_available: bool) -> list[ChangedFileDetail]:
         task = self._find_task(task_id)
         return self._load_changed_files_for_task(task, require_available=require_available)
+
+    def _changed_files_available_for_task(self, task) -> bool:
+        metadata = task.metadata
+        if metadata.state not in {TaskState.HUMAN_VERIFYING, TaskState.DONE}:
+            return False
+        if metadata.integration.patch_path:
+            try:
+                self._resolve_patch_path(metadata.task_id, metadata.integration.patch_path)
+            except TransitionError:
+                return False
+        if metadata.state == TaskState.HUMAN_VERIFYING:
+            return True
+        patch_path = self._resolve_patch_path(metadata.task_id, metadata.integration.patch_path)
+        return bool(patch_path and patch_path.exists())
 
     def _load_changed_files_for_task(self, task, *, require_available: bool) -> list[ChangedFileDetail]:
         if task.metadata.state not in {"human-verifying", "done"}:
@@ -310,16 +326,14 @@ class TaskService:
             return None
         return patch_path.read_text()
 
-    def _load_current_cycle_line_comments(self, metadata: TaskMetadata) -> list[HumanLineComment]:
-        task = self._find_task(metadata.task_id)
+    def _load_current_cycle_line_comments(self, task, metadata: TaskMetadata) -> list[HumanLineComment]:
         comments_path = self._resolve_comments_path(task.task_dir, metadata)
         if comments_path is None or not comments_path.exists():
             return []
         artifact = HumanLineCommentsArtifact.model_validate_json(comments_path.read_text())
         return [self._annotate_comment(comment, metadata.cycle, editable=True) for comment in artifact.comments]
 
-    def _load_all_line_comments(self, metadata: TaskMetadata) -> list[HumanLineComment]:
-        task = self._find_task(metadata.task_id)
+    def _load_all_line_comments(self, task, metadata: TaskMetadata) -> list[HumanLineComment]:
         comments_by_id: OrderedDict[str, HumanLineComment] = OrderedDict()
         for path in sorted(task.task_dir.glob("HUMAN-VERIFY-*.comments.json")):
             cycle = self._cycle_from_comment_artifact_name(path.name)
@@ -347,8 +361,8 @@ class TaskService:
             raise TransitionError("human verification comments are unavailable because comments path is outside the task directory")
         return resolved
 
-    def _comments_for_file(self, metadata: TaskMetadata, path: str) -> list[HumanLineComment]:
-        return [comment for comment in self._load_all_line_comments(metadata) if comment.anchor.path == path]
+    def _comments_for_file(self, task, path: str) -> list[HumanLineComment]:
+        return [comment for comment in self._load_all_line_comments(task, task.metadata) if comment.anchor.path == path]
 
     def _cycle_from_comment_artifact_name(self, filename: str) -> int | None:
         match = re.match(r"^HUMAN-VERIFY-(\d{3})\.comments\.json$", filename)
