@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kanban Agent</title>
+  <title>Agent Kanban</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
@@ -59,7 +59,7 @@
     .column-cards { display: grid; gap: 10px; }
     .plan-board .column-cards, .implementation-board .column-cards, .final-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
     .final-board .column-cards { overflow-x: hidden; }
-    .card { position: relative; background: white; border-left: 4px solid var(--accent); padding: 11px 12px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .card { position: relative; background: white; border-left: 4px solid var(--card-accent, var(--accent)); padding: 11px 12px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
     .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
     .card:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
     .card-title { display: block; padding-right: 8px; line-height: 1.35; }
@@ -72,6 +72,7 @@
     .card-tag-label { flex: 0 0 auto; opacity: 0.72; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.68rem; }
     .card-tag-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .card-tag-id { --tag-bg: rgba(139,90,43,0.12); --tag-border: rgba(139,90,43,0.24); --tag-text: #7a4921; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }
+    .card-task-id-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .card-repo-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .card-tag-branch { --tag-bg: rgba(82,96,107,0.1); --tag-border: rgba(82,96,107,0.18); --tag-text: #45525d; }
     .card-tag-final-branch { --tag-bg: rgba(124,79,44,0.14); --tag-border: rgba(124,79,44,0.26); --tag-text: #6c3b16; }
@@ -111,6 +112,8 @@
     .modal-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }
     .task-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .modal-copy p { margin: 6px 0 0; color: var(--muted); }
+    .task-modal-tag-row { margin-top: 8px; }
+    .task-modal-tag-row .card-tag { font-size: 0.73rem; }
     .retrospective-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
     .retrospective-shell { display: grid; gap: 14px; min-height: 0; overflow: hidden; }
     .retrospective-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,249,239,0.82); color: var(--muted); }
@@ -188,12 +191,12 @@
     .task-model-row strong { display: block; font-size: 0.98rem; overflow-wrap: anywhere; }
     .task-model-row small { display: block; margin-top: 3px; color: var(--muted); font-size: 0.86rem; }
     .stage-timing-shell { display: grid; gap: 14px; }
-    .stage-timing-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; flex-wrap: wrap; padding: 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.88); }
-    .stage-timing-head p { margin: 6px 0 0; color: var(--muted); }
+    .stage-timing-head { display: flex; justify-content: space-between; gap: 12px; align-items: end; flex-wrap: wrap; }
+    .stage-timing-head h3 { margin: 0; }
     .stage-timing-total { display: grid; gap: 4px; min-width: 180px; }
     .stage-timing-total span { color: var(--muted); font-size: 0.84rem; letter-spacing: 0.04em; text-transform: uppercase; }
     .stage-timing-total strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
-    .stage-timing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .stage-timing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 190px)); gap: 10px; }
     .stage-timing-card { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); border-top: 4px solid var(--stage-color, var(--accent)); }
     .stage-timing-card.current { background: rgba(255,249,239,0.96); box-shadow: 0 10px 20px rgba(24,32,38,0.06); }
     .stage-timing-card span { color: var(--muted); font-size: 0.82rem; letter-spacing: 0.05em; text-transform: uppercase; }
@@ -351,7 +354,7 @@
 </head>
 <body>
   <header>
-    <h1>Kanban Agent</h1>
+    <h1>Agent Kanban</h1>
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Settings</button>
@@ -605,7 +608,7 @@
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="task-modal-title">Task details</h2>
-          <p id="task-modal-subtitle">Inspect task metadata, current agent activity, and task artifacts.</p>
+          <div id="task-modal-subtitle" class="card-tag-row task-modal-tag-row"><span class="card-tag">Inspect task metadata, current agent activity, and task artifacts.</span></div>
         </div>
         <div class="task-modal-actions">
           <button type="button" id="start-verification" class="accent-button" hidden>Start verification</button>
@@ -619,7 +622,6 @@
       <div id="task-modal-error" class="form-error" hidden></div>
       <div class="task-tabs">
         <button type="button" id="task-tab-overview" class="active">Overview</button>
-        <button type="button" id="task-tab-timeline">Timeline</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
         <button type="button" id="task-tab-review-note" hidden>Review note</button>
@@ -628,9 +630,6 @@
         <div class="task-panel-scroll">
           <div id="task-overview" class="muted">Select a task to inspect.</div>
         </div>
-      </section>
-      <section id="task-panel-timeline" class="task-panel" hidden>
-        <div id="task-timeline" class="task-panel-scroll muted">Select a task to inspect its stage timeline.</div>
       </section>
       <section id="task-panel-changed-files" class="task-panel" hidden>
         <div class="diff-layout">
@@ -839,16 +838,13 @@
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
-    const taskTabTimeline = document.getElementById('task-tab-timeline');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
     const taskTabReviewNote = document.getElementById('task-tab-review-note');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
-    const taskPanelTimeline = document.getElementById('task-panel-timeline');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
     const taskPanelReviewNote = document.getElementById('task-panel-review-note');
     const taskPanelEditor = document.getElementById('task-panel-editor');
-    const taskTimeline = document.getElementById('task-timeline');
     const startVerificationButton = document.getElementById('start-verification');
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');
@@ -914,6 +910,7 @@
     let branchLookupTimer = null;
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
+    let boardTaskSnapshots = new Map();
     let lastLoadedSettingsState = null;
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
@@ -1093,14 +1090,14 @@
         basicsHeading: '요청 기본값',
         basicsDescription: '무엇을 왜 바꾸는지 정리합니다.',
         repoHeading: '저장소 범위',
-        repoDescription: '대상 저장소, 기준 브랜치, 작업 범위를 정합니다.',
+        repoDescription: '대상 프로젝트, 기준 브랜치, 작업 범위를 정합니다.',
         titleLabel: '제목',
         titleDescription: '요청 제목과 task 폴더 이름에 쓰입니다.',
         goalLabel: '목표',
         goalDescription: '원하는 결과를 구체적으로 적습니다.',
         backgroundLabel: '배경 / 이유',
         backgroundDescription: '이 요청이 필요한 맥락을 적습니다.',
-        targetRepoLabel: '대상 저장소',
+        targetRepoLabel: '대상 프로젝트',
         targetRepoDescription: '근처 저장소를 고르거나 경로를 직접 입력하세요.',
         baseBranchLabel: '기준 브랜치',
         baseBranchHelp: '저장소 브랜치를 고르거나 직접 입력하세요.',
@@ -1114,7 +1111,7 @@
         scopeLabel: '범위',
         scopeDescription: '저장소 기본값으로 시작하며 줄별로 수정할 수 있습니다.',
         outOfScopeLabel: '범위 외',
-        outOfScopeDescription: '기본적으로 대상 저장소 밖 수정은 막습니다.',
+        outOfScopeDescription: '기본적으로 대상 프로젝트 밖 수정은 막습니다.',
         constraintsLabel: '제약 / 메모',
         constraintsDescription: '기술 제한, 일정, 환경 규칙 등을 적습니다.',
         referencesLabel: '참고 파일 / 경로',
@@ -1126,7 +1123,7 @@
         creating: '생성 중...',
         validationTitle: '최소 5글자 이상 입력하세요.',
         validationGoal: '목표는 필수입니다.',
-        validationTargetRepo: '대상 저장소는 필수입니다.',
+        validationTargetRepo: '대상 프로젝트는 필수입니다.',
         validationBaseBranch: '기준 브랜치는 필수입니다.',
       },
     };
@@ -1248,7 +1245,7 @@
         closeAria: 'Close task details',
         tabOverview: 'Overview',
         tabTimeline: 'Timeline',
-        tabViewer: 'Viewer',
+        tabViewer: 'Work log',
         tabChangedFiles: 'Changed files',
         reviewNoteTitle: 'Review note',
         changedFilesHeading: 'Changed files',
@@ -1320,6 +1317,7 @@
         noJsonFiles: 'No JSON files',
         noRecordedErrors: 'No recorded errors.',
         taskSubtitleFormat: '{taskId} in {state}',
+        taskSubtitleWithFinalBranch: '{taskId} in {state} · {branch}',
         taskActivity: 'Agent activity',
         leaseOwner: 'Lease owner',
         leaseRun: 'Lease run',
@@ -1401,7 +1399,7 @@
         closeAria: '작업 상세 닫기',
         tabOverview: '개요',
         tabTimeline: '타임라인',
-        tabViewer: '문서 보기',
+        tabViewer: '작업 내역',
         tabChangedFiles: '변경 파일',
         reviewNoteTitle: '리뷰 노트',
         changedFilesHeading: '변경 파일',
@@ -1425,11 +1423,9 @@
         unableLoadTaskDetails: '작업 상세를 표시할 수 없습니다.',
         stalePlanMessage: 'PLAN.md를 로컬에서 편집하는 동안 작업 상태가 바뀌었습니다. 초안을 저장하거나 편집 모드를 나가서 최신 상태를 다시 불러오세요.',
         titleLabel: '제목',
-        taskIdLabel: '작업 ID',
         stateLabel: '상태',
-        requestLanguageLabel: '요청 언어',
         updatedLabel: '업데이트 시각',
-        targetRepoLabel: '대상 저장소',
+        targetRepoLabel: '대상 프로젝트',
         baseBranchLabel: '기준 브랜치',
         finalBranchLabel: '최종 브랜치',
         retrospectiveCountLabel: '{count}건 회고',
@@ -1455,25 +1451,11 @@
         retrospectivePathLabel: '저장소 경로',
         retrospectiveModelLabel: '모델',
         retrospectiveNoContent: '불러온 회고가 없습니다.',
-        requestPathLabel: 'REQUEST.md 경로',
         finalBranchNotCreated: '아직 생성되지 않음',
-        capturedStageModels: '기록된 단계별 모델',
-        plannerModelUsed: 'Planner 사용 모델',
-        implementerModelUsed: 'Implementer 사용 모델',
-        reviewerModelUsed: 'Reviewer 사용 모델',
-        plannerModelNote: '플랜 실행 로그에서 기록했습니다.',
-        implementerModelNote: '워크스페이스 구현 실행에서 기록했습니다.',
-        reviewerModelNote: 'AI 리뷰 실행에서 기록했습니다.',
-        modelUsageSuffix: '런타임 오버라이드와 별개로 실제 사용된 모델입니다. 마지막 실행 토큰: {tokens}. 세션 토큰: {sessionTokens}.',
-        notCapturedYet: '아직 기록되지 않음',
-        markdownFiles: 'Markdown 파일',
-        jsonFiles: 'JSON 파일',
         latestError: '최근 오류',
-        noMarkdownFiles: 'markdown 파일 없음',
-        noJsonFiles: 'JSON 파일 없음',
         noRecordedErrors: '기록된 오류가 없습니다.',
         taskSubtitleFormat: '{taskId} · {state}',
-        taskActivity: '에이전트 활동',
+        taskSubtitleWithFinalBranch: '{taskId} · {state} · {branch}',
         leaseOwner: 'Lease 소유자',
         leaseRun: 'Lease 실행',
         heartbeat: '하트비트',
@@ -1620,7 +1602,7 @@
 
     function applyTaskTranslations() {
       setTaskText('task-modal-title', 'modalTitle');
-      setTaskText('task-modal-subtitle', 'modalSubtitle');
+      document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags();
       setTaskText('retrospective-modal-title', 'retrospectiveModalTitle');
       setTaskText('retrospective-modal-subtitle', 'retrospectiveModalSubtitle');
       startVerificationButton.textContent = translateTask('startVerification');
@@ -1632,7 +1614,6 @@
       retrospectiveCreateTargetButton.textContent = translateTask('retrospectiveCreateTarget');
       retrospectiveCreateBranchButton.textContent = translateTask('retrospectiveCreateBranch');
       taskTabOverview.textContent = translateTask('tabOverview');
-      taskTabTimeline.textContent = translateTask('tabTimeline');
       taskTabEditor.textContent = translateTask('tabViewer');
       taskTabChangedFiles.textContent = translateTask('tabChangedFiles');
       document.getElementById('task-human-review-note-title').textContent = translateTask('reviewNoteTitle');
@@ -1640,7 +1621,6 @@
       document.querySelector('#task-changed-file-summary .diff-badge').textContent = translateTask('readOnlyPatch');
       if (!activeTaskDetail) {
         taskOverview.innerHTML = `<div class="muted">${escapeHtml(translateTask('selectTask'))}</div>`;
-        taskTimeline.innerHTML = `<div class="task-panel-scroll muted">${escapeHtml(translateTask('selectTaskTimeline'))}</div>`;
       }
       if (!activeRetrospectiveRecord) {
         retrospectiveStatus.textContent = translateTask('retrospectiveIdle');
@@ -1865,6 +1845,7 @@
     async function loadBoard() {
       const res = await fetch('/api/board');
       const data = await res.json();
+      boardTaskSnapshots = new Map(data.columns.flatMap((column) => (column.items || []).map((item) => [item.task_id, item])));
       if (!boardPhaseManuallySelected) {
         activeBoardPhase = selectDefaultBoardPhase(data.columns);
       }
@@ -1928,6 +1909,10 @@
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 2.75a2.25 2.25 0 1 1-1.5 2.121v3.258a2.251 2.251 0 0 1 0 3.742v.258a2.25 2.25 0 1 1-1 0v-.258a2.251 2.251 0 0 1 0-3.742V4.871A2.25 2.25 0 0 1 5 2.75Zm0 1.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 7a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm6-6.5a2.25 2.25 0 0 1 .5 4.444v.806A3.5 3.5 0 0 1 8 13.5H5.75a.75.75 0 0 1 0-1.5H8A2 2 0 0 0 10 10V9.194A2.25 2.25 0 1 1 11 4.75Zm0 1.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" fill="currentColor"/></svg>`;
     }
 
+    function taskIdIconSvg(className = 'card-task-id-icon') {
+      return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.25 2.5a.75.75 0 0 1 .75.75V5.5h2V3.25a.75.75 0 0 1 1.5 0V5.5h2.25a.75.75 0 0 1 0 1.5H10.5v2h2.25a.75.75 0 0 1 0 1.5H10.5v2.25a.75.75 0 0 1-1.5 0V10.5H7v2.25a.75.75 0 0 1-1.5 0V10.5H3.25a.75.75 0 0 1 0-1.5H5.5V7H3.25a.75.75 0 0 1 0-1.5H5.5V3.25a.75.75 0 0 1 .75-.75Zm.75 4.5v2h2V7H7Z" fill="currentColor"/></svg>`;
+    }
+
     function caretIconSvg(className = 'target-branch-caret') {
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.47 6.22a.75.75 0 0 1 1.06 0L8 8.69l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" fill="currentColor"/></svg>`;
     }
@@ -1955,7 +1940,7 @@
       const repoTone = repoTagTone(repoPath);
       const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};`;
       const tags = [
-        renderTag('', item.task_id ? `#${item.task_id}` : '', 'card-tag-id', '', item.task_id || ''),
+        renderTag('', item.task_id || '', 'card-tag-id', '', item.task_id || '', taskIdIconSvg()),
         compactFinal ? '' : renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
         compactFinal ? '' : renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon')),
         compactFinal ? renderTag('', finalBranchLabel, 'card-tag-branch card-tag-final-branch', '', finalBranchLabel, branchIconSvg('card-branch-icon')) : '',
@@ -1963,6 +1948,22 @@
       const runtimeValue = renderCardRuntime(item);
       const runtime = runtimeValue ? `<span class="card-meta card-runtime-meta">${renderCardActivity(item)}${runtimeValue}</span>` : '';
       return `<div class="card-meta-row"><div class="card-tag-row">${tags.join('')}</div>${runtime}</div>`;
+    }
+
+    function renderTaskSubtitleTags(task) {
+      if (!task?.task_id) return `<span class="card-tag">${escapeHtml(translateTask('loadingTaskDetails'))}</span>`;
+      const repoPath = normalizeRepoPath(task.target_repo_root);
+      const repoLabel = task.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
+      const baseBranch = task.base_branch || '';
+      const finalBranch = task.final_branch || '';
+      const repoTone = repoTagTone(repoPath);
+      const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};`;
+      return [
+        renderTag('', task.task_id || '', 'card-tag-id', '', task.task_id || '', taskIdIconSvg()),
+        renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
+        renderTag('', baseBranch, 'card-tag-branch', '', baseBranch, branchIconSvg('card-branch-icon')),
+        renderTag('', finalBranch, 'card-tag-branch card-tag-final-branch', '', finalBranch, branchIconSvg('card-branch-icon')),
+      ].filter(Boolean).join('');
     }
 
     function renderCardRuntime(item) {
@@ -2004,9 +2005,17 @@
           <div class="final-project-branches">${branchGroups.map(([branch, branchItems], index) => `
             <section class="target-branch-group" data-expanded="${index === 0 ? 'true' : 'false'}">
               <div class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? 'true' : 'false'}"><span class="target-branch-label-main"><span class="target-branch-title">${branchIconSvg('target-branch-icon')}<span class="target-branch-name">${escapeHtml(branch)}</span></span></span><span class="target-branch-label-side"><button type="button" class="target-branch-retrospective" data-target-repo="${escapeHtml(branchItems[0].target_repo_root || '')}" data-base-branch="${escapeHtml(branch)}">${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>${caretIconSvg('target-branch-caret')}</span></div>
-              <div class="column-cards">${branchItems.map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong class="card-title">${item.title}</strong>${renderCardTags(item, { compactFinal: true })}${renderCardModelMeta(item)}</button></article>`).join('')}</div>
+              <div class="column-cards">${branchItems.map((item) => renderTaskCard(item, { compactFinal: true })).join('')}</div>
             </section>`).join('')}</div>
         </section>`;
+    }
+
+    function renderTaskCard(item, options = {}) {
+      const { compactFinal = false } = options;
+      const repoPath = normalizeRepoPath(item.target_repo_root);
+      const repoTone = repoPath ? repoTagTone(repoPath) : null;
+      const cardStyle = repoTone ? ` style="--card-accent:${repoTone.text};"` : '';
+      return `<article class="card"${cardStyle}><button class="card-button" data-task-id="${item.task_id}"><strong class="card-title">${item.title}</strong>${renderCardTags(item, { compactFinal })}${renderCardModelMeta(item)}</button></article>`;
     }
 
     function toggleFinalBranchGroup(branchLabel) {
@@ -2041,7 +2050,7 @@
       return `
         <section class="column">
           <h2>${stateLabel(column.state)}</h2>
-          <div class="column-cards">${(column.items || []).map((item) => `<article class="card"><button class="card-button" data-task-id="${item.task_id}"><strong class="card-title">${item.title}</strong>${renderCardTags(item)}${renderCardModelMeta(item)}</button></article>`).join('')}</div>
+          <div class="column-cards">${(column.items || []).map((item) => renderTaskCard(item)).join('')}</div>
         </section>`;
     }
 
@@ -2702,21 +2711,73 @@
       return (value || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
     }
 
-    function setTaskTab(tab) {
+    function setTaskTab(tab, { load = true } = {}) {
       activeTaskTab = tab;
       taskTabOverview.classList.toggle('active', tab === 'overview');
-      taskTabTimeline.classList.toggle('active', tab === 'timeline');
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
       taskTabReviewNote.classList.toggle('active', tab === 'review-note');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskPanelOverview.hidden = tab !== 'overview';
-      taskPanelTimeline.hidden = tab !== 'timeline';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
       taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
       if (tab === 'review-note') requestAnimationFrame(() => syncHumanReviewEditorHeight());
+      if (!load) return;
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
+    }
+
+    function taskChromeState(state = '') {
+      return {
+        changedFilesVisible: state === 'human-verifying' || state === 'done',
+        reviewNoteVisible: state === 'human-verifying',
+        viewerVisible: true,
+        defaultTab: state === 'waiting-check-plans' ? 'editor' : (state === 'human-verifying' ? 'changed-files' : 'overview'),
+      };
+    }
+
+    function hydrateTaskModalChrome(snapshot = null, { preserveTab = false } = {}) {
+      const state = snapshot?.state || '';
+      const chrome = taskChromeState(state);
+      const nextTab = preserveTab ? activeTaskTab : chrome.defaultTab;
+      document.getElementById('task-modal-title').textContent = snapshot?.title || translateTask('modalTitle');
+      document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags(snapshot);
+      taskTabChangedFiles.hidden = !chrome.changedFilesVisible;
+      taskTabReviewNote.hidden = !chrome.reviewNoteVisible;
+      taskTabEditor.hidden = !chrome.viewerVisible;
+      togglePlanEditButton.hidden = state !== 'waiting-check-plans';
+      togglePlanEditButton.disabled = state !== 'waiting-check-plans';
+      savePlanButton.hidden = state !== 'waiting-check-plans';
+      savePlanButton.disabled = true;
+      approvePlanButton.hidden = state !== 'waiting-check-plans';
+      approvePlanButton.disabled = state !== 'waiting-check-plans';
+      startVerificationButton.hidden = state !== 'completed-reviews';
+      startVerificationButton.disabled = state !== 'completed-reviews';
+      requestChangesButton.hidden = state !== 'human-verifying';
+      requestChangesShell.hidden = state !== 'human-verifying';
+      approveHumanReviewButton.hidden = state !== 'human-verifying';
+      approveHumanReviewShell.hidden = state !== 'human-verifying';
+      deleteTaskButton.hidden = !snapshot;
+      deleteTaskButton.disabled = !snapshot;
+      if (state === 'waiting-check-plans') activeArtifactName = 'PLAN.md';
+      setTaskTab(nextTab, { load: false });
+      return nextTab;
+    }
+
+    async function ensureChangedFileSummaries(taskId) {
+      if (!activeTaskDetail?.changed_files_available) return [];
+      if (activeTaskDetail.changed_files.length) return activeTaskDetail.changed_files;
+      const response = await fetch(`/api/tasks/${taskId}?include_changed_files=true`);
+      const detail = await response.json();
+      if (!response.ok) throw new Error(detail.detail || translateTask('failedLoadTaskDetails'));
+      if (taskId !== activeTaskId) return [];
+      activeTaskDetail = { ...activeTaskDetail, changed_files_available: detail.changed_files_available, changed_files: detail.changed_files };
+      if (!activeChangedFileId || !activeTaskDetail.changed_files.some((file) => file.id === activeChangedFileId)) {
+        activeChangedFileId = activeTaskDetail.changed_files[0]?.id || null;
+      }
+      renderChangedFileButtons(activeTaskDetail.changed_files);
+      if (!activeTaskDetail.changed_files.length) renderDiffPlaceholder(translateTask('changedFilesPatchAvailable'));
+      return activeTaskDetail.changed_files;
     }
 
     function renderTaskActivity(detail) {
@@ -3152,6 +3213,13 @@
       return null;
     }
 
+    function resetArtifactViewerScroll() {
+      taskViewerHost.scrollTop = 0;
+      taskViewerHost.querySelectorAll('.toastui-editor-contents, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .log-viewer').forEach((node) => {
+        node.scrollTop = 0;
+      });
+    }
+
     function rewriteAttachmentPaths(markdown, taskId) {
       return markdown.replace(/(!\[[^\]]*\]\()(_attachments\/[^)]+)(\))/g, `$1/api/tasks/${taskId}/attachments/$2$3`)
         .replace(/\/api\/tasks\/([^/]+)\/attachments\/_attachments\//g, '/api/tasks/$1/attachments/');
@@ -3399,13 +3467,18 @@
     }
 
     function renderStageTiming(stageTiming) {
-      const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries : [];
-      const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];
+      const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];
+      const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments.filter((segment) => segment.state !== 'done') : [];
       const hasRecordedTime = segments.length > 0 || summaries.some((summary) => Number(summary.attempt_count || 0) > 0);
       if (!summaries.length || !hasRecordedTime) {
         return `<div class="task-section"><h3>${escapeHtml(translateTask('stageTiming'))}</h3><div class="muted">${escapeHtml(translateTask('noStateHistory'))}</div></div>`;
       }
-      const totalDurationMs = Number(stageTiming?.total_duration_ms || 0);
+      const hiddenDurationMs = Array.isArray(stageTiming?.segments)
+        ? stageTiming.segments
+            .filter((segment) => segment.state === 'done')
+            .reduce((total, segment) => total + Number(segment.duration_ms || 0), 0)
+        : 0;
+      const totalDurationMs = Math.max(0, Number(stageTiming?.total_duration_ms || 0) - hiddenDurationMs);
       const currentSummary = summaries.find((summary) => summary.is_current) || null;
       const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');
       const totalBaseDurationMs = currentSummaryIsLive
@@ -3446,13 +3519,9 @@
         : `<div class="muted">${escapeHtml(translateTask('noStageVisits'))}</div>`;
       return `
         <div class="task-section">
-          <h3>${escapeHtml(translateTask('stageTiming'))}</h3>
           <div class="stage-timing-shell">
             <div class="stage-timing-head">
-              <div>
-                <strong>${escapeHtml(translateTask('timelineFromHistory'))}</strong>
-                <p>${escapeHtml(translateTask('timelineFromHistoryBody'))}</p>
-              </div>
+              <h3>${escapeHtml(translateTask('stageTiming'))}</h3>
               <div class="stage-timing-total">
                 <span>${escapeHtml(translateTask('totalTrackedTime'))}</span>
                 <strong ${totalDurationAttrs}>${formatElapsed(totalDurationMs)}${escapeHtml(translateTask('trackedSuffix'))}</strong>
@@ -3471,15 +3540,10 @@
       activeTaskDetail = detail;
       setTaskDetailStale(false);
       const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
-      const changedFilesVisible = detail.changed_files.length > 0;
+      const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
       const reviewNoteVisible = metadata.state === 'human-verifying';
       const viewerVisible = detail.markdown_files.length > 0;
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
-      const stageModels = [
-        { label: translateTask('plannerModelUsed'), value: metadata.plan.resolved_model, note: translateTask('plannerModelNote'), tokens: metadata.plan.last_run_tokens, sessionTokens: metadata.plan.session_tokens },
-        { label: translateTask('implementerModelUsed'), value: metadata.implementation.resolved_model, note: translateTask('implementerModelNote'), tokens: metadata.implementation.last_run_tokens, sessionTokens: metadata.implementation.session_tokens },
-        { label: translateTask('reviewerModelUsed'), value: metadata.review.resolved_model, note: translateTask('reviewerModelNote'), tokens: metadata.review.last_run_tokens, sessionTokens: metadata.review.session_tokens },
-      ];
       taskTabChangedFiles.hidden = !changedFilesVisible;
       taskTabReviewNote.hidden = !reviewNoteVisible;
       taskTabEditor.hidden = !viewerVisible;
@@ -3498,45 +3562,23 @@
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
       activeChangedFileDetail = null;
       renderChangedFileButtons(detail.changed_files);
-      renderDiffPlaceholder(changedFilesVisible ? translateTask('selectChangedFile') : translateTask('changedFilesPatchAvailable'));
+      renderDiffPlaceholder(detail.changed_files.length ? translateTask('selectChangedFile') : translateTask('changedFilesPatchAvailable'));
       renderArtifactButtons(detail.markdown_files);
-      taskTimeline.innerHTML = renderStageTiming(detail.stage_timing);
       taskOverview.innerHTML = `
-          <div class="task-meta-grid">
-          <div class="meta-item"><span>${escapeHtml(translateTask('titleLabel'))}</span><strong>${escapeHtml(metadata.title)}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('taskIdLabel'))}</span><strong>${escapeHtml(metadata.task_id)}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('stateLabel'))}</span><strong>${escapeHtml(stateLabel(metadata.state))}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('requestLanguageLabel'))}</span><strong>${escapeHtml(metadata.request.language || 'en')}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('updatedLabel'))}</span><strong>${escapeHtml(metadata.updated_at)}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('targetRepoLabel'))}</span><strong>${escapeHtml(metadata.target.repo_root)}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('baseBranchLabel'))}</span><strong>${escapeHtml(metadata.target.base_branch)}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('finalBranchLabel'))}</span><strong>${escapeHtml(metadata.integration.final_branch || translateTask('finalBranchNotCreated'))}</strong></div>
-          <div class="meta-item"><span>${escapeHtml(translateTask('requestPathLabel'))}</span><strong>${escapeHtml(detail.request_markdown_path)}</strong></div>
-        </div>
-        ${renderTaskActivity(detail)}
-        <div class="task-section">
-          <h3>${escapeHtml(translateTask('capturedStageModels'))}</h3>
-          <div class="task-model-grid">${stageModels.map((item) => `<div class="task-model-row"><span>${escapeHtml(item.label)}</span><div><strong>${escapeHtml(item.value || translateTask('notCapturedYet'))}</strong><small>${escapeHtml(item.note)} ${escapeHtml(translateTask('modelUsageSuffix', { tokens: String(item.tokens || 0), sessionTokens: String(item.sessionTokens || 0) }))}</small></div></div>`).join('')}</div>
-        </div>
-        <div class="task-section">
-          <h3>${escapeHtml(translateTask('markdownFiles'))}</h3>
-          <ul class="task-list">${detail.markdown_files.length ? detail.markdown_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : `<li>${escapeHtml(translateTask('noMarkdownFiles'))}</li>`}</ul>
-        </div>
-        <div class="task-section">
-          <h3>${escapeHtml(translateTask('jsonFiles'))}</h3>
-          <ul class="task-list">${detail.json_files.length ? detail.json_files.map((file) => `<li>${escapeHtml(file)}</li>`).join('') : `<li>${escapeHtml(translateTask('noJsonFiles'))}</li>`}</ul>
-        </div>
-        <div class="task-section">
-          <h3>${escapeHtml(translateTask('changedFilesHeading'))}</h3>
-          <ul class="task-list">${detail.changed_files.length ? detail.changed_files.map((file) => `<li>${escapeHtml(file.display_path)} (+${file.additions} / -${file.deletions})</li>`).join('') : `<li>${escapeHtml(translateTask('noChangedFilesForState'))}</li>`}</ul>
-        </div>
+        ${renderStageTiming(detail.stage_timing)}
         <div class="task-section">
           <h3>${escapeHtml(translateTask('latestError'))}</h3>
           <div class="muted">${latestError ? escapeHtml(latestError.message) : escapeHtml(translateTask('noRecordedErrors'))}</div>
         </div>
       `;
       document.getElementById('task-modal-title').textContent = metadata.title;
-      document.getElementById('task-modal-subtitle').textContent = translateTask('taskSubtitleFormat', { taskId: metadata.task_id, state: stateLabel(metadata.state) });
+      document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags({
+        task_id: metadata.task_id,
+        target_repo_root: metadata.target.repo_root,
+        target_repo_label: metadata.target.repo_label,
+        base_branch: metadata.target.base_branch,
+        final_branch: metadata.integration.final_branch || '',
+      });
     }
 
     function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {
@@ -3623,8 +3665,8 @@
 
     async function loadTaskDetail(taskId, preserveTab = false, options = {}) {
       const { softRefresh = false } = options;
-      const defaultTab = preserveTab ? activeTaskTab : 'overview';
-      const nextTab = preserveTab ? activeTaskTab : defaultTab;
+      const snapshot = options.snapshot || boardTaskSnapshots.get(taskId) || null;
+      const nextTab = preserveTab ? activeTaskTab : taskChromeState(snapshot?.state).defaultTab;
       const requestToken = ++activeTaskRequestToken;
       activeTaskId = taskId;
       taskModalError.hidden = true;
@@ -3634,8 +3676,12 @@
         activeChangedFileId = null;
         activeChangedFileDetail = null;
         activeInlineCommentAnchor = null;
+        hydrateTaskModalChrome(snapshot, { preserveTab });
+        if (!snapshot) {
+          setTaskText('task-modal-title', 'modalTitle');
+          document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags();
+        }
         taskOverview.innerHTML = `<div class="muted">${escapeHtml(translateTask('loadingTaskDetails'))}</div>`;
-        taskTimeline.innerHTML = `<div class="muted">${escapeHtml(translateTask('loadingStageTimeline'))}</div>`;
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder(translateTask('selectChangedTabToInspect'));
         setHumanReviewEditorContent('');
@@ -3648,11 +3694,6 @@
         savePlanButton.disabled = true;
         taskModeBadge.textContent = translateTask('viewerMode');
         taskEditorStatus.textContent = translateTask('selectMarkdownArtifact');
-        updateHumanVerificationState();
-        updateTaskDeleteState();
-        taskTabChangedFiles.hidden = true;
-        taskTabEditor.hidden = true;
-        setTaskTab(nextTab);
         setTaskModalOpen(true);
       }
       try {
@@ -3662,9 +3703,13 @@
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         renderTaskOverview(detail);
         const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
-        const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files.length ? 'changed-files' : preferredInitialTab;
-        if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab);
-        if (resolvedTab === 'changed-files' && detail.changed_files.length) await loadChangedFile(taskId, activeChangedFileId, true);
+        const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
+        if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab, { load: false });
+        if (resolvedTab === 'changed-files' && detail.changed_files_available) {
+          await ensureChangedFileSummaries(taskId);
+          if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId || activeTaskTab !== 'changed-files' || !activeTaskDetail?.changed_files.length) return;
+          await loadChangedFile(taskId, activeChangedFileId, true);
+        }
         if (resolvedTab === 'editor' && detail.markdown_files.length) await loadMarkdownArtifact(taskId, activeArtifactName);
       } catch (error) {
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
@@ -3715,7 +3760,11 @@
     }
 
     async function loadChangedFile(taskId, changedFileId = null, silent = false) {
-      if (!activeTaskDetail || !activeTaskDetail.changed_files.length) return;
+      if (!activeTaskDetail) return;
+      if (!activeTaskDetail.changed_files.length) {
+        await ensureChangedFileSummaries(taskId);
+      }
+      if (!activeTaskDetail.changed_files.length) return;
       const selected = changedFileId && activeTaskDetail.changed_files.some((file) => file.id === changedFileId)
         ? changedFileId
         : activeTaskDetail.changed_files[0].id;
@@ -3820,6 +3869,7 @@
         } else {
           taskEditorStatus.textContent = translateTask('renderedArtifact', { name: activeArtifactName });
         }
+        requestAnimationFrame(resetArtifactViewerScroll);
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -4058,7 +4108,7 @@
       }
       const button = event.target.closest('[data-task-id]');
       if (!button) return;
-      loadTaskDetail(button.dataset.taskId);
+      loadTaskDetail(button.dataset.taskId, false, { snapshot: boardTaskSnapshots.get(button.dataset.taskId) || null });
     });
     board.addEventListener('keydown', (event) => {
       const branchLabel = event.target.closest('.target-branch-label');
@@ -4077,7 +4127,6 @@
       loadBoard();
     });
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
-    taskTabTimeline.addEventListener('click', () => setTaskTab('timeline'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));

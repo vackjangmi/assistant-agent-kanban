@@ -462,13 +462,16 @@ def test_api_exposes_changed_files_for_human_verifying_tasks(configured_paths):
         before = client.get(f"/api/tasks/{completed.metadata.task_id}")
         assert before.status_code == 200
         assert before.json()["changed_files"] == []
+        assert before.json()["changed_files_available"] is False
 
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
         assert start.status_code == 200
 
         detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
         assert detail.status_code == 200
-        changed_files = detail.json()["changed_files"]
+        assert detail.json()["changed_files"] == []
+        assert detail.json()["changed_files_available"] is True
+        changed_files = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true").json()["changed_files"]
         assert len(changed_files) == 1
         assert changed_files[0]["path"] == "app.txt"
         assert changed_files[0]["display_path"] == "app.txt"
@@ -517,7 +520,9 @@ def test_api_exposes_changed_files_for_done_tasks(configured_paths):
 
         detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
         assert detail.status_code == 200
-        changed_files = detail.json()["changed_files"]
+        assert detail.json()["changed_files"] == []
+        assert detail.json()["changed_files_available"] is True
+        changed_files = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true").json()["changed_files"]
         assert len(changed_files) == 1
 
         diff = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}")
@@ -557,7 +562,7 @@ def test_api_creates_line_comment_for_changed_file(configured_paths):
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
         assert start.status_code == 200
 
-        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
         changed_files = detail.json()["changed_files"]
         assert len(changed_files) == 1
 
@@ -601,7 +606,7 @@ def test_api_deletes_line_comment_for_changed_file(configured_paths):
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
         assert start.status_code == 200
 
-        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
         changed_files = detail.json()["changed_files"]
         assert len(changed_files) == 1
 
@@ -642,7 +647,7 @@ def test_api_blocks_approval_when_line_comments_remain(configured_paths):
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
         assert start.status_code == 200
 
-        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
         changed_files = detail.json()["changed_files"]
         assert len(changed_files) == 1
 
@@ -708,6 +713,7 @@ def test_api_hides_changed_files_when_patch_path_is_outside_managed_runs_root(co
 
     assert detail.status_code == 200
     assert detail.json()["changed_files"] == []
+    assert detail.json()["changed_files_available"] is False
     assert changed.status_code == 409
     assert "outside the managed runs root" in changed.json()["detail"]
 
@@ -1404,7 +1410,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospective-modal-title" in response.text
     assert "retrospective-create-target" in response.text
     assert "retrospective-create-branch" in response.text
-    assert "Viewer" in response.text
+    assert "Work log" in response.text
     assert "Viewer mode" in response.text
     assert "Changed files" in response.text
     assert "task-tab-changed-files" in response.text
@@ -1496,11 +1502,19 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "card-tag-branch" in response.text
     assert "card-branch-icon" in response.text
     assert "title=\"${escapeHtml(title)}\"" in response.text
-    assert "renderTag('', item.task_id ? `#${item.task_id}` : ''" in response.text
+    assert "function taskIdIconSvg(className = 'card-task-id-icon')" in response.text
+    assert "renderTag('', item.task_id || '', 'card-tag-id', '', item.task_id || '', taskIdIconSvg())" in response.text
     assert "renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon'))" in response.text
     assert "renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon'))" in response.text
     assert "renderTag('', finalBranchLabel, 'card-tag-branch card-tag-final-branch'" in response.text
-    assert "renderCardTags(item, { compactFinal: true })" in response.text
+    assert "function renderTaskCard(item, options = {})" in response.text
+    assert "renderTaskCard(item, { compactFinal: true })" in response.text
+    assert 'id="task-modal-subtitle" class="card-tag-row task-modal-tag-row"' in response.text
+    assert ".task-modal-tag-row .card-tag { font-size: 0.73rem; }" in response.text
+    assert "function renderTaskSubtitleTags(task)" in response.text
+    assert "renderTag('', task.task_id || '', 'card-tag-id', '', task.task_id || '', taskIdIconSvg())" in response.text
+    assert "document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags(snapshot);" in response.text
+    assert "document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags({" in response.text
     assert "const activeSince = item.state_entered_at || '';" in response.text
     assert 'buildDurationAttributes(0, activeSince)' in response.text
     assert 'class="card-meta card-runtime-meta">${renderCardActivity(item)}${runtimeValue}' in response.text
@@ -1546,6 +1560,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const branch = item.base_branch || 'unknown';" in response.text
     assert "title=\"${escapeHtml(projectPath)}\"" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
+    assert ".stage-timing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 190px)); gap: 10px; }" in response.text
+    assert "const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];" in response.text
+    assert "const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments.filter((segment) => segment.state !== 'done') : [];" in response.text
+    assert "const hiddenDurationMs = Array.isArray(stageTiming?.segments)" in response.text
+    assert "translateTask('timelineFromHistory')" not in response.text
+    assert "translateTask('timelineFromHistoryBody')" not in response.text
     assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');" in response.text
     assert "const summaryIsLive = summary.is_current && summary.state !== 'done';" in response.text
     assert "segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0)" in response.text
@@ -1563,7 +1583,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/attachments?artifact=PLAN.md" in response.text
     assert "callback(uploaded.relative_path, uploaded.filename);" in response.text
     assert "function rewriteAttachmentPaths(markdown, taskId)" in response.text
-    assert "const defaultTab = preserveTab ? activeTaskTab : 'overview';" in response.text
+    assert "function resetArtifactViewerScroll()" in response.text
+    assert "requestAnimationFrame(resetArtifactViewerScroll);" in response.text
+    assert "let boardTaskSnapshots = new Map();" in response.text
+    assert "function setTaskTab(tab, { load = true } = {})" in response.text
+    assert "function taskChromeState(state = '')" in response.text
+    assert "hydrateTaskModalChrome(snapshot, { preserveTab });" in response.text
+    assert "?include_changed_files=true" in response.text
     assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" not in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
     assert "Final branch" in response.text
@@ -1571,7 +1597,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "height: min(86vh, calc(100vh - 64px))" in response.text
     assert ".diff-desktop { font-size: 0.82rem; }" in response.text
     assert ".diff-mobile { font-size: 0.82rem; }" in response.text
-    assert "setTaskTab('changed-files');" in response.text
+    assert "loadTaskDetail(button.dataset.taskId, false, { snapshot: boardTaskSnapshots.get(button.dataset.taskId) || null });" in response.text
     assert "worker_log" in response.text
     assert 'id="task-tab-logs"' not in response.text
     assert 'id="task-panel-logs"' not in response.text
@@ -1612,21 +1638,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Agent active" in response.text
     assert "Agent waiting" in response.text
     assert "Agent idle" in response.text
-    assert "Agent activity" in response.text
-    assert "task-activity-shell" in response.text
-    assert "Captured stage models" in response.text
     assert "Stage timing" in response.text
     assert "stage-timing-grid" in response.text
     assert "renderStageTiming(stageTiming)" in response.text
-    assert 'id="task-tab-timeline"' in response.text
-    assert 'id="task-panel-timeline"' in response.text
-    assert "setTaskTab('timeline')" in response.text
-    assert "const taskTabTimeline = document.getElementById('task-tab-timeline');" in response.text
-    assert "Current stage model used" in response.text
-    assert "Planner model used" in response.text
-    assert "Implementer model used" in response.text
-    assert "Reviewer model used" in response.text
-    assert "REQUEST.md path" in response.text
+    assert "${renderStageTiming(detail.stage_timing)}" in response.text
+    assert 'id="task-tab-timeline"' not in response.text
+    assert 'id="task-panel-timeline"' not in response.text
+    assert "setTaskTab('timeline')" not in response.text
+    assert "const taskTabTimeline = document.getElementById('task-tab-timeline');" not in response.text
     assert "Delete task" in response.text
     assert "This stops any running task work and removes managed artifacts" in response.text
     assert "method: 'DELETE'" in response.text
@@ -1656,7 +1675,8 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert "구현 단계" in response.text
     assert "최종 완료" in response.text
     assert "작업 상세" in response.text
-    assert "에이전트 활동" in response.text
+    assert "대상 프로젝트" in response.text
+    assert "작업 내역" in response.text
     assert "변경 파일" in response.text
     assert "요구사항" in response.text
     assert "계획 작성중" in response.text
