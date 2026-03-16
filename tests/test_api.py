@@ -1727,6 +1727,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "callback(uploaded.relative_path, uploaded.filename);" in response.text
     assert "return false;" in response.text
     assert "function rewriteAttachmentPaths(markdown, taskId)" in response.text
+    assert "async function refreshActiveTaskDetailAfterComment(taskId)" in response.text
+    assert "await refreshActiveTaskDetailAfterComment(activeTaskId);" in response.text
     assert "function resetArtifactViewerScroll()" in response.text
     assert "requestAnimationFrame(resetArtifactViewerScroll);" in response.text
     assert "let boardTaskSnapshots = new Map();" in response.text

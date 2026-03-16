@@ -3415,10 +3415,12 @@
               const uploaded = await uploadPlanAttachment(blob);
               callback(uploaded.relative_path, uploaded.filename);
               taskEditorStatus.textContent = translateTask('attachedPlanImage', { filename: uploaded.filename });
+              return false;
             } catch (error) {
               taskModalError.hidden = false;
               taskModalError.textContent = error.message;
               taskEditorStatus.textContent = translateTask('imageUploadFailed');
+              return false;
             }
           },
         },
@@ -4031,6 +4033,22 @@
       }
     }
 
+    async function refreshActiveTaskDetailAfterComment(taskId) {
+      if (!activeTaskDetail || !taskId) return;
+      const response = await fetch(`/api/tasks/${taskId}?include_changed_files=true`);
+      const detail = await response.json();
+      if (!response.ok) throw new Error(detail.detail || translateTask('failedLoadTaskDetails'));
+      if (taskId !== activeTaskId) return;
+      activeTaskDetail = {
+        ...activeTaskDetail,
+        ...detail,
+        changed_files_available: detail.changed_files_available,
+        changed_files: detail.changed_files,
+      };
+      renderTaskOverview(activeTaskDetail);
+      renderChangedFileButtons(activeTaskDetail.changed_files || []);
+    }
+
     async function submitInlineComment() {
       if (!activeTaskId || !activeChangedFileId || !activeInlineCommentAnchor) return;
       const body = currentInlineCommentDraft().trim();
@@ -4056,6 +4074,7 @@
         if (!response.ok) throw new Error(payload.detail || translateHumanReview('commentComposerError'));
         activeInlineCommentAnchor = null;
         activeChangedFileId = payload.summary?.id || activeChangedFileId;
+        await refreshActiveTaskDetailAfterComment(activeTaskId);
         renderChangedFileDetail(payload, { preserveScroll: true });
         taskModalError.hidden = true;
       } catch (error) {
@@ -4078,6 +4097,7 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateHumanReview('commentDeleteError'));
         activeChangedFileId = payload.summary?.id || changedFileId;
+        await refreshActiveTaskDetailAfterComment(activeTaskId);
         renderChangedFileDetail(payload, { preserveScroll: true, keepComposer: true });
         taskModalError.hidden = true;
       } catch (error) {
