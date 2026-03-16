@@ -9,6 +9,7 @@ RETRY_COOLDOWN = timedelta(minutes=10)
 IMMEDIATE_GATE_REASONS = {
     "planner-empty-artifact",
     "implementation-no-changes",
+    "implementation-base-sync-conflict",
     "implementation-local-commits",
     "implementation-failed",
     "review-no-workspace",

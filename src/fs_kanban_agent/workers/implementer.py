@@ -37,21 +37,15 @@ class ImplementerWorker(WorkerBase):
         run_id = self.make_run_id()
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             try:
-                workspace_repo = await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
+                workspace_repo = await self._prepare_workspace(task)
             except WorkspaceSyncError as exc:
-                existing_workspace = Path(task.metadata.implementation.workspace or "")
-                if not existing_workspace.exists():
-                    apply_retry_gate(task.metadata, reason="implementation-base-sync-conflict")
-                    task.metadata.implementation.last_result = "failure"
-                    task.metadata.errors.append(
-                        TaskErrorInfo(code="implementation-base-sync-conflict", message=str(exc))
-                    )
-                    self.metadata_store.save(task.task_dir, task.metadata)
-                    return True
-                workspace_repo = existing_workspace
+                apply_retry_gate(task.metadata, reason="implementation-base-sync-conflict")
+                task.metadata.implementation.last_result = "failure"
                 task.metadata.errors.append(
                     TaskErrorInfo(code="implementation-base-sync-conflict", message=str(exc))
                 )
+                self.metadata_store.save(task.task_dir, task.metadata)
+                return True
             implementing = self.transitions.move(task, TaskState.IMPLEMENTING, by=self.worker_name)
             run_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.cycle + 1:03d}.jsonl"
             prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
@@ -123,6 +117,28 @@ class ImplementerWorker(WorkerBase):
                 done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=note)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
+
+    async def _prepare_workspace(self, task):
+        try:
+            return await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
+        except WorkspaceSyncError as exc:
+            existing_workspace = Path(task.metadata.implementation.workspace or "")
+            if not existing_workspace.exists():
+                raise
+            await asyncio.to_thread(self.workspace_manager.discard, task.metadata)
+            self._reset_implementation_context(task.metadata)
+            task.metadata.errors.append(
+                TaskErrorInfo(code="implementation-base-sync-conflict", message=str(exc))
+            )
+            self.metadata_store.save(task.task_dir, task.metadata)
+            return await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
+
+    def _reset_implementation_context(self, metadata) -> None:
+        metadata.implementation.last_result = None
+        metadata.implementation.resolved_model = None
+        metadata.implementation.session_id = None
+        metadata.implementation.last_run_tokens = 0
+        metadata.implementation.session_tokens = 0
 
     def _build_implementer_source(self, task_dir):
         sections = ["# Plan", "", (task_dir / "PLAN.md").read_text().rstrip()]

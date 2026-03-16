@@ -32,6 +32,13 @@ class WorkspaceManager:
         metadata.implementation.branch = f"task/{metadata.task_id.lower()}"
         return repo_dir
 
+    def discard(self, metadata: TaskMetadata) -> None:
+        workspace_root = self.config.workspace.root or (self.config.kanban_root / "_runtime/workspaces")
+        workspace_dir = workspace_root / metadata.task_id
+        shutil.rmtree(workspace_dir, ignore_errors=True)
+        metadata.implementation.workspace = None
+        metadata.implementation.branch = None
+
     def _clone_task_repo(self, target_repo_root: Path, repo_dir: Path, metadata: TaskMetadata) -> None:
         clone = subprocess.run(["git", "clone", str(target_repo_root), str(repo_dir)], capture_output=True, text=True, check=False)
         if clone.returncode != 0:

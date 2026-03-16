@@ -292,7 +292,7 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
     assert updated.metadata.retry_gate.not_before is not None
 
 
-def test_implementer_worker_continues_with_existing_workspace_on_base_sync_conflict(tmp_path):
+def test_implementer_worker_restarts_from_latest_base_on_workspace_sync_conflict(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
@@ -317,11 +317,17 @@ def test_implementer_worker_continues_with_existing_workspace_on_base_sync_confl
     workspace_manager = WorkspaceManager(config)
     workspace_repo = workspace_manager.prepare(todo.metadata)
     Path(workspace_repo, "app.txt").write_text("workspace change\n")
+    Path(workspace_repo, "stale-only.txt").write_text("stale\n")
     (target_repo / "app.txt").write_text("upstream change\n")
     subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
 
-    adapter = FakeAdapter(["## Summary\nimplemented"])
+    def modify_workspace(cwd):
+        assert (cwd / "app.txt").read_text() == "upstream change\n"
+        assert (cwd / "stale-only.txt").exists() is False
+        (cwd / "app.txt").write_text("fresh implementation\n")
+
+    adapter = FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace)
     worker = ImplementerWorker(
         config,
         scanner,
@@ -341,6 +347,7 @@ def test_implementer_worker_continues_with_existing_workspace_on_base_sync_confl
     assert any(error.code == "implementation-base-sync-conflict" for error in updated.metadata.errors)
     assert updated.metadata.retry_gate.reason is None
     assert updated.metadata.retry_gate.not_before is None
+    assert Path(updated.metadata.implementation.workspace or "", "app.txt").read_text() == "fresh implementation\n"
     assert adapter.responses == []
 
 
