@@ -145,7 +145,7 @@ def test_retrospective_service_builds_korean_prompt_when_request_language_is_kor
     assert "엔지니어링 회고를 마크다운으로 간결하게 작성하세요." in prompt
     assert "회고는 반드시 Korean로 작성하세요." in prompt
     assert "대상 저장소:" in prompt
-    assert "대상 브랜치:" in prompt
+    assert "기준 브랜치:" in prompt
     assert "완료된 작업:" in prompt
 
 
