@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import MethodType
 from types import SimpleNamespace
 
 from fs_kanban_agent.events import EventBus
@@ -26,6 +27,9 @@ class DummyModelRegistry:
     def __init__(self) -> None:
         self.adapter = object()
 
+    def get(self, *, refresh: bool = False):
+        return None
+
 
 class RecordingDeletionService:
     def __init__(self) -> None:
@@ -33,6 +37,19 @@ class RecordingDeletionService:
 
     def delete(self, task_id: str, *, by: str) -> None:
         self.calls.append((task_id, by))
+
+
+class IdleWorker:
+    def candidate_tasks(self):
+        return []
+
+    async def run_task(self, task) -> bool:
+        return False
+
+
+class IdleWorkerWithAdapter(IdleWorker):
+    def __init__(self, adapter) -> None:
+        self.adapter = adapter
 
 
 class BlockingWorker:
@@ -150,9 +167,9 @@ def test_runtime_supervisor_force_delete_cancels_task_and_deletes(configured_pat
     deletion_service = RecordingDeletionService()
     supervisor = RuntimeSupervisor(
         config,
-        SimpleNamespace(adapter=adapter),
-        SimpleNamespace(adapter=adapter),
-        SimpleNamespace(adapter=adapter),
+        IdleWorkerWithAdapter(adapter),
+        IdleWorkerWithAdapter(adapter),
+        IdleWorkerWithAdapter(adapter),
         SimpleNamespace(adapter=adapter),
         KanbanScanner(config, MetadataStore()),
         DummyBoardService(),
@@ -180,5 +197,97 @@ def test_runtime_supervisor_force_delete_cancels_task_and_deletes(configured_pat
         assert deletion_service.calls == [(task_id, "human")]
         assert task_id not in supervisor._inflight_task_ids
         assert running.cancelled() or running.done()
+
+    asyncio.run(scenario())
+
+
+def test_runtime_supervisor_restarts_dispatch_loop_after_failure(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = True
+    config.runtime.poll_interval_seconds = 0.01
+    supervisor = RuntimeSupervisor(
+        config,
+        IdleWorker(),
+        IdleWorker(),
+        IdleWorker(),
+        object(),
+        KanbanScanner(config, MetadataStore()),
+        DummyBoardService(),
+        object(),
+        object(),
+        object(),
+        object(),
+        DummyRecoveryService(),
+        EventBus(),
+        DummyModelRegistry(),
+    )
+
+    async def crashing_dispatch(self) -> None:
+        attempts.append(asyncio.get_running_loop().time())
+        if len(attempts) == 1:
+            raise RuntimeError("dispatch crashed")
+        await self._stop_event.wait()
+
+    async def idle_watch(self) -> None:
+        await self._stop_event.wait()
+
+    attempts: list[float] = []
+    supervisor.dispatch_forever = MethodType(crashing_dispatch, supervisor)
+    supervisor.watch_forever = MethodType(idle_watch, supervisor)
+
+    async def scenario() -> None:
+        await supervisor.start()
+        for _ in range(50):
+            if len(attempts) >= 2:
+                break
+            await asyncio.sleep(0.01)
+        await supervisor.stop()
+        assert len(attempts) >= 2
+
+    asyncio.run(scenario())
+
+
+def test_runtime_supervisor_restarts_watch_loop_after_failure(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = True
+    config.runtime.poll_interval_seconds = 0.01
+    supervisor = RuntimeSupervisor(
+        config,
+        IdleWorker(),
+        IdleWorker(),
+        IdleWorker(),
+        object(),
+        KanbanScanner(config, MetadataStore()),
+        DummyBoardService(),
+        object(),
+        object(),
+        object(),
+        object(),
+        DummyRecoveryService(),
+        EventBus(),
+        DummyModelRegistry(),
+    )
+
+    async def idle_dispatch(self) -> None:
+        await self._stop_event.wait()
+
+    async def crashing_watch(self) -> None:
+        attempts.append(asyncio.get_running_loop().time())
+        if len(attempts) == 1:
+            raise RuntimeError("watch crashed")
+        await self._stop_event.wait()
+
+    attempts: list[float] = []
+    supervisor.dispatch_forever = MethodType(idle_dispatch, supervisor)
+    supervisor.watch_forever = MethodType(crashing_watch, supervisor)
+
+    async def scenario() -> None:
+        await supervisor.start()
+        for _ in range(50):
+            if len(attempts) >= 2:
+                break
+            await asyncio.sleep(0.01)
+        await supervisor.stop()
+        assert len(attempts) >= 2
 
     asyncio.run(scenario())

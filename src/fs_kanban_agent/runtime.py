@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterable
+import logging
 from typing import Any, Protocol
 
 from .config import AppConfig
@@ -25,6 +26,9 @@ from .workers.reviewer import ReviewerWorker
 from watchfiles import awatch
 
 from .opencode_adapter import OpenCodeAdapter
+
+
+logger = logging.getLogger(__name__)
 
 
 class DispatchWorker(Protocol):
@@ -99,8 +103,8 @@ class RuntimeSupervisor:
         if self.config.runtime.auto_dispatch:
             self._background_tasks = [
                 *self._background_tasks,
-                asyncio.create_task(self.dispatch_forever(), name="fs-kanban-dispatch"),
-                asyncio.create_task(self.watch_forever(), name="fs-kanban-watch"),
+                self._create_supervised_task("fs-kanban-dispatch", self.dispatch_forever),
+                self._create_supervised_task("fs-kanban-watch", self.watch_forever),
             ]
 
     async def stop(self) -> None:
@@ -184,6 +188,24 @@ class RuntimeSupervisor:
         async for _changes in awatch(self.config.kanban_root, stop_event=self._stop_event):
             await asyncio.sleep(self.config.runtime.poll_interval_seconds)
             await self.rescan_and_publish()
+
+    def _create_supervised_task(self, name: str, runner: Any) -> asyncio.Task[None]:
+        return asyncio.create_task(self._run_supervised(name, runner), name=name)
+
+    async def _run_supervised(self, name: str, runner: Any) -> None:
+        restart_delay = max(self.config.runtime.poll_interval_seconds, 0.1)
+        while not self._stop_event.is_set():
+            try:
+                await runner()
+                if not self._stop_event.is_set():
+                    logger.warning("background task exited unexpectedly; restarting", extra={"task_name": name})
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("background task crashed; restarting", extra={"task_name": name})
+            if self._stop_event.is_set():
+                return
+            await asyncio.sleep(restart_delay)
 
     def _worker_specs(self) -> Iterable[tuple[str, DispatchWorker, int]]:
         return (
