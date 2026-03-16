@@ -1408,8 +1408,16 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospective-modal" in response.text
     assert "task-modal-panel" in response.text
     assert "retrospective-modal-title" in response.text
+    assert "retrospective-modal-subtitle" not in response.text
+    assert "retrospective-context-row" in response.text
+    assert ".retrospective-context-row { margin-top: 8px; margin-bottom: 10px; }" in response.text
+    assert "retrospective-view-title" in response.text
+    assert "retrospective-target-title" in response.text
+    assert "retrospective-branch-title" in response.text
     assert "retrospective-create-target" in response.text
     assert "retrospective-create-branch" in response.text
+    assert 'class="retrospective-status approval-choice-status"' in response.text
+    assert 'class="approval-choice-card"' in response.text
     assert "Work log" in response.text
     assert "Viewer mode" in response.text
     assert "Changed files" in response.text
@@ -1543,13 +1551,28 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'class="target-branch-retrospective"' in response.text
     assert "retrospectiveCountLabel: '{count} retrospectives'" in response.text
     assert "retrospectiveCountLabel: '{count}건 회고'" in response.text
+    assert "retrospectiveModalSubtitle" not in response.text
     assert "${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>" in response.text
     assert "data-target-repo=\"${escapeHtml(branchItems[0].target_repo_root || '')}\"" in response.text
     assert 'data-base-branch="${escapeHtml(branch)}"' in response.text
     assert "function openRetrospectiveModal(targetRepoRoot, baseBranch)" in response.text
     assert "function createRetrospective(completionMode)" in response.text
+    assert "function renderRetrospectiveContextTags(record = null)" in response.text
+    assert "function setRetrospectiveMode(mode, record = null)" in response.text
     assert "retrospectiveUnavailable" in response.text
     assert "payload.created" in response.text
+    assert "retrospectiveViewTitle: 'Retrospective content'" in response.text
+    assert "renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon'))" in response.text
+    assert "retrospectiveBranchDescription" not in response.text
+    assert "retrospectiveTargetDescription" not in response.text
+    assert "retrospectiveProjectLabel" not in response.text
+    assert "retrospectiveBranchLabel" not in response.text
+    assert "setRetrospectiveMode(record?.exists ? 'view' : 'choice', record || null);" in response.text
+    assert "setRetrospectiveMode('choice', {" in response.text
+    assert "retrospectiveViewShell.style.display = showChoice ? 'none' : 'grid';" in response.text
+    assert "retrospectiveStatus.hidden = true;" in response.text
+    assert "retrospectiveCreateTargetButton.hidden = false;" in response.text
+    assert "retrospectiveCreateBranchButton.hidden = false;" in response.text
     assert 'class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? ' in response.text
     assert '.target-branch-caret { flex: 0 0 auto; width: 20px; height: 20px; margin-left: 2px;' in response.text
     assert ".final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
@@ -1564,7 +1587,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".stage-timing-row { display: grid; gap: 10px; grid-template-columns: repeat(var(--stage-columns, 1), minmax(0, 1fr)); }" in response.text
     assert ".stage-timing-card.upcoming { opacity: 0.48; background: rgba(255,255,255,0.62); }" in response.text
     assert "const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];" in response.text
-    assert "const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments.filter((segment) => segment.state !== 'done') : [];" in response.text
+    assert "const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];" in response.text
     assert "const stageTimingRows = [" in response.text
     assert "['requests', 'planning', 'waiting-check-plans']" in response.text
     assert "['todos', 'implementing', 'waiting-reviews']" in response.text

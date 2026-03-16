@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent Kanban</title>
+  <title>Assistant Agent Kanban</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
@@ -114,8 +114,12 @@
     .modal-copy p { margin: 6px 0 0; color: var(--muted); }
     .task-modal-tag-row { margin-top: 8px; }
     .task-modal-tag-row .card-tag { font-size: 0.73rem; }
-    .retrospective-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-    .retrospective-shell { display: grid; gap: 14px; min-height: 0; overflow: hidden; }
+    .retrospective-context-row { margin-top: 8px; margin-bottom: 10px; }
+    .retrospective-context-row .card-tag { font-size: 0.72rem; }
+    .retrospective-view-copy { display: grid; gap: 6px; }
+    .retrospective-view-copy strong { font-size: 1rem; color: var(--accent-strong); }
+    .retrospective-view-copy p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .retrospective-shell { display: grid; gap: 14px; min-height: 0; overflow: hidden; margin-top: 14px; }
     .retrospective-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,249,239,0.82); color: var(--muted); }
     .retrospective-status[data-tone="error"] { border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
     .retrospective-status[data-tone="success"] { border-color: rgba(33,115,73,0.24); background: rgba(244,250,246,0.88); color: var(--success); }
@@ -357,7 +361,7 @@
 </head>
 <body>
   <header>
-    <h1>Agent Kanban</h1>
+    <h1>Assistant Agent Kanban</h1>
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Settings</button>
@@ -707,18 +711,35 @@
       <div class="modal-head">
         <div class="modal-copy">
           <h2 id="retrospective-modal-title">Retrospective</h2>
-          <p id="retrospective-modal-subtitle">Review or create a retrospective for this completed branch group.</p>
         </div>
-        <div class="retrospective-modal-actions">
-          <button type="button" id="retrospective-create-target" class="accent-button" hidden>Commit to target branch</button>
-          <button type="button" id="retrospective-create-branch" class="primary" hidden>Create new branch</button>
+        <div class="modal-head-actions">
           <button type="button" id="close-retrospective-modal">Close</button>
         </div>
       </div>
-      <div id="retrospective-status" class="retrospective-status" data-tone="neutral">Choose how to create or view this retrospective.</div>
-      <div class="retrospective-shell">
+      <div id="retrospective-context-row" class="card-tag-row retrospective-context-row"></div>
+      <div id="retrospective-choice-shell" class="approval-choice-shell">
+        <div class="approval-choice-grid">
+          <section class="approval-choice-card">
+            <div>
+              <strong id="retrospective-target-title">Commit on target branch</strong>
+            </div>
+            <button type="button" id="retrospective-create-target" class="accent-button" hidden>Commit to target branch</button>
+          </section>
+          <section class="approval-choice-card">
+            <div>
+              <strong id="retrospective-branch-title">Create retrospective branch</strong>
+            </div>
+            <button type="button" id="retrospective-create-branch" class="primary" hidden>Create new branch</button>
+          </section>
+        </div>
+        <div id="retrospective-status" class="retrospective-status approval-choice-status" data-tone="neutral">Choose how to create or view this retrospective.</div>
+      </div>
+      <div id="retrospective-view-shell" class="retrospective-shell" hidden>
+        <div class="retrospective-view-copy">
+          <strong id="retrospective-view-title"></strong>
+        </div>
         <div id="retrospective-meta" class="retrospective-meta"></div>
-        <pre id="retrospective-content" class="retrospective-content"><span class="retrospective-empty">No retrospective loaded.</span></pre>
+        <pre id="retrospective-content" class="retrospective-content"></pre>
       </div>
     </div>
   </section>
@@ -869,7 +890,11 @@
     const approvalChoiceTargetButton = document.getElementById('approval-choice-target-button');
     const approvalChoiceNewBranchButton = document.getElementById('approval-choice-new-branch-button');
     const approvalChoiceStatus = document.getElementById('approval-choice-status');
+    const retrospectiveChoiceShell = document.getElementById('retrospective-choice-shell');
+    const retrospectiveViewShell = document.getElementById('retrospective-view-shell');
+    const retrospectiveViewTitle = document.getElementById('retrospective-view-title');
     const retrospectiveStatus = document.getElementById('retrospective-status');
+    const retrospectiveContextRow = document.getElementById('retrospective-context-row');
     const retrospectiveMeta = document.getElementById('retrospective-meta');
     const retrospectiveContent = document.getElementById('retrospective-content');
     const retrospectiveCreateTargetButton = document.getElementById('retrospective-create-target');
@@ -1158,9 +1183,9 @@
         approvalChoiceDescription: 'Choose how this reviewed task should be completed in the target repository.',
         approvalChoiceCopyTitle: 'Final approval mode',
         approvalChoiceCopyBody: 'Pick the completion path that matches how you want the reviewed patch finalized.',
-        approvalChoiceTargetTitle: 'Commit on target branch',
-        approvalChoiceTargetDescription: 'Apply the reviewed result directly onto the configured target branch and finish there.',
-        approvalChoiceTargetAction: 'Commit on target branch',
+        approvalChoiceTargetTitle: 'Commit on base branch',
+        approvalChoiceTargetDescription: 'Apply the reviewed result directly onto the configured base branch and finish there.',
+        approvalChoiceTargetAction: 'Commit on base branch',
         approvalChoiceNewBranchTitle: 'Finalize on new branch',
         approvalChoiceNewBranchDescription: 'Keep the reviewed result isolated by finishing it on a dedicated branch.',
         approvalChoiceNewBranchAction: 'Finalize on new branch',
@@ -1281,23 +1306,23 @@
         finalBranchLabel: 'Final branch',
         retrospectiveCountLabel: '{count} retrospectives',
         retrospectiveModalTitle: 'Retrospective',
-        retrospectiveModalSubtitle: 'Review or create a retrospective for this completed branch group.',
+        retrospectiveViewTitle: 'Retrospective content',
         retrospectiveClose: 'Close',
-        retrospectiveCreateTarget: 'Commit to target branch',
+        retrospectiveTargetTitle: 'Commit on base branch',
+        retrospectiveCreateTarget: 'Commit to base branch',
+        retrospectiveBranchTitle: 'Create retrospective branch',
         retrospectiveCreateBranch: 'Create new branch',
         retrospectiveIdle: 'Choose how to create or view this retrospective.',
         retrospectiveLoading: 'Loading retrospective...',
         retrospectiveMissing: 'No retrospective exists for this exact completed branch group yet.',
         retrospectiveExisting: 'Existing retrospective loaded.',
         retrospectiveUnavailable: 'Retrospective generation is unavailable because no commit model is configured.',
-        retrospectiveCreatingTarget: 'Generating retrospective and committing to the target branch...',
+        retrospectiveCreatingTarget: 'Generating retrospective and committing to the base branch...',
         retrospectiveCreatingBranch: 'Generating retrospective and creating a new retrospective branch...',
-        retrospectiveCreatedTarget: 'Retrospective committed to the target branch.',
+        retrospectiveCreatedTarget: 'Retrospective committed to the base branch.',
         retrospectiveCreatedBranch: 'Retrospective committed on a new retrospective branch.',
-        retrospectiveLoadedTarget: 'An existing target-branch retrospective is already available.',
+        retrospectiveLoadedTarget: 'An existing base-branch retrospective is already available.',
         retrospectiveLoadedBranch: 'An existing retrospective branch is already available.',
-        retrospectiveProjectLabel: 'Project',
-        retrospectiveBranchLabel: 'Target branch',
         retrospectiveCommitBranchLabel: 'Committed branch',
         retrospectivePathLabel: 'Repo path',
         retrospectiveModelLabel: 'Model',
@@ -1433,23 +1458,23 @@
         finalBranchLabel: '최종 브랜치',
         retrospectiveCountLabel: '{count}건 회고',
         retrospectiveModalTitle: '회고',
-        retrospectiveModalSubtitle: '완료된 브랜치 그룹에 대한 회고를 확인하거나 생성합니다.',
+        retrospectiveViewTitle: '회고 내용 조회',
         retrospectiveClose: '닫기',
-        retrospectiveCreateTarget: '타겟 브랜치에 커밋',
+        retrospectiveTargetTitle: '기준 브랜치에 커밋',
+        retrospectiveCreateTarget: '기준 브랜치에 커밋',
+        retrospectiveBranchTitle: '회고 브랜치 만들기',
         retrospectiveCreateBranch: '새 브랜치 생성',
         retrospectiveIdle: '이 회고를 어떻게 생성하거나 조회할지 선택하세요.',
         retrospectiveLoading: '회고를 불러오는 중...',
         retrospectiveMissing: '이 완료 브랜치 그룹에 대한 회고가 아직 없습니다.',
         retrospectiveExisting: '기존 회고를 불러왔습니다.',
         retrospectiveUnavailable: 'commit model이 설정되지 않아 회고를 생성할 수 없습니다.',
-        retrospectiveCreatingTarget: '회고를 생성하고 타겟 브랜치에 커밋하는 중...',
+        retrospectiveCreatingTarget: '회고를 생성하고 기준 브랜치에 커밋하는 중...',
         retrospectiveCreatingBranch: '회고를 생성하고 새 회고 브랜치를 만드는 중...',
-        retrospectiveCreatedTarget: '회고를 타겟 브랜치에 커밋했습니다.',
+        retrospectiveCreatedTarget: '회고를 기준 브랜치에 커밋했습니다.',
         retrospectiveCreatedBranch: '회고를 새 회고 브랜치에 커밋했습니다.',
-        retrospectiveLoadedTarget: '이미 생성된 타겟 브랜치 회고를 불러왔습니다.',
+        retrospectiveLoadedTarget: '이미 생성된 기준 브랜치 회고를 불러왔습니다.',
         retrospectiveLoadedBranch: '이미 생성된 회고 브랜치를 불러왔습니다.',
-        retrospectiveProjectLabel: '프로젝트',
-        retrospectiveBranchLabel: '타겟 브랜치',
         retrospectiveCommitBranchLabel: '커밋된 브랜치',
         retrospectivePathLabel: '저장소 경로',
         retrospectiveModelLabel: '모델',
@@ -1607,7 +1632,9 @@
       setTaskText('task-modal-title', 'modalTitle');
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags();
       setTaskText('retrospective-modal-title', 'retrospectiveModalTitle');
-      setTaskText('retrospective-modal-subtitle', 'retrospectiveModalSubtitle');
+      retrospectiveViewTitle.textContent = activeRetrospectiveRecord?.exists ? translateTask('retrospectiveViewTitle') : '';
+      setTaskText('retrospective-target-title', 'retrospectiveTargetTitle');
+      setTaskText('retrospective-branch-title', 'retrospectiveBranchTitle');
       startVerificationButton.textContent = translateTask('startVerification');
       approvePlanButton.textContent = translateTask('approvePlan');
       deleteTaskButton.textContent = translateTask('deleteTask');
@@ -1628,6 +1655,9 @@
       if (!activeRetrospectiveRecord) {
         retrospectiveStatus.textContent = translateTask('retrospectiveIdle');
         retrospectiveContent.textContent = translateTask('retrospectiveNoContent');
+        retrospectiveContextRow.innerHTML = renderRetrospectiveContextTags();
+      } else {
+        setRetrospectiveMode(activeRetrospectiveRecord.exists ? 'view' : 'choice', activeRetrospectiveRecord);
       }
     }
 
@@ -1967,6 +1997,27 @@
         renderTag('', baseBranch, 'card-tag-branch', '', baseBranch, branchIconSvg('card-branch-icon')),
         renderTag('', finalBranch, 'card-tag-branch card-tag-final-branch', '', finalBranch, branchIconSvg('card-branch-icon')),
       ].filter(Boolean).join('');
+    }
+
+    function renderRetrospectiveContextTags(record = null) {
+      const repoPath = normalizeRepoPath(record?.target_repo_root || activeRetrospectiveTargetRepoRoot);
+      const repoLabel = record?.target_repo_label || deriveRepoContext(repoPath).repoName || '';
+      const baseBranch = record?.base_branch || activeRetrospectiveBaseBranch || '';
+      const repoTone = repoPath ? repoTagTone(repoPath) : null;
+      const repoStyle = repoTone ? `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};` : '';
+      return [
+        renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
+        renderTag('', baseBranch, 'card-tag-branch', '', baseBranch, branchIconSvg('card-branch-icon')),
+      ].filter(Boolean).join('');
+    }
+
+    function setRetrospectiveMode(mode, record = null) {
+      const showChoice = mode === 'choice';
+      retrospectiveChoiceShell.hidden = !showChoice;
+      retrospectiveViewShell.hidden = showChoice;
+      retrospectiveViewShell.style.display = showChoice ? 'none' : 'grid';
+      retrospectiveContextRow.innerHTML = renderRetrospectiveContextTags(record);
+      retrospectiveViewTitle.textContent = showChoice ? '' : translateTask('retrospectiveViewTitle');
     }
 
     function renderCardRuntime(item) {
@@ -2529,6 +2580,11 @@
         activeRetrospectiveRecord = null;
         retrospectiveCreateTargetButton.hidden = true;
         retrospectiveCreateBranchButton.hidden = true;
+        retrospectiveMeta.innerHTML = '';
+        retrospectiveContent.textContent = translateTask('retrospectiveNoContent');
+        retrospectiveStatus.dataset.tone = 'neutral';
+        retrospectiveStatus.textContent = translateTask('retrospectiveIdle');
+        setRetrospectiveMode('choice');
       }
       syncBodyModalState();
     }
@@ -2539,8 +2595,6 @@
 
     function renderRetrospectiveMeta(record) {
       const items = [
-        [translateTask('retrospectiveProjectLabel'), record.target_repo_label || record.target_repo_root || ''],
-        [translateTask('retrospectiveBranchLabel'), record.base_branch || ''],
         [translateTask('retrospectiveCommitBranchLabel'), record.committed_branch || ''],
         [translateTask('retrospectivePathLabel'), record.repo_relative_path || ''],
         [translateTask('retrospectiveModelLabel'), record.resolved_model || ''],
@@ -2558,10 +2612,12 @@
 
     function renderRetrospective(record, statusKey, tone = 'neutral') {
       activeRetrospectiveRecord = record;
+      retrospectiveStatus.hidden = statusKey === 'retrospectiveMissing';
       retrospectiveStatus.dataset.tone = tone;
       retrospectiveStatus.textContent = translateTask(statusKey);
-      renderRetrospectiveMeta(record || {});
-      retrospectiveContent.textContent = record?.content || translateTask('retrospectiveNoContent');
+      setRetrospectiveMode(record?.exists ? 'view' : 'choice', record || null);
+      renderRetrospectiveMeta(record?.exists ? record : {});
+      retrospectiveContent.textContent = record?.exists ? (record.content || translateTask('retrospectiveNoContent')) : '';
       updateRetrospectiveButtons(record || {});
     }
 
@@ -2599,12 +2655,19 @@
     async function openRetrospectiveModal(targetRepoRoot, baseBranch) {
       activeRetrospectiveTargetRepoRoot = targetRepoRoot;
       activeRetrospectiveBaseBranch = baseBranch;
+      setRetrospectiveMode('choice', {
+        target_repo_root: targetRepoRoot,
+        base_branch: baseBranch,
+      });
+      retrospectiveStatus.hidden = true;
       retrospectiveStatus.dataset.tone = 'neutral';
       retrospectiveStatus.textContent = translateTask('retrospectiveLoading');
       retrospectiveMeta.innerHTML = '';
-      retrospectiveContent.textContent = translateTask('retrospectiveNoContent');
-      retrospectiveCreateTargetButton.hidden = true;
-      retrospectiveCreateBranchButton.hidden = true;
+      retrospectiveContent.textContent = '';
+      retrospectiveCreateTargetButton.hidden = false;
+      retrospectiveCreateBranchButton.hidden = false;
+      retrospectiveCreateTargetButton.disabled = false;
+      retrospectiveCreateBranchButton.disabled = false;
       setRetrospectiveModalOpen(true);
       try {
         const record = await inspectRetrospective(targetRepoRoot, baseBranch);
@@ -2612,12 +2675,13 @@
         const tone = record.exists ? 'success' : (record.can_create === false ? 'error' : 'neutral');
         renderRetrospective(record, statusKey, tone);
       } catch (error) {
+        retrospectiveStatus.hidden = false;
         retrospectiveStatus.dataset.tone = 'error';
         retrospectiveStatus.textContent = error.message;
         retrospectiveContent.textContent = translateTask('retrospectiveNoContent');
         retrospectiveMeta.innerHTML = '';
-        retrospectiveCreateTargetButton.hidden = true;
-        retrospectiveCreateBranchButton.hidden = true;
+        retrospectiveCreateTargetButton.hidden = false;
+        retrospectiveCreateBranchButton.hidden = false;
       }
     }
 
@@ -3477,7 +3541,7 @@
 
     function renderStageTiming(stageTiming) {
       const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];
-      const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments.filter((segment) => segment.state !== 'done') : [];
+      const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];
       const summaryMap = new Map(summaries.map((summary) => [summary.state, summary]));
       const visitedStates = new Set([
         ...summaries.filter((summary) => Number(summary.attempt_count || 0) > 0 || Number(summary.total_duration_ms || 0) > 0 || summary.is_current).map((summary) => summary.state),
