@@ -209,9 +209,14 @@
     .stage-timing-shell { display: grid; gap: 14px; }
     .stage-timing-head { display: flex; justify-content: space-between; gap: 12px; align-items: end; flex-wrap: wrap; }
     .stage-timing-head h3 { margin: 0; }
-    .stage-timing-total { display: grid; gap: 4px; min-width: 180px; }
+    .stage-timing-total { display: grid; gap: 6px; min-width: 240px; justify-items: end; }
     .stage-timing-total span { color: var(--muted); font-size: 0.84rem; letter-spacing: 0.04em; text-transform: uppercase; }
-    .stage-timing-total strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+    .stage-timing-breakdown { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: baseline; max-width: 100%; }
+    .stage-timing-breakdown-item { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; color: var(--muted); font-size: 0.86rem; white-space: nowrap; }
+    .stage-timing-breakdown-item span { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .stage-timing-breakdown-item strong { font-size: 0.92rem; font-variant-numeric: tabular-nums; color: var(--text); }
+    .stage-timing-breakdown-item.is-total strong { font-size: 1.08rem; }
+    .stage-timing-breakdown-separator { color: var(--border-strong); font-size: 0.86rem; }
     .stage-timing-grid { display: grid; gap: 10px; }
     .stage-timing-row { display: grid; gap: 10px; grid-template-columns: repeat(var(--stage-columns, 1), minmax(0, 1fr)); }
     .stage-timing-card { display: grid; gap: 6px; min-width: 0; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); border-top: 4px solid var(--stage-color, var(--accent)); transition: opacity 180ms ease, transform 180ms ease, box-shadow 180ms ease, background 180ms ease; }
@@ -367,7 +372,7 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .stage-timing-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .stage-timing-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .stage-timing-total { justify-items: start; min-width: 0; } .stage-timing-breakdown { justify-content: flex-start; gap: 6px 10px; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -1395,7 +1400,10 @@
         noStageVisits: 'No stage visits recorded yet.',
         timelineFromHistory: 'Timeline built from metadata history',
         timelineFromHistoryBody: 'Every duration comes from the task\'s recorded state transitions, so repeated implement-review loops stay visible.',
-        totalTrackedTime: 'Total tracked time',
+        totalTrackedTime: 'Overall',
+        aiWorkTime: 'AI',
+        humanWorkTime: 'Human',
+        waitingTime: 'Waiting',
         trackedSuffix: ' tracked',
         totalPrefix: 'total ',
         latestEntry: 'Latest entry {value}',
@@ -1537,7 +1545,10 @@
         noStageVisits: '기록된 단계 방문이 없습니다.',
         timelineFromHistory: 'metadata history 기반 타임라인',
         timelineFromHistoryBody: '모든 시간은 task에 기록된 상태 전이에서 계산되므로 implement-review 반복도 그대로 보입니다.',
-        totalTrackedTime: '총 추적 시간',
+        totalTrackedTime: '전체',
+        aiWorkTime: 'AI',
+        humanWorkTime: '인간',
+        waitingTime: '대기',
         trackedSuffix: ' 추적됨',
         totalPrefix: '총 ',
         latestEntry: '최근 진입 {value}',
@@ -3649,6 +3660,13 @@
     function renderStageTiming(stageTiming) {
       const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];
       const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];
+      const bucketDurationAttrs = (durationMs, states, { live = true } = {}) => {
+        if (!live) return buildDurationAttributes(Number(durationMs || 0));
+        const liveSegment = segments.find((segment) => segment.is_current && states.includes(segment.state) && segment.state !== 'done');
+        const liveDurationMs = liveSegment ? Number(liveSegment.duration_ms || 0) : 0;
+        const baseDurationMs = liveSegment ? Math.max(0, Number(durationMs || 0) - liveDurationMs) : Number(durationMs || 0);
+        return buildDurationAttributes(baseDurationMs, liveSegment ? liveSegment.entered_at : '');
+      };
       const summaryMap = new Map(summaries.map((summary) => [summary.state, summary]));
       const visitedStates = new Set([
         ...summaries.filter((summary) => Number(summary.attempt_count || 0) > 0 || Number(summary.total_duration_ms || 0) > 0 || summary.is_current).map((summary) => summary.state),
@@ -3661,12 +3679,37 @@
             .reduce((total, segment) => total + Number(segment.duration_ms || 0), 0)
         : 0;
       const totalDurationMs = Math.max(0, Number(stageTiming?.total_duration_ms || 0) - hiddenDurationMs);
+      const aiWorkDurationMs = Math.max(0, Number(stageTiming?.ai_work_duration_ms || 0));
+      const humanWorkDurationMs = Math.max(0, Number(stageTiming?.human_work_duration_ms || 0));
+      const waitingDurationMs = Math.max(0, Number(stageTiming?.waiting_duration_ms || 0));
       const currentSummary = summaries.find((summary) => summary.is_current) || null;
       const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');
       const totalBaseDurationMs = currentSummaryIsLive
         ? Math.max(0, totalDurationMs - Number(currentSummary.latest_duration_ms || 0))
         : totalDurationMs;
-      const totalDurationAttrs = buildDurationAttributes(totalBaseDurationMs, currentSummaryIsLive ? currentSummary.latest_entered_at : '', '', ' tracked');
+      const totalDurationAttrs = buildDurationAttributes(totalBaseDurationMs, currentSummaryIsLive ? currentSummary.latest_entered_at : '', '', translateTask('trackedSuffix'));
+      const timingBreakdown = `
+        <div class="stage-timing-breakdown">
+          <span class="stage-timing-breakdown-item">
+            <span>${escapeHtml(translateTask('aiWorkTime'))}</span>
+            <strong ${bucketDurationAttrs(aiWorkDurationMs, [], { live: false })}>${formatElapsed(aiWorkDurationMs)}</strong>
+          </span>
+          <span class="stage-timing-breakdown-separator" aria-hidden="true">|</span>
+          <span class="stage-timing-breakdown-item">
+            <span>${escapeHtml(translateTask('humanWorkTime'))}</span>
+            <strong ${bucketDurationAttrs(humanWorkDurationMs, ['human-verifying'])}>${formatElapsed(humanWorkDurationMs)}</strong>
+          </span>
+          <span class="stage-timing-breakdown-separator" aria-hidden="true">|</span>
+          <span class="stage-timing-breakdown-item">
+            <span>${escapeHtml(translateTask('waitingTime'))}</span>
+            <strong ${bucketDurationAttrs(waitingDurationMs, ['requests', 'waiting-check-plans', 'todos', 'waiting-reviews', 'completed-reviews'])}>${formatElapsed(waitingDurationMs)}</strong>
+          </span>
+          <span class="stage-timing-breakdown-separator" aria-hidden="true">|</span>
+          <span class="stage-timing-breakdown-item is-total">
+            <span>${escapeHtml(translateTask('totalTrackedTime'))}</span>
+            <strong ${totalDurationAttrs}>${formatElapsed(totalDurationMs)}${escapeHtml(translateTask('trackedSuffix'))}</strong>
+          </span>
+        </div>`;
       const summaryCards = stageTimingRows.map((states) => {
         const cards = states.map((state) => {
           const summary = summaryMap.get(state) || {
@@ -3718,8 +3761,7 @@
             <div class="stage-timing-head">
               <h3>${escapeHtml(translateTask('stageTiming'))}</h3>
               <div class="stage-timing-total">
-                <span>${escapeHtml(translateTask('totalTrackedTime'))}</span>
-                <strong ${totalDurationAttrs}>${formatElapsed(totalDurationMs)}${escapeHtml(translateTask('trackedSuffix'))}</strong>
+                ${timingBreakdown}
               </div>
             </div>
             <div class="stage-timing-grid">${summaryCards}</div>
@@ -3731,11 +3773,16 @@
       `;
     }
 
+    function latestVisibleError(errors) {
+      if (!Array.isArray(errors)) return null;
+      return [...errors].reverse().find((item) => item && item.code !== 'human-verification-rejected') || null;
+    }
+
     function renderTaskOverview(detail) {
       const metadata = detail.metadata;
       activeTaskDetail = detail;
       setTaskDetailStale(false);
-      const latestError = metadata.errors.length ? metadata.errors[metadata.errors.length - 1] : null;
+      const latestError = latestVisibleError(metadata.errors);
       const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
       const reviewNoteVisible = metadata.state === 'human-verifying';
       const viewerVisible = detail.markdown_files.length > 0;

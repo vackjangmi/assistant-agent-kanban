@@ -1686,8 +1686,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Agent idle" in response.text
     assert "Stage timing" in response.text
     assert "stage-timing-grid" in response.text
+    assert "stage-timing-breakdown-item" in response.text
+    assert "stage-timing-breakdown-separator" in response.text
+    assert "translateTask('trackedSuffix')" in response.text
     assert "renderStageTiming(stageTiming)" in response.text
     assert "${renderStageTiming(detail.stage_timing)}" in response.text
+    assert "function latestVisibleError(errors)" in response.text
+    assert "item.code !== 'human-verification-rejected'" in response.text
     assert 'id="task-tab-timeline"' not in response.text
     assert 'id="task-panel-timeline"' not in response.text
     assert "setTaskTab('timeline')" not in response.text
