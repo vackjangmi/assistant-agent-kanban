@@ -206,6 +206,7 @@ class RetrospectiveRecord(BaseModel):
     target_repo_root: str = "."
     target_repo_label: str = "."
     base_branch: str = "main"
+    comparison_branch: str | None = None
     committed_branch: str | None = None
     completion_mode: Literal["new-branch", "target-branch"] | None = None
     repo_relative_path: str | None = None

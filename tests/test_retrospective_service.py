@@ -39,6 +39,16 @@ def _done_task_for_retrospective_with_request(config, task_name: str, *, commit_
     return scanner.find_task(completed.metadata.task_id), service
 
 
+def _create_comparison_branch(repo_root, branch_name: str = "retro-compare-source"):
+    subprocess.run(["git", "-C", str(repo_root), "switch", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "switch", "-c", branch_name], check=True, capture_output=True, text=True)
+    (repo_root / "compare.txt").write_text("compare branch change\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "compare.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "add compare branch file"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "switch", "main"], check=True, capture_output=True, text=True)
+    return branch_name
+
+
 def test_retrospective_service_creates_target_branch_retrospective(configured_paths):
     config, repo_root, _ = configured_paths
     adapter = FakeAdapter(["# Retrospective\n\n## Summary\nTarget branch retro\n"], resolved_models=["openai/gpt-5-commit"])
@@ -174,3 +184,27 @@ def test_retrospective_service_falls_back_to_english_for_unsupported_language(co
     prompt = adapter.prompts[0]
     assert "Write a concise engineering retrospective in markdown." in prompt
     assert "Return the retrospective in English." in prompt
+
+
+def test_retrospective_service_includes_comparison_branch_diff_summary(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["# Retrospective\n\n## Summary\nCompared\n"])
+            self.prompts: list[str] = []
+
+        def run(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            return super().run(**kwargs)
+
+    config, repo_root, _ = configured_paths
+    comparison_branch = _create_comparison_branch(repo_root)
+    adapter = PromptCapturingAdapter()
+    _, service = _done_task_for_retrospective(config, "retro-compare-task", commit_adapter=adapter)
+
+    record = service.create(str(repo_root), "main", comparison_branch, by="human", completion_mode="target-branch")
+
+    prompt = adapter.prompts[0]
+    assert record.comparison_branch == comparison_branch
+    assert f"Comparison branch: {comparison_branch}" in prompt
+    assert f"Git diff summary ({comparison_branch}..main):" in prompt
+    assert "compare.txt" in prompt

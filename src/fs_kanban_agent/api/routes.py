@@ -53,6 +53,7 @@ class HumanReviewNotePayload(BaseModel):
 class RetrospectivePayload(BaseModel):
     target_repo_root: str
     base_branch: str
+    comparison_branch: str | None = None
 
 
 class RetrospectiveCreatePayload(RetrospectivePayload):
@@ -499,7 +500,12 @@ def build_router() -> APIRouter:
     async def inspect_retrospective(payload: RetrospectivePayload, request: Request):
         runtime = request.app.state.runtime
         try:
-            record = await asyncio.to_thread(runtime.retrospective_service.inspect, payload.target_repo_root, payload.base_branch)
+            record = await asyncio.to_thread(
+                runtime.retrospective_service.inspect,
+                payload.target_repo_root,
+                payload.base_branch,
+                payload.comparison_branch,
+            )
         except (TransitionError, TaskNotFoundError) as exc:
             status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
@@ -513,6 +519,7 @@ def build_router() -> APIRouter:
                 runtime.retrospective_service.create,
                 payload.target_repo_root,
                 payload.base_branch,
+                payload.comparison_branch,
                 by="human",
                 completion_mode=payload.completion_mode,
             )
