@@ -299,6 +299,32 @@ def test_human_verification_approval_is_blocked_when_line_comments_remain(config
         service.approve(completed.metadata.task_id, by="human")
 
 
+def test_human_verification_approval_allows_resolved_current_cycle_comments(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-resolved-line-comment-approval-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    service.add_line_comment(
+        completed.metadata.task_id,
+        by="human",
+        path="app.txt",
+        side="right",
+        line_number=1,
+        line_kind="add",
+        hunk_header="@@ -1 +1 @@",
+        body_markdown="Resolved before approval.",
+    )
+
+    task = scanner.find_task(completed.metadata.task_id)
+    artifact = service._load_comments_artifact(task.task_dir, task.metadata)
+    artifact.comments[0].resolved = True
+    service._save_comments_artifact(task.task_dir, task.metadata, artifact)
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.DONE
+
+
 def test_human_verification_reject_requires_note_or_line_comment(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-reject-requires-feedback-task")

@@ -727,6 +727,45 @@ def test_api_blocks_approval_when_line_comments_remain(configured_paths):
         assert "approval is blocked until all inline comments are removed" in approve.json()["detail"]
 
 
+def test_api_allows_approval_when_current_line_comments_are_resolved(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-resolved-comment-approval-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-review-resolved-comment-approval-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+
+        create_comment = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}/comments",
+            json={
+                "path": "app.txt",
+                "side": "right",
+                "line_number": 1,
+                "line_kind": "add",
+                "hunk_header": "@@ -1 +1 @@",
+                "body": "Looks good after the fix.",
+            },
+        )
+        assert create_comment.status_code == 200
+
+        task = scanner.find_task(completed.metadata.task_id)
+        comments_path = task.task_dir / (task.metadata.human_verification.comments_path or "HUMAN-VERIFY-001.comments.json")
+        payload = json.loads(comments_path.read_text())
+        payload["comments"][0]["resolved"] = True
+        comments_path.write_text(json.dumps(payload, indent=2) + "\n")
+
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+
+    assert approve.status_code == 200
+
+
 def test_api_blocks_approval_when_review_note_exists(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False

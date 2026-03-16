@@ -184,10 +184,6 @@ class HumanVerificationService:
             try:
                 if context.metadata.human_verification.note_markdown.strip():
                     raise TransitionError("approval is blocked until the review note is cleared")
-                current_comments = self._load_comments_artifact(context.task_dir, context.metadata).comments
-                if current_comments:
-                    count = len(current_comments)
-                    raise TransitionError(f"approval is blocked until all inline comments are removed ({count} remaining)")
                 unresolved_comments = [comment for comment in self._load_comments_artifact(context.task_dir, context.metadata).comments if not comment.resolved]
                 if unresolved_comments:
                     count = len(unresolved_comments)
