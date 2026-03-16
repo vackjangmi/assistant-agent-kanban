@@ -111,6 +111,7 @@ class AppConfig(BaseModel):
             "_runtime/locks",
             "_runtime/workspaces",
             "_runtime/runs",
+            "_runtime/archive-runs",
             "_runtime/events",
             "_runtime/board-cache",
             "retrospectives",
@@ -159,6 +160,10 @@ class AppConfig(BaseModel):
     @property
     def runs_dir(self) -> Path:
         return self.kanban_root / "_runtime/runs"
+
+    @property
+    def archive_runs_dir(self) -> Path:
+        return self.kanban_root / "_runtime/archive-runs"
 
     @property
     def events_dir(self) -> Path:

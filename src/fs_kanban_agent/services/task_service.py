@@ -43,17 +43,18 @@ PatchFileState = dict[str, str | int | bool | list[ChangedFileHunk] | None]
 
 
 class TaskService:
-    def __init__(self, scanner: KanbanScanner, runs_root: Path, kanban_root: Path) -> None:
+    def __init__(self, scanner: KanbanScanner, runs_root: Path, kanban_root: Path, archive_runs_root: Path | None = None) -> None:
         self.scanner = scanner
         self.runs_root = runs_root
         self.kanban_root = kanban_root
+        self.archive_runs_root = archive_runs_root or (runs_root.parent / "archive-runs")
 
     def get_task(self, task_id: str, *, include_changed_files: bool = True) -> TaskDetail:
         task = self._find_task(task_id)
         request_markdown_path = str((task.task_dir / task.metadata.request.path).resolve())
         markdown_files = self._sorted_markdown_files(task.task_dir)
         json_files = sorted(path.name for path in task.task_dir.glob("*.json") if path.name != "metadata.json")
-        log_dir = self.runs_root / task.metadata.task_id
+        log_dir = self._task_runs_dir(task.metadata.task_id)
         log_files = sorted(path.name for path in log_dir.glob("*")) if log_dir.exists() else []
         changed_files = self._load_changed_files_for_task(task, require_available=False) if include_changed_files else []
         return TaskDetail(
@@ -75,7 +76,7 @@ class TaskService:
             task = self.scanner.find_task(task_id)
         except FileNotFoundError as exc:
             raise TaskNotFoundError(task_id) from exc
-        log_dir = self.runs_root / task.metadata.task_id
+        log_dir = self._task_runs_dir(task.metadata.task_id)
         entries: list[TaskLogEntry] = []
         if log_dir.exists():
             paths = sorted(
@@ -391,12 +392,24 @@ class TaskService:
             resolved = patch_path.resolve()
         else:
             resolved = (self.kanban_root.expanduser().resolve().parent / patch_path).resolve()
-        managed_root = (self.runs_root / task_id).resolve()
-        try:
-            resolved.relative_to(managed_root)
-        except ValueError as exc:
-            raise TransitionError("changed files are unavailable because patch path is outside the managed runs root") from exc
+        managed_roots = [
+            (self.runs_root / task_id).resolve(),
+            (self.archive_runs_root / task_id).resolve(),
+        ]
+        for managed_root in managed_roots:
+            try:
+                resolved.relative_to(managed_root)
+                return resolved
+            except ValueError:
+                continue
+        raise TransitionError("changed files are unavailable because patch path is outside the managed runs roots")
         return resolved
+
+    def _task_runs_dir(self, task_id: str) -> Path:
+        live_dir = self.runs_root / task_id
+        if live_dir.exists():
+            return live_dir
+        return self.archive_runs_root / task_id
 
     def _parse_patch(self, patch_text: str) -> list[ChangedFileDetail]:
         details: list[ChangedFileDetail] = []

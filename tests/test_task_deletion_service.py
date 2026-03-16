@@ -28,6 +28,11 @@ def test_task_deletion_service_removes_task_runtime_artifacts_and_lock(configure
     run_dir = config.runs_dir / task.metadata.task_id
     run_dir.mkdir(parents=True)
     (run_dir / "planner-001.jsonl").write_text("log\n")
+    archive_run_dir = config.archive_runs_dir / task.metadata.task_id
+    archive_run_dir.mkdir(parents=True)
+    (archive_run_dir / "review-001.patch").write_text("patch\n")
+    task.metadata.integration.patch_path = str(archive_run_dir / "review-001.patch")
+    scanner.metadata_store.save(task.task_dir, task.metadata)
     lock_path = config.locks_dir / f"{task.metadata.task_id}.lock"
     lock_path.write_text("locked\n")
 
@@ -37,6 +42,7 @@ def test_task_deletion_service_removes_task_runtime_artifacts_and_lock(configure
     assert not task_dir.exists()
     assert not workspace_root.exists()
     assert not run_dir.exists()
+    assert not archive_run_dir.exists()
     assert not lock_path.exists()
     with pytest.raises(FileNotFoundError):
         scanner.find_task(task.metadata.task_id)

@@ -553,13 +553,26 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
 
     assert moved.state == TaskState.DONE
     done = scanner.find_task(completed.metadata.task_id)
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir)
     expected_final_branch = f"feature/{done.metadata.task_id.lower()}-{done.metadata.slug}"
+    assert config.workspace.root is not None
+    workspace_root = config.workspace.root / done.metadata.task_id
+    live_runs_dir = config.runs_dir / done.metadata.task_id
+    archive_runs_dir = config.archive_runs_dir / done.metadata.task_id
+    detail = task_service.get_task(done.metadata.task_id)
     assert done.state == TaskState.DONE
     assert done.metadata.commit.sha
     assert done.metadata.commit.review_sha == review_sha
     assert done.metadata.integration.final_branch == expected_final_branch
     assert done.metadata.integration.review_branch is None
     assert done.metadata.integration.original_branch is None
+    assert done.metadata.implementation.workspace is None
+    assert not workspace_root.exists()
+    assert not live_runs_dir.exists()
+    assert archive_runs_dir.exists()
+    assert done.metadata.integration.patch_path == str(archive_runs_dir / "review-001.patch")
+    assert (archive_runs_dir / "implementer-001.jsonl").exists()
+    assert (archive_runs_dir / "review-001.patch").exists()
     expected_message = "\n".join(
         [
             f"feat: {done.metadata.title}",
@@ -583,6 +596,9 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert (docs_root / "PLAN.md").exists()
     assert (docs_root / "HUMAN-VERIFY-001.md").exists()
     assert (docs_root / "COMMIT.md").exists()
+    assert detail.log_files == ["implementer-001.jsonl", "review-001.patch"]
+    changed_file = next(file for file in detail.changed_files if file.path == "app.txt")
+    assert task_service.get_changed_file(done.metadata.task_id, changed_file.id).summary.path == "app.txt"
 
 
 def test_human_verification_approve_switches_back_to_review_branch_before_commit(tmp_path):

@@ -180,6 +180,7 @@ class HumanVerificationService:
         if completion_mode not in {"new-branch", "target-branch"}:
             raise TransitionError(f"unsupported completion mode: {completion_mode}")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
+            done_context: TaskContext | None = None
             try:
                 if context.metadata.human_verification.note_markdown.strip():
                     raise TransitionError("approval is blocked until the review note is cleared")
@@ -205,7 +206,7 @@ class HumanVerificationService:
                 context.metadata.commit.status = "committed"
                 context.metadata.commit.sha = sha
                 completion_label = "new branch" if completion_mode == "new-branch" else "target branch"
-                return self.transitions.move(context, TaskState.DONE, by=by, note=f"human verification approved ({completion_label})")
+                done_context = self.transitions.move(context, TaskState.DONE, by=by, note=f"human verification approved ({completion_label})")
             except TransitionError:
                 raise
             except Exception as exc:
@@ -218,6 +219,9 @@ class HumanVerificationService:
                 context.metadata.commit.review_sha = None
                 context.metadata.errors.append(TaskErrorInfo(code="human-verification-finalize-failed", message=str(exc)))
                 return self.transitions.move(context, TaskState.TODOS, by=by, note=f"human verification finalize failed: {exc}")
+            assert done_context is not None
+            self._cleanup_done_runtime(done_context)
+            return done_context
 
     def _find_task(self, task_id: str) -> TaskContext:
         try:
@@ -410,3 +414,53 @@ class HumanVerificationService:
         if not result.ok:
             return fallback
         return self.commit_manager.sanitize_branch_summary(result.assistant_text, fallback_title=context.metadata.title)
+
+    def _cleanup_done_runtime(self, context: TaskContext) -> None:
+        if context.state != TaskState.DONE:
+            raise TransitionError("done runtime cleanup requires a done task")
+        metadata = context.metadata
+        task_id = metadata.task_id
+        workspace_path = metadata.implementation.workspace
+        live_runs_dir = (self.config.runs_dir / task_id).resolve()
+        archive_runs_dir = (self.config.archive_runs_dir / task_id).resolve()
+        archived_patch_path = self._archived_patch_path(metadata, live_runs_dir, archive_runs_dir)
+        self._archive_runs_dir(live_runs_dir, archive_runs_dir)
+        if archived_patch_path is not None:
+            metadata.integration.patch_path = str(archived_patch_path)
+        metadata.implementation.workspace = None
+        self.metadata_store.save(context.task_dir, metadata)
+        self._delete_workspace_root(metadata, workspace_path)
+
+    def _archived_patch_path(self, metadata, live_runs_dir: Path, archive_runs_dir: Path) -> Path | None:
+        if not metadata.integration.patch_path:
+            return None
+        patch_path = Path(metadata.integration.patch_path).expanduser().resolve()
+        try:
+            relative_path = patch_path.relative_to(live_runs_dir)
+        except ValueError:
+            try:
+                patch_path.relative_to(archive_runs_dir)
+            except ValueError as exc:
+                raise TransitionError("done runtime cleanup is blocked because patch path is outside the managed runs roots") from exc
+            return patch_path
+        return archive_runs_dir / relative_path
+
+    def _archive_runs_dir(self, live_runs_dir: Path, archive_runs_dir: Path) -> None:
+        if not live_runs_dir.exists():
+            return
+        archive_runs_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(archive_runs_dir, ignore_errors=True)
+        shutil.move(str(live_runs_dir), str(archive_runs_dir))
+
+    def _delete_workspace_root(self, metadata, workspace_path: str | None) -> None:
+        expected_root = (self.config.workspace.root or (self.config.kanban_root / "_runtime/workspaces")) / metadata.task_id
+        if workspace_path is None:
+            shutil.rmtree(expected_root, ignore_errors=True)
+            return
+        resolved_workspace = Path(workspace_path).expanduser().resolve()
+        managed_root = expected_root.resolve()
+        try:
+            resolved_workspace.relative_to(managed_root)
+        except ValueError as exc:
+            raise TransitionError("done runtime cleanup is blocked because workspace path is outside the managed workspace root") from exc
+        shutil.rmtree(managed_root, ignore_errors=True)

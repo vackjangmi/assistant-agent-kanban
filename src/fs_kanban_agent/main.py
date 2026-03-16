@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "logs":
         config = _load_request_config(args.config, args.kanban_root)
-        logs = TaskService(KanbanScanner(config), config.runs_dir, config.kanban_root).get_logs(args.task_id)
+        logs = TaskService(KanbanScanner(config), config.runs_dir, config.kanban_root, config.archive_runs_dir).get_logs(args.task_id)
         if not logs.entries:
             print(f"No logs found for {args.task_id}")
             return

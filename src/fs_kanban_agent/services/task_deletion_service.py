@@ -26,6 +26,7 @@ class TaskDeletionService:
             self._prepare_for_deletion(context)
             self._delete_target_repo_docs(context.metadata)
             self._delete_tree(self.config.runs_dir / task_id)
+            self._delete_tree(self.config.archive_runs_dir / task_id)
             self._delete_tree(self._workspace_root(task_id, context.metadata))
             self._delete_tree(context.task_dir)
         if lock_path.exists():
@@ -62,11 +63,17 @@ class TaskDeletionService:
         if not metadata.integration.patch_path:
             return
         patch_path = Path(metadata.integration.patch_path).expanduser().resolve()
-        managed_root = (self.config.runs_dir / metadata.task_id).resolve()
-        try:
-            patch_path.relative_to(managed_root)
-        except ValueError as exc:
-            raise TransitionError("task deletion is blocked because patch path is outside the managed runs root") from exc
+        managed_roots = [
+            (self.config.runs_dir / metadata.task_id).resolve(),
+            (self.config.archive_runs_dir / metadata.task_id).resolve(),
+        ]
+        for managed_root in managed_roots:
+            try:
+                patch_path.relative_to(managed_root)
+                return
+            except ValueError:
+                continue
+        raise TransitionError("task deletion is blocked because patch path is outside the managed runs roots")
 
     def _delete_tree(self, path: Path) -> None:
         if path.exists():
