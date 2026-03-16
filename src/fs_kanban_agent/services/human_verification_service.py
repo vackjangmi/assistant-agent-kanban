@@ -60,8 +60,10 @@ class HumanVerificationService:
                     context.metadata.integration.final_branch_summary = self._generate_branch_summary(context)
                 self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
                 self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
-                context.metadata.commit.status = "prepared"
-                context.metadata.commit.sha = None
+                review_sha = self.commit_manager.commit_task(context.task_dir, context.metadata)
+                context.metadata.commit.status = "review-committed"
+                context.metadata.commit.review_sha = review_sha
+                context.metadata.commit.sha = review_sha
                 self.metadata_store.save(context.task_dir, context.metadata)
                 return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
             except IntegrationConflictError as exc:

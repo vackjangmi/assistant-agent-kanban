@@ -80,10 +80,11 @@ def test_human_verification_start_applies_patch_and_moves_state(configured_paths
     assert updated.metadata.commit.message_path == "COMMIT.md"
     assert updated.metadata.integration.final_branch_summary == "verify-start-task"
     assert (updated.task_dir / "COMMIT.md").exists()
-    assert updated.metadata.commit.status == "prepared"
-    assert updated.metadata.commit.sha is None
+    assert updated.metadata.commit.status == "review-committed"
+    assert updated.metadata.commit.review_sha is not None
+    assert updated.metadata.commit.sha == updated.metadata.commit.review_sha
     status = subprocess.run(["git", "-C", str(repo_root), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
-    assert status == "M  app.txt"
+    assert status == ""
 
 
 def test_human_verification_start_includes_untracked_files(configured_paths):
@@ -584,7 +585,8 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     detail = task_service.get_task(done.metadata.task_id)
     assert done.state == TaskState.DONE
     assert done.metadata.commit.sha
-    assert done.metadata.commit.review_sha == done.metadata.commit.sha
+    assert done.metadata.commit.review_sha is not None
+    assert done.metadata.commit.review_sha != done.metadata.commit.sha
     assert done.metadata.integration.final_branch == expected_final_branch
     assert done.metadata.integration.review_branch is None
     assert done.metadata.integration.original_branch is None
@@ -655,6 +657,8 @@ def test_human_verification_approve_can_commit_to_target_branch(tmp_path):
     assert moved.state == TaskState.DONE
     refreshed = scanner.find_task(completed.metadata.task_id)
     assert refreshed.metadata.commit.review_sha is not None
+    assert refreshed.metadata.commit.sha is not None
+    assert refreshed.metadata.commit.review_sha != refreshed.metadata.commit.sha
     assert refreshed.metadata.integration.final_branch == "main"
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == "main"

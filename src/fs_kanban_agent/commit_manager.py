@@ -33,42 +33,22 @@ class CommitManager:
     def finalize_review_branch(self, task_dir: Path, metadata: TaskMetadata, *, completion_mode: str = "new-branch") -> str:
         if completion_mode not in {"new-branch", "target-branch"}:
             raise CommitError(f"unsupported completion mode: {completion_mode}")
-        review_sha = self._commit_review_branch(task_dir, metadata, allow_existing_commit=True)
-        if metadata.commit.review_sha is None:
-            metadata.commit.review_sha = review_sha
+        review_sha = self._ensure_review_branch_tip(task_dir, metadata)
+        metadata.commit.review_sha = review_sha
         try:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise CommitError(str(exc)) from exc
         if completion_mode == "target-branch":
-            final_sha = self._commit_to_target_branch(target_repo_root, metadata, review_sha)
+            final_sha = self._squash_review_branch_onto(target_repo_root, task_dir, metadata, metadata.target.base_branch)
             metadata.integration.final_branch = metadata.target.base_branch
             return final_sha
-        final_branch = self._ensure_final_branch(target_repo_root, metadata, review_sha)
+        base_head = self._branch_head(target_repo_root, metadata.target.base_branch)
+        if base_head is None:
+            raise CommitError(f"failed to resolve base branch '{metadata.target.base_branch}'")
+        final_branch = self._ensure_final_branch(target_repo_root, metadata, base_head)
         metadata.integration.final_branch = final_branch
-        rebase = subprocess.run(
-            ["git", "-C", str(target_repo_root), "rebase", metadata.target.base_branch],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if rebase.returncode != 0:
-            raise CommitError(rebase.stderr.strip() or "failed to rebase final branch")
-        return self._current_head(target_repo_root) or review_sha
-
-    def _commit_to_target_branch(self, repo_root: Path, metadata: TaskMetadata, review_sha: str) -> str:
-        target_branch = metadata.target.base_branch
-        self._switch_to_branch(repo_root, target_branch)
-        cherry_pick = subprocess.run(
-            ["git", "-C", str(repo_root), "cherry-pick", review_sha],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if cherry_pick.returncode != 0:
-            subprocess.run(["git", "-C", str(repo_root), "cherry-pick", "--abort"], capture_output=True, text=True, check=False)
-            raise CommitError(cherry_pick.stderr.strip() or "failed to cherry-pick reviewed commit onto target branch")
-        return self._current_head(repo_root) or review_sha
+        return self._squash_review_branch_onto(target_repo_root, task_dir, metadata, final_branch)
 
     def _commit_review_branch(self, task_dir: Path, metadata: TaskMetadata, *, allow_existing_commit: bool) -> str:
         try:
@@ -113,6 +93,56 @@ class CommitManager:
         if commit.returncode != 0:
             raise CommitError(commit.stderr.strip() or "git commit failed")
         return self._current_head(target_repo_root) or ""
+
+    def _ensure_review_branch_tip(self, task_dir: Path, metadata: TaskMetadata) -> str:
+        review_branch = metadata.integration.review_branch
+        if not review_branch:
+            raise CommitError("review branch is missing")
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise CommitError(str(exc)) from exc
+        current_branch = self._current_branch(target_repo_root)
+        if current_branch != review_branch:
+            switch = subprocess.run(
+                ["git", "-C", str(target_repo_root), "switch", review_branch],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if switch.returncode != 0:
+                raise CommitError(switch.stderr.strip() or "failed to switch to review branch")
+        return self._commit_review_branch(task_dir, metadata, allow_existing_commit=True)
+
+    def _squash_review_branch_onto(self, repo_root: Path, task_dir: Path, metadata: TaskMetadata, destination_branch: str) -> str:
+        review_branch = metadata.integration.review_branch
+        if not review_branch:
+            raise CommitError("review branch is missing")
+        self._switch_to_branch(repo_root, destination_branch)
+        squash = subprocess.run(
+            ["git", "-C", str(repo_root), "merge", "--squash", review_branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if squash.returncode != 0:
+            subprocess.run(["git", "-C", str(repo_root), "merge", "--abort"], capture_output=True, text=True, check=False)
+            raise CommitError(squash.stderr.strip() or "failed to squash review branch")
+        stage_status = self._cached_diff_status(repo_root)
+        if stage_status.returncode == 0:
+            raise CommitError("no squashed changes to commit")
+        if stage_status.returncode not in (0, 1):
+            raise CommitError(stage_status.stderr.strip() or "failed to inspect squashed changes")
+        commit_path = (task_dir / (metadata.commit.message_path or "COMMIT.md")).expanduser().resolve()
+        commit = subprocess.run(
+            ["git", "-C", str(repo_root), "commit", "-F", str(commit_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if commit.returncode != 0:
+            raise CommitError(commit.stderr.strip() or "git commit failed")
+        return self._current_head(repo_root) or ""
 
     def _cached_diff_status(self, repo_root: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
