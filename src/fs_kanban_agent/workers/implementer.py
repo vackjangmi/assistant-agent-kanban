@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from ..enums import TaskState
 from ..exceptions import WorkspaceSyncError
@@ -38,13 +39,19 @@ class ImplementerWorker(WorkerBase):
             try:
                 workspace_repo = await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
             except WorkspaceSyncError as exc:
-                apply_retry_gate(task.metadata, reason="implementation-base-sync-conflict")
-                task.metadata.implementation.last_result = "failure"
+                existing_workspace = Path(task.metadata.implementation.workspace or "")
+                if not existing_workspace.exists():
+                    apply_retry_gate(task.metadata, reason="implementation-base-sync-conflict")
+                    task.metadata.implementation.last_result = "failure"
+                    task.metadata.errors.append(
+                        TaskErrorInfo(code="implementation-base-sync-conflict", message=str(exc))
+                    )
+                    self.metadata_store.save(task.task_dir, task.metadata)
+                    return True
+                workspace_repo = existing_workspace
                 task.metadata.errors.append(
                     TaskErrorInfo(code="implementation-base-sync-conflict", message=str(exc))
                 )
-                self.metadata_store.save(task.task_dir, task.metadata)
-                return True
             implementing = self.transitions.move(task, TaskState.IMPLEMENTING, by=self.worker_name)
             run_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.cycle + 1:03d}.jsonl"
             prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")

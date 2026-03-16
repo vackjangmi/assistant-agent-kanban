@@ -292,7 +292,7 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
     assert updated.metadata.retry_gate.not_before is not None
 
 
-def test_implementer_worker_keeps_task_in_todos_on_base_sync_conflict(tmp_path):
+def test_implementer_worker_continues_with_existing_workspace_on_base_sync_conflict(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
@@ -335,13 +335,13 @@ def test_implementer_worker_keeps_task_in_todos_on_base_sync_conflict(tmp_path):
 
     assert asyncio.run(worker.run_once()) is True
     updated = scanner.scan()[0]
-    assert updated.state == TaskState.TODOS
-    assert updated.metadata.cycle == 0
-    assert updated.metadata.implementation.last_result == "failure"
+    assert updated.state == TaskState.WAITING_REVIEWS
+    assert updated.metadata.cycle == 1
+    assert updated.metadata.implementation.last_result == "success"
     assert any(error.code == "implementation-base-sync-conflict" for error in updated.metadata.errors)
-    assert updated.metadata.retry_gate.reason == "implementation-base-sync-conflict"
-    assert updated.metadata.retry_gate.not_before is not None
-    assert adapter.responses == ["## Summary\nimplemented"]
+    assert updated.metadata.retry_gate.reason is None
+    assert updated.metadata.retry_gate.not_before is None
+    assert adapter.responses == []
 
 
 def test_workspace_manager_refreshes_existing_workspace_with_relative_kanban_root(monkeypatch, tmp_path):
