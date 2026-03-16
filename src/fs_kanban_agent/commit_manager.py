@@ -79,7 +79,9 @@ class CommitManager:
         review_branch = metadata.integration.review_branch
         if review_branch:
             current_branch = self._current_branch(target_repo_root)
-            if current_branch != review_branch:
+            if current_branch != review_branch and allow_existing_commit and metadata.commit.review_sha is None:
+                self._restore_review_branch_from_patch(target_repo_root, metadata, review_branch)
+            elif current_branch != review_branch:
                 switch = subprocess.run(
                     ["git", "-C", str(target_repo_root), "switch", review_branch],
                     capture_output=True,
@@ -91,14 +93,15 @@ class CommitManager:
         stage_all = subprocess.run(["git", "-C", str(target_repo_root), "add", "-A"], capture_output=True, text=True, check=False)
         if stage_all.returncode != 0:
             raise CommitError(stage_all.stderr.strip() or "failed to stage target repo changes")
-        staged = subprocess.run(
-            ["git", "-C", str(target_repo_root), "diff", "--cached", "--quiet"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        staged = self._cached_diff_status(target_repo_root)
+        if staged.returncode == 0 and allow_existing_commit and metadata.commit.review_sha is None:
+            self._reapply_review_patch(target_repo_root, metadata)
+            stage_all = subprocess.run(["git", "-C", str(target_repo_root), "add", "-A"], capture_output=True, text=True, check=False)
+            if stage_all.returncode != 0:
+                raise CommitError(stage_all.stderr.strip() or "failed to restage target repo changes")
+            staged = self._cached_diff_status(target_repo_root)
         if staged.returncode == 0:
-            if allow_existing_commit:
+            if allow_existing_commit and metadata.commit.review_sha is not None:
                 sha = self._current_head(target_repo_root)
                 if sha:
                     return sha
@@ -110,6 +113,42 @@ class CommitManager:
         if commit.returncode != 0:
             raise CommitError(commit.stderr.strip() or "git commit failed")
         return self._current_head(target_repo_root) or ""
+
+    def _cached_diff_status(self, repo_root: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "-C", str(repo_root), "diff", "--cached", "--quiet"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _reapply_review_patch(self, repo_root: Path, metadata: TaskMetadata) -> None:
+        patch_path = metadata.integration.patch_path
+        if not patch_path:
+            raise CommitError("review patch path is missing")
+        resolved_patch = Path(patch_path).expanduser().resolve()
+        if not resolved_patch.exists():
+            raise CommitError("review patch is missing")
+        apply_result = subprocess.run(
+            ["git", "-C", str(repo_root), "apply", "--3way", "--index", str(resolved_patch)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if apply_result.returncode != 0:
+            raise CommitError(apply_result.stderr.strip() or "failed to reapply review patch")
+
+    def _restore_review_branch_from_patch(self, repo_root: Path, metadata: TaskMetadata, review_branch: str) -> None:
+        start_point = metadata.integration.base_commit or metadata.target.base_branch
+        switch = subprocess.run(
+            ["git", "-C", str(repo_root), "switch", "-C", review_branch, start_point],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if switch.returncode != 0:
+            raise CommitError(switch.stderr.strip() or "failed to restore review branch")
+        self._reapply_review_patch(repo_root, metadata)
 
     def _build_commit_body(self, task_dir: Path, metadata: TaskMetadata) -> list[str]:
         details: list[str] = []

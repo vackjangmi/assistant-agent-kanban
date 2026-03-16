@@ -60,9 +60,8 @@ class HumanVerificationService:
                     context.metadata.integration.final_branch_summary = self._generate_branch_summary(context)
                 self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
                 self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
-                sha = self.commit_manager.commit_task(context.task_dir, context.metadata)
-                context.metadata.commit.status = "review-committed"
-                context.metadata.commit.sha = sha
+                context.metadata.commit.status = "prepared"
+                context.metadata.commit.sha = None
                 self.metadata_store.save(context.task_dir, context.metadata)
                 return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
             except IntegrationConflictError as exc:
@@ -188,8 +187,6 @@ class HumanVerificationService:
                 if unresolved_comments:
                     count = len(unresolved_comments)
                     raise TransitionError(f"approval is blocked until all inline comments are removed ({count} remaining)")
-                if context.metadata.commit.review_sha is None:
-                    context.metadata.commit.review_sha = context.metadata.commit.sha
                 self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="APPROVED")
                 self._sync_task_documents_to_target_repo(context.task_dir, context.metadata)
                 self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)

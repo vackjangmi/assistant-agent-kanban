@@ -80,12 +80,10 @@ def test_human_verification_start_applies_patch_and_moves_state(configured_paths
     assert updated.metadata.commit.message_path == "COMMIT.md"
     assert updated.metadata.integration.final_branch_summary == "verify-start-task"
     assert (updated.task_dir / "COMMIT.md").exists()
-    assert updated.metadata.commit.status == "review-committed"
-    assert updated.metadata.commit.sha
-    committed_message = subprocess.run(["git", "-C", str(repo_root), "log", "-1", "--pretty=%B"], check=True, capture_output=True, text=True).stdout.strip()
-    assert committed_message == (updated.task_dir / "COMMIT.md").read_text().strip()
+    assert updated.metadata.commit.status == "prepared"
+    assert updated.metadata.commit.sha is None
     status = subprocess.run(["git", "-C", str(repo_root), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
-    assert status == ""
+    assert status == "M  app.txt"
 
 
 def test_human_verification_start_includes_untracked_files(configured_paths):
@@ -573,8 +571,6 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     create_request_task(config, "verify-approve-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
     service.start(completed.metadata.task_id, by="human")
-    review_sha = scanner.find_task(completed.metadata.task_id).metadata.commit.sha
-
     moved = service.approve(completed.metadata.task_id, by="human")
 
     assert moved.state == TaskState.DONE
@@ -588,7 +584,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     detail = task_service.get_task(done.metadata.task_id)
     assert done.state == TaskState.DONE
     assert done.metadata.commit.sha
-    assert done.metadata.commit.review_sha == review_sha
+    assert done.metadata.commit.review_sha == done.metadata.commit.sha
     assert done.metadata.integration.final_branch == expected_final_branch
     assert done.metadata.integration.review_branch is None
     assert done.metadata.integration.original_branch is None
@@ -654,13 +650,11 @@ def test_human_verification_approve_can_commit_to_target_branch(tmp_path):
     create_request_task(config, "verify-approve-target-branch-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
     service.start(completed.metadata.task_id, by="human")
-    review_sha = scanner.find_task(completed.metadata.task_id).metadata.commit.sha
-
     moved = service.approve(completed.metadata.task_id, by="human", completion_mode="target-branch")
 
     assert moved.state == TaskState.DONE
     refreshed = scanner.find_task(completed.metadata.task_id)
-    assert refreshed.metadata.commit.review_sha == review_sha
+    assert refreshed.metadata.commit.review_sha is not None
     assert refreshed.metadata.integration.final_branch == "main"
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == "main"
