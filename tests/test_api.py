@@ -1560,14 +1560,24 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const branch = item.base_branch || 'unknown';" in response.text
     assert "title=\"${escapeHtml(projectPath)}\"" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
-    assert ".stage-timing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 190px)); gap: 10px; }" in response.text
+    assert ".stage-timing-grid { display: grid; gap: 10px; }" in response.text
+    assert ".stage-timing-row { display: grid; gap: 10px; grid-template-columns: repeat(var(--stage-columns, 1), minmax(0, 1fr)); }" in response.text
+    assert ".stage-timing-card.upcoming { opacity: 0.48; background: rgba(255,255,255,0.62); }" in response.text
     assert "const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];" in response.text
     assert "const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments.filter((segment) => segment.state !== 'done') : [];" in response.text
+    assert "const stageTimingRows = [" in response.text
+    assert "['requests', 'planning', 'waiting-check-plans']" in response.text
+    assert "['todos', 'implementing', 'waiting-reviews']" in response.text
+    assert "['reviewing', 'completed-reviews', 'human-verifying']" in response.text
+    assert "const summaryMap = new Map(summaries.map((summary) => [summary.state, summary]));" in response.text
+    assert "const visitedStates = new Set([" in response.text
     assert "const hiddenDurationMs = Array.isArray(stageTiming?.segments)" in response.text
     assert "translateTask('timelineFromHistory')" not in response.text
     assert "translateTask('timelineFromHistoryBody')" not in response.text
     assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');" in response.text
     assert "const summaryIsLive = summary.is_current && summary.state !== 'done';" in response.text
+    assert "const cardStateClass = summary.is_current ? ' current' : reached ? ' reached' : ' upcoming';" in response.text
+    assert "<div class=\"stage-timing-row\" style=\"--stage-columns:${states.length}\">${cards}</div>" in response.text
     assert "segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0)" in response.text
     assert "/api/tasks/${taskId}/logs" not in response.text
     assert "debug_rendered_content" not in response.text

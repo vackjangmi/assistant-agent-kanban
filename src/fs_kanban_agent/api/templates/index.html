@@ -196,9 +196,12 @@
     .stage-timing-total { display: grid; gap: 4px; min-width: 180px; }
     .stage-timing-total span { color: var(--muted); font-size: 0.84rem; letter-spacing: 0.04em; text-transform: uppercase; }
     .stage-timing-total strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
-    .stage-timing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 190px)); gap: 10px; }
-    .stage-timing-card { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); border-top: 4px solid var(--stage-color, var(--accent)); }
+    .stage-timing-grid { display: grid; gap: 10px; }
+    .stage-timing-row { display: grid; gap: 10px; grid-template-columns: repeat(var(--stage-columns, 1), minmax(0, 1fr)); }
+    .stage-timing-card { display: grid; gap: 6px; min-width: 0; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); border-top: 4px solid var(--stage-color, var(--accent)); transition: opacity 180ms ease, transform 180ms ease, box-shadow 180ms ease, background 180ms ease; }
     .stage-timing-card.current { background: rgba(255,249,239,0.96); box-shadow: 0 10px 20px rgba(24,32,38,0.06); }
+    .stage-timing-card.upcoming { opacity: 0.48; background: rgba(255,255,255,0.62); }
+    .stage-timing-card.reached:not(.current) { opacity: 0.94; }
     .stage-timing-card span { color: var(--muted); font-size: 0.82rem; letter-spacing: 0.05em; text-transform: uppercase; }
     .stage-timing-card strong { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
     .stage-timing-card small { color: var(--muted); font-size: 0.86rem; }
@@ -348,7 +351,7 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .stage-timing-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -3466,13 +3469,21 @@
       return `${base}${summary.is_current ? translateTask('currentSuffix') : ''}`;
     }
 
+    const stageTimingRows = [
+      ['requests', 'planning', 'waiting-check-plans'],
+      ['todos', 'implementing', 'waiting-reviews'],
+      ['reviewing', 'completed-reviews', 'human-verifying'],
+    ];
+
     function renderStageTiming(stageTiming) {
       const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];
       const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments.filter((segment) => segment.state !== 'done') : [];
-      const hasRecordedTime = segments.length > 0 || summaries.some((summary) => Number(summary.attempt_count || 0) > 0);
-      if (!summaries.length || !hasRecordedTime) {
-        return `<div class="task-section"><h3>${escapeHtml(translateTask('stageTiming'))}</h3><div class="muted">${escapeHtml(translateTask('noStateHistory'))}</div></div>`;
-      }
+      const summaryMap = new Map(summaries.map((summary) => [summary.state, summary]));
+      const visitedStates = new Set([
+        ...summaries.filter((summary) => Number(summary.attempt_count || 0) > 0 || Number(summary.total_duration_ms || 0) > 0 || summary.is_current).map((summary) => summary.state),
+        ...segments.map((segment) => segment.state),
+      ]);
+      const hasRecordedTime = segments.length > 0 || Array.from(visitedStates).length > 0;
       const hiddenDurationMs = Array.isArray(stageTiming?.segments)
         ? stageTiming.segments
             .filter((segment) => segment.state === 'done')
@@ -3485,19 +3496,32 @@
         ? Math.max(0, totalDurationMs - Number(currentSummary.latest_duration_ms || 0))
         : totalDurationMs;
       const totalDurationAttrs = buildDurationAttributes(totalBaseDurationMs, currentSummaryIsLive ? currentSummary.latest_entered_at : '', '', ' tracked');
-      const summaryCards = summaries.map((summary) => {
-        const summaryIsLive = summary.is_current && summary.state !== 'done';
-        const totalBaseMs = summaryIsLive
-          ? Math.max(0, Number(summary.total_duration_ms || 0) - Number(summary.latest_duration_ms || 0))
-          : Number(summary.total_duration_ms || 0);
-        return `
-          <article class="stage-timing-card${summary.is_current ? ' current' : ''}" style="--stage-color:${stageColor(summary.state)}">
-            <span>${escapeHtml(stateLabel(summary.state))}</span>
-            <strong ${buildDurationAttributes(totalBaseMs, summaryIsLive ? summary.latest_entered_at : '', translateTask('totalPrefix'))}>${`${translateTask('totalPrefix')}${formatElapsed(summary.total_duration_ms || 0)}`}</strong>
-            <small>${escapeHtml(taskVisitText(summary))}</small>
-            <small>${summary.latest_entered_at ? escapeHtml(translateTask('latestEntry', { value: formatDateTime(summary.latest_entered_at) })) : escapeHtml(translateTask('noTimeRecorded'))}</small>
-          </article>
-        `;
+      const summaryCards = stageTimingRows.map((states) => {
+        const cards = states.map((state) => {
+          const summary = summaryMap.get(state) || {
+            state,
+            attempt_count: 0,
+            total_duration_ms: 0,
+            latest_duration_ms: 0,
+            latest_entered_at: '',
+            is_current: false,
+          };
+          const summaryIsLive = summary.is_current && summary.state !== 'done';
+          const totalBaseMs = summaryIsLive
+            ? Math.max(0, Number(summary.total_duration_ms || 0) - Number(summary.latest_duration_ms || 0))
+            : Number(summary.total_duration_ms || 0);
+          const reached = visitedStates.has(state);
+          const cardStateClass = summary.is_current ? ' current' : reached ? ' reached' : ' upcoming';
+          return `
+            <article class="stage-timing-card${cardStateClass}" style="--stage-color:${stageColor(state)}">
+              <span>${escapeHtml(stateLabel(state))}</span>
+              <strong ${buildDurationAttributes(totalBaseMs, summaryIsLive ? summary.latest_entered_at : '', translateTask('totalPrefix'))}>${`${translateTask('totalPrefix')}${formatElapsed(summary.total_duration_ms || 0)}`}</strong>
+              <small>${escapeHtml(taskVisitText(summary))}</small>
+              <small>${summary.latest_entered_at ? escapeHtml(translateTask('latestEntry', { value: formatDateTime(summary.latest_entered_at) })) : escapeHtml(translateTask('noTimeRecorded'))}</small>
+            </article>
+          `;
+        }).join('');
+        return `<div class="stage-timing-row" style="--stage-columns:${states.length}">${cards}</div>`;
       }).join('');
       const timelineBar = segments.length
         ? `<div class="stage-timeline-bar">${segments.map((segment) => {
@@ -3528,6 +3552,7 @@
               </div>
             </div>
             <div class="stage-timing-grid">${summaryCards}</div>
+            ${hasRecordedTime ? '' : `<div class="muted">${escapeHtml(translateTask('noStateHistory'))}</div>`}
             ${timelineBar}
             ${segmentRows}
           </div>
