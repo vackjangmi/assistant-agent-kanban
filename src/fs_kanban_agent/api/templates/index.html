@@ -76,6 +76,7 @@
     .card-repo-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .card-tag-branch { --tag-bg: rgba(82,96,107,0.1); --tag-border: rgba(82,96,107,0.18); --tag-text: #45525d; }
     .card-tag-final-branch { --tag-bg: rgba(124,79,44,0.14); --tag-border: rgba(124,79,44,0.26); --tag-text: #6c3b16; }
+    .card-history-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .final-board .card { min-width: 0; max-width: 100%; overflow: hidden; }
     .final-board .card-button { display: block; min-width: 0; max-width: 100%; padding-right: 0; }
     .final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -110,12 +111,23 @@
     .task-modal-panel { width: min(1380px, 100%); height: min(86vh, calc(100vh - 64px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .retrospective-modal-panel { width: min(860px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .modal-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }
+    .retrospective-modal-panel .modal-head { margin-bottom: 6px; }
     .task-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .modal-copy p { margin: 6px 0 0; color: var(--muted); }
-    .task-modal-tag-row { margin-top: 8px; }
+    .task-modal-tag-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
     .task-modal-tag-row .card-tag { font-size: 0.73rem; }
-    .retrospective-context-row { margin-top: 8px; margin-bottom: 10px; }
+    .task-modal-tag-group { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+    .task-modal-tag-group.task-modal-status-group { margin-left: auto; justify-content: flex-end; }
+    .retrospective-context-row { margin-top: 0; margin-bottom: 10px; }
     .retrospective-context-row .card-tag { font-size: 0.72rem; }
+    .retrospective-compare-field { display: grid; gap: 6px; margin-bottom: 12px; }
+    .retrospective-compare-field label { font-size: 0.76rem; font-weight: 700; color: var(--accent-strong); }
+    .retrospective-compare-field input { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.94); padding: 10px 12px; font: inherit; }
+    .retrospective-compare-help { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.4; }
+    .retrospective-action-shell { display: grid; gap: 10px; }
+    .retrospective-action-shell strong { font-size: 0.9rem; color: var(--accent-strong); }
+    .retrospective-action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+    .retrospective-action-buttons > button { flex: 1 1 calc(50% - 5px); min-width: 0; }
     .retrospective-view-copy { display: grid; gap: 6px; }
     .retrospective-view-copy strong { font-size: 1rem; color: var(--accent-strong); }
     .retrospective-view-copy p { margin: 0; color: var(--muted); line-height: 1.5; }
@@ -718,19 +730,18 @@
       </div>
       <div id="retrospective-context-row" class="card-tag-row retrospective-context-row"></div>
       <div id="retrospective-choice-shell" class="approval-choice-shell">
-        <div class="approval-choice-grid">
-          <section class="approval-choice-card">
-            <div>
-              <strong id="retrospective-target-title">Commit on target branch</strong>
-            </div>
+        <div class="retrospective-compare-field">
+          <label id="retrospective-compare-label" for="retrospective-compare-branch">Comparison branch</label>
+          <input id="retrospective-compare-branch" list="retrospective-compare-options" placeholder="Optional branch to diff against">
+          <datalist id="retrospective-compare-options"></datalist>
+          <p id="retrospective-compare-help" class="retrospective-compare-help">Optional. If set, the retrospective also uses a git diff summary between the comparison branch and the base branch.</p>
+        </div>
+        <div class="retrospective-action-shell">
+          <strong id="retrospective-action-title">Commit destination</strong>
+          <div class="retrospective-action-buttons">
             <button type="button" id="retrospective-create-target" class="accent-button" hidden>Commit to target branch</button>
-          </section>
-          <section class="approval-choice-card">
-            <div>
-              <strong id="retrospective-branch-title">Create retrospective branch</strong>
-            </div>
             <button type="button" id="retrospective-create-branch" class="primary" hidden>Create new branch</button>
-          </section>
+          </div>
         </div>
         <div id="retrospective-status" class="retrospective-status approval-choice-status" data-tone="neutral">Choose how to create or view this retrospective.</div>
       </div>
@@ -895,6 +906,11 @@
     const retrospectiveViewTitle = document.getElementById('retrospective-view-title');
     const retrospectiveStatus = document.getElementById('retrospective-status');
     const retrospectiveContextRow = document.getElementById('retrospective-context-row');
+    const retrospectiveActionTitle = document.getElementById('retrospective-action-title');
+    const retrospectiveCompareLabel = document.getElementById('retrospective-compare-label');
+    const retrospectiveCompareBranchInput = document.getElementById('retrospective-compare-branch');
+    const retrospectiveCompareOptions = document.getElementById('retrospective-compare-options');
+    const retrospectiveCompareHelp = document.getElementById('retrospective-compare-help');
     const retrospectiveMeta = document.getElementById('retrospective-meta');
     const retrospectiveContent = document.getElementById('retrospective-content');
     const retrospectiveCreateTargetButton = document.getElementById('retrospective-create-target');
@@ -925,6 +941,7 @@
     let activeTaskRefreshTimer = null;
     let activeRetrospectiveTargetRepoRoot = '';
     let activeRetrospectiveBaseBranch = '';
+    let activeRetrospectiveComparisonBranch = '';
     let activeRetrospectiveRecord = null;
     let taskDetailStale = false;
     let planSourceMarkdown = '';
@@ -1308,10 +1325,14 @@
         retrospectiveModalTitle: 'Retrospective',
         retrospectiveViewTitle: 'Retrospective content',
         retrospectiveClose: 'Close',
-        retrospectiveTargetTitle: 'Commit on base branch',
+        retrospectiveActionTitle: 'Commit destination',
         retrospectiveCreateTarget: 'Commit to base branch',
-        retrospectiveBranchTitle: 'Create retrospective branch',
         retrospectiveCreateBranch: 'Create new branch',
+        retrospectiveCompareLabel: 'Comparison branch',
+        retrospectiveComparePlaceholder: 'No comparison branch',
+        retrospectiveCompareHelp: 'Optional. If set, the retrospective also uses a git diff summary between the comparison branch and the base branch.',
+        retrospectiveCompareTagLabel: 'Compare branch',
+        retrospectiveCompareMetaLabel: 'Comparison branch',
         retrospectiveIdle: 'Choose how to create or view this retrospective.',
         retrospectiveLoading: 'Loading retrospective...',
         retrospectiveMissing: 'No retrospective exists for this exact completed branch group yet.',
@@ -1382,6 +1403,7 @@
         visitMany: '{count} visits',
         currentSuffix: ' - current',
         notVisitedYet: 'Not visited yet',
+        completedLabel: 'completed',
         now: 'now',
         noRuntimeLogForCard: 'No heartbeat recorded for this task.',
         waitingNoLeaseCard: 'This stage is active, but no worker lease is attached yet.',
@@ -1460,10 +1482,14 @@
         retrospectiveModalTitle: '회고',
         retrospectiveViewTitle: '회고 내용 조회',
         retrospectiveClose: '닫기',
-        retrospectiveTargetTitle: '기준 브랜치에 커밋',
+        retrospectiveActionTitle: '커밋 생성 위치',
         retrospectiveCreateTarget: '기준 브랜치에 커밋',
-        retrospectiveBranchTitle: '회고 브랜치 만들기',
         retrospectiveCreateBranch: '새 브랜치 생성',
+        retrospectiveCompareLabel: '비교 브랜치',
+        retrospectiveComparePlaceholder: '비교 브랜치 없음',
+        retrospectiveCompareHelp: '선택 입력입니다. 값을 지정하면 비교 브랜치와 기준 브랜치 사이의 git diff 요약도 회고에 포함합니다.',
+        retrospectiveCompareTagLabel: '비교 브랜치',
+        retrospectiveCompareMetaLabel: '비교 브랜치',
         retrospectiveIdle: '이 회고를 어떻게 생성하거나 조회할지 선택하세요.',
         retrospectiveLoading: '회고를 불러오는 중...',
         retrospectiveMissing: '이 완료 브랜치 그룹에 대한 회고가 아직 없습니다.',
@@ -1519,6 +1545,7 @@
         visitMany: '{count}회 방문',
         currentSuffix: ' - 현재',
         notVisitedYet: '아직 방문하지 않음',
+        completedLabel: '완료됨',
         now: '지금',
         noRuntimeLogForCard: '이 작업에는 하트비트 기록이 없습니다.',
         waitingNoLeaseCard: '이 단계는 활성 상태지만 아직 worker lease가 붙어 있지 않습니다.',
@@ -1633,8 +1660,10 @@
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags();
       setTaskText('retrospective-modal-title', 'retrospectiveModalTitle');
       retrospectiveViewTitle.textContent = activeRetrospectiveRecord?.exists ? translateTask('retrospectiveViewTitle') : '';
-      setTaskText('retrospective-target-title', 'retrospectiveTargetTitle');
-      setTaskText('retrospective-branch-title', 'retrospectiveBranchTitle');
+      setTaskText('retrospective-action-title', 'retrospectiveActionTitle');
+      retrospectiveCompareLabel.textContent = translateTask('retrospectiveCompareLabel');
+      retrospectiveCompareBranchInput.placeholder = translateTask('retrospectiveComparePlaceholder');
+      retrospectiveCompareHelp.textContent = translateTask('retrospectiveCompareHelp');
       startVerificationButton.textContent = translateTask('startVerification');
       approvePlanButton.textContent = translateTask('approvePlan');
       deleteTaskButton.textContent = translateTask('deleteTask');
@@ -1946,6 +1975,10 @@
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.25 2.5a.75.75 0 0 1 .75.75V5.5h2V3.25a.75.75 0 0 1 1.5 0V5.5h2.25a.75.75 0 0 1 0 1.5H10.5v2h2.25a.75.75 0 0 1 0 1.5H10.5v2.25a.75.75 0 0 1-1.5 0V10.5H7v2.25a.75.75 0 0 1-1.5 0V10.5H3.25a.75.75 0 0 1 0-1.5H5.5V7H3.25a.75.75 0 0 1 0-1.5H5.5V3.25a.75.75 0 0 1 .75-.75Zm.75 4.5v2h2V7H7Z" fill="currentColor"/></svg>`;
     }
 
+    function workHistoryIconSvg(className = 'card-history-icon') {
+      return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.25 3.75A1.75 1.75 0 0 1 5 2h6a1.75 1.75 0 0 1 1.75 1.75v8.5A1.75 1.75 0 0 1 11 14H5a1.75 1.75 0 0 1-1.75-1.75v-8.5Z" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.25h5M5.5 7.75h5M5.5 10.25H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M2.25 5.5h1.5M2.25 8h1.5M2.25 10.5h1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+    }
+
     function caretIconSvg(className = 'target-branch-caret') {
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.47 6.22a.75.75 0 0 1 1.06 0L8 8.69l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" fill="currentColor"/></svg>`;
     }
@@ -1983,36 +2016,89 @@
       return `<div class="card-meta-row"><div class="card-tag-row">${tags.join('')}</div>${runtime}</div>`;
     }
 
+    function resolveTaskCompletedAt(task) {
+      const segmentCompletedAt = task?.stage_timing?.segments?.filter((segment) => segment.state === 'done').slice(-1)[0]?.entered_at;
+      if (segmentCompletedAt) return segmentCompletedAt;
+      const historyCompletedAt = task?.history?.filter((entry) => entry.state === 'done').slice(-1)[0]?.entered_at;
+      return historyCompletedAt || '';
+    }
+
+    function hexToRgba(hex, alpha) {
+      const normalized = String(hex || '').replace('#', '');
+      const expanded = normalized.length === 3 ? normalized.split('').map((char) => char + char).join('') : normalized;
+      const value = Number.parseInt(expanded, 16);
+      if (Number.isNaN(value)) return `rgba(82,96,107,${alpha})`;
+      const red = (value >> 16) & 255;
+      const green = (value >> 8) & 255;
+      const blue = value & 255;
+      return `rgba(${red},${green},${blue},${alpha})`;
+    }
+
+    function stateTagStyle(state) {
+      const color = stageColor(state || 'requests');
+      return `--tag-bg:${hexToRgba(color, 0.14)};--tag-border:${hexToRgba(color, 0.28)};--tag-text:${color};`;
+    }
+
     function renderTaskSubtitleTags(task) {
       if (!task?.task_id) return `<span class="card-tag">${escapeHtml(translateTask('loadingTaskDetails'))}</span>`;
       const repoPath = normalizeRepoPath(task.target_repo_root);
       const repoLabel = task.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
       const baseBranch = task.base_branch || '';
       const finalBranch = task.final_branch || '';
+      const state = task.state || '';
+      const completedAt = task.completed_at || resolveTaskCompletedAt(task);
       const repoTone = repoTagTone(repoPath);
       const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};`;
-      return [
+      const statusStyle = state ? stateTagStyle(state) : '';
+      const leftTags = [
         renderTag('', task.task_id || '', 'card-tag-id', '', task.task_id || '', taskIdIconSvg()),
         renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
         renderTag('', baseBranch, 'card-tag-branch', '', baseBranch, branchIconSvg('card-branch-icon')),
         renderTag('', finalBranch, 'card-tag-branch card-tag-final-branch', '', finalBranch, branchIconSvg('card-branch-icon')),
       ].filter(Boolean).join('');
+      const rightTags = [
+        state ? renderTag('', state === 'done' && completedAt ? `${stateLabel(state)} · ${formatDateTime(completedAt)}` : stateLabel(state), 'card-tag-branch card-tag-final-branch', statusStyle, stateLabel(state), workHistoryIconSvg()) : '',
+      ].filter(Boolean).join('');
+      return `<div class="task-modal-tag-group">${leftTags}</div><div class="task-modal-tag-group task-modal-status-group">${rightTags}</div>`;
     }
 
     function renderRetrospectiveContextTags(record = null) {
       const repoPath = normalizeRepoPath(record?.target_repo_root || activeRetrospectiveTargetRepoRoot);
       const repoLabel = record?.target_repo_label || deriveRepoContext(repoPath).repoName || '';
       const baseBranch = record?.base_branch || activeRetrospectiveBaseBranch || '';
+      const comparisonBranch = record?.comparison_branch || activeRetrospectiveComparisonBranch || '';
       const repoTone = repoPath ? repoTagTone(repoPath) : null;
       const repoStyle = repoTone ? `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};` : '';
       return [
         renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
         renderTag('', baseBranch, 'card-tag-branch', '', baseBranch, branchIconSvg('card-branch-icon')),
+        comparisonBranch ? renderTag('', comparisonBranch, 'card-tag-branch', '', `${translateTask('retrospectiveCompareTagLabel')}: ${comparisonBranch}`, branchIconSvg('card-branch-icon')) : '',
       ].filter(Boolean).join('');
+    }
+
+    function normalizedRetrospectiveComparisonBranch() {
+      return (retrospectiveCompareBranchInput.value || '').trim();
+    }
+
+    async function loadRetrospectiveCompareBranchOptions(targetRepoRoot, baseBranch) {
+      const currentValue = normalizedRetrospectiveComparisonBranch();
+      retrospectiveCompareOptions.innerHTML = '';
+      if (!targetRepoRoot) return;
+      try {
+        const response = await fetch(`/api/target-repo-branches?target_repo=${encodeURIComponent(targetRepoRoot)}`);
+        const payload = await response.json();
+        if (!response.ok || !Array.isArray(payload.branches)) return;
+        const branches = payload.branches.filter((branch) => branch && branch !== baseBranch);
+        retrospectiveCompareOptions.innerHTML = branches.map((branch) => `<option value="${escapeHtml(branch)}"></option>`).join('');
+        retrospectiveCompareBranchInput.value = currentValue;
+      } catch (_error) {
+        retrospectiveCompareOptions.innerHTML = '';
+      }
     }
 
     function setRetrospectiveMode(mode, record = null) {
       const showChoice = mode === 'choice';
+      if (record?.comparison_branch !== undefined) activeRetrospectiveComparisonBranch = record?.comparison_branch || '';
       retrospectiveChoiceShell.hidden = !showChoice;
       retrospectiveViewShell.hidden = showChoice;
       retrospectiveViewShell.style.display = showChoice ? 'none' : 'grid';
@@ -2577,6 +2663,7 @@
       if (!isOpen) {
         activeRetrospectiveTargetRepoRoot = '';
         activeRetrospectiveBaseBranch = '';
+        activeRetrospectiveComparisonBranch = '';
         activeRetrospectiveRecord = null;
         retrospectiveCreateTargetButton.hidden = true;
         retrospectiveCreateBranchButton.hidden = true;
@@ -2584,6 +2671,8 @@
         retrospectiveContent.textContent = translateTask('retrospectiveNoContent');
         retrospectiveStatus.dataset.tone = 'neutral';
         retrospectiveStatus.textContent = translateTask('retrospectiveIdle');
+        retrospectiveCompareBranchInput.value = '';
+        retrospectiveCompareOptions.innerHTML = '';
         setRetrospectiveMode('choice');
       }
       syncBodyModalState();
@@ -2595,6 +2684,7 @@
 
     function renderRetrospectiveMeta(record) {
       const items = [
+        [translateTask('retrospectiveCompareMetaLabel'), record.comparison_branch || ''],
         [translateTask('retrospectiveCommitBranchLabel'), record.committed_branch || ''],
         [translateTask('retrospectivePathLabel'), record.repo_relative_path || ''],
         [translateTask('retrospectiveModelLabel'), record.resolved_model || ''],
@@ -2625,7 +2715,7 @@
       const response = await fetch('/api/retrospectives/inspect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_repo_root: targetRepoRoot, base_branch: baseBranch }),
+        body: JSON.stringify({ target_repo_root: targetRepoRoot, base_branch: baseBranch, comparison_branch: normalizedRetrospectiveComparisonBranch() || null }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
@@ -2641,7 +2731,7 @@
       const response = await fetch('/api/retrospectives/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_repo_root: activeRetrospectiveTargetRepoRoot, base_branch: activeRetrospectiveBaseBranch, completion_mode: completionMode }),
+        body: JSON.stringify({ target_repo_root: activeRetrospectiveTargetRepoRoot, base_branch: activeRetrospectiveBaseBranch, comparison_branch: normalizedRetrospectiveComparisonBranch() || null, completion_mode: completionMode }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
@@ -2655,10 +2745,13 @@
     async function openRetrospectiveModal(targetRepoRoot, baseBranch) {
       activeRetrospectiveTargetRepoRoot = targetRepoRoot;
       activeRetrospectiveBaseBranch = baseBranch;
+      activeRetrospectiveComparisonBranch = '';
+      retrospectiveCompareBranchInput.value = '';
       setRetrospectiveMode('choice', {
         target_repo_root: targetRepoRoot,
         base_branch: baseBranch,
       });
+      await loadRetrospectiveCompareBranchOptions(targetRepoRoot, baseBranch);
       retrospectiveStatus.hidden = true;
       retrospectiveStatus.dataset.tone = 'neutral';
       retrospectiveStatus.textContent = translateTask('retrospectiveLoading');
@@ -3533,6 +3626,20 @@
       return `${base}${summary.is_current ? translateTask('currentSuffix') : ''}`;
     }
 
+    const singleVisitStageLabels = new Set(['requests', 'planning', 'waiting-check-plans', 'done']);
+
+    function formatStageVisitLabel(segment) {
+      const baseLabel = stateLabel(segment.state);
+      if (segment.visit_index === 1 && singleVisitStageLabels.has(segment.state)) return baseLabel;
+      return `${baseLabel} #${segment.visit_index}`;
+    }
+
+    function formatStageSegmentEnd(segment) {
+      if (segment.exited_at) return formatDateTime(segment.exited_at);
+      if (segment.state === 'done') return translateTask('completedLabel');
+      return translateTask('now');
+    }
+
     const stageTimingRows = [
       ['requests', 'planning', 'waiting-check-plans'],
       ['todos', 'implementing', 'waiting-reviews'],
@@ -3591,7 +3698,7 @@
         ? `<div class="stage-timeline-bar">${segments.map((segment) => {
             const ratio = totalDurationMs > 0 ? (Number(segment.duration_ms || 0) / totalDurationMs) * 100 : 100 / segments.length;
             const flexBasis = Math.max(ratio, 4);
-            const title = `${stateLabel(segment.state)} #${segment.visit_index} - ${formatElapsed(segment.duration_ms || 0)}`;
+            const title = `${formatStageVisitLabel(segment)} - ${formatElapsed(segment.duration_ms || 0)}`;
             return `<div class="stage-timeline-segment${segment.is_current ? ' current' : ''}" style="--stage-color:${stageColor(segment.state)}; flex: ${flexBasis} 1 0%;" title="${escapeHtml(title)}"></div>`;
           }).join('')}</div>`
         : `<div class="muted">${escapeHtml(translateTask('noStageTransitions'))}</div>`;
@@ -3599,9 +3706,9 @@
         ? `<div class="stage-segment-list">${segments.map((segment) => `
             <div class="stage-segment-row">
               <span class="stage-swatch" style="--stage-color:${stageColor(segment.state)}"></span>
-              <strong>${escapeHtml(stateLabel(segment.state))} #${segment.visit_index}</strong>
+              <strong>${escapeHtml(formatStageVisitLabel(segment))}</strong>
               <span class="stage-segment-duration" ${buildDurationAttributes(segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0), segment.is_current && segment.state !== 'done' ? segment.entered_at : '')}>${formatElapsed(segment.duration_ms || 0)}</span>
-              <span class="muted">${escapeHtml(formatDateTime(segment.entered_at))} -> ${escapeHtml(segment.exited_at ? formatDateTime(segment.exited_at) : 'now')}</span>
+              <span class="muted">${escapeHtml(formatDateTime(segment.entered_at))} -> ${escapeHtml(formatStageSegmentEnd(segment))}</span>
             </div>
           `).join('')}</div>`
         : `<div class="muted">${escapeHtml(translateTask('noStageVisits'))}</div>`;
@@ -3663,10 +3770,13 @@
       document.getElementById('task-modal-title').textContent = metadata.title;
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags({
         task_id: metadata.task_id,
+        state: metadata.state,
         target_repo_root: metadata.target.repo_root,
         target_repo_label: metadata.target.repo_label,
         base_branch: metadata.target.base_branch,
         final_branch: metadata.integration.final_branch || '',
+        stage_timing: detail.stage_timing,
+        history: metadata.history || [],
       });
     }
 
@@ -4174,6 +4284,10 @@
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
     closeRetrospectiveModalButton.addEventListener('click', () => { setRetrospectiveModalOpen(false); });
     closeApprovalChoiceButton.addEventListener('click', () => { setApprovalChoiceModalOpen(false); });
+    retrospectiveCompareBranchInput.addEventListener('input', () => {
+      activeRetrospectiveComparisonBranch = normalizedRetrospectiveComparisonBranch();
+      retrospectiveContextRow.innerHTML = renderRetrospectiveContextTags();
+    });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });

@@ -1410,14 +1410,15 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospective-modal-title" in response.text
     assert "retrospective-modal-subtitle" not in response.text
     assert "retrospective-context-row" in response.text
-    assert ".retrospective-context-row { margin-top: 8px; margin-bottom: 10px; }" in response.text
+    assert ".retrospective-context-row { margin-top: 0; margin-bottom: 10px; }" in response.text
     assert "retrospective-view-title" in response.text
-    assert "retrospective-target-title" in response.text
-    assert "retrospective-branch-title" in response.text
+    assert "retrospective-action-title" in response.text
+    assert "retrospective-compare-branch" in response.text
+    assert "retrospective-compare-options" in response.text
     assert "retrospective-create-target" in response.text
     assert "retrospective-create-branch" in response.text
     assert 'class="retrospective-status approval-choice-status"' in response.text
-    assert 'class="approval-choice-card"' in response.text
+    assert 'class="retrospective-action-buttons"' in response.text
     assert "Work log" in response.text
     assert "Viewer mode" in response.text
     assert "Changed files" in response.text
@@ -1559,9 +1560,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function createRetrospective(completionMode)" in response.text
     assert "function renderRetrospectiveContextTags(record = null)" in response.text
     assert "function setRetrospectiveMode(mode, record = null)" in response.text
+    assert "function normalizedRetrospectiveComparisonBranch()" in response.text
+    assert "function loadRetrospectiveCompareBranchOptions(targetRepoRoot, baseBranch)" in response.text
     assert "retrospectiveUnavailable" in response.text
     assert "payload.created" in response.text
     assert "retrospectiveViewTitle: 'Retrospective content'" in response.text
+    assert "retrospectiveActionTitle: 'Commit destination'" in response.text
+    assert "retrospectiveCompareLabel: 'Comparison branch'" in response.text
     assert "renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon'))" in response.text
     assert "retrospectiveBranchDescription" not in response.text
     assert "retrospectiveTargetDescription" not in response.text
@@ -1573,6 +1578,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospectiveStatus.hidden = true;" in response.text
     assert "retrospectiveCreateTargetButton.hidden = false;" in response.text
     assert "retrospectiveCreateBranchButton.hidden = false;" in response.text
+    assert "comparison_branch: normalizedRetrospectiveComparisonBranch() || null" in response.text
+    assert "retrospectiveCompareBranchInput.addEventListener('input'" in response.text
     assert 'class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? ' in response.text
     assert '.target-branch-caret { flex: 0 0 auto; width: 20px; height: 20px; margin-left: 2px;' in response.text
     assert ".final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
@@ -1588,6 +1595,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".stage-timing-card.upcoming { opacity: 0.48; background: rgba(255,255,255,0.62); }" in response.text
     assert "const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];" in response.text
     assert "const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];" in response.text
+    assert "function formatStageVisitLabel(segment)" in response.text
+    assert "function formatStageSegmentEnd(segment)" in response.text
+    assert "translateTask('completedLabel')" in response.text
     assert "const stageTimingRows = [" in response.text
     assert "['requests', 'planning', 'waiting-check-plans']" in response.text
     assert "['todos', 'implementing', 'waiting-reviews']" in response.text
