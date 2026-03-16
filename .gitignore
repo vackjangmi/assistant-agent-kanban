@@ -7,3 +7,4 @@ ai-kanban/
 .sisyphus/
 *.egg-info/
 config.local.yaml
+.kanban-agent/
