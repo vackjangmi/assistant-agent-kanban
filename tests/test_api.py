@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 import json
 import subprocess
@@ -276,6 +277,63 @@ def test_api_uploads_and_serves_plan_attachments(configured_paths):
         assert download.status_code == 200
         assert download.content == b"pngdata"
         assert download.headers["content-type"] == "image/png"
+
+
+def test_api_extracts_embedded_plan_data_images_to_attachments(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-embedded-image-task")
+    app = create_app(config, FakeAdapter(["## Summary\nplan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    runtime = app.state.runtime
+    metadata_store = runtime.planner.metadata_store
+    scanner = runtime.planner.scanner
+    transitions = runtime.planner.transitions
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("original plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    embedded = base64.b64encode(b"pngdata").decode()
+    markdown = f"![diagram](data:image/png;base64,{embedded})"
+
+    with TestClient(app) as client:
+        save = client.put(
+            f"/api/tasks/{waiting.metadata.task_id}/artifacts/PLAN.md",
+            json={"content": markdown},
+        )
+        assert save.status_code == 200
+
+    saved_content = (waiting.task_dir / "PLAN.md").read_text()
+    assert saved_content.startswith("![diagram](_attachments/")
+    assert saved_content.endswith(")\n")
+    attachments = list((waiting.task_dir / "_attachments").glob("*.png"))
+    assert len(attachments) == 1
+    assert attachments[0].read_bytes() == b"pngdata"
+
+
+def test_api_rejects_invalid_embedded_plan_image_data(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-invalid-image-task")
+    app = create_app(config, FakeAdapter(["## Summary\nplan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    runtime = app.state.runtime
+    metadata_store = runtime.planner.metadata_store
+    scanner = runtime.planner.scanner
+    transitions = runtime.planner.transitions
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("original plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    with TestClient(app) as client:
+        response = client.put(
+            f"/api/tasks/{waiting.metadata.task_id}/artifacts/PLAN.md",
+            json={"content": "![broken](data:image/png;base64,not-valid)"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "embedded image data is invalid"
+    assert (waiting.task_dir / "PLAN.md").read_text() == "original plan\n"
 
 
 def test_api_rejects_plan_attachment_upload_outside_waiting_check_plans(configured_paths):
@@ -1628,6 +1686,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "addImageBlobHook" in response.text
     assert "/api/tasks/${activeTaskId}/attachments?artifact=PLAN.md" in response.text
     assert "callback(uploaded.relative_path, uploaded.filename);" in response.text
+    assert "return false;" in response.text
     assert "function rewriteAttachmentPaths(markdown, taskId)" in response.text
     assert "function resetArtifactViewerScroll()" in response.text
     assert "requestAnimationFrame(resetArtifactViewerScroll);" in response.text
