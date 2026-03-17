@@ -11,13 +11,39 @@ from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.models import utc_now
+from fs_kanban_agent.models import RunResult, utc_now
 from fs_kanban_agent.scanner import KanbanScanner
 from fs_kanban_agent.transitions import TransitionManager
 from fs_kanban_agent.workspace_manager import WorkspaceManager
 from fs_kanban_agent.workers.implementer import ImplementerWorker
 
 from .conftest import FakeAdapter, create_request_task, init_git_repo
+
+
+class InterruptedThenSuccessAdapter(FakeAdapter):
+    def __init__(self, *, side_effect=None) -> None:
+        super().__init__(responses=["## Summary\nimplemented"], side_effect=side_effect)
+        self.calls = 0
+
+    def run(self, **kwargs) -> RunResult:
+        self.calls += 1
+        if self.calls == 1:
+            run_log_path = kwargs["run_log_path"]
+            run_log_path.parent.mkdir(parents=True, exist_ok=True)
+            run_log_path.write_text("")
+            return RunResult(
+                ok=False,
+                returncode=-2,
+                assistant_text="",
+                stdout="",
+                stderr="",
+                raw_events_path=str(run_log_path),
+                command=["implementer"],
+                resolved_model="openai/gpt-5.3-codex",
+                session_id=None,
+                total_tokens=0,
+            )
+        return super().run(**kwargs)
 
 
 def test_implementer_worker_uses_external_workspace(configured_paths):
@@ -290,6 +316,43 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
     assert any(error.code == "implementation-no-changes" for error in updated.metadata.errors)
     assert updated.metadata.retry_gate.reason == "implementation-no-changes"
     assert updated.metadata.retry_gate.not_before is not None
+
+
+def test_implementer_worker_retries_interrupted_run_once(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-interrupted-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed after retry\n")
+
+    adapter = InterruptedThenSuccessAdapter(side_effect=modify_workspace)
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert adapter.calls == 2
+    assert updated.state == TaskState.WAITING_REVIEWS
+    assert updated.metadata.implementation.last_result == "success"
+    assert not any(error.code == "implementation-failed" for error in updated.metadata.errors)
 
 
 def test_implementer_worker_restarts_from_latest_base_on_workspace_sync_conflict(tmp_path):

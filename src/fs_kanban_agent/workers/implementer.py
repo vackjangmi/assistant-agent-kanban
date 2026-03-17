@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..enums import TaskState
 from ..exceptions import WorkspaceSyncError
-from ..models import TaskErrorInfo
+from ..models import RunResult, TaskErrorInfo
 from ..opencode_adapter import OpenCodeAdapter
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from ..workspace_manager import WorkspaceManager
@@ -58,16 +58,14 @@ class ImplementerWorker(WorkerBase):
             )
             prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
             run_config = self.config.model_copy(deep=True)
-            result = await asyncio.to_thread(
-                self.adapter.run,
-                agent=run_config.opencode.implementer_agent,
+            result = await self._run_adapter_with_retry(
+                implementing=implementing,
                 prompt=prompt,
-                cwd=workspace_repo,
+                workspace_repo=workspace_repo,
                 run_log_path=run_log_path,
-                config=run_config,
+                run_config=run_config,
                 session_id=session_id,
-                cancel_key=implementing.metadata.task_id,
-                on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
+                loop=loop,
             )
             implementing.metadata.implementation.resolved_model = result.resolved_model
             implementing.metadata.implementation.session_id = result.session_id
@@ -139,6 +137,51 @@ class ImplementerWorker(WorkerBase):
         metadata.implementation.session_id = None
         metadata.implementation.last_run_tokens = 0
         metadata.implementation.session_tokens = 0
+
+    async def _run_adapter_with_retry(
+        self,
+        *,
+        implementing,
+        prompt: str,
+        workspace_repo: Path,
+        run_log_path: Path,
+        run_config,
+        session_id: str | None,
+        loop,
+    ) -> RunResult:
+        result = await asyncio.to_thread(
+            self.adapter.run,
+            agent=run_config.opencode.implementer_agent,
+            prompt=prompt,
+            cwd=workspace_repo,
+            run_log_path=run_log_path,
+            config=run_config,
+            session_id=session_id,
+            cancel_key=implementing.metadata.task_id,
+            on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
+        )
+        if not self._is_interrupted_run(result):
+            return result
+        return await asyncio.to_thread(
+            self.adapter.run,
+            agent=run_config.opencode.implementer_agent,
+            prompt=prompt,
+            cwd=workspace_repo,
+            run_log_path=run_log_path,
+            config=run_config,
+            session_id=session_id,
+            cancel_key=implementing.metadata.task_id,
+            on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
+        )
+
+    def _is_interrupted_run(self, result) -> bool:
+        return (
+            not result.ok
+            and result.returncode < 0
+            and not result.stdout.strip()
+            and not result.stderr.strip()
+            and not result.assistant_text.strip()
+        )
 
     def _build_implementer_source(self, task_dir):
         sections = ["# Plan", "", (task_dir / "PLAN.md").read_text().rstrip()]
