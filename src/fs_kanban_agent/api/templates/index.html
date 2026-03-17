@@ -4693,7 +4693,7 @@
     }
 
     async function loadTaskDetail(taskId, preserveTab = false, options = {}) {
-      const { softRefresh = false } = options;
+      const { softRefresh = false, reloadArtifact = true } = options;
       const snapshot = options.snapshot || boardTaskSnapshots.get(taskId) || null;
       const nextTab = preserveTab ? activeTaskTab : taskChromeState(snapshot?.state).defaultTab;
       const requestToken = ++activeTaskRequestToken;
@@ -4739,7 +4739,14 @@
           if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId || activeTaskTab !== 'changed-files' || !activeTaskDetail?.changed_files.length) return;
           await loadChangedFile(taskId, activeChangedFileId, true);
         }
-        if (resolvedTab === 'editor' && detail.markdown_files.length) await loadMarkdownArtifact(taskId, activeArtifactName);
+        const shouldReloadArtifact = resolvedTab === 'editor'
+          && detail.markdown_files.length
+          && (
+            reloadArtifact
+            || !activeArtifactName
+            || !detail.markdown_files.includes(activeArtifactName)
+          );
+        if (shouldReloadArtifact) await loadMarkdownArtifact(taskId, activeArtifactName);
       } catch (error) {
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
         taskModalError.hidden = false;
@@ -4749,7 +4756,8 @@
       }
     }
 
-    function scheduleActiveTaskRefresh() {
+    function scheduleActiveTaskRefresh(options = {}) {
+      const { reloadArtifact = true } = options;
       if (taskModal.hidden || !activeTaskId) return;
       if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md' && isPlanDirty()) {
         setTaskDetailStale(true, translateTask('stalePlanMessage'));
@@ -4758,7 +4766,7 @@
       clearTaskRefreshTimer();
       activeTaskRefreshTimer = window.setTimeout(() => {
         activeTaskRefreshTimer = null;
-        loadTaskDetail(activeTaskId, true, { softRefresh: true }).catch((error) => {
+        loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact }).catch((error) => {
           taskModalError.hidden = false;
           taskModalError.textContent = error.message;
         });
@@ -5243,13 +5251,13 @@
     source.addEventListener('task_moved', async (event) => {
       const payload = JSON.parse(event.data);
       if (taskModal.hidden || activeTaskId !== payload.task_id) return;
-      scheduleActiveTaskRefresh();
+      scheduleActiveTaskRefresh({ reloadArtifact: true });
     });
     source.addEventListener('worker_log', (event) => {
       if (taskModal.hidden) return;
       const payload = JSON.parse(event.data);
       if (activeTaskId !== payload.task_id) return;
-      scheduleActiveTaskRefresh();
+      scheduleActiveTaskRefresh({ reloadArtifact: false });
     });
     loadBoard();
   </script>

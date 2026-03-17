@@ -1868,7 +1868,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "setInterval(() => {" not in response.text
     assert "let activeTaskRequestToken = 0;" in response.text
     assert "let activeArtifactRequestToken = 0;" in response.text
-    assert "function scheduleActiveTaskRefresh()" in response.text
+    assert "function scheduleActiveTaskRefresh(options = {})" in response.text
     assert "if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;" in response.text
     assert "encodeURIComponent(activeArtifactName)" in response.text
     assert "if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;" in response.text
@@ -1876,7 +1876,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "activeBoardPhase = 'implementation';" in response.text
     assert "boardPhaseManuallySelected = true;" in response.text
     assert "source.addEventListener('board_snapshot', (event) => {" in response.text
-    assert "scheduleActiveTaskRefresh();" in response.text
+    assert "scheduleActiveTaskRefresh({ reloadArtifact: true });" in response.text
+    assert "scheduleActiveTaskRefresh({ reloadArtifact: false });" in response.text
     assert "data-active-since" in response.text
     assert "renderRunningMeta(item)" not in response.text
     assert "running 00:00:00" not in response.text
