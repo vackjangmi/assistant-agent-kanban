@@ -9,6 +9,7 @@ from pathlib import Path
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.events import EventBus
+from fs_kanban_agent.exceptions import WorkspaceSyncError
 from fs_kanban_agent.locks import TaskLockManager
 from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.models import RunResult, utc_now
@@ -517,6 +518,101 @@ def test_implementer_worker_skips_retry_gated_todos(configured_paths):
 
     assert asyncio.run(worker.run_once()) is False
     assert adapter.responses == ["## Summary\nimplemented"]
+
+
+def test_implementer_worker_moves_to_implementing_before_workspace_prepare(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-state-first-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    class InspectingWorkspaceManager(WorkspaceManager):
+        def prepare(self, metadata):
+            current = scanner.find_task(metadata.task_id)
+            assert current.state == TaskState.IMPLEMENTING
+            return super().prepare(metadata)
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        workspace_manager=InspectingWorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    assert scanner.find_task(todo.metadata.task_id).state == TaskState.WAITING_REVIEWS
+
+
+def test_implementer_worker_returns_to_todos_when_workspace_prepare_fails_after_entering_implementing(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-prepare-failure-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    class FailingWorkspaceManager(WorkspaceManager):
+        def prepare(self, metadata):
+            raise WorkspaceSyncError("git clone failed")
+
+    event_bus = EventBus()
+    task_moved_states = []
+
+    original_publish = event_bus.publish
+
+    async def capture_publish(event):
+        if event.event == "task_moved" and event.task_id == todo.metadata.task_id:
+            task_moved_states.append(event.payload["state"])
+        await original_publish(event)
+
+    event_bus.publish = capture_publish
+    adapter = FakeAdapter(["## Summary\nimplemented"])
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        event_bus,
+        adapter=adapter,
+        workspace_manager=FailingWorkspaceManager(config),
+    )
+
+    result = asyncio.run(worker.run_once())
+    updated = scanner.find_task(todo.metadata.task_id)
+
+    assert result is True
+    assert task_moved_states == [TaskState.IMPLEMENTING.value, TaskState.TODOS.value]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.implementation.last_result == "failure"
+    assert updated.metadata.cycle == 0
+    assert updated.metadata.implementation.iteration == 0
+    assert updated.metadata.retry_gate.reason == "implementation-base-sync-conflict"
+    assert any(error.code == "implementation-base-sync-conflict" for error in updated.metadata.errors)
+    assert adapter.run_calls == []
+    assert list(updated.task_dir.glob("WORK-*.md")) == []
+    assert list(updated.task_dir.glob("WORK-*.json")) == []
 
 
 def test_implementer_worker_emits_realtime_worker_log_events(configured_paths):

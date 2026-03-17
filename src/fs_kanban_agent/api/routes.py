@@ -231,6 +231,16 @@ def _settings_response(runtime, snapshot, *, config_path: str | None = None, sav
     return response
 
 
+def _validate_model_selection(model_name: str | None, *, field_name: str, available_models: set[str]) -> None:
+    if model_name is None:
+        return
+    if not available_models:
+        return
+    if model_name in available_models:
+        return
+    raise HTTPException(status_code=422, detail=f"{field_name} must be one of the discovered models")
+
+
 def _reconfigure_runtime_adapters(runtime) -> None:
     planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = build_role_adapters(runtime.config, adapter_registry=runtime.adapter_registry)
     runtime.planner.adapter = planner_adapter
@@ -317,6 +327,12 @@ def build_router() -> APIRouter:
             next_config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
         if payload.repo_discovery_max_depth is not None:
             next_config.repo_discovery.max_depth = payload.repo_discovery_max_depth
+        validation_snapshot = await _resolve_settings_snapshot(runtime, refresh=True, assistant=next_config.active_backend())
+        available_models = set(validation_snapshot.models)
+        _validate_model_selection(next_config.role_model("planner"), field_name="planner_model", available_models=available_models)
+        _validate_model_selection(next_config.role_model("implementer"), field_name="implementer_model", available_models=available_models)
+        _validate_model_selection(next_config.role_model("reviewer"), field_name="reviewer_model", available_models=available_models)
+        _validate_model_selection(next_config.role_model("commit"), field_name="commit_model", available_models=available_models)
         config_path = next_config.persist()
         _apply_config_update(runtime.config, next_config)
         if previous_backend != runtime.config.active_backend() or _uses_builtin_runtime_adapter(runtime):

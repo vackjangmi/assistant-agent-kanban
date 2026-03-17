@@ -1038,16 +1038,16 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             json={
                 "language": "KO",
                 "coding_assistant": "opencode",
-                "planner_model": "gpt-5-planner",
+                "planner_model": "gpt-5",
                 "planner_session_token_budget": 210,
                 "planner_agent_count": 2,
-                "implementer_model": " gpt-5-implementer ",
+                "implementer_model": " o3-mini ",
                 "implementer_session_token_budget": 230,
                 "implementer_agent_count": 3,
                 "reviewer_model": "",
                 "reviewer_session_token_budget": 190,
                 "reviewer_agent_count": 4,
-                "commit_model": "gpt-5-commit",
+                "commit_model": "gpt-5",
                 "commit_session_token_budget": 250,
                 "repo_discovery_root": "../",
                 "repo_discovery_max_depth": 4,
@@ -1059,25 +1059,25 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["saved"] is True
     assert payload["language"] == "KO"
     assert payload["coding_assistant"] == "opencode"
-    assert payload["planner_model"] == "gpt-5-planner"
+    assert payload["planner_model"] == "gpt-5"
     assert payload["planner_session_token_budget"] == 210
     assert payload["planner_agent_count"] == 2
-    assert payload["implementer_model"] == "gpt-5-implementer"
+    assert payload["implementer_model"] == "o3-mini"
     assert payload["implementer_session_token_budget"] == 230
     assert payload["implementer_agent_count"] == 3
     assert payload["reviewer_model"] is None
     assert payload["reviewer_session_token_budget"] == 190
     assert payload["reviewer_agent_count"] == 4
-    assert payload["commit_model"] == "gpt-5-commit"
+    assert payload["commit_model"] == "gpt-5"
     assert payload["commit_session_token_budget"] == 250
     assert payload["repo_discovery_root"] == "../"
     assert payload["repo_discovery_max_depth"] == 4
-    assert app.state.runtime.config.opencode.planner_model == "gpt-5-planner"
+    assert app.state.runtime.config.opencode.planner_model == "gpt-5"
     assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.runtime.planner_agent_count == 2
-    assert app.state.runtime.config.opencode.implementer_model == "gpt-5-implementer"
+    assert app.state.runtime.config.opencode.implementer_model == "o3-mini"
     assert app.state.runtime.config.opencode.implementer_session_token_budget == 230000
     assert app.state.runtime.config.runtime.implementer_agent_count == 3
     assert app.state.runtime.config.opencode.reviewer_model is None
@@ -1085,7 +1085,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.runtime.reviewer_agent_count == 4
     assert app.state.runtime.config.repo_discovery.root == "../"
     assert app.state.runtime.config.repo_discovery.max_depth == 4
-    assert load_config(config_path).opencode.commit_model == "gpt-5-commit"
+    assert load_config(config_path).opencode.commit_model == "gpt-5"
     assert load_config(config_path).opencode.commit_session_token_budget == 250000
     assert load_config(config_path).repo_discovery.root == "../"
     assert load_config(config_path).repo_discovery.max_depth == 4
@@ -1391,6 +1391,48 @@ def test_api_accepts_codex_runtime_coding_assistant(configured_paths):
     assert response.status_code == 200
     assert config.runtime.coding_assistant == "codex"
     assert config.codex.planner_model == "gpt-5.4"
+
+
+def test_api_rejects_unknown_opencode_model_on_save(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"], discovery_responses=[["openai/gpt-5.4"]]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "opencode",
+                "planner_model": "not-a-real-model",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "planner_model must be one of the discovered models"
+
+
+def test_api_rejects_unknown_codex_model_on_save(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "codex",
+                "planner_model": "not-a-real-model",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "planner_model must be one of the discovered models"
 
 
 def test_api_refresh_can_preview_codex_models_without_switching_runtime(configured_paths):
