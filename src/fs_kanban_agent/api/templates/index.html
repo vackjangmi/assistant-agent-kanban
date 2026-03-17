@@ -131,13 +131,13 @@
     body[data-theme="dark"] .target-branch-meta,
     body[data-theme="dark"] .diff-badge,
     body[data-theme="dark"] .mode-pill {
-      background: rgba(39, 50, 62, 0.88);
-      border-color: rgba(186, 200, 214, 0.1);
-      color: var(--text);
+      background: var(--tag-bg-dark, rgba(39, 50, 62, 0.88));
+      border-color: var(--tag-border-dark, rgba(186, 200, 214, 0.1));
+      color: var(--tag-text-dark, var(--text));
     }
-    body[data-theme="dark"] .card-tag-id { --tag-bg: rgba(214, 171, 120, 0.16); --tag-border: rgba(214, 171, 120, 0.18); --tag-text: #f3d4ae; }
-    body[data-theme="dark"] .card-tag-branch { --tag-bg: rgba(74, 92, 109, 0.44); --tag-border: rgba(186, 200, 214, 0.14); --tag-text: #d9e3eb; }
-    body[data-theme="dark"] .card-tag-final-branch { --tag-bg: rgba(99, 132, 114, 0.28); --tag-border: rgba(114, 200, 154, 0.18); --tag-text: #d8f3e4; }
+    body[data-theme="dark"] .card-tag-id { --tag-bg: rgba(214, 171, 120, 0.16); --tag-border: rgba(214, 171, 120, 0.18); --tag-text: #f3d4ae; --tag-bg-dark: rgba(214, 171, 120, 0.2); --tag-border-dark: rgba(214, 171, 120, 0.24); --tag-text-dark: #f6d9b5; }
+    body[data-theme="dark"] .card-tag-branch { --tag-bg: rgba(74, 92, 109, 0.44); --tag-border: rgba(186, 200, 214, 0.14); --tag-text: #d9e3eb; --tag-bg-dark: rgba(74, 92, 109, 0.5); --tag-border-dark: rgba(186, 200, 214, 0.18); --tag-text-dark: #e2ebf2; }
+    body[data-theme="dark"] .card-tag-final-branch { --tag-bg: rgba(99, 132, 114, 0.28); --tag-border: rgba(114, 200, 154, 0.18); --tag-text: #d8f3e4; --tag-bg-dark: rgba(99, 132, 114, 0.34); --tag-border-dark: rgba(114, 200, 154, 0.26); --tag-text-dark: #e3f7ec; }
     body[data-theme="dark"] .card-meta,
     body[data-theme="dark"] .target-branch-label,
     body[data-theme="dark"] .retrospective-compare-help,
@@ -320,7 +320,10 @@
     }
     body[data-theme="dark"] .target-branch-label:hover,
     body[data-theme="dark"] .target-branch-label:focus-visible { background: linear-gradient(180deg, rgba(43, 56, 70, 0.98), rgba(34, 47, 60, 0.94)); }
-    body[data-theme="dark"] .card { background: rgba(30, 42, 54, 0.96); }
+    body[data-theme="dark"] .card {
+      background: rgba(30, 42, 54, 0.96);
+      border-left-color: var(--card-accent-dark, var(--card-accent, var(--accent)));
+    }
     body[data-theme="dark"] .card-title { color: #f2f7fb; }
     body[data-theme="dark"] .card-model { background: rgba(214, 171, 120, 0.1); border-color: rgba(214, 171, 120, 0.14); }
     body[data-theme="dark"] .activity-badge[data-activity-state="active"] { background: rgba(26, 63, 47, 0.9); border-color: rgba(114, 200, 154, 0.2); }
@@ -373,6 +376,7 @@
     .final-board .column { flex: 1 1 320px; min-width: 320px; }
     .column h2 { margin-top: 0; }
     .final-project-column { border-top: 6px solid var(--repo-accent, var(--accent)); background: var(--panel); }
+    body[data-theme="dark"] .final-project-column { border-top-color: var(--repo-accent-dark, var(--repo-accent, var(--accent-strong))); }
     .final-project-heading { margin-bottom: 10px; }
     .final-project-title { display: inline-block; margin: 0; }
     .final-project-branches { display: grid; gap: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
@@ -2348,6 +2352,10 @@
         background: `hsla(${hue}, ${saturation}%, 90%, 0.96)`,
         border: `hsla(${hue}, ${Math.max(36, saturation - 10)}%, 46%, 0.26)`,
         text: `hsl(${hue}, ${Math.max(42, saturation - 4)}%, 27%)`,
+        darkAccent: `hsl(${hue}, ${Math.max(52, saturation - 2)}%, 72%)`,
+        darkBackground: `hsla(${hue}, ${Math.max(44, saturation - 2)}%, 30%, 0.34)`,
+        darkBorder: `hsla(${hue}, ${Math.max(40, saturation - 6)}%, 62%, 0.34)`,
+        darkText: `hsl(${hue}, ${Math.max(48, saturation)}%, 78%)`,
       };
     }
 
@@ -2388,7 +2396,7 @@
       const branchLabel = item.base_branch || '';
       const finalBranchLabel = item.final_branch || '';
       const repoTone = repoTagTone(repoPath);
-      const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};`;
+      const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};--tag-bg-dark:${repoTone.darkBackground};--tag-border-dark:${repoTone.darkBorder};--tag-text-dark:${repoTone.darkText};`;
       const tags = [
         renderTag('', item.task_id || '', 'card-tag-id', '', item.task_id || '', taskIdIconSvg()),
         compactFinal ? '' : renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
@@ -2420,7 +2428,7 @@
 
     function stateTagStyle(state) {
       const color = stageColor(state || 'requests');
-      return `--tag-bg:${hexToRgba(color, 0.14)};--tag-border:${hexToRgba(color, 0.28)};--tag-text:${color};`;
+      return `--tag-bg:${hexToRgba(color, 0.14)};--tag-border:${hexToRgba(color, 0.28)};--tag-text:${color};--tag-bg-dark:${hexToRgba(color, 0.24)};--tag-border-dark:${hexToRgba(color, 0.4)};--tag-text-dark:${color};`;
     }
 
     function renderTaskSubtitleTags(task) {
@@ -2432,7 +2440,7 @@
       const state = task.state || '';
       const completedAt = task.completed_at || resolveTaskCompletedAt(task);
       const repoTone = repoTagTone(repoPath);
-      const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};`;
+      const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};--tag-bg-dark:${repoTone.darkBackground};--tag-border-dark:${repoTone.darkBorder};--tag-text-dark:${repoTone.darkText};`;
       const statusStyle = state ? stateTagStyle(state) : '';
       const leftTags = [
         renderTag('', task.task_id || '', 'card-tag-id', '', task.task_id || '', taskIdIconSvg()),
@@ -2520,7 +2528,7 @@
       const projectLabel = sortedItems[0]?.target_repo_label || deriveRepoContext(projectPath).repoName || projectPath || stateLabel('done');
       const branchGroups = groupFinalItemsByTargetBranch(sortedItems);
       const repoTone = repoTagTone(projectPath);
-      const columnStyle = `--repo-accent:${repoTone.text};--repo-accent-soft:${repoTone.background};`;
+      const columnStyle = `--repo-accent:${repoTone.text};--repo-accent-dark:${repoTone.darkAccent};--repo-accent-soft:${repoTone.background};`;
       return `
         <section class="column final-project-column" style="${columnStyle}">
           <div class="final-project-heading">
@@ -2538,7 +2546,7 @@
       const { compactFinal = false } = options;
       const repoPath = normalizeRepoPath(item.target_repo_root);
       const repoTone = repoPath ? repoTagTone(repoPath) : null;
-      const cardStyle = repoTone ? ` style="--card-accent:${repoTone.text};"` : '';
+      const cardStyle = repoTone ? ` style="--card-accent:${repoTone.text};--card-accent-dark:${repoTone.darkAccent};"` : '';
       return `<article class="card"${cardStyle}><button class="card-button" data-task-id="${item.task_id}"><strong class="card-title">${item.title}</strong>${renderCardTags(item, { compactFinal })}${renderCardModelMeta(item)}</button></article>`;
     }
 
