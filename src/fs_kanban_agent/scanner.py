@@ -182,11 +182,25 @@ class KanbanScanner:
 
     def _existing_task_ids(self) -> set[str]:
         existing: set[str] = set()
-        for metadata_path in self.config.kanban_root.glob("*/**/metadata.json"):
-            if metadata_path.parent.parent.name == "_runtime":
-                continue
+        for metadata_path in self._metadata_paths_for_states():
             existing.add(TaskMetadata.model_validate_json(metadata_path.read_text()).task_id)
         return existing
+
+    def _metadata_paths_for_states(self) -> list[Path]:
+        metadata_paths: list[Path] = []
+        for state in STATE_ORDER:
+            state_dir = self.config.state_dir(state)
+            if state is TaskState.DONE:
+                metadata_paths.extend(sorted(state_dir.glob("**/metadata.json")))
+                continue
+            metadata_paths.extend(
+                sorted(
+                    task_dir / "metadata.json"
+                    for task_dir in state_dir.iterdir()
+                    if task_dir.is_dir() and (task_dir / "metadata.json").exists()
+                )
+            )
+        return metadata_paths
 
     def _ensure_metadata(self, task_dir: Path, state: TaskState, existing_ids: set[str]) -> tuple[TaskMetadata, Path]:
         path = self.metadata_store.metadata_path(task_dir)

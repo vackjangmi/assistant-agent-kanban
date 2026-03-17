@@ -117,7 +117,7 @@ def test_scanner_refreshes_request_metadata_after_initial_bootstrap(configured_p
 
 def test_scanner_preserves_bootstrapped_request_language_after_request_edits(configured_paths):
     config, _, _ = configured_paths
-    task_dir = create_request_task(config, "stable-language-task", language="ko", body="한국어 요청입니다.")
+    create_request_task(config, "stable-language-task", language="ko", body="한국어 요청입니다.")
     scanner = KanbanScanner(config)
 
     first_task = scanner.scan()[0]
@@ -387,3 +387,37 @@ def test_scanner_discovers_nested_done_tasks(configured_paths):
 
     assert scanned.state == TaskState.DONE
     assert scanned.task_dir == nested_done_dir
+
+
+def test_scanner_ignores_runtime_metadata_when_collecting_task_ids(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "runtime-ignore-task")
+    runtime_metadata = config.kanban_root / "_runtime" / "workspaces" / "fake-task" / "metadata.json"
+    runtime_metadata.parent.mkdir(parents=True, exist_ok=True)
+    runtime_metadata.write_text(
+        """{
+  "version": 1,
+  "task_id": "runtime1",
+  "title": "runtime metadata",
+  "slug": "runtime-metadata",
+  "state": "todos",
+  "created_at": "2026-03-10T00:00:00Z",
+  "updated_at": "2026-03-10T00:00:00Z",
+  "request": {"path": "REQUEST.md"},
+  "target": {"repo_root": ".", "base_branch": "main"},
+  "plan": {"revision": 0, "approved": false, "path": null},
+  "implementation": {"iteration": 0, "workspace": null, "branch": null, "last_result": null},
+  "review": {"iteration": 0, "last_verdict": null},
+  "integration": {"applied": false, "base_branch": "main", "base_commit": null, "patch_path": null, "applied_at": null},
+  "commit": {"status": "pending", "sha": null, "message_path": null},
+  "lease": {"owner": null, "run_id": null, "heartbeat_at": null},
+  "history": [],
+  "errors": []
+}
+"""
+    )
+
+    tasks = KanbanScanner(config, MetadataStore()).scan()
+
+    assert len(tasks) == 1
+    assert tasks[0].metadata.task_id != "runtime1"

@@ -6,6 +6,7 @@ from pathlib import Path
 from filelock import FileLock, Timeout
 
 from .config import AppConfig
+from .enums import STATE_ORDER, TaskState
 from .exceptions import LockError
 from .metadata_store import MetadataStore
 from .models import TaskMetadata, utc_now
@@ -54,12 +55,26 @@ class TaskLockManager:
     def _resolve_task_dir(self, original_task_dir: Path, task_id: str) -> Path:
         if original_task_dir.exists():
             return original_task_dir
-        for metadata_path in self.config.kanban_root.glob("*/**/metadata.json"):
-            if metadata_path.parent.parent.name == "_runtime":
-                continue
+        for metadata_path in self._metadata_paths_for_states():
             if metadata_path.parent.name == task_id:
                 return metadata_path.parent
         return original_task_dir
+
+    def _metadata_paths_for_states(self) -> list[Path]:
+        metadata_paths: list[Path] = []
+        for state in STATE_ORDER:
+            state_dir = self.config.state_dir(state)
+            if state is TaskState.DONE:
+                metadata_paths.extend(sorted(state_dir.glob("**/metadata.json")))
+                continue
+            metadata_paths.extend(
+                sorted(
+                    task_dir / "metadata.json"
+                    for task_dir in state_dir.iterdir()
+                    if task_dir.is_dir() and (task_dir / "metadata.json").exists()
+                )
+            )
+        return metadata_paths
 
     def _acquire_file_lock(self, task_id: str):
         lock = FileLock(str(self.path_for(task_id)))

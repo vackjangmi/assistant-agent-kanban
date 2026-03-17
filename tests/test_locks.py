@@ -4,6 +4,7 @@ import pytest
 
 from fs_kanban_agent.exceptions import LockError
 from fs_kanban_agent.locks import TaskLockManager
+from fs_kanban_agent.metadata_store import MetadataStore
 from fs_kanban_agent.scanner import KanbanScanner
 
 from .conftest import create_request_task
@@ -36,3 +37,18 @@ def test_lock_manager_allows_raw_task_id_locking(configured_paths):
         with pytest.raises(LockError):
             with second.acquire_by_task_id(task.metadata.task_id, owner="other", run_id="raw-2"):
                 pass
+
+
+def test_lock_manager_resolves_missing_task_dir_without_runtime_metadata(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "resolve-task")
+    scanner = KanbanScanner(config, MetadataStore())
+    task = scanner.scan()[0]
+    runtime_metadata = config.kanban_root / "_runtime" / "workspaces" / task.metadata.task_id / "metadata.json"
+    runtime_metadata.parent.mkdir(parents=True, exist_ok=True)
+    runtime_metadata.write_text((task.task_dir / "metadata.json").read_text())
+    missing_task_dir = task.task_dir.parent / "missing-task-dir"
+
+    resolved = TaskLockManager(config, MetadataStore())._resolve_task_dir(missing_task_dir, task.metadata.task_id)
+
+    assert resolved == task.task_dir
