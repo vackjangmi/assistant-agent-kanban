@@ -283,12 +283,14 @@
     body[data-theme="dark"] .human-review-editor-shell {
       background: transparent;
     }
-    body[data-theme="dark"] #task-panel-review-note .human-review-box {
+    body[data-theme="dark"] #task-panel-review-note .human-review-box,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell {
       background: linear-gradient(180deg, rgba(24, 35, 45, 0.98), rgba(17, 25, 33, 0.97)) !important;
       border-color: var(--review-border) !important;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 14px 28px rgba(0,0,0,0.22) !important;
     }
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell {
       border: 0;
       border-radius: 0;
       overflow: visible;
@@ -340,7 +342,8 @@
     body[data-theme="dark"] .approval-choice-status {
       background: linear-gradient(180deg, rgba(27, 39, 49, 0.98), rgba(20, 29, 38, 0.96));
     }
-    body[data-theme="dark"] #task-panel-review-note .editor-toolbar {
+    body[data-theme="dark"] #task-panel-review-note .editor-toolbar,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell-copy {
       padding: 0;
       margin-bottom: 8px;
       border: 0;
@@ -348,10 +351,12 @@
       background: transparent;
       box-shadow: none;
     }
-    body[data-theme="dark"] #task-panel-review-note .editor-toolbar strong {
+    body[data-theme="dark"] #task-panel-review-note .editor-toolbar strong,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell-copy strong {
       color: #f3f7fa;
     }
-    body[data-theme="dark"] #task-panel-review-note .editor-toolbar .muted {
+    body[data-theme="dark"] #task-panel-review-note .editor-toolbar .muted,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell-copy .muted {
       color: #b8c7d3;
     }
     body[data-theme="dark"] #task-panel-review-note .editor-toolbar button {
@@ -484,7 +489,11 @@
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-defaultUI,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-main,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-container,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-container {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-container,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-defaultUI,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-main,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-container,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-ww-container {
       background: var(--review-panel-strong) !important;
     }
     body[data-theme="dark"] .human-review-editor-shell .toastui-editor-toolbar,
@@ -495,7 +504,9 @@
       border-color: var(--review-toolbar-divider) !important;
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-group,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-toolbar-group,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-toolbar-divider {
       border-color: var(--review-toolbar-divider) !important;
     }
     body[data-theme="dark"] .human-review-editor-shell .toastui-editor-defaultUI button {
@@ -516,7 +527,10 @@
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-container,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-container,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-main {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-main,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-container,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-ww-container,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-main {
       background: linear-gradient(180deg, rgba(21, 30, 38, 0.98), rgba(16, 23, 30, 0.98)) !important;
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-preview,
@@ -526,11 +540,21 @@
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-gutters,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-scroll,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-preview,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-contents,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-splitter,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-gutters,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-scroll,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror {
       background: var(--review-editor-surface) !important;
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-gutters,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-splitter {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-splitter,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-gutters,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-splitter {
       background: var(--review-editor-gutter) !important;
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-preview,
@@ -541,15 +565,28 @@
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror pre,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-line,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror p {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror p,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-preview,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-contents,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-preview p,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-contents p,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror pre,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-line,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror p {
       color: var(--text) !important;
     }
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-cursor {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-cursor,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-cursor {
       border-left-color: var(--text) !important;
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-selected,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-focused .CodeMirror-selected,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror-selectednode {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror-selectednode,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-selected,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-focused .CodeMirror-selected,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror-selectednode {
       background: rgba(214, 171, 120, 0.24) !important;
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar,
@@ -557,7 +594,13 @@
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-tab-container,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-tab-container,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-group,
-    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider {
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-toolbar,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-mode-switch,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-tab-container,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-ww-tab-container,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-toolbar-group,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-toolbar-divider {
       color: var(--text) !important;
     }
     body[data-theme="dark"] .human-review-editor-shell .editor-textarea,
@@ -1012,6 +1055,8 @@
     .human-review-editor-shell .editor-textarea { min-height: 0; height: 100%; }
     .human-review-editor-shell .editor-textarea { resize: none; overflow: auto; }
     .viewer-host { min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; }
+    .artifact-edit-shell { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
+    .artifact-edit-shell-copy { display: grid; gap: 4px; }
     .editor-host[hidden] { display: none; }
     .viewer-host[hidden] { display: none; }
     .mode-pill { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }
@@ -1366,7 +1411,7 @@
             <div class="editor-toolbar">
               <div>
                 <strong id="task-artifact-name">No document selected</strong>
-                <div hidden><span id="task-mode-badge" class="mode-pill">Viewer mode</span><span id="task-editor-status" class="muted">Select a markdown artifact to view.</span></div>
+                <div><span id="task-mode-badge" class="mode-pill">Viewer mode</span><span id="task-editor-status" class="muted">Select a markdown artifact to view.</span></div>
               </div>
               <div>
                 <button type="button" id="toggle-plan-edit" hidden>Edit draft</button>
@@ -1375,8 +1420,16 @@
             </div>
             <div id="task-artifact-subtabs" class="artifact-subtabs" hidden></div>
             <div id="task-viewer-host" class="viewer-host"></div>
-            <div id="task-editor-host" class="editor-host" hidden></div>
-            <textarea id="task-editor" class="editor-textarea" spellcheck="false" hidden disabled></textarea>
+            <div id="task-plan-editor-shell" class="human-review-box artifact-edit-shell" hidden>
+              <div class="artifact-edit-shell-copy">
+                <strong id="task-plan-editor-title">PLAN.md</strong>
+                <div id="task-plan-editor-shell-status" class="muted">Edit the current PLAN draft and keep attachments inline.</div>
+              </div>
+              <div class="human-review-editor-shell">
+                <div id="task-editor-host" class="editor-host" hidden></div>
+                <textarea id="task-editor" class="editor-textarea" spellcheck="false" hidden disabled></textarea>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1585,6 +1638,9 @@
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
     const taskArtifactSubtabs = document.getElementById('task-artifact-subtabs');
     const taskViewerHost = document.getElementById('task-viewer-host');
+    const taskPlanEditorShell = document.getElementById('task-plan-editor-shell');
+    const taskPlanEditorTitle = document.getElementById('task-plan-editor-title');
+    const taskPlanEditorShellStatus = document.getElementById('task-plan-editor-shell-status');
     const taskEditorHost = document.getElementById('task-editor-host');
     const taskEditor = document.getElementById('task-editor');
     const taskArtifactName = document.getElementById('task-artifact-name');
@@ -4133,12 +4189,12 @@
             try {
               const uploaded = await uploadPlanAttachment(blob);
               callback(uploaded.relative_path, uploaded.filename);
-              taskEditorStatus.textContent = translateTask('attachedPlanImage', { filename: uploaded.filename });
+              setTaskEditorMessage(translateTask('attachedPlanImage', { filename: uploaded.filename }));
               return false;
             } catch (error) {
               taskModalError.hidden = false;
               taskModalError.textContent = error.message;
-              taskEditorStatus.textContent = translateTask('imageUploadFailed');
+              setTaskEditorMessage(translateTask('imageUploadFailed'));
               return false;
             }
           },
@@ -4156,7 +4212,7 @@
       const fallbackExtension = blob.type === 'image/jpeg' ? '.jpg' : blob.type === 'image/gif' ? '.gif' : blob.type === 'image/webp' ? '.webp' : '.png';
       const fallbackName = blob.name && /\.[a-zA-Z0-9]+$/.test(blob.name) ? blob.name : `image${fallbackExtension}`;
       formData.append('file', blob, fallbackName);
-      taskEditorStatus.textContent = translateTask('uploadingImage');
+      setTaskEditorMessage(translateTask('uploadingImage'));
       const response = await fetch(`/api/tasks/${activeTaskId}/attachments?artifact=PLAN.md`, {
         method: 'POST',
         body: formData,
@@ -4170,6 +4226,11 @@
       ensureMarkdownViewer(value || '');
       if (planEditor) planEditor.setMarkdown(value || '');
       taskEditor.value = value || '';
+    }
+
+    function setTaskEditorMessage(value) {
+      taskEditorStatus.textContent = value;
+      taskPlanEditorShellStatus.textContent = value;
     }
 
     function getPlanEditorContent() {
@@ -4297,6 +4358,7 @@
     function setArtifactMode(editing) {
       taskModeBadge.textContent = editing ? translateTask('editMode') : translateTask('viewerMode');
       taskViewerHost.hidden = editing;
+      taskPlanEditorShell.hidden = !editing;
       taskEditorHost.hidden = !editing;
       if (editing) {
         const editor = ensurePlanEditor();
@@ -4519,7 +4581,7 @@
       if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files, metadata);
       planEditMode = false;
       taskModeBadge.textContent = translateTask('viewerMode');
-      taskEditorStatus.textContent = planEditable ? translateTask('renderedPreviewEditable') : translateTask('renderedPreviewReadonly');
+      setTaskEditorMessage(planEditable ? translateTask('renderedPreviewEditable') : translateTask('renderedPreviewReadonly'));
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
@@ -4660,7 +4722,7 @@
         planEditMode = false;
         savePlanButton.disabled = true;
         taskModeBadge.textContent = translateTask('viewerMode');
-        taskEditorStatus.textContent = translateTask('selectMarkdownArtifact');
+        setTaskEditorMessage(translateTask('selectMarkdownArtifact'));
         setTaskModalOpen(true);
       }
       try {
@@ -4836,7 +4898,8 @@
       renderArtifactButtons(activeTaskDetail.markdown_files);
       const family = activeArtifactFamily(buildArtifactEntries(activeTaskDetail.markdown_files));
       taskArtifactName.textContent = family ? `${family.label} / ${activeArtifactName || translateTask('noDocumentSelected')}` : (activeArtifactName || translateTask('noDocumentSelected'));
-      taskEditorStatus.textContent = activeArtifactName ? translateTask('loadingArtifact', { name: activeArtifactName }) : translateTask('noMarkdownArtifactSelected');
+      taskPlanEditorTitle.textContent = activeArtifactName || 'PLAN.md';
+      setTaskEditorMessage(activeArtifactName ? translateTask('loadingArtifact', { name: activeArtifactName }) : translateTask('noMarkdownArtifactSelected'));
       setArtifactMode(false);
       updatePlanActionState();
       try {
@@ -4850,15 +4913,15 @@
         setArtifactMode(editable);
         updatePlanActionState();
         if (activeArtifactName === 'PLAN.md' && activeTaskDetail.metadata.state === 'waiting-check-plans') {
-          taskEditorStatus.textContent = planEditMode ? translateTask('editingPlan') : translateTask('viewingPlan');
+          setTaskEditorMessage(planEditMode ? translateTask('editingPlan') : translateTask('viewingPlan'));
         } else {
-          taskEditorStatus.textContent = translateTask('renderedArtifact', { name: activeArtifactName });
+          setTaskEditorMessage(translateTask('renderedArtifact', { name: activeArtifactName }));
         }
         requestAnimationFrame(resetArtifactViewerScroll);
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskEditorStatus.textContent = translateTask('unableLoadArtifact', { name: activeArtifactName || 'artifact' });
+        setTaskEditorMessage(translateTask('unableLoadArtifact', { name: activeArtifactName || 'artifact' }));
       }
     }
 
@@ -4874,7 +4937,7 @@
     async function savePlanArtifact() {
       if (!activeTaskId) return;
       savePlanButton.disabled = true;
-      taskEditorStatus.textContent = translateTask('savingPlan');
+      setTaskEditorMessage(translateTask('savingPlan'));
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}/artifacts/PLAN.md`, {
           method: 'PUT',
@@ -4884,12 +4947,12 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedSavePlan'));
         planSourceMarkdown = getPlanEditorContent();
-        taskEditorStatus.textContent = translateTask('savedPlan');
+        setTaskEditorMessage(translateTask('savedPlan'));
         if (taskDetailStale) scheduleActiveTaskRefresh();
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskEditorStatus.textContent = translateTask('saveFailed');
+        setTaskEditorMessage(translateTask('saveFailed'));
       } finally {
         updatePlanActionState();
       }
@@ -4899,13 +4962,13 @@
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans') return;
       savePlanButton.disabled = true;
       approvePlanButton.disabled = true;
-      taskEditorStatus.textContent = isPlanDirty() ? translateTask('savingBeforeApproval') : translateTask('approvingPlan');
+      setTaskEditorMessage(isPlanDirty() ? translateTask('savingBeforeApproval') : translateTask('approvingPlan'));
       try {
         if (isPlanDirty()) await savePlanArtifact();
         const response = await fetch(`/api/tasks/${activeTaskId}/approve-plan`, { method: 'POST' });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedApprovePlan'));
-        taskEditorStatus.textContent = translateTask('planApproved');
+        setTaskEditorMessage(translateTask('planApproved'));
         activeBoardPhase = 'implementation';
         boardPhaseManuallySelected = true;
         await loadBoard();
@@ -4913,7 +4976,7 @@
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        taskEditorStatus.textContent = translateTask('failedApprovePlan');
+        setTaskEditorMessage(translateTask('failedApprovePlan'));
       } finally {
         updatePlanActionState();
       }
