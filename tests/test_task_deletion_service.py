@@ -144,3 +144,26 @@ def test_task_deletion_service_rolls_back_applied_integration_and_docs(configure
     assert not docs_root.exists()
     branch_check = subprocess.run(["git", "-C", str(repo_root), "branch", "--list", review_branch], capture_output=True, text=True, check=False)
     assert branch_check.stdout.strip() == ""
+
+
+def test_task_deletion_service_removes_docs_from_configured_target_docs_root(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.target_repo_docs_root = "records/kanban-docs"
+    create_request_task(config, "delete-configured-doc-root-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    review_branch = f"review/{task.metadata.task_id.lower()}"
+    docs_root = repo_root / "records" / "kanban-docs" / "2026" / "03" / "14" / task.metadata.task_id
+    docs_root.mkdir(parents=True)
+    (docs_root / "HUMAN-VERIFY-001.md").write_text("review note\n")
+    subprocess.run(["git", "-C", str(repo_root), "branch", review_branch, "main"], check=True, capture_output=True, text=True)
+    task.metadata.integration.applied = True
+    task.metadata.integration.original_branch = "main"
+    task.metadata.integration.review_branch = review_branch
+    metadata_store.save(task.task_dir, task.metadata)
+
+    service = TaskDeletionService(config, scanner, TaskLockManager(config, metadata_store), IntegrationManager(config))
+    service.delete(task.metadata.task_id, by="human")
+
+    assert not docs_root.exists()

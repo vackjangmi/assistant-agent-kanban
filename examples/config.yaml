@@ -1,6 +1,7 @@
 kanban_root: ./.kanban-agent
 repo_root: .
 base_branch: main
+target_repo_docs_root: docs/kanban-agent
 
 opencode:
   binary: opencode

@@ -238,7 +238,13 @@ def _validate_model_selection(model_name: str | None, *, field_name: str, availa
         return
     if model_name in available_models:
         return
-    raise HTTPException(status_code=422, detail=f"{field_name} must be one of the discovered models")
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "settings.model_not_discovered",
+            "field": field_name,
+        },
+    )
 
 
 def _reconfigure_runtime_adapters(runtime) -> None:
@@ -475,7 +481,11 @@ def build_router() -> APIRouter:
         normalized_base_branch = payload.base_branch.strip() if payload.base_branch else runtime.config.base_branch
         request_language = runtime_language_code_to_request_language(runtime.config.runtime.language)
         try:
-            default_scope, default_out_of_scope = build_default_scope_sections_for_language(payload.target_repo, language_code=request_language)
+            default_scope, default_out_of_scope = build_default_scope_sections_for_language(
+                payload.target_repo,
+                language_code=request_language,
+                managed_docs_root=runtime.config.target_repo_docs_root_value(),
+            )
             task_dir = create_request(
                 runtime.config,
                 template=RequestTemplateData(

@@ -16,6 +16,7 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
+DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
 AssistantBackend = Literal["opencode", "codex"]
 AssistantRole = Literal["planner", "implementer", "reviewer", "commit"]
 SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode", "codex": "Codex CLI"}
@@ -111,6 +112,7 @@ class AppConfig(BaseModel):
     kanban_root: Path = Path("./.kanban-agent")
     repo_root: Path = Path(".")
     base_branch: str = "main"
+    target_repo_docs_root: str = DEFAULT_TARGET_REPO_DOCS_ROOT
     opencode: OpenCodeConfig = Field(default_factory=OpenCodeConfig)
     codex: CodexConfig = Field(default_factory=CodexConfig)
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
@@ -148,6 +150,22 @@ class AppConfig(BaseModel):
             return configured_root.resolve()
         anchor = self.loaded_from.parent if self.loaded_from is not None else PROJECT_ROOT
         return (anchor / configured_root).resolve()
+
+    def target_repo_docs_root_value(self) -> str:
+        value = self.target_repo_docs_root.strip()
+        return value or DEFAULT_TARGET_REPO_DOCS_ROOT
+
+    def resolve_target_repo_docs_root(self, target_repo_root: Path) -> Path:
+        configured_root = Path(self.target_repo_docs_root_value())
+        if configured_root.is_absolute():
+            raise ValueError("target repo docs root must be a relative path")
+        resolved_repo_root = target_repo_root.expanduser().resolve()
+        resolved_docs_root = (resolved_repo_root / configured_root).resolve()
+        try:
+            resolved_docs_root.relative_to(resolved_repo_root)
+        except ValueError as exc:
+            raise ValueError("target repo docs root must stay inside the target repository") from exc
+        return resolved_docs_root
 
     def state_dir(self, state: TaskState) -> Path:
         return self.kanban_root / state.value

@@ -928,6 +928,7 @@ def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):
 
 def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_path):
     config, _, _ = configured_paths
+    config.target_repo_docs_root = "records/kanban-docs"
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
@@ -950,6 +951,20 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert f"Limit code changes to `{target_repo}`." in request_markdown
     assert "## Out of Scope" in request_markdown
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
+    assert "Do not modify files under `records/kanban-docs` unless the request explicitly asks for it." in request_markdown
+
+
+def test_ui_injects_configured_target_repo_docs_root_into_request_defaults(configured_paths):
+    config, _, _ = configured_paths
+    config.target_repo_docs_root = "records/kanban-docs"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "records/kanban-docs" in response.text
+    assert "__TARGET_REPO_DOCS_ROOT__" not in response.text
 
 
 def test_api_uses_runtime_default_base_branch_when_request_omits_it(configured_paths, tmp_path):
@@ -1411,7 +1426,10 @@ def test_api_rejects_unknown_opencode_model_on_save(configured_paths):
         )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "planner_model must be one of the discovered models"
+    assert response.json()["detail"] == {
+        "code": "settings.model_not_discovered",
+        "field": "planner_model",
+    }
 
 
 def test_api_rejects_unknown_codex_model_on_save(configured_paths):
@@ -1432,7 +1450,10 @@ def test_api_rejects_unknown_codex_model_on_save(configured_paths):
         )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "planner_model must be one of the discovered models"
+    assert response.json()["detail"] == {
+        "code": "settings.model_not_discovered",
+        "field": "planner_model",
+    }
 
 
 def test_api_refresh_can_preview_codex_models_without_switching_runtime(configured_paths):

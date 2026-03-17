@@ -13,9 +13,10 @@ TEMPLATE_DEFAULT_BASE_BRANCH = "__DEFAULT_BASE_BRANCH__"
 TEMPLATE_INITIAL_RUNTIME_LANGUAGE = "__INITIAL_RUNTIME_LANGUAGE__"
 TEMPLATE_INITIAL_RUNTIME_THEME = "__INITIAL_RUNTIME_THEME__"
 TEMPLATE_INITIAL_RUNTIME_THEME_ATTR = "__INITIAL_RUNTIME_THEME_ATTR__"
+TEMPLATE_TARGET_REPO_DOCS_ROOT = "__TARGET_REPO_DOCS_ROOT__"
 
 
-def _render_index_html(*, default_target_repo: str, default_base_branch: str, initial_runtime_language: str, initial_runtime_theme: str) -> str:
+def _render_index_html(*, default_target_repo: str, default_base_branch: str, initial_runtime_language: str, initial_runtime_theme: str, target_repo_docs_root: str) -> str:
     template = TEMPLATE_PATH.read_text()
     return (
         template.replace(TEMPLATE_DEFAULT_TARGET_REPO, json.dumps(default_target_repo))
@@ -23,6 +24,7 @@ def _render_index_html(*, default_target_repo: str, default_base_branch: str, in
         .replace(TEMPLATE_INITIAL_RUNTIME_LANGUAGE, json.dumps(initial_runtime_language))
         .replace(TEMPLATE_INITIAL_RUNTIME_THEME_ATTR, initial_runtime_theme)
         .replace(TEMPLATE_INITIAL_RUNTIME_THEME, json.dumps(initial_runtime_theme))
+        .replace(TEMPLATE_TARGET_REPO_DOCS_ROOT, json.dumps(target_repo_docs_root))
     )
 
 
@@ -37,6 +39,7 @@ def build_ui_router() -> APIRouter:
             default_base_branch=runtime.config.base_branch,
             initial_runtime_language=runtime.config.runtime.language,
             initial_runtime_theme=runtime.config.runtime.theme,
+            target_repo_docs_root=runtime.config.target_repo_docs_root_value(),
         )
 
     return router

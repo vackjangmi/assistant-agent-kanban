@@ -22,12 +22,13 @@ class RequestTemplateData(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)
 
 
-def build_default_scope_sections(target_repo_root: str | Path) -> tuple[list[str], list[str]]:
-    return build_default_scope_sections_for_language(target_repo_root, language_code="en")
+def build_default_scope_sections(target_repo_root: str | Path, *, managed_docs_root: str = "docs/kanban-agent") -> tuple[list[str], list[str]]:
+    return build_default_scope_sections_for_language(target_repo_root, language_code="en", managed_docs_root=managed_docs_root)
 
 
-def build_default_scope_sections_for_language(target_repo_root: str | Path, *, language_code: str) -> tuple[list[str], list[str]]:
+def build_default_scope_sections_for_language(target_repo_root: str | Path, *, language_code: str, managed_docs_root: str = "docs/kanban-agent") -> tuple[list[str], list[str]]:
     target_path = str(Path(target_repo_root).expanduser())
+    docs_root = managed_docs_root.strip() or "docs/kanban-agent"
     if language_code == "ko":
         scope = [
             f"코드 변경 범위는 `{target_path}` 내부로 제한한다.",
@@ -36,6 +37,7 @@ def build_default_scope_sections_for_language(target_repo_root: str | Path, *, l
         ]
         out_of_scope = [
             f"`{target_path}` 밖의 파일은 수정하지 않는다.",
+            f"`{docs_root}` 하위 문서는 요청에서 명시하지 않으면 수정하지 않는다.",
             "관련 없는 앱, 패키지, 워크스페이스 전체 설정은 변경하지 않는다.",
             "요청에서 명시하지 않으면 배포나 인프라 변경은 추가하지 않는다.",
         ]
@@ -47,6 +49,7 @@ def build_default_scope_sections_for_language(target_repo_root: str | Path, *, l
     ]
     out_of_scope = [
         f"Do not modify files outside `{target_path}`.",
+        f"Do not modify files under `{docs_root}` unless the request explicitly asks for it.",
         "Do not change unrelated apps, packages, or workspace-wide configuration.",
         "Do not add deployment or infrastructure changes unless the request explicitly asks for them.",
     ]

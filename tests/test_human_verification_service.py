@@ -615,7 +615,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     review_date = datetime.now(timezone.utc)
-    docs_root = target_repo / "docs" / "kanban-agent" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / done.metadata.task_id
+    docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / done.metadata.task_id
     assert (docs_root / "REQUEST.md").exists()
     assert (docs_root / "PLAN.md").exists()
     assert (docs_root / "HUMAN-VERIFY-001.md").exists()
@@ -666,6 +666,28 @@ def test_human_verification_approve_can_commit_to_target_branch(tmp_path):
     final_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"feature/{completed.metadata.task_id.lower()}-{completed.metadata.slug}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     assert final_branch == ""
+
+
+def test_human_verification_approve_uses_configured_target_docs_root(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(
+        kanban_root=tmp_path / ".kanban-agent",
+        repo_root=tmp_path / "unused-default",
+        target_repo_docs_root="records/kanban-docs",
+    )
+    config.bootstrap()
+    create_request_task(config, "verify-configured-doc-root-task", target_repo_root=target_repo)
+    _, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.DONE
+    review_date = datetime.now(timezone.utc)
+    docs_root = target_repo / "records" / "kanban-docs" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / moved.metadata.task_id
+    assert (docs_root / "REQUEST.md").exists()
 
 
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):

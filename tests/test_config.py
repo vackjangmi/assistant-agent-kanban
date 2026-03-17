@@ -106,3 +106,11 @@ def test_load_config_accepts_codex_runtime_backend(tmp_path):
 
     assert config.runtime.coding_assistant == "codex"
     assert config.codex.planner_model == "gpt-5.4"
+
+
+def test_resolve_target_repo_docs_root_uses_configured_relative_path(tmp_path):
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo", target_repo_docs_root="docs/task-artifacts")
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+
+    assert config.resolve_target_repo_docs_root(target_repo) == (target_repo / "docs/task-artifacts").resolve()
