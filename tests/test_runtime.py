@@ -291,3 +291,52 @@ def test_runtime_supervisor_restarts_watch_loop_after_failure(configured_paths):
         assert len(attempts) >= 2
 
     asyncio.run(scenario())
+
+
+def test_runtime_supervisor_ignores_runtime_only_watch_changes(configured_paths):
+    config, _, _ = configured_paths
+    supervisor = RuntimeSupervisor(
+        config,
+        IdleWorker(),
+        IdleWorker(),
+        IdleWorker(),
+        object(),
+        KanbanScanner(config, MetadataStore()),
+        DummyBoardService(),
+        object(),
+        object(),
+        object(),
+        object(),
+        DummyRecoveryService(),
+        EventBus(),
+        DummyModelRegistry(),
+    )
+
+    assert supervisor._should_rescan_for_changes({(None, str(config.runs_dir / "task-1" / "implementer-001.jsonl"))}) is False
+
+
+def test_runtime_supervisor_rescans_when_non_runtime_path_changes(configured_paths):
+    config, _, _ = configured_paths
+    supervisor = RuntimeSupervisor(
+        config,
+        IdleWorker(),
+        IdleWorker(),
+        IdleWorker(),
+        object(),
+        KanbanScanner(config, MetadataStore()),
+        DummyBoardService(),
+        object(),
+        object(),
+        object(),
+        object(),
+        DummyRecoveryService(),
+        EventBus(),
+        DummyModelRegistry(),
+    )
+
+    assert supervisor._should_rescan_for_changes(
+        {
+            (None, str(config.runs_dir / "task-1" / "implementer-001.jsonl")),
+            (None, str(config.kanban_root / "requests" / "abc1234" / "metadata.json")),
+        }
+    ) is True

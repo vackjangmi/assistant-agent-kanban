@@ -1594,7 +1594,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
     assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
-    assert "source.addEventListener('board_snapshot', async () => {\n      await loadBoard();\n    });" in response.text
+    assert "function applyBoardSnapshot(data)" in response.text
+    assert "source.addEventListener('board_snapshot', (event) => {" in response.text
+    assert "applyBoardSnapshot(message.payload);" in response.text
     assert "function phaseLabel(phase)" in response.text
     assert "function repoTagTone(path)" in response.text
     assert "function renderFinalBoard(columns)" in response.text
@@ -1759,7 +1761,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "translateTask('stalePlanMessage')" in response.text
     assert "activeBoardPhase = 'implementation';" in response.text
     assert "boardPhaseManuallySelected = true;" in response.text
-    assert "source.addEventListener('board_snapshot', async () => {" in response.text
+    assert "source.addEventListener('board_snapshot', (event) => {" in response.text
     assert "scheduleActiveTaskRefresh();" in response.text
     assert "data-active-since" in response.text
     assert "renderRunningMeta(item)" not in response.text

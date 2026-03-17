@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 import logging
+from pathlib import Path
 from typing import Any, Protocol
 
 from .config import AppConfig
@@ -121,7 +122,8 @@ class RuntimeSupervisor:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def rescan_and_publish(self) -> None:
-        board = self.board_service.get_board()
+        refresh = getattr(self.board_service, "refresh_board", None)
+        board = refresh() if callable(refresh) else self.board_service.get_board()
         await self.events.publish(board_to_event(board))
 
     async def force_delete(self, task_id: str, *, by: str) -> None:
@@ -186,6 +188,8 @@ class RuntimeSupervisor:
 
     async def watch_forever(self) -> None:
         async for _changes in awatch(self.config.kanban_root, stop_event=self._stop_event):
+            if not self._should_rescan_for_changes(_changes):
+                continue
             await asyncio.sleep(self.config.runtime.poll_interval_seconds)
             await self.rescan_and_publish()
 
@@ -213,6 +217,16 @@ class RuntimeSupervisor:
             ("implementer", self.implementer, self.config.runtime.implementer_agent_count),
             ("reviewer", self.reviewer, self.config.runtime.reviewer_agent_count),
         )
+
+    def _should_rescan_for_changes(self, changes: Iterable[tuple[object, str]]) -> bool:
+        runtime_root = (self.config.kanban_root / "_runtime").expanduser().resolve()
+        for _change, raw_path in changes:
+            path = Path(raw_path).expanduser().resolve()
+            try:
+                path.relative_to(runtime_root)
+            except ValueError:
+                return True
+        return False
 
     def _collect_task_adapters(self) -> Iterable[OpenCodeAdapter | None]:
         seen: set[int] = set()

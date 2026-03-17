@@ -1915,9 +1915,7 @@
       return 'plan';
     }
 
-    async function loadBoard() {
-      const res = await fetch('/api/board');
-      const data = await res.json();
+    function applyBoardSnapshot(data) {
       boardTaskSnapshots = new Map(data.columns.flatMap((column) => (column.items || []).map((item) => [item.task_id, item])));
       if (!boardPhaseManuallySelected) {
         activeBoardPhase = selectDefaultBoardPhase(data.columns);
@@ -1940,6 +1938,12 @@
         board.innerHTML = visibleColumns.map((column) => renderBoardColumn(column)).join('');
       }
       refreshRunningClocks();
+    }
+
+    async function loadBoard() {
+      const res = await fetch('/api/board');
+      const data = await res.json();
+      applyBoardSnapshot(data);
     }
 
     function boardCardLabel(key) {
@@ -4449,11 +4453,11 @@
     resetFormState();
     loadTargetRepoOptions();
     const source = new EventSource('/api/events');
-    source.addEventListener('board_snapshot', async () => {
-      await loadBoard();
+    source.addEventListener('board_snapshot', (event) => {
+      const message = JSON.parse(event.data);
+      applyBoardSnapshot(message.payload);
     });
     source.addEventListener('task_moved', async (event) => {
-      await loadBoard();
       const payload = JSON.parse(event.data);
       if (taskModal.hidden || activeTaskId !== payload.task_id) return;
       scheduleActiveTaskRefresh();
