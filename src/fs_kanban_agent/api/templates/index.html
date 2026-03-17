@@ -10,14 +10,350 @@
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <style>
-    :root { --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --panel-strong: rgba(255,252,247,0.95); --border: rgba(24,32,38,0.15); --accent: #7c4f2c; --accent-strong: #5f3417; --accent-soft: rgba(124,79,44,0.12); --success: #217349; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }
+    :root { --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --panel-strong: rgba(255,252,247,0.95); --border: rgba(24,32,38,0.15); --border-strong: rgba(24,32,38,0.28); --accent: #7c4f2c; --accent-strong: #5f3417; --accent-soft: rgba(124,79,44,0.12); --success: #217349; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }
+    body[data-theme="dark"] { --bg-top: #0c1218; --bg-bottom: #141d26; --panel: rgba(24,34,44,0.84); --panel-strong: rgba(28,39,50,0.96); --border: rgba(186,200,214,0.12); --border-strong: rgba(186,200,214,0.22); --accent: #d6ab78; --accent-strong: #f2c693; --accent-soft: rgba(214,171,120,0.16); --success: #72c89a; --danger: #f09486; --text: #eef4f8; --muted: #aebcca; --shadow: 0 18px 40px rgba(0,0,0,0.42); }
+    body[data-theme="dark"] .column,
+    body[data-theme="dark"] .final-project-column,
+    body[data-theme="dark"] .settings-card,
+    body[data-theme="dark"] .task-activity-card,
+    body[data-theme="dark"] .retrospective-meta-item,
+    body[data-theme="dark"] .settings-readonly-card,
+    body[data-theme="dark"] .stage-timing-card,
+    body[data-theme="dark"] .stage-segment-row,
+    body[data-theme="dark"] .human-review-box,
+    body[data-theme="dark"] .approval-choice-card,
+    body[data-theme="dark"] .diff-thread-comment,
+    body[data-theme="dark"] .diff-thread-comment-body,
+    body[data-theme="dark"] .approval-choice-status,
+    body[data-theme="dark"] .settings-status,
+    body[data-theme="dark"] .retrospective-content,
+    body[data-theme="dark"] .log-viewer,
+    body[data-theme="dark"] .diff-shell,
+    body[data-theme="dark"] .viewer-host,
+    body[data-theme="dark"] .editor-host,
+    body[data-theme="dark"] .target-branch-group,
+    body[data-theme="dark"] .target-branch-label,
+    body[data-theme="dark"] .target-branch-meta,
+    body[data-theme="dark"] .target-branch-retrospective,
+    body[data-theme="dark"] .card,
+    body[data-theme="dark"] .diff-file-list button,
+    body[data-theme="dark"] .diff-summary,
+    body[data-theme="dark"] .diff-badge,
+    body[data-theme="dark"] .diff-inline-comment,
+    body[data-theme="dark"] .diff-unified,
+    body[data-theme="dark"] .verification-actions,
+    body[data-theme="dark"] .task-activity-hero,
+    body[data-theme="dark"] .settings-copy,
+    body[data-theme="dark"] .approval-choice-copy,
+    body[data-theme="dark"] .retrospective-status {
+      color: var(--text);
+    }
+    body[data-theme="dark"] .column,
+    body[data-theme="dark"] .final-project-column,
+    body[data-theme="dark"] .settings-card,
+    body[data-theme="dark"] .task-activity-card,
+    body[data-theme="dark"] .retrospective-meta-item,
+    body[data-theme="dark"] .settings-readonly-card,
+    body[data-theme="dark"] .stage-timing-card,
+    body[data-theme="dark"] .stage-segment-row,
+    body[data-theme="dark"] .human-review-box,
+    body[data-theme="dark"] .approval-choice-card,
+    body[data-theme="dark"] .diff-thread-comment,
+    body[data-theme="dark"] .diff-thread-comment-body,
+    body[data-theme="dark"] .approval-choice-status,
+    body[data-theme="dark"] .settings-status,
+    body[data-theme="dark"] .retrospective-content,
+    body[data-theme="dark"] .log-viewer,
+    body[data-theme="dark"] .diff-shell,
+    body[data-theme="dark"] .viewer-host,
+    body[data-theme="dark"] .editor-host,
+    body[data-theme="dark"] .target-branch-group,
+    body[data-theme="dark"] .diff-file-list button,
+    body[data-theme="dark"] .diff-badge,
+    body[data-theme="dark"] .diff-unified {
+      background: rgba(28, 39, 50, 0.94);
+      border-color: var(--border);
+    }
+    body[data-theme="dark"] .target-branch-label,
+    body[data-theme="dark"] .diff-summary,
+    body[data-theme="dark"] .verification-actions,
+    body[data-theme="dark"] .task-activity-hero,
+    body[data-theme="dark"] .settings-copy,
+    body[data-theme="dark"] .approval-choice-copy,
+    body[data-theme="dark"] .diff-inline-comment,
+    body[data-theme="dark"] .retrospective-status {
+      background: linear-gradient(180deg, rgba(36, 49, 62, 0.96), rgba(29, 40, 52, 0.92));
+      border-color: rgba(239, 190, 135, 0.18);
+    }
+    body[data-theme="dark"] .target-branch-meta,
+    body[data-theme="dark"] .target-branch-retrospective,
+    body[data-theme="dark"] .activity-badge,
+    body[data-theme="dark"] .mode-pill,
+    body[data-theme="dark"] .diff-line-comment-button,
+    body[data-theme="dark"] .ghost-button {
+      background: rgba(34, 46, 58, 0.96);
+      border-color: rgba(239, 190, 135, 0.18);
+      color: var(--text);
+    }
+    body[data-theme="dark"] .target-branch-retrospective:hover,
+    body[data-theme="dark"] .target-branch-retrospective:focus-visible,
+    body[data-theme="dark"] .diff-line-comment-button:hover,
+    body[data-theme="dark"] .diff-line-comment-button:focus-visible,
+    body[data-theme="dark"] .ghost-button:hover,
+    body[data-theme="dark"] .ghost-button:focus-visible {
+      background: rgba(46, 60, 74, 0.98);
+      color: var(--accent-strong);
+    }
+    body[data-theme="dark"] .accent-button,
+    body[data-theme="dark"] button.primary {
+      background: linear-gradient(180deg, #dfb482, #cf9d66);
+      border-color: rgba(242, 198, 147, 0.45);
+      color: #1a232c;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.26);
+    }
+    body[data-theme="dark"] .accent-button:hover,
+    body[data-theme="dark"] .accent-button:focus-visible,
+    body[data-theme="dark"] button.primary:hover,
+    body[data-theme="dark"] button.primary:focus-visible {
+      background: linear-gradient(180deg, #e7be90, #d8a874);
+      color: #121920;
+    }
+    body[data-theme="dark"] .danger-button {
+      background: linear-gradient(180deg, #cf6f60, #bb5949);
+      border-color: rgba(255, 180, 167, 0.34);
+      color: #fff8f6;
+    }
+    body[data-theme="dark"] .card {
+      box-shadow: 0 12px 28px rgba(0,0,0,0.26);
+      border: 1px solid rgba(186, 200, 214, 0.08);
+    }
+    body[data-theme="dark"] .card-tag,
+    body[data-theme="dark"] .target-branch-meta,
+    body[data-theme="dark"] .diff-badge,
+    body[data-theme="dark"] .mode-pill {
+      background: rgba(39, 50, 62, 0.88);
+      border-color: rgba(186, 200, 214, 0.1);
+      color: var(--text);
+    }
+    body[data-theme="dark"] .card-tag-id { --tag-bg: rgba(214, 171, 120, 0.16); --tag-border: rgba(214, 171, 120, 0.18); --tag-text: #f3d4ae; }
+    body[data-theme="dark"] .card-tag-branch { --tag-bg: rgba(74, 92, 109, 0.44); --tag-border: rgba(186, 200, 214, 0.14); --tag-text: #d9e3eb; }
+    body[data-theme="dark"] .card-tag-final-branch { --tag-bg: rgba(99, 132, 114, 0.28); --tag-border: rgba(114, 200, 154, 0.18); --tag-text: #d8f3e4; }
+    body[data-theme="dark"] .card-meta,
+    body[data-theme="dark"] .target-branch-label,
+    body[data-theme="dark"] .retrospective-compare-help,
+    body[data-theme="dark"] .settings-copy p,
+    body[data-theme="dark"] .approval-choice-copy p,
+    body[data-theme="dark"] .task-activity-copy p,
+    body[data-theme="dark"] .settings-toolbar p,
+    body[data-theme="dark"] .settings-card span,
+    body[data-theme="dark"] .settings-card small,
+    body[data-theme="dark"] .task-activity-card small,
+    body[data-theme="dark"] .retrospective-empty,
+    body[data-theme="dark"] .diff-empty,
+    body[data-theme="dark"] .muted,
+    body[data-theme="dark"] .target-branch-retrospective,
+    body[data-theme="dark"] .target-branch-meta,
+    body[data-theme="dark"] .diff-file-meta,
+    body[data-theme="dark"] .diff-thread-comment-meta,
+    body[data-theme="dark"] .diff-inline-comment-anchor,
+    body[data-theme="dark"] .diff-inline-comment-status,
+    body[data-theme="dark"] .human-review-approval-status,
+    body[data-theme="dark"] .settings-status,
+    body[data-theme="dark"] .retrospective-status,
+    body[data-theme="dark"] .stage-timing-card span,
+    body[data-theme="dark"] .stage-timing-card small,
+    body[data-theme="dark"] .stage-timing-breakdown-item,
+    body[data-theme="dark"] .stage-timing-breakdown-item span,
+    body[data-theme="dark"] .stage-timing-total span,
+    body[data-theme="dark"] .stage-segment-row .muted,
+    body[data-theme="dark"] .settings-readonly-card span {
+      color: var(--muted);
+    }
+    body[data-theme="dark"] .task-activity-card span,
+    body[data-theme="dark"] .settings-field label,
+    body[data-theme="dark"] .settings-toolbar-field label,
+    body[data-theme="dark"] .task-model-row span,
+    body[data-theme="dark"] .retrospective-view-copy strong,
+    body[data-theme="dark"] .retrospective-action-shell strong,
+    body[data-theme="dark"] .settings-readonly-card strong,
+    body[data-theme="dark"] .task-activity-card strong,
+    body[data-theme="dark"] .target-branch-title,
+    body[data-theme="dark"] .target-branch-retrospective,
+    body[data-theme="dark"] .stage-timing-card strong,
+    body[data-theme="dark"] .stage-timing-breakdown-item strong,
+    body[data-theme="dark"] .card-model strong {
+      color: var(--accent-strong);
+    }
+    body[data-theme="dark"] .field input,
+    body[data-theme="dark"] .field textarea,
+    body[data-theme="dark"] .settings-toolbar-field select,
+    body[data-theme="dark"] .settings-card input,
+    body[data-theme="dark"] .settings-card select,
+    body[data-theme="dark"] .retrospective-compare-field input,
+    body[data-theme="dark"] .verification-actions textarea,
+    body[data-theme="dark"] .diff-inline-comment-fallback,
+    body[data-theme="dark"] .editor-textarea {
+      background: rgba(20, 28, 36, 0.98);
+      border-color: rgba(186, 200, 214, 0.16);
+      color: var(--text);
+    }
+    body[data-theme="dark"] .field input::placeholder,
+    body[data-theme="dark"] .field textarea::placeholder,
+    body[data-theme="dark"] .settings-card input::placeholder,
+    body[data-theme="dark"] .retrospective-compare-field input::placeholder,
+    body[data-theme="dark"] .editor-textarea::placeholder,
+    body[data-theme="dark"] .diff-inline-comment-fallback::placeholder {
+      color: #93a5b5;
+    }
+    body[data-theme="dark"] select option { background: #16202a; color: var(--text); }
+    body[data-theme="dark"] .modal-head,
+    body[data-theme="dark"] .stacked-modal-panel .modal-head { border-bottom-color: rgba(226, 234, 242, 0.08); }
+    body[data-theme="dark"] .task-model-row,
+    body[data-theme="dark"] .human-review-approval-status,
+    body[data-theme="dark"] .retrospective-view-shell,
+    body[data-theme="dark"] .task-activity-shell,
+    body[data-theme="dark"] .task-modal-tag-group .card-tag,
+    body[data-theme="dark"] .target-branch-label-side,
+    body[data-theme="dark"] .retrospective-context-row .card-tag {
+      color: var(--text);
+    }
+    body[data-theme="dark"] .task-model-row {
+      background: rgba(34, 46, 58, 0.88);
+      border-color: rgba(186, 200, 214, 0.1);
+    }
+    body[data-theme="dark"] .task-model-row small,
+    body[data-theme="dark"] .retrospective-view-copy p,
+    body[data-theme="dark"] .task-modal-tag-row .card-tag,
+    body[data-theme="dark"] .approval-choice-status,
+    body[data-theme="dark"] .task-modal-actions,
+    body[data-theme="dark"] .header-actions,
+    body[data-theme="dark"] .stage-timing-breakdown-separator {
+      color: var(--muted);
+    }
+    body[data-theme="dark"] .stage-timeline-bar {
+      background: rgba(13, 19, 26, 0.8);
+      border-color: rgba(186, 200, 214, 0.08);
+    }
+    body[data-theme="dark"] .stage-timing-total strong,
+    body[data-theme="dark"] .stage-timing-head h3,
+    body[data-theme="dark"] .task-modal-actions button,
+    body[data-theme="dark"] .retrospective-action-title,
+    body[data-theme="dark"] .retrospective-view-title,
+    body[data-theme="dark"] .task-human-review-note-title,
+    body[data-theme="dark"] #task-modal-title,
+    body[data-theme="dark"] #settings-modal-title,
+    body[data-theme="dark"] #retrospective-modal-title,
+    body[data-theme="dark"] #approval-choice-title {
+      color: var(--text);
+    }
+    body[data-theme="dark"] .task-tabs button,
+    body[data-theme="dark"] .board-phase-tabs button {
+      background: rgba(26, 36, 46, 0.88);
+      color: #aebcca;
+      border-color: rgba(186, 200, 214, 0.08);
+    }
+    body[data-theme="dark"] .task-tabs button.active,
+    body[data-theme="dark"] .board-phase-tabs button.active {
+      background: linear-gradient(180deg, #e4bb8c, #d0a06a);
+      border-color: rgba(242, 198, 147, 0.44);
+      color: #13202a;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+    }
+    body[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+    body[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgba(126, 144, 161, 0.4); border-radius: 999px; border: 2px solid rgba(12, 18, 25, 0.55); }
+    body[data-theme="dark"] ::-webkit-scrollbar-track { background: rgba(12, 18, 25, 0.3); }
+    body[data-theme="dark"] .settings-input-suffix { background: rgba(239, 190, 135, 0.14); color: var(--accent-strong); border-color: rgba(239, 190, 135, 0.16); }
+    body[data-theme="dark"] .diff-cell.context { background: rgba(35, 46, 59, 0.76); }
+    body[data-theme="dark"] .diff-cell.empty { background: rgba(11, 17, 24, 0.64); }
+    body[data-theme="dark"] .diff-cell.add { background: rgba(35, 98, 68, 0.3); }
+    body[data-theme="dark"] .diff-cell.remove { background: rgba(136, 53, 41, 0.28); }
+    body[data-theme="dark"] .diff-unified-line.context { color: var(--text); }
+    body[data-theme="dark"] .diff-unified-line.add { color: #9ee0ba; }
+    body[data-theme="dark"] .diff-unified-line.remove { color: #ffb4a7; }
+    body[data-theme="dark"] .toastui-editor-defaultUI,
+    body[data-theme="dark"] .toastui-editor-main,
+    body[data-theme="dark"] .toastui-editor-md-container,
+    body[data-theme="dark"] .toastui-editor-ww-container,
+    body[data-theme="dark"] .toastui-editor-mode-switch,
+    body[data-theme="dark"] .toastui-editor-toolbar,
+    body[data-theme="dark"] .toastui-editor-md-tab-container,
+    body[data-theme="dark"] .toastui-editor-ww-tab-container,
+    body[data-theme="dark"] .toastui-editor-popup,
+    body[data-theme="dark"] .toastui-editor-popup-body,
+    body[data-theme="dark"] .toastui-editor-popup-add-image input {
+      background: rgba(17, 25, 33, 0.98) !important;
+      border-color: rgba(226, 234, 242, 0.14) !important;
+      color: var(--text) !important;
+    }
+    body[data-theme="dark"] .toastui-editor-toolbar-icons,
+    body[data-theme="dark"] .toastui-editor-mode-switch .tab-item,
+    body[data-theme="dark"] .toastui-editor-defaultUI button {
+      color: var(--text) !important;
+    }
+    body[data-theme="dark"] .toastui-editor-contents,
+    body[data-theme="dark"] .toastui-editor-contents p,
+    body[data-theme="dark"] .toastui-editor-contents li,
+    body[data-theme="dark"] .toastui-editor-contents code,
+    body[data-theme="dark"] .toastui-editor-contents pre,
+    body[data-theme="dark"] .toastui-editor-md-preview,
+    body[data-theme="dark"] .toastui-editor-md-preview p,
+    body[data-theme="dark"] .toastui-editor-md-preview li,
+    body[data-theme="dark"] .toastui-editor-md-preview code,
+    body[data-theme="dark"] .toastui-editor-md-preview pre {
+      background: transparent !important;
+      color: var(--text) !important;
+    }
+    body[data-theme="dark"] .toastui-editor-contents table th,
+    body[data-theme="dark"] .toastui-editor-contents table td,
+    body[data-theme="dark"] .toastui-editor-md-table th,
+    body[data-theme="dark"] .toastui-editor-md-table td {
+      border-color: rgba(226, 234, 242, 0.14) !important;
+    }
+    body[data-theme="dark"] .column { background: rgba(26, 36, 47, 0.74); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
+    body[data-theme="dark"] .final-project-column { background: rgba(28, 39, 50, 0.82); }
+    body[data-theme="dark"] .target-branch-group { background: rgba(22, 31, 40, 0.9); box-shadow: none; }
+    body[data-theme="dark"] .target-branch-label {
+      background: linear-gradient(180deg, rgba(37, 49, 62, 0.96), rgba(31, 42, 54, 0.92));
+      color: #d9e3eb;
+      border-bottom-color: rgba(186, 200, 214, 0.08);
+      box-shadow: none;
+    }
+    body[data-theme="dark"] .target-branch-label:hover,
+    body[data-theme="dark"] .target-branch-label:focus-visible { background: linear-gradient(180deg, rgba(43, 56, 70, 0.98), rgba(34, 47, 60, 0.94)); }
+    body[data-theme="dark"] .card { background: rgba(30, 42, 54, 0.96); }
+    body[data-theme="dark"] .card-title { color: #f2f7fb; }
+    body[data-theme="dark"] .card-model { background: rgba(214, 171, 120, 0.1); border-color: rgba(214, 171, 120, 0.14); }
+    body[data-theme="dark"] .activity-badge[data-activity-state="active"] { background: rgba(26, 63, 47, 0.9); border-color: rgba(114, 200, 154, 0.2); }
+    body[data-theme="dark"] .activity-badge[data-activity-state="waiting"] { background: rgba(81, 59, 29, 0.86); border-color: rgba(214, 171, 120, 0.18); color: #efc68f; }
+    body[data-theme="dark"] .activity-badge[data-activity-state="idle"] { background: rgba(42, 54, 66, 0.88); border-color: rgba(186, 200, 214, 0.12); color: #c7d3dc; }
+    body[data-theme="dark"] .settings-card,
+    body[data-theme="dark"] .task-activity-card,
+    body[data-theme="dark"] .retrospective-meta-item,
+    body[data-theme="dark"] .settings-readonly-card,
+    body[data-theme="dark"] .stage-timing-card,
+    body[data-theme="dark"] .stage-segment-row,
+    body[data-theme="dark"] .approval-choice-card,
+    body[data-theme="dark"] .human-review-box,
+    body[data-theme="dark"] .retrospective-content,
+    body[data-theme="dark"] .log-viewer,
+    body[data-theme="dark"] .viewer-host,
+    body[data-theme="dark"] .editor-host,
+    body[data-theme="dark"] .diff-shell,
+    body[data-theme="dark"] .diff-unified,
+    body[data-theme="dark"] .approval-choice-status,
+    body[data-theme="dark"] .settings-status {
+      background: rgba(27, 38, 49, 0.94);
+    }
+    body[data-theme="dark"] .stage-timing-card.current { background: rgba(36, 48, 60, 0.96); box-shadow: 0 10px 22px rgba(0,0,0,0.18); }
+    body[data-theme="dark"] .stage-timing-card.upcoming { background: rgba(25, 35, 45, 0.74); opacity: 0.65; }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body { font-family: "Nanum Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; min-height: 100%; display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }
     body.modal-open { overflow: hidden; }
     header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    button { padding: 9px 14px; border: 1px solid var(--text); background: #fff9ef; cursor: pointer; font: inherit; }
+    button { padding: 9px 14px; border: 1px solid var(--text); background: #fff9ef; cursor: pointer; font: inherit; color: var(--text); }
+    body[data-theme="dark"] button { background: rgba(31,42,54,0.94); }
     button.primary { background: var(--accent); border-color: var(--accent-strong); color: #fff; }
     .accent-button { background: #8b5a2b; border-color: #72461f; color: #fff; }
     .ghost-button { background: transparent; border-color: var(--border); }
@@ -107,7 +443,7 @@
     @keyframes activity-pulse { 0% { box-shadow: 0 0 0 0 rgba(33,115,73,0.24); } 70% { box-shadow: 0 0 0 8px rgba(33,115,73,0); } 100% { box-shadow: 0 0 0 0 rgba(33,115,73,0); } }
     .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }
     .modal[hidden] { display: none; }
-    .modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: rgba(255,255,255,0.95); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
+    .modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: var(--panel-strong); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
     .task-modal-panel { width: min(1380px, 100%); height: min(86vh, calc(100vh - 64px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .retrospective-modal-panel { width: min(860px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .modal-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }
@@ -376,7 +712,7 @@
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
-<body>
+<body data-theme="__INITIAL_RUNTIME_THEME_ATTR__">
   <header>
     <h1>Assistant Agent Kanban</h1>
     <div class="header-actions">
@@ -512,6 +848,15 @@
                   <option value="KO">Korean</option>
                 </select>
                 <small id="settings-language-note">Only <code>EN</code> and <code>KO</code>.</small>
+              </label>
+              <label class="settings-card" for="runtime_theme">
+                <strong id="settings-theme-title">Theme</strong>
+                <span id="settings-theme-description">Dashboard appearance default.</span>
+                <select id="runtime_theme" name="theme">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+                <small id="settings-theme-note">Light mode is the default.</small>
               </label>
               <label class="settings-card" for="repo_discovery_root">
                 <strong id="settings-repo-root-title">Repo discovery root</strong>
@@ -836,6 +1181,7 @@
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
     const runtimeLanguageInput = document.getElementById('runtime_language');
+    const runtimeThemeInput = document.getElementById('runtime_theme');
     const runtimeCodingAssistantInput = document.getElementById('runtime_coding_assistant');
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
@@ -857,6 +1203,7 @@
     const defaultTargetRepo = __DEFAULT_TARGET_REPO__;
     const defaultBaseBranch = __DEFAULT_BASE_BRANCH__;
     const initialRuntimeLanguage = __INITIAL_RUNTIME_LANGUAGE__;
+    const initialRuntimeTheme = __INITIAL_RUNTIME_THEME__;
     const boardPhaseStates = {
       plan: ['requests', 'planning', 'waiting-check-plans'],
       implementation: ['todos', 'implementing', 'waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
@@ -986,6 +1333,11 @@
         languageNote: 'Only <code>EN</code> and <code>KO</code>.',
         languageEnglish: 'English',
         languageKorean: 'Korean',
+        themeTitle: 'Theme',
+        themeDescription: 'Dashboard appearance default.',
+        themeNote: 'Light mode is the default.',
+        themeLight: 'Light',
+        themeDark: 'Dark',
         repoRootTitle: 'Repo discovery root',
         repoRootDescription: 'Where repo suggestions are scanned.',
         repoRootNote: 'Use <code>../</code> or an absolute path.',
@@ -1043,6 +1395,11 @@
         languageNote: '<code>EN</code>과 <code>KO</code>만 지원합니다.',
         languageEnglish: '영어',
         languageKorean: '한국어',
+        themeTitle: '테마',
+        themeDescription: '대시보드 기본 표시 모드입니다.',
+        themeNote: '기본값은 라이트 모드입니다.',
+        themeLight: '라이트',
+        themeDark: '다크',
         repoRootTitle: '저장소 탐색 루트',
         repoRootDescription: '저장소 추천을 스캔하는 경로입니다.',
         repoRootNote: '<code>../</code> 또는 절대 경로를 사용하세요.',
@@ -1744,6 +2101,11 @@
       setSettingsHtml('settings-language-note', 'languageNote');
       runtimeLanguageInput.querySelector('option[value="EN"]').textContent = translateSettings('languageEnglish');
       runtimeLanguageInput.querySelector('option[value="KO"]').textContent = translateSettings('languageKorean');
+      setSettingsText('settings-theme-title', 'themeTitle');
+      setSettingsText('settings-theme-description', 'themeDescription');
+      setSettingsHtml('settings-theme-note', 'themeNote');
+      runtimeThemeInput.querySelector('option[value="light"]').textContent = translateSettings('themeLight');
+      runtimeThemeInput.querySelector('option[value="dark"]').textContent = translateSettings('themeDark');
       setSettingsText('settings-repo-root-title', 'repoRootTitle');
       setSettingsText('settings-repo-root-description', 'repoRootDescription');
       setSettingsHtml('settings-repo-root-note', 'repoRootNote');
@@ -1837,6 +2199,7 @@
     function captureSettingsState() {
       return {
         language: runtimeLanguageInput.value || 'EN',
+        theme: runtimeThemeInput.value || 'light',
         coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
         repo_discovery_root: repoDiscoveryRootInput.value || '../',
         repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
@@ -1857,6 +2220,8 @@
     function restoreSettingsState(state) {
       if (!state) return;
       runtimeLanguageInput.value = state.language || initialRuntimeLanguage;
+      runtimeThemeInput.value = state.theme || initialRuntimeTheme;
+      applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions([{ value: 'opencode', label: 'OpenCode' }], state.coding_assistant || 'opencode');
       repoDiscoveryRootInput.value = state.repo_discovery_root || '../';
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, state.repo_discovery_max_depth, 2);
@@ -1875,6 +2240,10 @@
       applyRequestTranslations();
       applyHumanReviewTranslations();
       refreshRequestDerivedText();
+    }
+
+    function applyRuntimeTheme(theme) {
+      body.dataset.theme = theme === 'dark' ? 'dark' : 'light';
     }
 
     function closeSettingsModal({ restore = false } = {}) {
@@ -2548,6 +2917,8 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || translateSettings('settingsLoadFailed'));
         runtimeLanguageInput.value = data.language || 'EN';
+        runtimeThemeInput.value = data.theme || 'light';
+        applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
@@ -2591,6 +2962,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             language: runtimeLanguageInput.value || 'EN',
+            theme: runtimeThemeInput.value || 'light',
             coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
             repo_discovery_root: repoDiscoveryRootInput.value,
             repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
@@ -2610,6 +2982,8 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || translateSettings('settingsSaveFailed'));
         runtimeLanguageInput.value = data.language || 'EN';
+        runtimeThemeInput.value = data.theme || 'light';
+        applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
@@ -4447,10 +4821,12 @@
     targetRepoInput.addEventListener('change', applyRepoDefaults);
     targetRepoInput.addEventListener('change', loadTargetRepoBranches);
     targetRepoInput.addEventListener('blur', loadTargetRepoBranches);
+    runtimeThemeInput.addEventListener('change', () => applyRuntimeTheme(runtimeThemeInput.value));
     baseBranchInput.addEventListener('input', () => { baseBranchInput.dataset.autofilled = 'false'; });
     scopeField.addEventListener('input', () => { scopeField.dataset.autofilled = 'false'; });
     outOfScopeField.addEventListener('input', () => { outOfScopeField.dataset.autofilled = 'false'; });
     resetFormState();
+    applyRuntimeTheme(initialRuntimeTheme);
     loadTargetRepoOptions();
     const source = new EventSource('/api/events');
     source.addEventListener('board_snapshot', (event) => {

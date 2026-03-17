@@ -1004,6 +1004,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         get_response = client.get("/api/settings/models")
         assert get_response.status_code == 200
         assert get_response.json()["language"] == "EN"
+        assert get_response.json()["theme"] == "light"
         assert get_response.json()["coding_assistant"] == "opencode"
         assert get_response.json()["available_assistants"] == [{"value": "opencode", "label": "OpenCode"}]
         assert get_response.json()["planner_model"] is None
@@ -1225,6 +1226,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
                 json={
                 "planner_model": "planner-x",
                 "language": "KO",
+                "theme": "dark",
                 "coding_assistant": "opencode",
                 "planner_session_token_budget": 180,
                 "planner_agent_count": 2,
@@ -1246,6 +1248,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         persisted = load_config(default_base_path)
         assert persisted.opencode.planner_model == "planner-x"
         assert persisted.runtime.language == "KO"
+        assert persisted.runtime.theme == "dark"
         assert persisted.runtime.coding_assistant == "opencode"
         assert persisted.opencode.planner_session_token_budget == 180000
         assert persisted.runtime.planner_agent_count == 2
@@ -1265,6 +1268,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     config.repo_discovery.root = "../custom-root"
     config.runtime.planner_agent_count = 5
     config.runtime.language = "KO"
+    config.runtime.theme = "dark"
     config.runtime.coding_assistant = "opencode"
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -1273,6 +1277,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
             "/api/settings/models",
             json={
                 "planner_model": "planner-x",
+                "theme": "dark",
                 "coding_assistant": "opencode",
                 "planner_session_token_budget": 260,
                 "implementer_agent_count": 2,
@@ -1288,6 +1293,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
 
     assert response.status_code == 200
     assert response.json()["language"] == "KO"
+    assert response.json()["theme"] == "dark"
     assert response.json()["coding_assistant"] == "opencode"
     assert response.json()["repo_discovery_root"] == "../custom-root"
     assert response.json()["repo_discovery_max_depth"] == 5
@@ -1295,6 +1301,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     assert response.json()["implementer_agent_count"] == 2
     assert app.state.runtime.config.repo_discovery.root == "../custom-root"
     assert app.state.runtime.config.runtime.language == "KO"
+    assert app.state.runtime.config.runtime.theme == "dark"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
     assert app.state.runtime.config.runtime.planner_agent_count == 5
     assert app.state.runtime.config.runtime.implementer_agent_count == 2
@@ -1305,6 +1312,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
     config.opencode.planner_model = "stable-planner"
     config.runtime.planner_agent_count = 3
     config.runtime.language = "EN"
+    config.runtime.theme = "light"
     config.runtime.coding_assistant = "opencode"
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -1320,6 +1328,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
                 json={
                     "planner_model": "new-planner",
                     "language": "KO",
+                    "theme": "dark",
                     "coding_assistant": "opencode",
                     "planner_session_token_budget": 250,
                     "planner_agent_count": 7,
@@ -1334,6 +1343,7 @@ def test_api_does_not_mutate_live_runtime_settings_when_persist_fails(configured
 
     assert app.state.runtime.config.opencode.planner_model == "stable-planner"
     assert app.state.runtime.config.runtime.language == "EN"
+    assert app.state.runtime.config.runtime.theme == "light"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
     assert app.state.runtime.config.runtime.planner_agent_count == 3
 
@@ -1486,6 +1496,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "__DEFAULT_TARGET_REPO__" not in response.text
     assert "__DEFAULT_BASE_BRANCH__" not in response.text
     assert "__INITIAL_RUNTIME_LANGUAGE__" not in response.text
+    assert "__INITIAL_RUNTIME_THEME__" not in response.text
+    assert 'data-theme="light"' in response.text
     assert 'id="board-phase-tabs"' in response.text
     assert 'data-board-phase="plan"' in response.text
     assert 'data-board-phase="implementation"' in response.text
@@ -1531,7 +1543,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "task-activity-shell" in response.text
     assert "planner_model" in response.text
     assert "runtime_language" in response.text
+    assert "runtime_theme" in response.text
     assert "runtime_coding_assistant" in response.text
+    assert "function applyRuntimeTheme(theme)" in response.text
+    assert "applyRuntimeTheme(initialRuntimeTheme);" in response.text
     assert "const settingsTranslations = {" in response.text
     assert "applyRuntimeSettingsTranslations();" in response.text
     assert "const taskTranslations = {" in response.text

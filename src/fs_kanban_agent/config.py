@@ -64,6 +64,7 @@ class RuntimeConfig(BaseModel):
     poll_interval_seconds: float = 0.2
     auto_dispatch: bool = True
     language: Literal["EN", "KO"] = "EN"
+    theme: Literal["light", "dark"] = "light"
     coding_assistant: Literal["opencode"] = "opencode"
     planner_agent_count: int = Field(default=1, ge=1)
     implementer_agent_count: int = Field(default=1, ge=1)

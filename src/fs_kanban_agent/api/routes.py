@@ -71,6 +71,7 @@ class CreateLineCommentPayload(BaseModel):
 
 class ModelSettingsPayload(BaseModel):
     language: str | None = None
+    theme: Literal["light", "dark"] | None = None
     coding_assistant: str | None = None
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
@@ -181,6 +182,7 @@ def build_router() -> APIRouter:
         omo_snapshot = read_omo_delegation_snapshot()
         return {
             "language": runtime.config.runtime.language,
+            "theme": runtime.config.runtime.theme,
             "coding_assistant": runtime.config.runtime.coding_assistant,
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
@@ -226,6 +228,8 @@ def build_router() -> APIRouter:
         fields_set = payload.model_fields_set
         if "language" in fields_set:
             next_config.runtime.language = _normalize_runtime_language(payload.language)
+        if "theme" in fields_set and payload.theme is not None:
+            next_config.runtime.theme = payload.theme
         if "coding_assistant" in fields_set:
             next_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(payload.coding_assistant)
         if "planner_model" in fields_set:
@@ -259,6 +263,7 @@ def build_router() -> APIRouter:
         ensure_runtime_agents(runtime.config)
         return {
             "language": runtime.config.runtime.language,
+            "theme": runtime.config.runtime.theme,
             "coding_assistant": runtime.config.runtime.coding_assistant,
             "planner_model": runtime.config.opencode.planner_model,
             "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
