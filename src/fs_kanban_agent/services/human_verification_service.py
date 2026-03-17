@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 import uuid
+from typing import Mapping
 
 from ..commit_manager import CommitManager
 from ..enums import TaskState
@@ -34,6 +35,7 @@ class HumanVerificationService:
         integration_manager: IntegrationManager,
         commit_manager: CommitManager,
         branch_summary_adapter: AssistantAdapter | None = None,
+        adapter_registry: Mapping[str, AssistantAdapter] | None = None,
     ) -> None:
         self.scanner = scanner
         self.config = config
@@ -43,6 +45,7 @@ class HumanVerificationService:
         self.integration_manager = integration_manager
         self.commit_manager = commit_manager
         self.branch_summary_adapter = branch_summary_adapter
+        self.adapter_registry = dict(adapter_registry or {})
 
     def start(self, task_id: str, *, by: str) -> TaskContext:
         context = self._find_task(task_id)
@@ -378,7 +381,9 @@ class HumanVerificationService:
 
     def _generate_branch_summary(self, context: TaskContext) -> str:
         fallback = self.commit_manager.sanitize_branch_summary(None, fallback_title=context.metadata.title)
-        if self.branch_summary_adapter is None:
+        run_config = self.config.with_runtime_pin(context.metadata.runtime_pin)
+        adapter = self.adapter_registry.get(run_config.active_backend(), self.branch_summary_adapter)
+        if adapter is None:
             return fallback
         prompt = "\n".join(
             [
@@ -397,12 +402,12 @@ class HumanVerificationService:
         )
         run_log_path = self.config.runs_dir / context.metadata.task_id / f"branch-summary-{context.metadata.cycle:03d}.jsonl"
         try:
-            result = self.branch_summary_adapter.run(
-                agent="planner",
+            result = adapter.run(
+                agent=run_config.role_agent("planner"),
                 prompt=prompt,
                 cwd=context.task_dir,
                 run_log_path=run_log_path,
-                config=self.config,
+                config=run_config,
             )
         except AdapterRunError:
             return fallback

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .enums import STATE_ORDER, TaskState
 from .language import normalize_runtime_language
+from .models import TaskRuntimePin
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -176,6 +177,27 @@ class AppConfig(BaseModel):
 
     def backend_timeout_seconds(self) -> int:
         return int(self.backend_config().timeout_seconds)
+
+    def capture_runtime_pin(self, *, captured_by: str) -> TaskRuntimePin:
+        return TaskRuntimePin(
+            backend=self.active_backend(),
+            captured_by=captured_by,
+            planner_model=self.role_model("planner"),
+            implementer_model=self.role_model("implementer"),
+            reviewer_model=self.role_model("reviewer"),
+            commit_model=self.role_model("commit"),
+        )
+
+    def with_runtime_pin(self, runtime_pin: TaskRuntimePin | None) -> AppConfig:
+        if runtime_pin is None:
+            return self.model_copy(deep=True)
+        pinned = self.model_copy(deep=True)
+        pinned.runtime.coding_assistant = runtime_pin.backend
+        pinned.set_role_model("planner", runtime_pin.planner_model)
+        pinned.set_role_model("implementer", runtime_pin.implementer_model)
+        pinned.set_role_model("reviewer", runtime_pin.reviewer_model)
+        pinned.set_role_model("commit", runtime_pin.commit_model)
+        return pinned
 
     def config_path_for_persistence(self) -> Path:
         if self.loaded_local_from is not None:

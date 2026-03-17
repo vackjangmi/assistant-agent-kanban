@@ -104,6 +104,16 @@ class TargetRepoInfo(BaseModel):
     base_branch: str = "main"
 
 
+class TaskRuntimePin(BaseModel):
+    backend: Literal["opencode", "codex"]
+    captured_at: datetime = Field(default_factory=utc_now)
+    captured_by: str
+    planner_model: str | None = None
+    implementer_model: str | None = None
+    reviewer_model: str | None = None
+    commit_model: str | None = None
+
+
 class TaskMetadata(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
@@ -117,6 +127,7 @@ class TaskMetadata(BaseModel):
     request: RequestInfo = Field(default_factory=RequestInfo)
     human_verification: HumanVerificationInfo = Field(default_factory=HumanVerificationInfo)
     target: TargetRepoInfo = Field(default_factory=TargetRepoInfo)
+    runtime_pin: TaskRuntimePin | None = None
     plan: PlanInfo = Field(default_factory=PlanInfo)
     cycle: int = 0
     implementation: ImplementationInfo = Field(default_factory=ImplementationInfo)

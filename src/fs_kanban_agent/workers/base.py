@@ -5,6 +5,7 @@ import json
 import subprocess
 import uuid
 from pathlib import Path
+from typing import Mapping
 
 from ..config import AppConfig
 from ..events import EventBus
@@ -12,6 +13,7 @@ from ..language import generation_language_name
 from ..locks import TaskLockManager
 from ..log_parser import render_assistant_log
 from ..metadata_store import MetadataStore
+from ..assistant_adapter import AssistantAdapter
 from ..models import RunResult, TaskMetadata, WorkerEvent
 from ..scanner import KanbanScanner
 from ..transitions import TransitionManager
@@ -28,6 +30,7 @@ class WorkerBase:
         locks: TaskLockManager,
         transitions: TransitionManager,
         event_bus: EventBus,
+        adapter_registry: Mapping[str, AssistantAdapter] | None = None,
     ) -> None:
         self.config = config
         self.scanner = scanner
@@ -35,6 +38,7 @@ class WorkerBase:
         self.locks = locks
         self.transitions = transitions
         self.event_bus = event_bus
+        self.adapter_registry = dict(adapter_registry or {})
 
     def make_run_id(self) -> str:
         return f"{self.worker_name}-{uuid.uuid4()}"
@@ -151,3 +155,23 @@ class WorkerBase:
         if reused_session_id and returned_session_id == reused_session_id:
             return prior_session_tokens + run_tokens
         return run_tokens
+
+    def ensure_task_runtime_pin(self, task_dir: Path, metadata: TaskMetadata) -> None:
+        if metadata.runtime_pin is not None:
+            return
+        metadata.runtime_pin = self.config.capture_runtime_pin(captured_by=self.worker_name)
+        self.metadata_store.save(task_dir, metadata)
+
+    def resolve_task_run_config(self, task_dir: Path, metadata: TaskMetadata) -> AppConfig:
+        self.ensure_task_runtime_pin(task_dir, metadata)
+        return self.config.with_runtime_pin(metadata.runtime_pin)
+
+    def resolve_task_adapter(self, task_dir: Path, metadata: TaskMetadata) -> AssistantAdapter:
+        run_config = self.resolve_task_run_config(task_dir, metadata)
+        backend = run_config.active_backend()
+        adapter = self.adapter_registry.get(backend)
+        if adapter is None:
+            adapter = getattr(self, "adapter", None)
+        if adapter is None:
+            raise RuntimeError(f"no adapter registered for backend: {backend}")
+        return adapter

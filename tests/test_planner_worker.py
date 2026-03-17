@@ -48,6 +48,38 @@ def test_planner_worker_generates_plan(configured_paths):
     assert task.metadata.plan.resolved_model == "openai/gpt-5.4"
 
 
+def test_planner_worker_pins_runtime_backend_and_models(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "codex"
+    config.codex.planner_model = "gpt-5.4"
+    config.codex.implementer_model = "gpt-5.3-codex"
+    config.codex.reviewer_model = "gpt-5.4"
+    config.codex.commit_model = "gpt-5.3-codex"
+    create_request_task(config, "planner-runtime-pin-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    codex_adapter = FakeAdapter(["## Summary\nplan"], resolved_models=["gpt-5.4"])
+    worker = PlanningWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=codex_adapter,
+        adapter_registry={"opencode": FakeAdapter(), "codex": codex_adapter},
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    task = scanner.scan()[0]
+    assert task.metadata.runtime_pin is not None
+    assert task.metadata.runtime_pin.backend == "codex"
+    assert task.metadata.runtime_pin.planner_model == "gpt-5.4"
+    assert task.metadata.runtime_pin.implementer_model == "gpt-5.3-codex"
+
+
 def test_planner_worker_reuses_session_under_budget_and_tracks_tokens(configured_paths):
     config, _, _ = configured_paths
     config.opencode.planner_session_token_budget = 250000

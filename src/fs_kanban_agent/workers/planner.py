@@ -52,12 +52,13 @@ class PlanningWorker(WorkerBase):
             session_id = self.reuse_session_id(
                 session_id=planning.metadata.plan.session_id,
                 session_tokens=planning.metadata.plan.session_tokens,
-                budget=self.config.role_session_token_budget("planner"),
+                budget=self.resolve_task_run_config(planning.task_dir, planning.metadata).role_session_token_budget("planner"),
             )
             prior_session_tokens = planning.metadata.plan.session_tokens if session_id else 0
-            run_config = self.config.model_copy(deep=True)
+            run_config = self.resolve_task_run_config(planning.task_dir, planning.metadata)
+            adapter = self.resolve_task_adapter(planning.task_dir, planning.metadata)
             result = await asyncio.to_thread(
-                self.adapter.run,
+                adapter.run,
                 agent=run_config.role_agent("planner"),
                 prompt=prompt,
                 cwd=planner_cwd,

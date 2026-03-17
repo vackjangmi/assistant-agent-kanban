@@ -50,11 +50,11 @@ class SubprocessCodexAdapter(AssistantAdapter):
     ) -> RunResult:
         command = [
             config.codex.binary,
-            "--ask-for-approval",
-            "never",
-            "--sandbox",
-            "workspace-write",
             "exec",
+            "-c",
+            'approval_policy="never"',
+            "-s",
+            "danger-full-access",
         ]
         if session_id:
             command.extend(["resume", session_id])

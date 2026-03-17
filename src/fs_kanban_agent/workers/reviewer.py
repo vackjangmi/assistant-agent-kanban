@@ -73,12 +73,13 @@ class ReviewerWorker(WorkerBase):
             session_id = self.reuse_session_id(
                 session_id=reviewing.metadata.review.session_id,
                 session_tokens=reviewing.metadata.review.session_tokens,
-                budget=self.config.role_session_token_budget("reviewer"),
+                budget=self.resolve_task_run_config(reviewing.task_dir, reviewing.metadata).role_session_token_budget("reviewer"),
             )
             prior_session_tokens = reviewing.metadata.review.session_tokens if session_id else 0
-            run_config = self.config.model_copy(deep=True)
+            run_config = self.resolve_task_run_config(reviewing.task_dir, reviewing.metadata)
+            adapter = self.resolve_task_adapter(reviewing.task_dir, reviewing.metadata)
             result = await asyncio.to_thread(
-                self.adapter.run,
+                adapter.run,
                 agent=run_config.role_agent("reviewer"),
                 prompt=prompt,
                 cwd=workspace_path,

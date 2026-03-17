@@ -232,7 +232,7 @@ def _settings_response(runtime, snapshot, *, config_path: str | None = None, sav
 
 
 def _reconfigure_runtime_adapters(runtime) -> None:
-    planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = build_role_adapters(runtime.config)
+    planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = build_role_adapters(runtime.config, adapter_registry=runtime.adapter_registry)
     runtime.planner.adapter = planner_adapter
     runtime.implementer.adapter = implementer_adapter
     runtime.reviewer.adapter = reviewer_adapter
@@ -251,7 +251,7 @@ async def _resolve_settings_snapshot(runtime, *, refresh: bool, assistant: str |
         return snapshot
     preview_config = runtime.config.model_copy(deep=True)
     preview_config.runtime.coding_assistant = requested_assistant
-    preview_adapter, _, _, _, _ = build_role_adapters(preview_config)
+    preview_adapter, _, _, _, _ = build_role_adapters(preview_config, adapter_registry=runtime.adapter_registry)
     preview_registry = AssistantModelRegistry(adapter=preview_adapter, config=preview_config)
     return await asyncio.to_thread(preview_registry.get, refresh=refresh)
 

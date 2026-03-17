@@ -54,11 +54,13 @@ class ImplementerWorker(WorkerBase):
             session_id = self.reuse_session_id(
                 session_id=implementing.metadata.implementation.session_id,
                 session_tokens=implementing.metadata.implementation.session_tokens,
-                budget=self.config.role_session_token_budget("implementer"),
+                budget=self.resolve_task_run_config(implementing.task_dir, implementing.metadata).role_session_token_budget("implementer"),
             )
             prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
-            run_config = self.config.model_copy(deep=True)
+            run_config = self.resolve_task_run_config(implementing.task_dir, implementing.metadata)
+            adapter = self.resolve_task_adapter(implementing.task_dir, implementing.metadata)
             result = await self._run_adapter_with_retry(
+                adapter=adapter,
                 implementing=implementing,
                 prompt=prompt,
                 workspace_repo=workspace_repo,
@@ -141,6 +143,7 @@ class ImplementerWorker(WorkerBase):
     async def _run_adapter_with_retry(
         self,
         *,
+        adapter,
         implementing,
         prompt: str,
         workspace_repo: Path,
@@ -150,7 +153,7 @@ class ImplementerWorker(WorkerBase):
         loop,
     ) -> RunResult:
         result = await asyncio.to_thread(
-            self.adapter.run,
+            adapter.run,
             agent=run_config.role_agent("implementer"),
             prompt=prompt,
             cwd=workspace_repo,
@@ -163,7 +166,7 @@ class ImplementerWorker(WorkerBase):
         if not self._is_interrupted_run(result):
             return result
         return await asyncio.to_thread(
-            self.adapter.run,
+            adapter.run,
             agent=run_config.role_agent("implementer"),
             prompt=prompt,
             cwd=workspace_repo,

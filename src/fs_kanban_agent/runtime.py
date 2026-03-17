@@ -82,6 +82,7 @@ class RuntimeSupervisor:
         self.recovery = recovery
         self.events = events
         self.model_registry = model_registry
+        self.adapter_registry: dict[str, AssistantAdapter] = {}
         self._stop_event = asyncio.Event()
         self._background_tasks: list[asyncio.Task[None]] = []
         self._role_tasks: dict[str, set[asyncio.Task[None]]] = {
@@ -228,11 +229,16 @@ class RuntimeSupervisor:
 
     def _collect_task_adapters(self) -> Iterable[AssistantAdapter | None]:
         seen: set[int] = set()
+        registry = getattr(self, "adapter_registry", {})
         for adapter in (
             getattr(self.planner, "adapter", None),
+            *getattr(self.planner, "adapter_registry", {}).values(),
             getattr(self.implementer, "adapter", None),
+            *getattr(self.implementer, "adapter_registry", {}).values(),
             getattr(self.reviewer, "adapter", None),
+            *getattr(self.reviewer, "adapter_registry", {}).values(),
             getattr(self.committer, "adapter", None),
+            *registry.values(),
         ):
             if adapter is None:
                 continue
@@ -278,7 +284,7 @@ def board_to_event(board):
     return WorkerEvent(event="board_snapshot", payload=board.model_dump(mode="json"))
 
 
-def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter=None, branch_summary_adapter=None):
+def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter=None, branch_summary_adapter=None, adapter_registry=None):
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
@@ -291,18 +297,19 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     workspace_manager = WorkspaceManager(config)
     integration_manager = IntegrationManager(config)
     commit_manager = CommitManager()
-    planner = PlanningWorker(config, scanner, metadata_store, locks, transitions, events, adapter=planner_adapter)
-    implementer = ImplementerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=implementer_adapter, workspace_manager=workspace_manager)
-    reviewer = ReviewerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=reviewer_adapter, integration_manager=integration_manager)
+    registry = dict(adapter_registry or {})
+    planner = PlanningWorker(config, scanner, metadata_store, locks, transitions, events, adapter=planner_adapter, adapter_registry=registry)
+    implementer = ImplementerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=implementer_adapter, workspace_manager=workspace_manager, adapter_registry=registry)
+    reviewer = ReviewerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=reviewer_adapter, integration_manager=integration_manager, adapter_registry=registry)
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
-    verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter)
+    verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter, adapter_registry=registry)
     deletion_service = TaskDeletionService(config, scanner, locks, integration_manager)
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir)
     retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = AssistantModelRegistry(adapter=planner_adapter, config=config)
-    return RuntimeSupervisor(
+    runtime = RuntimeSupervisor(
         config,
         planner,
         implementer,
@@ -318,3 +325,5 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
         events,
         model_registry,
     )
+    runtime.adapter_registry = registry
+    return runtime

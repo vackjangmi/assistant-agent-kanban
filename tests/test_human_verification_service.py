@@ -780,7 +780,7 @@ def test_human_verification_start_generates_english_branch_summary_with_adapter(
     assert moved.state == TaskState.HUMAN_VERIFYING
     updated = scanner.find_task(completed.metadata.task_id)
     assert updated.metadata.integration.final_branch_summary == "add-area-game-mode"
-    assert branch_summary_adapter.run_calls[0]["agent"] == "planner"
+    assert branch_summary_adapter.run_calls[0]["agent"] == "fs-kanban-planner"
 
 
 def test_human_verification_approve_uses_stored_english_branch_summary(tmp_path):

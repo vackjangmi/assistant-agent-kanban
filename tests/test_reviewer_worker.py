@@ -99,6 +99,38 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert scanner.scan()[0].metadata.retry_gate.reason is None
 
 
+def test_reviewer_worker_uses_pinned_backend_after_global_change(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "opencode"
+    config.opencode.reviewer_model = "openai/gpt-5.4"
+    create_request_task(config, "review-pinned-backend-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    task = scanner.scan()[0]
+    task.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(task.task_dir, task.metadata)
+    config.runtime.coding_assistant = "codex"
+    config.codex.reviewer_model = "gpt-5.3-codex"
+    opencode_adapter = FakeAdapter(["Verdict: PASS\nReady"], resolved_models=["openai/gpt-5.4"])
+    codex_adapter = FakeAdapter(["Verdict: PASS\nWrong backend"], resolved_models=["gpt-5.3-codex"])
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=codex_adapter,
+        integration_manager=IntegrationManager(config),
+        adapter_registry={"opencode": opencode_adapter, "codex": codex_adapter},
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert len(opencode_adapter.run_calls) == 1
+    assert len(codex_adapter.run_calls) == 0
+    assert updated.metadata.review.resolved_model == "openai/gpt-5.4"
+
+
 def test_reviewer_worker_leaves_target_repo_clean_until_human_verification(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()

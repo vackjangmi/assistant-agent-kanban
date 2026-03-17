@@ -88,6 +88,50 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert updated.metadata.implementation.resolved_model == "openai/gpt-5.4"
 
 
+def test_implementer_worker_uses_pinned_backend_after_global_change(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "opencode"
+    config.opencode.implementer_model = "openai/gpt-5.3-codex"
+    create_request_task(config, "implement-pinned-backend-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    task.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(task.task_dir, task.metadata)
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    config.runtime.coding_assistant = "codex"
+    config.codex.implementer_model = "gpt-5.4"
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed\n")
+
+    opencode_adapter = FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace, resolved_models=["openai/gpt-5.3-codex"])
+    codex_adapter = FakeAdapter(["## Summary\nwrong backend"], side_effect=modify_workspace, resolved_models=["gpt-5.4"])
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=codex_adapter,
+        workspace_manager=WorkspaceManager(config),
+        adapter_registry={"opencode": opencode_adapter, "codex": codex_adapter},
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert len(opencode_adapter.run_calls) == 1
+    assert len(codex_adapter.run_calls) == 0
+    assert updated.metadata.implementation.resolved_model == "openai/gpt-5.3-codex"
+
+
 def test_implementer_worker_persists_and_reuses_session_id(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "implement-session-task")
