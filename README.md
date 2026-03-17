@@ -72,12 +72,8 @@ You can override the config or bind address if needed:
 ./run.sh --config /path/to/config.yaml --host 0.0.0.0 --port 8000
 ```
 
-This uses `create_default_app()`, which loads default config and injects real
-`SubprocessOpenCodeAdapter` instances.
-
-By default the adapter uses plain `opencode run` without `--attach`. If you want
-to reuse an external OpenCode server, set `opencode.attach_url` explicitly in
-your config.
+This uses `create_default_app()`, which loads default config and injects the
+configured assistant backend automatically.
 
 The fs-kanban worker prompts are still role-specific custom agents, but they now
 use prompt-driven OMO delegation for lightweight helper work. The planner can
@@ -149,12 +145,12 @@ Implement the requested refactor.
 
 ```python
 from fs_kanban_agent.api.app import create_app
+from fs_kanban_agent.assistant_factory import build_role_adapters
 from fs_kanban_agent.config import load_config
-from fs_kanban_agent.opencode_adapter import SubprocessOpenCodeAdapter
 
 config = load_config("examples/config.yaml")
-adapter = SubprocessOpenCodeAdapter()
-app = create_app(config, adapter, adapter, adapter, adapter)
+planner, implementer, reviewer, committer, branch_summary = build_role_adapters(config)
+app = create_app(config, planner, implementer, reviewer, committer, branch_summary)
 ```
 
 Then serve it with:

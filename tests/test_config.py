@@ -87,3 +87,22 @@ def test_resolve_repo_discovery_root_defaults_from_project_root_when_unloaded(tm
     config.bootstrap()
 
     assert config.resolve_repo_discovery_root() == (PROJECT_ROOT / "../").resolve()
+
+
+def test_load_config_accepts_codex_runtime_backend(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "runtime:",
+                "  coding_assistant: codex",
+                "codex:",
+                "  planner_model: gpt-5.4",
+            ]
+        )
+    )
+
+    config = load_config(config_path)
+
+    assert config.runtime.coding_assistant == "codex"
+    assert config.codex.planner_model == "gpt-5.4"

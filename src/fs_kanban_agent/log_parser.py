@@ -3,13 +3,31 @@ from __future__ import annotations
 import json
 
 
-def render_opencode_log(raw_content: str, *, debug: bool = False) -> str:
+def render_assistant_log(raw_content: str, *, debug: bool = False) -> str:
     rendered: list[str] = []
     for raw_line in raw_content.splitlines():
-        chunk = render_opencode_event_line(raw_line, debug=debug)
+        chunk = render_assistant_event_line(raw_line, debug=debug)
         if chunk:
             rendered.append(chunk)
     return "\n\n".join(part.strip() for part in rendered if part.strip())
+
+
+def render_assistant_event_line(raw_line: str, *, debug: bool = False) -> str | None:
+    line = raw_line.strip()
+    if not line:
+        return None
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return line
+    event_type = payload.get("type")
+    if isinstance(event_type, str) and (event_type.startswith("item.") or event_type.startswith("turn.") or event_type.startswith("thread.")):
+        return render_codex_event_line(raw_line, debug=debug)
+    return render_opencode_event_line(raw_line, debug=debug)
+
+
+def render_opencode_log(raw_content: str, *, debug: bool = False) -> str:
+    return render_assistant_log(raw_content, debug=debug)
 
 
 def render_opencode_event_line(raw_line: str, *, debug: bool = False) -> str | None:
@@ -47,6 +65,54 @@ def render_opencode_event_line(raw_line: str, *, debug: bool = False) -> str | N
         message = payload.get("message")
         if isinstance(message, str) and message.strip():
             return f"ERROR: {message}"
+    return None
+
+
+def render_codex_event_line(raw_line: str, *, debug: bool = False) -> str | None:
+    line = raw_line.strip()
+    if not line:
+        return None
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return line
+    event_type = payload.get("type")
+    if event_type == "item.started":
+        item = payload.get("item") or {}
+        if isinstance(item, dict):
+            item_type = item.get("type")
+            if isinstance(item_type, str):
+                return f"Started {item_type.replace('_', ' ')}"
+    if event_type == "item.completed":
+        item = payload.get("item") or {}
+        if isinstance(item, dict):
+            item_type = item.get("type")
+            if item_type == "agent_message":
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    return text
+            if item_type == "command_execution":
+                command = item.get("command")
+                if isinstance(command, str) and command.strip():
+                    return f"Command completed: {command}"
+            if item_type == "web_search":
+                return "Web search completed"
+            if isinstance(item_type, str) and debug:
+                return f"Completed {item_type.replace('_', ' ')}"
+    if event_type == "turn.completed" and debug:
+        usage = payload.get("usage") or {}
+        if isinstance(usage, dict):
+            parts = ["Debug tokens"]
+            for key in ("input_tokens", "cached_input_tokens", "output_tokens"):
+                value = usage.get(key)
+                if isinstance(value, int):
+                    parts.append(f"{key}={value}")
+            return " | ".join(parts) if len(parts) > 1 else None
+    if event_type == "turn.failed":
+        message = payload.get("message")
+        if isinstance(message, str) and message.strip():
+            return f"ERROR: {message}"
+        return "ERROR: turn failed"
     return None
 
 

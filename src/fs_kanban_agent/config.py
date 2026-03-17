@@ -15,7 +15,9 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
-SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode"}
+AssistantBackend = Literal["opencode", "codex"]
+AssistantRole = Literal["planner", "implementer", "reviewer", "commit"]
+SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode", "codex": "Codex CLI"}
 
 
 def normalize_runtime_assistant(value: str | None) -> str | None:
@@ -31,7 +33,6 @@ def normalize_runtime_assistant(value: str | None) -> str | None:
 
 class OpenCodeConfig(BaseModel):
     binary: str = "opencode"
-    attach_url: str | None = None
     planner_agent: str = "fs-kanban-planner"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
@@ -42,6 +43,19 @@ class OpenCodeConfig(BaseModel):
     reviewer_model: str | None = None
     reviewer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     commit_agent: str = "fs-kanban-committer"
+    commit_model: str | None = None
+    commit_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    timeout_seconds: int = 1800
+
+
+class CodexConfig(BaseModel):
+    binary: str = "codex"
+    planner_model: str | None = None
+    planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    implementer_model: str | None = None
+    implementer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    reviewer_model: str | None = None
+    reviewer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     commit_model: str | None = None
     commit_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     timeout_seconds: int = 1800
@@ -65,7 +79,7 @@ class RuntimeConfig(BaseModel):
     auto_dispatch: bool = True
     language: Literal["EN", "KO"] = "EN"
     theme: Literal["light", "dark"] = "light"
-    coding_assistant: Literal["opencode"] = "opencode"
+    coding_assistant: AssistantBackend = "opencode"
     planner_agent_count: int = Field(default=1, ge=1)
     implementer_agent_count: int = Field(default=1, ge=1)
     reviewer_agent_count: int = Field(default=1, ge=1)
@@ -83,7 +97,7 @@ class RuntimeConfig(BaseModel):
     def normalize_coding_assistant_setting(cls, value: str) -> str:
         normalized = normalize_runtime_assistant(value)
         if normalized is None:
-            raise ValueError("runtime coding assistant must be OpenCode")
+            raise ValueError("runtime coding assistant must be OpenCode or Codex CLI")
         return normalized
 
 
@@ -97,6 +111,7 @@ class AppConfig(BaseModel):
     repo_root: Path = Path(".")
     base_branch: str = "main"
     opencode: OpenCodeConfig = Field(default_factory=OpenCodeConfig)
+    codex: CodexConfig = Field(default_factory=CodexConfig)
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     locks: LocksConfig = Field(default_factory=LocksConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
@@ -135,6 +150,32 @@ class AppConfig(BaseModel):
 
     def state_dir(self, state: TaskState) -> Path:
         return self.kanban_root / state.value
+
+    def active_backend(self) -> AssistantBackend:
+        return self.runtime.coding_assistant
+
+    def backend_config(self):
+        return self.opencode if self.active_backend() == "opencode" else self.codex
+
+    def role_agent(self, role: AssistantRole) -> str:
+        if self.active_backend() == "opencode":
+            return getattr(self.opencode, f"{role}_agent")
+        return f"fs-kanban-{role}"
+
+    def role_model(self, role: AssistantRole) -> str | None:
+        return getattr(self.backend_config(), f"{role}_model")
+
+    def set_role_model(self, role: AssistantRole, value: str | None) -> None:
+        setattr(self.backend_config(), f"{role}_model", value)
+
+    def role_session_token_budget(self, role: AssistantRole) -> int:
+        return getattr(self.backend_config(), f"{role}_session_token_budget")
+
+    def set_role_session_token_budget(self, role: AssistantRole, value: int) -> None:
+        setattr(self.backend_config(), f"{role}_session_token_budget", value)
+
+    def backend_timeout_seconds(self) -> int:
+        return int(self.backend_config().timeout_seconds)
 
     def config_path_for_persistence(self) -> Path:
         if self.loaded_local_from is not None:

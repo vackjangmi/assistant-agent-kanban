@@ -6,7 +6,7 @@ from pathlib import Path
 from ..enums import TaskState
 from ..exceptions import WorkspaceSyncError
 from ..models import RunResult, TaskErrorInfo
-from ..opencode_adapter import OpenCodeAdapter
+from ..assistant_adapter import AssistantAdapter
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from ..workspace_manager import WorkspaceManager
 from .base import WorkerBase
@@ -15,7 +15,7 @@ from .base import WorkerBase
 class ImplementerWorker(WorkerBase):
     worker_name = "implementer"
 
-    def __init__(self, *args, adapter: OpenCodeAdapter, workspace_manager: WorkspaceManager, **kwargs) -> None:
+    def __init__(self, *args, adapter: AssistantAdapter, workspace_manager: WorkspaceManager, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.adapter = adapter
         self.workspace_manager = workspace_manager
@@ -54,7 +54,7 @@ class ImplementerWorker(WorkerBase):
             session_id = self.reuse_session_id(
                 session_id=implementing.metadata.implementation.session_id,
                 session_tokens=implementing.metadata.implementation.session_tokens,
-                budget=self.config.opencode.implementer_session_token_budget,
+                budget=self.config.role_session_token_budget("implementer"),
             )
             prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
             run_config = self.config.model_copy(deep=True)
@@ -151,7 +151,7 @@ class ImplementerWorker(WorkerBase):
     ) -> RunResult:
         result = await asyncio.to_thread(
             self.adapter.run,
-            agent=run_config.opencode.implementer_agent,
+            agent=run_config.role_agent("implementer"),
             prompt=prompt,
             cwd=workspace_repo,
             run_log_path=run_log_path,
@@ -164,7 +164,7 @@ class ImplementerWorker(WorkerBase):
             return result
         return await asyncio.to_thread(
             self.adapter.run,
-            agent=run_config.opencode.implementer_agent,
+            agent=run_config.role_agent("implementer"),
             prompt=prompt,
             cwd=workspace_repo,
             run_log_path=run_log_path,

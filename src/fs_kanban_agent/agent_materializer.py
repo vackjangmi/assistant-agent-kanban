@@ -6,6 +6,8 @@ from .config import AppConfig, PROJECT_ROOT
 
 
 def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
+    if config.active_backend() != "opencode":
+        return None
     source = PROJECT_ROOT / ".opencode" / "agents" / f"{agent_name}.md"
     if not source.exists():
         return None
@@ -18,6 +20,8 @@ def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
 
 
 def ensure_runtime_agents(config: AppConfig) -> list[Path]:
+    if config.active_backend() != "opencode":
+        return []
     materialized: list[Path] = []
     seen: set[str] = set()
     for agent_name in (

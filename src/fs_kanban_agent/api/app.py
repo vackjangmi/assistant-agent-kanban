@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from ..assistant_factory import build_role_adapters
 from ..config import AppConfig, load_config
-from ..opencode_adapter import SubprocessOpenCodeAdapter
 from ..runtime import build_runtime
 from .routes import build_router
 from .sse import build_sse_router
@@ -34,12 +34,5 @@ def create_app(config: AppConfig, planner_adapter, implementer_adapter, reviewer
 
 def create_default_app(config_path: str | None = None) -> FastAPI:
     config = load_config(config_path)
-    planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = _build_role_adapters(config)
+    planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = build_role_adapters(config)
     return create_app(config, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter)
-
-
-def _build_role_adapters(config: AppConfig):
-    if config.runtime.coding_assistant != "opencode":
-        raise NotImplementedError(f"unsupported coding assistant: {config.runtime.coding_assistant}")
-    adapter = SubprocessOpenCodeAdapter()
-    return adapter, adapter, adapter, adapter, adapter

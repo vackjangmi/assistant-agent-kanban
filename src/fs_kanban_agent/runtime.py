@@ -19,14 +19,12 @@ from .services.retrospective_service import RetrospectiveService
 from .services.task_deletion_service import TaskDeletionService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
-from .opencode_adapter import OpenCodeModelRegistry, SubprocessOpenCodeAdapter
+from .assistant_adapter import AssistantAdapter, AssistantModelRegistry
 from .workers.committer import CommitWorker
 from .workers.implementer import ImplementerWorker
 from .workers.planner import PlanningWorker
 from .workers.reviewer import ReviewerWorker
 from watchfiles import awatch
-
-from .opencode_adapter import OpenCodeAdapter
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +95,7 @@ class RuntimeSupervisor:
     async def start(self) -> None:
         self._stop_event.clear()
         await self.startup_recovery()
-        if isinstance(self.model_registry.adapter, SubprocessOpenCodeAdapter):
+        if getattr(self.model_registry.adapter, "supports_model_discovery", False):
             self._background_tasks.append(
                 asyncio.create_task(self.warm_model_registry(), name="fs-kanban-model-discovery")
             )
@@ -228,7 +226,7 @@ class RuntimeSupervisor:
                 return True
         return False
 
-    def _collect_task_adapters(self) -> Iterable[OpenCodeAdapter | None]:
+    def _collect_task_adapters(self) -> Iterable[AssistantAdapter | None]:
         seen: set[int] = set()
         for adapter in (
             getattr(self.planner, "adapter", None),
@@ -303,7 +301,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir)
     retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)
     recovery = RecoveryService(config, scanner, transitions, locks)
-    model_registry = OpenCodeModelRegistry(adapter=planner_adapter, config=config)
+    model_registry = AssistantModelRegistry(adapter=planner_adapter, config=config)
     return RuntimeSupervisor(
         config,
         planner,

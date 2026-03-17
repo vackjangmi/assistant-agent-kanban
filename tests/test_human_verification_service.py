@@ -31,7 +31,7 @@ def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effe
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    task = scanner.scan()[0]
+    task = next(item for item in scanner.scan() if item.state == TaskState.REQUESTS)
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
     (planning.task_dir / "PLAN.md").write_text("plan\n")
     metadata_store.save(planning.task_dir, planning.metadata)
@@ -55,8 +55,8 @@ def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effe
     )
     import asyncio
 
-    asyncio.run(implementer.run_once())
-    reviewing = transitions.move(scanner.scan()[0], TaskState.REVIEWING, by="reviewer")
+    asyncio.run(implementer.run_task(scanner.find_task(waiting.metadata.task_id)))
+    reviewing = transitions.move(scanner.find_task(waiting.metadata.task_id), TaskState.REVIEWING, by="reviewer")
     completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
     service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, IntegrationManager(config), CommitManager(), branch_summary_adapter=branch_summary_adapter)
     return scanner, service, completed

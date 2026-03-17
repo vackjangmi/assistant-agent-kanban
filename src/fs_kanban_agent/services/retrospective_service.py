@@ -14,7 +14,7 @@ from ..exceptions import AdapterRunError, CommitError, TaskNotFoundError, Transi
 from ..language import generation_language_code, language_name
 from ..locks import TaskLockManager
 from ..models import RetrospectiveRecord, RunResult, TaskContext
-from ..opencode_adapter import OpenCodeAdapter
+from ..assistant_adapter import AssistantAdapter
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 
@@ -24,7 +24,7 @@ class RetrospectiveService:
     config: AppConfig
     locks: TaskLockManager
     commit_manager: CommitManager
-    adapter: OpenCodeAdapter | None
+    adapter: AssistantAdapter | None
 
     def __init__(
         self,
@@ -32,7 +32,7 @@ class RetrospectiveService:
         config: AppConfig,
         locks: TaskLockManager,
         commit_manager: CommitManager,
-        adapter: OpenCodeAdapter | None = None,
+        adapter: AssistantAdapter | None = None,
     ) -> None:
         self.scanner = scanner
         self.config = config
@@ -182,7 +182,7 @@ class RetrospectiveService:
         run_log_path = self.config.runs_dir / primary.metadata.task_id / f"retrospective-{self._retrospective_key(primary.metadata.target.base_branch, comparison_branch)}.jsonl"
         try:
             result = adapter.run(
-                agent=self.config.opencode.commit_agent,
+                agent=self.config.role_agent("commit"),
                 prompt=prompt,
                 cwd=primary.task_dir,
                 run_log_path=run_log_path,

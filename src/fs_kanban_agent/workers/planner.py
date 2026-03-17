@@ -6,7 +6,7 @@ from pathlib import Path
 from ..config import PROJECT_ROOT
 from ..enums import TaskState
 from ..exceptions import AdapterRunError
-from ..opencode_adapter import OpenCodeAdapter
+from ..assistant_adapter import AssistantAdapter
 from ..request_parser import has_required_request_fields
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from .base import WorkerBase
@@ -20,7 +20,7 @@ class PlanningWorker(WorkerBase):
         "docs/03-agent-task.md",
     )
 
-    def __init__(self, *args, adapter: OpenCodeAdapter, **kwargs) -> None:
+    def __init__(self, *args, adapter: AssistantAdapter, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.adapter = adapter
 
@@ -52,13 +52,13 @@ class PlanningWorker(WorkerBase):
             session_id = self.reuse_session_id(
                 session_id=planning.metadata.plan.session_id,
                 session_tokens=planning.metadata.plan.session_tokens,
-                budget=self.config.opencode.planner_session_token_budget,
+                budget=self.config.role_session_token_budget("planner"),
             )
             prior_session_tokens = planning.metadata.plan.session_tokens if session_id else 0
             run_config = self.config.model_copy(deep=True)
             result = await asyncio.to_thread(
                 self.adapter.run,
-                agent=run_config.opencode.planner_agent,
+                agent=run_config.role_agent("planner"),
                 prompt=prompt,
                 cwd=planner_cwd,
                 run_log_path=run_log_path,

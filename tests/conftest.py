@@ -7,14 +7,14 @@ from pathlib import Path
 import pytest
 
 from fs_kanban_agent import config as config_module
+from fs_kanban_agent.assistant_adapter import AssistantAdapter
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
 from fs_kanban_agent.models import RunResult
-from fs_kanban_agent.opencode_adapter import OpenCodeAdapter
 from fs_kanban_agent.exceptions import AdapterRunError
 
 
-class FakeAdapter(OpenCodeAdapter):
+class FakeAdapter(AssistantAdapter):
     def __init__(
         self,
         responses: list[str] | None = None,

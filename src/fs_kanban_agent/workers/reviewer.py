@@ -7,7 +7,7 @@ from ..enums import TaskState
 from ..integration_manager import IntegrationManager
 from ..language import generation_language_code
 from ..models import TaskErrorInfo
-from ..opencode_adapter import OpenCodeAdapter
+from ..assistant_adapter import AssistantAdapter
 from ..retry_policy import apply_retry_gate, clear_retry_gate
 from .base import WorkerBase
 
@@ -15,7 +15,7 @@ from .base import WorkerBase
 class ReviewerWorker(WorkerBase):
     worker_name = "reviewer"
 
-    def __init__(self, *args, adapter: OpenCodeAdapter, integration_manager: IntegrationManager, **kwargs) -> None:
+    def __init__(self, *args, adapter: AssistantAdapter, integration_manager: IntegrationManager, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.adapter = adapter
         self.integration_manager = integration_manager
@@ -73,13 +73,13 @@ class ReviewerWorker(WorkerBase):
             session_id = self.reuse_session_id(
                 session_id=reviewing.metadata.review.session_id,
                 session_tokens=reviewing.metadata.review.session_tokens,
-                budget=self.config.opencode.reviewer_session_token_budget,
+                budget=self.config.role_session_token_budget("reviewer"),
             )
             prior_session_tokens = reviewing.metadata.review.session_tokens if session_id else 0
             run_config = self.config.model_copy(deep=True)
             result = await asyncio.to_thread(
                 self.adapter.run,
-                agent=run_config.opencode.reviewer_agent,
+                agent=run_config.role_agent("reviewer"),
                 prompt=prompt,
                 cwd=workspace_path,
                 run_log_path=run_log_path,

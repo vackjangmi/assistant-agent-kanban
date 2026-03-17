@@ -9,7 +9,9 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import FileResponse
 
+from ..assistant_factory import build_role_adapters
 from ..agent_materializer import ensure_runtime_agents
+from ..assistant_adapter import AssistantModelRegistry
 from ..config import DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, normalize_runtime_assistant
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
@@ -104,7 +106,7 @@ class ModelSettingsPayload(BaseModel):
             return None
         normalized = normalize_runtime_assistant(value)
         if normalized is None:
-            raise ValueError("coding assistant must be OpenCode")
+            raise ValueError("coding assistant must be OpenCode or Codex CLI")
         return normalized
 
 
@@ -146,7 +148,7 @@ def _normalize_runtime_language(value: str | None) -> str:
 def _normalize_runtime_coding_assistant(value: str | None) -> str:
     normalized = normalize_runtime_assistant(value)
     if normalized is None:
-        raise ValueError("coding assistant must be OpenCode")
+        raise ValueError("coding assistant must be OpenCode or Codex CLI")
     return normalized
 
 
@@ -155,12 +157,108 @@ def _apply_config_update(target, updated) -> None:
     target.repo_root = updated.repo_root
     target.base_branch = updated.base_branch
     target.opencode = updated.opencode
+    target.codex = updated.codex
     target.workspace = updated.workspace
     target.locks = updated.locks
     target.runtime = updated.runtime
     target.repo_discovery = updated.repo_discovery
     target.loaded_from = updated.loaded_from
     target.loaded_local_from = updated.loaded_local_from
+
+
+def _settings_response(runtime, snapshot, *, config_path: str | None = None, saved: bool = False) -> dict[str, object]:
+    active_backend = snapshot.backend
+    active_config = runtime.config if runtime.config.active_backend() == active_backend else runtime.config.model_copy(deep=True)
+    active_config.runtime.coding_assistant = active_backend
+    omo_snapshot = read_omo_delegation_snapshot() if active_backend == "opencode" else None
+    response = {
+        "language": runtime.config.runtime.language,
+        "theme": runtime.config.runtime.theme,
+        "coding_assistant": active_backend,
+        "planner_model": active_config.role_model("planner"),
+        "planner_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("planner")),
+        "planner_agent_count": runtime.config.runtime.planner_agent_count,
+        "implementer_model": active_config.role_model("implementer"),
+        "implementer_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("implementer")),
+        "implementer_agent_count": runtime.config.runtime.implementer_agent_count,
+        "reviewer_model": active_config.role_model("reviewer"),
+        "reviewer_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("reviewer")),
+        "reviewer_agent_count": runtime.config.runtime.reviewer_agent_count,
+        "commit_model": active_config.role_model("commit"),
+        "commit_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("commit")),
+        "repo_discovery_root": runtime.config.repo_discovery_root_value(),
+        "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
+        "config_path": config_path or str(runtime.config.config_path_for_persistence()),
+        "available_assistants": [
+            {"value": value, "label": label}
+            for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
+        ],
+        "available_models": snapshot.models,
+        "discovery_status": snapshot.status,
+        "discovered_at": snapshot.discovered_at,
+        "discovery_error": snapshot.error,
+        "discovery_attempted": snapshot.attempted,
+        "supports_model_discovery": snapshot.supports_model_discovery,
+        "model_backend": snapshot.backend,
+        "saved": saved,
+    }
+    if omo_snapshot is None:
+        response.update(
+            {
+                "delegated_model_source_path": None,
+                "delegated_model_status": "unsupported",
+                "delegated_model_error": None,
+                "delegated_models": [],
+            }
+        )
+        return response
+    response.update(
+        {
+            "delegated_model_source_path": str(omo_snapshot.source_path) if omo_snapshot.source_path else None,
+            "delegated_model_status": omo_snapshot.status,
+            "delegated_model_error": omo_snapshot.error,
+            "delegated_models": [
+                {
+                    "key": target.key,
+                    "source_type": target.source_type,
+                    "model": target.model,
+                    "variant": target.variant,
+                }
+                for target in omo_snapshot.targets
+            ],
+        }
+    )
+    return response
+
+
+def _reconfigure_runtime_adapters(runtime) -> None:
+    planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = build_role_adapters(runtime.config)
+    runtime.planner.adapter = planner_adapter
+    runtime.implementer.adapter = implementer_adapter
+    runtime.reviewer.adapter = reviewer_adapter
+    runtime.committer.adapter = commit_adapter
+    runtime.verification_service.branch_summary_adapter = branch_summary_adapter
+    runtime.retrospective_service.adapter = commit_adapter
+    runtime.model_registry.adapter = planner_adapter
+    runtime.model_registry.config = runtime.config
+    runtime._task_adapters = [adapter for adapter in runtime._collect_task_adapters() if adapter is not None]
+
+
+async def _resolve_settings_snapshot(runtime, *, refresh: bool, assistant: str | None):
+    requested_assistant = _normalize_runtime_coding_assistant(assistant) if assistant is not None else runtime.config.active_backend()
+    if requested_assistant == runtime.config.active_backend():
+        snapshot = await asyncio.to_thread(runtime.model_registry.get, refresh=refresh)
+        return snapshot
+    preview_config = runtime.config.model_copy(deep=True)
+    preview_config.runtime.coding_assistant = requested_assistant
+    preview_adapter, _, _, _, _ = build_role_adapters(preview_config)
+    preview_registry = AssistantModelRegistry(adapter=preview_adapter, config=preview_config)
+    return await asyncio.to_thread(preview_registry.get, refresh=refresh)
+
+
+def _uses_builtin_runtime_adapter(runtime) -> bool:
+    adapter = getattr(runtime.planner, "adapter", None)
+    return adapter.__class__.__module__.startswith("fs_kanban_agent.") if adapter is not None else False
 
 
 def build_router() -> APIRouter:
@@ -176,55 +274,16 @@ def build_router() -> APIRouter:
         return runtime.board_service.get_board()
 
     @router.get("/api/settings/models")
-    async def get_model_settings(request: Request, refresh: bool = False) -> dict[str, object]:
+    async def get_model_settings(request: Request, refresh: bool = False, assistant: str | None = None) -> dict[str, object]:
         runtime = request.app.state.runtime
-        snapshot = await asyncio.to_thread(runtime.model_registry.get, refresh=refresh)
-        omo_snapshot = read_omo_delegation_snapshot()
-        return {
-            "language": runtime.config.runtime.language,
-            "theme": runtime.config.runtime.theme,
-            "coding_assistant": runtime.config.runtime.coding_assistant,
-            "planner_model": runtime.config.opencode.planner_model,
-            "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
-            "planner_agent_count": runtime.config.runtime.planner_agent_count,
-            "implementer_model": runtime.config.opencode.implementer_model,
-            "implementer_session_token_budget": _display_session_token_budget(runtime.config.opencode.implementer_session_token_budget),
-            "implementer_agent_count": runtime.config.runtime.implementer_agent_count,
-            "reviewer_model": runtime.config.opencode.reviewer_model,
-            "reviewer_session_token_budget": _display_session_token_budget(runtime.config.opencode.reviewer_session_token_budget),
-            "reviewer_agent_count": runtime.config.runtime.reviewer_agent_count,
-            "commit_model": runtime.config.opencode.commit_model,
-            "commit_session_token_budget": _display_session_token_budget(runtime.config.opencode.commit_session_token_budget),
-            "repo_discovery_root": runtime.config.repo_discovery_root_value(),
-            "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
-            "config_path": str(runtime.config.config_path_for_persistence()),
-            "available_assistants": [
-                {"value": value, "label": label}
-                for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
-            ],
-            "available_models": snapshot.models,
-            "discovery_status": snapshot.status,
-            "discovered_at": snapshot.discovered_at,
-            "discovery_error": snapshot.error,
-            "discovery_attempted": snapshot.attempted,
-            "delegated_model_source_path": str(omo_snapshot.source_path) if omo_snapshot.source_path else None,
-            "delegated_model_status": omo_snapshot.status,
-            "delegated_model_error": omo_snapshot.error,
-            "delegated_models": [
-                {
-                    "key": target.key,
-                    "source_type": target.source_type,
-                    "model": target.model,
-                    "variant": target.variant,
-                }
-                for target in omo_snapshot.targets
-            ],
-        }
+        snapshot = await _resolve_settings_snapshot(runtime, refresh=refresh, assistant=assistant)
+        return _settings_response(runtime, snapshot)
 
     @router.put("/api/settings/models")
     async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, object]:
         runtime = request.app.state.runtime
         next_config = runtime.config.model_copy(deep=True)
+        previous_backend = runtime.config.active_backend()
         fields_set = payload.model_fields_set
         if "language" in fields_set:
             next_config.runtime.language = _normalize_runtime_language(payload.language)
@@ -233,58 +292,38 @@ def build_router() -> APIRouter:
         if "coding_assistant" in fields_set:
             next_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(payload.coding_assistant)
         if "planner_model" in fields_set:
-            next_config.opencode.planner_model = _normalize_model_override(payload.planner_model)
+            next_config.set_role_model("planner", _normalize_model_override(payload.planner_model))
         if "planner_session_token_budget" in fields_set:
-            next_config.opencode.planner_session_token_budget = _normalize_session_token_budget(payload.planner_session_token_budget)
+            next_config.set_role_session_token_budget("planner", _normalize_session_token_budget(payload.planner_session_token_budget))
         if "planner_agent_count" in fields_set:
             next_config.runtime.planner_agent_count = _normalize_agent_count(payload.planner_agent_count)
         if "implementer_model" in fields_set:
-            next_config.opencode.implementer_model = _normalize_model_override(payload.implementer_model)
+            next_config.set_role_model("implementer", _normalize_model_override(payload.implementer_model))
         if "implementer_session_token_budget" in fields_set:
-            next_config.opencode.implementer_session_token_budget = _normalize_session_token_budget(payload.implementer_session_token_budget)
+            next_config.set_role_session_token_budget("implementer", _normalize_session_token_budget(payload.implementer_session_token_budget))
         if "implementer_agent_count" in fields_set:
             next_config.runtime.implementer_agent_count = _normalize_agent_count(payload.implementer_agent_count)
         if "reviewer_model" in fields_set:
-            next_config.opencode.reviewer_model = _normalize_model_override(payload.reviewer_model)
+            next_config.set_role_model("reviewer", _normalize_model_override(payload.reviewer_model))
         if "reviewer_session_token_budget" in fields_set:
-            next_config.opencode.reviewer_session_token_budget = _normalize_session_token_budget(payload.reviewer_session_token_budget)
+            next_config.set_role_session_token_budget("reviewer", _normalize_session_token_budget(payload.reviewer_session_token_budget))
         if "reviewer_agent_count" in fields_set:
             next_config.runtime.reviewer_agent_count = _normalize_agent_count(payload.reviewer_agent_count)
         if "commit_model" in fields_set:
-            next_config.opencode.commit_model = _normalize_model_override(payload.commit_model)
+            next_config.set_role_model("commit", _normalize_model_override(payload.commit_model))
         if "commit_session_token_budget" in fields_set:
-            next_config.opencode.commit_session_token_budget = _normalize_session_token_budget(payload.commit_session_token_budget)
+            next_config.set_role_session_token_budget("commit", _normalize_session_token_budget(payload.commit_session_token_budget))
         if payload.repo_discovery_root is not None:
             next_config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
         if payload.repo_discovery_max_depth is not None:
             next_config.repo_discovery.max_depth = payload.repo_discovery_max_depth
         config_path = next_config.persist()
         _apply_config_update(runtime.config, next_config)
+        if previous_backend != runtime.config.active_backend() or _uses_builtin_runtime_adapter(runtime):
+            _reconfigure_runtime_adapters(runtime)
         ensure_runtime_agents(runtime.config)
-        return {
-            "language": runtime.config.runtime.language,
-            "theme": runtime.config.runtime.theme,
-            "coding_assistant": runtime.config.runtime.coding_assistant,
-            "planner_model": runtime.config.opencode.planner_model,
-            "planner_session_token_budget": _display_session_token_budget(runtime.config.opencode.planner_session_token_budget),
-            "planner_agent_count": runtime.config.runtime.planner_agent_count,
-            "implementer_model": runtime.config.opencode.implementer_model,
-            "implementer_session_token_budget": _display_session_token_budget(runtime.config.opencode.implementer_session_token_budget),
-            "implementer_agent_count": runtime.config.runtime.implementer_agent_count,
-            "reviewer_model": runtime.config.opencode.reviewer_model,
-            "reviewer_session_token_budget": _display_session_token_budget(runtime.config.opencode.reviewer_session_token_budget),
-            "reviewer_agent_count": runtime.config.runtime.reviewer_agent_count,
-            "commit_model": runtime.config.opencode.commit_model,
-            "commit_session_token_budget": _display_session_token_budget(runtime.config.opencode.commit_session_token_budget),
-            "repo_discovery_root": runtime.config.repo_discovery_root_value(),
-            "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
-            "config_path": str(config_path),
-            "available_assistants": [
-                {"value": value, "label": label}
-                for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
-            ],
-            "saved": True,
-        }
+        snapshot = await asyncio.to_thread(runtime.model_registry.refresh, refresh_cli=False)
+        return _settings_response(runtime, snapshot, config_path=str(config_path), saved=True)
 
     @router.get("/api/tasks/{task_id}")
     async def task_detail(task_id: str, request: Request, include_changed_files: bool = False):

@@ -110,6 +110,7 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     assert command[command.index("--model") + 1] == "openai/gpt-5.4"
     assert "--agent" in command
     assert command[command.index("--agent") + 1] == "fs-kanban-planner"
+    assert "--attach" not in command
     assert "--" in command
     assert command[-1] == "---\ntitle: sample\n---\n"
     env = cast(dict[str, str], recorded["env"])

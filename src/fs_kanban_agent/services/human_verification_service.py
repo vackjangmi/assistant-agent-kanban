@@ -11,11 +11,11 @@ import uuid
 
 from ..commit_manager import CommitManager
 from ..enums import TaskState
-from ..exceptions import IntegrationConflictError, IntegrationError, TaskNotFoundError, TransitionError
+from ..exceptions import AdapterRunError, IntegrationConflictError, IntegrationError, TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
-from ..opencode_adapter import OpenCodeAdapter, AdapterRunError
+from ..assistant_adapter import AssistantAdapter
 from ..models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, TaskContext, TaskErrorInfo, utc_now
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
@@ -33,7 +33,7 @@ class HumanVerificationService:
         transitions: TransitionManager,
         integration_manager: IntegrationManager,
         commit_manager: CommitManager,
-        branch_summary_adapter: OpenCodeAdapter | None = None,
+        branch_summary_adapter: AssistantAdapter | None = None,
     ) -> None:
         self.scanner = scanner
         self.config = config

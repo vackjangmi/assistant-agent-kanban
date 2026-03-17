@@ -10,7 +10,7 @@ from ..config import AppConfig
 from ..events import EventBus
 from ..language import generation_language_name
 from ..locks import TaskLockManager
-from ..log_parser import render_opencode_log
+from ..log_parser import render_assistant_log
 from ..metadata_store import MetadataStore
 from ..models import RunResult, TaskMetadata, WorkerEvent
 from ..scanner import KanbanScanner
@@ -99,8 +99,8 @@ class WorkerBase:
                     "worker_log",
                     task_id,
                     log_name=log_name,
-                    rendered_content=render_opencode_log(content) or None,
-                    debug_rendered_content=render_opencode_log(content, debug=True) or None,
+                    rendered_content=render_assistant_log(content) or None,
+                    debug_rendered_content=render_assistant_log(content, debug=True) or None,
                 ),
             )
 

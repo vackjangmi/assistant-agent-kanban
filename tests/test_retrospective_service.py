@@ -17,7 +17,11 @@ from .test_human_verification_service import _task_ready_for_human_verification
 
 def _done_task_for_retrospective(config, task_name: str, *, commit_adapter=None):
     create_request_task(config, task_name)
-    _, verification_service, completed = _task_ready_for_human_verification(config)
+
+    def unique_workspace_change(cwd):
+        (cwd / "app.txt").write_text(f"review me {task_name}\n")
+
+    _, verification_service, completed = _task_ready_for_human_verification(config, workspace_side_effect=unique_workspace_change)
     verification_service.start(completed.metadata.task_id, by="human")
     verification_service.approve(completed.metadata.task_id, by="human", completion_mode="target-branch")
     metadata_store = MetadataStore()
@@ -29,7 +33,11 @@ def _done_task_for_retrospective(config, task_name: str, *, commit_adapter=None)
 
 def _done_task_for_retrospective_with_request(config, task_name: str, *, commit_adapter=None, language: str | None = None, body: str | None = None):
     create_request_task(config, task_name, language=language, body=body)
-    _, verification_service, completed = _task_ready_for_human_verification(config)
+
+    def unique_workspace_change(cwd):
+        (cwd / "app.txt").write_text(f"review me {task_name}\n")
+
+    _, verification_service, completed = _task_ready_for_human_verification(config, workspace_side_effect=unique_workspace_change)
     verification_service.start(completed.metadata.task_id, by="human")
     verification_service.approve(completed.metadata.task_id, by="human", completion_mode="target-branch")
     metadata_store = MetadataStore()

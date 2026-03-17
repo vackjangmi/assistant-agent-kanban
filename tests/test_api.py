@@ -1006,7 +1006,10 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["language"] == "EN"
         assert get_response.json()["theme"] == "light"
         assert get_response.json()["coding_assistant"] == "opencode"
-        assert get_response.json()["available_assistants"] == [{"value": "opencode", "label": "OpenCode"}]
+        assert get_response.json()["available_assistants"] == [
+            {"value": "opencode", "label": "OpenCode"},
+            {"value": "codex", "label": "Codex CLI"},
+        ]
         assert get_response.json()["planner_model"] is None
         assert get_response.json()["planner_session_token_budget"] == 250
         assert get_response.json()["planner_agent_count"] == 1
@@ -1368,7 +1371,7 @@ def test_api_rejects_invalid_runtime_language(configured_paths):
     assert config.runtime.language == "EN"
 
 
-def test_api_rejects_invalid_runtime_coding_assistant(configured_paths):
+def test_api_accepts_codex_runtime_coding_assistant(configured_paths):
     config, _, _ = configured_paths
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -1377,6 +1380,7 @@ def test_api_rejects_invalid_runtime_coding_assistant(configured_paths):
             "/api/settings/models",
             json={
                 "coding_assistant": "codex",
+                "planner_model": "gpt-5.4",
                 "planner_session_token_budget": 250,
                 "implementer_session_token_budget": 250,
                 "reviewer_session_token_budget": 250,
@@ -1384,8 +1388,25 @@ def test_api_rejects_invalid_runtime_coding_assistant(configured_paths):
             },
         )
 
-    assert response.status_code == 422
-    assert config.runtime.coding_assistant == "opencode"
+    assert response.status_code == 200
+    assert config.runtime.coding_assistant == "codex"
+    assert config.codex.planner_model == "gpt-5.4"
+
+
+def test_api_refresh_can_preview_codex_models_without_switching_runtime(configured_paths):
+    config, _, _ = configured_paths
+    planner_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/models?refresh=true&assistant=codex")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["coding_assistant"] == "codex"
+    assert "gpt-5.4" in payload["available_models"]
+    assert payload["planner_model"] == config.codex.planner_model
+    assert app.state.runtime.config.runtime.coding_assistant == "opencode"
 
 
 def test_api_save_materializes_runtime_agents_immediately(configured_paths):
@@ -1573,7 +1594,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
     assert "readNumericSettingInput" in response.text
-    assert "opencode-model-options" in response.text
+    assert "assistant-model-options" in response.text
     assert "Refresh discovered models" in response.text
     assert "Save settings" in response.text
     assert "window.location.reload();" in response.text

@@ -303,6 +303,37 @@
       background: transparent !important;
       color: var(--text) !important;
     }
+    body[data-theme="dark"] .toastui-editor-contents h1,
+    body[data-theme="dark"] .toastui-editor-contents h2,
+    body[data-theme="dark"] .toastui-editor-contents h3,
+    body[data-theme="dark"] .toastui-editor-contents h4,
+    body[data-theme="dark"] .toastui-editor-contents h5,
+    body[data-theme="dark"] .toastui-editor-contents h6,
+    body[data-theme="dark"] .toastui-editor-md-preview h1,
+    body[data-theme="dark"] .toastui-editor-md-preview h2,
+    body[data-theme="dark"] .toastui-editor-md-preview h3,
+    body[data-theme="dark"] .toastui-editor-md-preview h4,
+    body[data-theme="dark"] .toastui-editor-md-preview h5,
+    body[data-theme="dark"] .toastui-editor-md-preview h6,
+    body[data-theme="dark"] .toastui-editor-contents strong,
+    body[data-theme="dark"] .toastui-editor-md-preview strong {
+      color: #f2f7fb !important;
+    }
+    body[data-theme="dark"] .toastui-editor-contents h1,
+    body[data-theme="dark"] .toastui-editor-contents h2,
+    body[data-theme="dark"] .toastui-editor-md-preview h1,
+    body[data-theme="dark"] .toastui-editor-md-preview h2 {
+      border-bottom-color: rgba(226, 234, 242, 0.16) !important;
+    }
+    body[data-theme="dark"] .toastui-editor-contents blockquote,
+    body[data-theme="dark"] .toastui-editor-md-preview blockquote {
+      color: #c7d3dc !important;
+      border-left-color: rgba(239, 190, 135, 0.42) !important;
+    }
+    body[data-theme="dark"] .toastui-editor-contents hr,
+    body[data-theme="dark"] .toastui-editor-md-preview hr {
+      border-color: rgba(226, 234, 242, 0.16) !important;
+    }
     body[data-theme="dark"] .toastui-editor-contents table th,
     body[data-theme="dark"] .toastui-editor-contents table td,
     body[data-theme="dark"] .toastui-editor-md-table th,
@@ -887,6 +918,7 @@
                   <label id="settings-coding-assistant-label" for="runtime_coding_assistant">Assistant</label>
                   <select id="runtime_coding_assistant" name="coding_assistant">
                     <option value="opencode">OpenCode</option>
+                    <option value="codex">Codex CLI</option>
                   </select>
                 </div>
               </div>
@@ -906,7 +938,7 @@
               </div>
               <div class="settings-field">
                 <label id="settings-planner-model-label" for="planner_model">Model</label>
-                <input id="planner_model" name="planner_model" list="opencode-model-options" placeholder="inherit default model">
+                <input id="planner_model" name="planner_model" list="assistant-model-options" placeholder="inherit default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-planner-token-label" for="planner_session_token_budget">Token</label>
@@ -925,7 +957,7 @@
               </div>
               <div class="settings-field">
                 <label id="settings-implementer-model-label" for="implementer_model">Model</label>
-                <input id="implementer_model" name="implementer_model" list="opencode-model-options" placeholder="inherit default model">
+                <input id="implementer_model" name="implementer_model" list="assistant-model-options" placeholder="inherit default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-implementer-token-label" for="implementer_session_token_budget">Token</label>
@@ -944,7 +976,7 @@
               </div>
               <div class="settings-field">
                 <label id="settings-reviewer-model-label" for="reviewer_model">Model</label>
-                <input id="reviewer_model" name="reviewer_model" list="opencode-model-options" placeholder="inherit default model">
+                <input id="reviewer_model" name="reviewer_model" list="assistant-model-options" placeholder="inherit default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-reviewer-token-label" for="reviewer_session_token_budget">Token</label>
@@ -959,7 +991,7 @@
             <div class="settings-role-inline settings-role-inline-commit">
               <div class="settings-field">
                 <label id="settings-commit-model-label" for="commit_model">Model</label>
-                <input id="commit_model" name="commit_model" list="opencode-model-options" placeholder="inherit default model">
+                <input id="commit_model" name="commit_model" list="assistant-model-options" placeholder="inherit default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-commit-token-label" for="commit_session_token_budget">Token</label>
@@ -971,7 +1003,7 @@
             </div>
           </section>
         </div>
-        <datalist id="opencode-model-options"></datalist>
+        <datalist id="assistant-model-options"></datalist>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
       </form>
     </div>
@@ -1198,7 +1230,7 @@
     const reviewerAgentCountInput = document.getElementById('reviewer_agent_count');
     const commitModelInput = document.getElementById('commit_model');
     const commitSessionTokenBudgetInput = document.getElementById('commit_session_token_budget');
-    const modelOptions = document.getElementById('opencode-model-options');
+    const modelOptions = document.getElementById('assistant-model-options');
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
     const settingsStatus = document.getElementById('settings-status');
     const refreshModelOptionsButton = document.getElementById('refresh-model-options');
@@ -2193,7 +2225,10 @@
     }
 
     function renderAssistantOptions(options, selectedValue = 'opencode') {
-      const items = Array.isArray(options) && options.length ? options : [{ value: 'opencode', label: 'OpenCode' }];
+      const items = Array.isArray(options) && options.length ? options : [
+        { value: 'opencode', label: 'OpenCode' },
+        { value: 'codex', label: 'Codex CLI' },
+      ];
       runtimeCodingAssistantInput.innerHTML = items
         .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
         .join('');
@@ -2226,7 +2261,7 @@
       runtimeLanguageInput.value = state.language || initialRuntimeLanguage;
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
-      renderAssistantOptions([{ value: 'opencode', label: 'OpenCode' }], state.coding_assistant || 'opencode');
+      renderAssistantOptions(lastSettingsPayload?.available_assistants || null, state.coding_assistant || 'opencode');
       repoDiscoveryRootInput.value = state.repo_discovery_root || '../';
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, state.repo_discovery_max_depth, 2);
       plannerModelInput.value = state.planner_model || '';
@@ -2240,6 +2275,7 @@
       syncNumericSettingInput(reviewerAgentCountInput, state.reviewer_agent_count, 1);
       commitModelInput.value = state.commit_model || '';
       syncNumericSettingInput(commitSessionTokenBudgetInput, state.commit_session_token_budget, 250);
+      renderModelOptions(lastSettingsPayload?.available_models || []);
       applyRuntimeSettingsTranslations();
       applyRequestTranslations();
       applyHumanReviewTranslations();
@@ -2921,7 +2957,12 @@
       setSettingsStatus(refresh ? translateSettings('statusRefreshing') : translateSettings('statusLoading'));
       refreshModelOptionsButton.disabled = true;
       try {
-        const response = await fetch(`/api/settings/models${refresh ? '?refresh=true' : ''}`);
+        const params = new URLSearchParams();
+        if (refresh) params.set('refresh', 'true');
+        const selectedAssistant = runtimeCodingAssistantInput.value || 'opencode';
+        if (selectedAssistant) params.set('assistant', selectedAssistant);
+        const query = params.toString();
+        const response = await fetch(`/api/settings/models${query ? `?${query}` : ''}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || translateSettings('settingsLoadFailed'));
         runtimeLanguageInput.value = data.language || 'EN';
@@ -4747,6 +4788,9 @@
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
+    runtimeCodingAssistantInput.addEventListener('change', () => {
+      loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error'));
+    });
     board.addEventListener('click', (event) => {
       const retrospectiveButton = event.target.closest('.target-branch-retrospective');
       if (retrospectiveButton) {

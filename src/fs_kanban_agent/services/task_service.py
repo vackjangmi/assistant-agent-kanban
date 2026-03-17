@@ -12,7 +12,7 @@ import uuid
 
 from ..enums import STATE_ORDER, TaskState
 from ..exceptions import TaskNotFoundError, TransitionError
-from ..log_parser import render_opencode_log
+from ..log_parser import render_assistant_log
 from ..models import (
     ChangedFileDetail,
     ChangedFileHunk,
@@ -103,8 +103,8 @@ class TaskService:
             )
             for path in paths:
                 raw_content = path.read_text()
-                rendered_content = render_opencode_log(raw_content)
-                debug_rendered_content = render_opencode_log(raw_content, debug=True)
+                rendered_content = render_assistant_log(raw_content)
+                debug_rendered_content = render_assistant_log(raw_content, debug=True)
                 entries.append(
                     TaskLogEntry(
                         name=path.name,
