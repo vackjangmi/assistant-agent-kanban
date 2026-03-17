@@ -1650,7 +1650,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function selectDefaultBoardPhase(columns)" in response.text
     assert "if (!boardPhaseManuallySelected) {" in response.text
     assert "#board.final-board { display: flex;" in response.text
-    assert ".final-board .column { flex: 0 0 min(320px, calc(100vw - 56px)); min-width: 280px; }" in response.text
+    assert ".final-board .column { flex: 1 1 320px; min-width: 320px; }" in response.text
     assert ".final-project-column { border-top: 6px solid var(--repo-accent, var(--accent));" in response.text
     assert "final-project-title" in response.text
     assert "final-project-path" not in response.text
