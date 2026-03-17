@@ -1409,6 +1409,21 @@ def test_api_refresh_can_preview_codex_models_without_switching_runtime(configur
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
 
 
+def test_api_settings_without_assistant_query_returns_persisted_backend(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "codex"
+    config.codex.planner_model = "gpt-5.4"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/models")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["coding_assistant"] == "codex"
+    assert payload["planner_model"] == "gpt-5.4"
+
+
 def test_api_save_materializes_runtime_agents_immediately(configured_paths):
     config, _, _ = configured_paths
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))

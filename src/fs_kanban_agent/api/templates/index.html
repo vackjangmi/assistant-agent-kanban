@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <style>
     :root { --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --panel-strong: rgba(255,252,247,0.95); --border: rgba(24,32,38,0.15); --border-strong: rgba(24,32,38,0.28); --accent: #7c4f2c; --accent-strong: #5f3417; --accent-soft: rgba(124,79,44,0.12); --success: #217349; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }
-    body[data-theme="dark"] { --bg-top: #0c1218; --bg-bottom: #141d26; --panel: rgba(24,34,44,0.84); --panel-strong: rgba(28,39,50,0.96); --border: rgba(186,200,214,0.12); --border-strong: rgba(186,200,214,0.22); --accent: #d6ab78; --accent-strong: #f2c693; --accent-soft: rgba(214,171,120,0.16); --success: #72c89a; --danger: #f09486; --text: #eef4f8; --muted: #aebcca; --shadow: 0 18px 40px rgba(0,0,0,0.42); }
+    body[data-theme="dark"] { --bg-top: #0c1218; --bg-bottom: #141d26; --panel: rgba(24,34,44,0.84); --panel-strong: rgba(28,39,50,0.96); --border: rgba(186,200,214,0.12); --border-strong: rgba(186,200,214,0.22); --accent: #d6ab78; --accent-strong: #f2c693; --accent-soft: rgba(214,171,120,0.16); --success: #72c89a; --danger: #f09486; --text: #eef4f8; --muted: #aebcca; --shadow: 0 18px 40px rgba(0,0,0,0.42); --review-panel: rgba(19, 28, 36, 0.96); --review-panel-strong: rgba(24, 34, 44, 0.98); --review-panel-soft: rgba(31, 43, 54, 0.96); --review-border: rgba(186, 200, 214, 0.16); --review-border-strong: rgba(214, 171, 120, 0.3); --review-toolbar: rgba(27, 38, 48, 0.98); --review-toolbar-divider: rgba(186, 200, 214, 0.1); --review-editor-surface: rgba(16, 24, 31, 0.98); --review-editor-gutter: rgba(21, 30, 39, 0.98); --review-add-bg: rgba(34, 111, 73, 0.4); --review-add-line-bg: rgba(31, 86, 59, 0.5); --review-add-text: #b7f0cf; --review-remove-bg: rgba(142, 53, 44, 0.38); --review-remove-line-bg: rgba(121, 43, 35, 0.48); --review-remove-text: #ffc2b7; }
     body[data-theme="dark"] .column,
     body[data-theme="dark"] .final-project-column,
     body[data-theme="dark"] .settings-card,
@@ -259,17 +259,201 @@
       color: #13202a;
       box-shadow: 0 10px 24px rgba(0,0,0,0.22);
     }
+    body[data-theme="dark"] .task-tabs button:hover,
+    body[data-theme="dark"] .task-tabs button:focus-visible,
+    body[data-theme="dark"] .board-phase-tabs button:hover,
+    body[data-theme="dark"] .board-phase-tabs button:focus-visible {
+      background: rgba(37, 51, 64, 0.96);
+      border-color: rgba(214, 171, 120, 0.18);
+      color: #dce6ee;
+    }
+    body[data-theme="dark"] .task-tabs,
+    body[data-theme="dark"] #task-panel-diff,
+    body[data-theme="dark"] #task-panel-review-note,
+    body[data-theme="dark"] .diff-layout,
+    body[data-theme="dark"] .diff-stage,
+    body[data-theme="dark"] .human-review-panel,
+    body[data-theme="dark"] .human-review-footer,
+    body[data-theme="dark"] .approval-choice-shell,
+    body[data-theme="dark"] .approval-choice-grid {
+      gap: 14px;
+    }
+    body[data-theme="dark"] #task-panel-review-note,
+    body[data-theme="dark"] #task-human-review-panel,
+    body[data-theme="dark"] .human-review-editor-shell {
+      background: transparent;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-box {
+      background: linear-gradient(180deg, rgba(24, 35, 45, 0.98), rgba(17, 25, 33, 0.97)) !important;
+      border-color: var(--review-border) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 14px 28px rgba(0,0,0,0.22) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell {
+      border: 0;
+      border-radius: 0;
+      overflow: visible;
+      background: transparent;
+      box-shadow: none;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-footer {
+      background: transparent !important;
+    }
     body[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
     body[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgba(126, 144, 161, 0.4); border-radius: 999px; border: 2px solid rgba(12, 18, 25, 0.55); }
     body[data-theme="dark"] ::-webkit-scrollbar-track { background: rgba(12, 18, 25, 0.3); }
     body[data-theme="dark"] .settings-input-suffix { background: rgba(239, 190, 135, 0.14); color: var(--accent-strong); border-color: rgba(239, 190, 135, 0.16); }
-    body[data-theme="dark"] .diff-cell.context { background: rgba(35, 46, 59, 0.76); }
-    body[data-theme="dark"] .diff-cell.empty { background: rgba(11, 17, 24, 0.64); }
-    body[data-theme="dark"] .diff-cell.add { background: rgba(35, 98, 68, 0.3); }
-    body[data-theme="dark"] .diff-cell.remove { background: rgba(136, 53, 41, 0.28); }
+    body[data-theme="dark"] .diff-file-list button {
+      background: linear-gradient(180deg, rgba(30, 42, 53, 0.98), rgba(24, 34, 43, 0.98));
+      border-color: var(--review-border);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    body[data-theme="dark"] .diff-file-list button:hover,
+    body[data-theme="dark"] .diff-file-list button:focus-visible {
+      background: linear-gradient(180deg, rgba(39, 53, 66, 0.98), rgba(29, 40, 51, 0.98));
+      border-color: rgba(214, 171, 120, 0.22);
+      color: #f3f7fa;
+    }
+    body[data-theme="dark"] .diff-file-list button.active {
+      background: linear-gradient(180deg, rgba(228, 187, 140, 0.96), rgba(204, 156, 103, 0.96));
+      border-color: rgba(242, 198, 147, 0.5);
+      color: #16212a;
+    }
+    body[data-theme="dark"] .diff-summary,
+    body[data-theme="dark"] .verification-actions,
+    body[data-theme="dark"] .human-review-box,
+    body[data-theme="dark"] .approval-choice-copy,
+    body[data-theme="dark"] .approval-choice-card,
+    body[data-theme="dark"] .approval-choice-status,
+    body[data-theme="dark"] .human-review-approval-status {
+      border-color: var(--review-border);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+    }
+    body[data-theme="dark"] .diff-summary,
+    body[data-theme="dark"] .verification-actions,
+    body[data-theme="dark"] .approval-choice-copy,
+    body[data-theme="dark"] .approval-choice-status {
+      background: linear-gradient(180deg, rgba(31, 43, 54, 0.98), rgba(23, 32, 41, 0.96));
+    }
+    body[data-theme="dark"] .human-review-box,
+    body[data-theme="dark"] .approval-choice-card,
+    body[data-theme="dark"] .human-review-approval-status,
+    body[data-theme="dark"] .approval-choice-status {
+      background: linear-gradient(180deg, rgba(27, 39, 49, 0.98), rgba(20, 29, 38, 0.96));
+    }
+    body[data-theme="dark"] #task-panel-review-note .editor-toolbar {
+      padding: 0;
+      margin-bottom: 8px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    body[data-theme="dark"] #task-panel-review-note .editor-toolbar strong {
+      color: #f3f7fa;
+    }
+    body[data-theme="dark"] #task-panel-review-note .editor-toolbar .muted {
+      color: #b8c7d3;
+    }
+    body[data-theme="dark"] #task-panel-review-note .editor-toolbar button {
+      color: #eef4f8 !important;
+    }
+    body[data-theme="dark"] .human-review-approval-status[data-tone="warning"],
+    body[data-theme="dark"] .approval-choice-status[data-tone="error"] {
+      border-color: rgba(240, 148, 134, 0.3);
+      background: linear-gradient(180deg, rgba(88, 38, 34, 0.5), rgba(56, 24, 22, 0.42));
+      color: #ffd0c7;
+    }
+    body[data-theme="dark"] .diff-badge,
+    body[data-theme="dark"] .diff-thread-comment-badge.historical {
+      background: rgba(43, 56, 69, 0.96);
+      border-color: rgba(186, 200, 214, 0.15);
+      color: #dce6ee;
+    }
+    body[data-theme="dark"] .diff-thread-comment-badge {
+      background: rgba(33, 84, 60, 0.62);
+      border-color: rgba(114, 200, 154, 0.28);
+      color: #c8f2db;
+    }
+    body[data-theme="dark"] .diff-shell,
+    body[data-theme="dark"] .diff-unified,
+    body[data-theme="dark"] .editor-host,
+    body[data-theme="dark"] .viewer-host {
+      background: var(--review-panel);
+      border-color: var(--review-border);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+    }
+    body[data-theme="dark"] .diff-hunk { border-top-color: rgba(186, 200, 214, 0.1); }
+    body[data-theme="dark"] .diff-hunk-header {
+      background: linear-gradient(180deg, rgba(67, 52, 34, 0.8), rgba(49, 38, 25, 0.76));
+      border-bottom: 1px solid rgba(214, 171, 120, 0.14);
+      color: #f2cfaa;
+    }
+    body[data-theme="dark"] .diff-cell,
+    body[data-theme="dark"] .diff-mobile-line {
+      border-top-color: rgba(186, 200, 214, 0.08);
+    }
+    body[data-theme="dark"] .diff-cell + .diff-cell,
+    body[data-theme="dark"] .diff-mobile-line-side,
+    body[data-theme="dark"] .diff-line-number {
+      border-color: rgba(186, 200, 214, 0.1);
+    }
+    body[data-theme="dark"] .diff-cell.context { background: rgba(36, 48, 60, 0.82); }
+    body[data-theme="dark"] .diff-cell.empty { background: rgba(13, 20, 27, 0.82); }
+    body[data-theme="dark"] .diff-cell.add { background: var(--review-add-bg); }
+    body[data-theme="dark"] .diff-cell.remove { background: var(--review-remove-bg); }
+    body[data-theme="dark"] .diff-line-thread-shell {
+      background: linear-gradient(180deg, rgba(28, 40, 50, 0.98), rgba(22, 31, 39, 0.98));
+      border-top-color: rgba(186, 200, 214, 0.08);
+    }
+    body[data-theme="dark"] .diff-thread-comment {
+      background: linear-gradient(180deg, rgba(34, 47, 58, 0.98), rgba(25, 35, 44, 0.98));
+      border-color: rgba(186, 200, 214, 0.14);
+      box-shadow: 0 14px 28px rgba(0,0,0,0.24);
+    }
+    body[data-theme="dark"] .diff-thread-comment.resolved {
+      background: linear-gradient(180deg, rgba(30, 63, 47, 0.92), rgba(22, 46, 35, 0.92));
+      border-color: rgba(114, 200, 154, 0.24);
+    }
+    body[data-theme="dark"] .diff-thread-comment-body {
+      background: rgba(17, 25, 33, 0.92);
+      border-color: rgba(186, 200, 214, 0.12);
+    }
+    body[data-theme="dark"] .diff-thread-comment-delete {
+      background: rgba(20, 28, 36, 0.9);
+      border-color: rgba(186, 200, 214, 0.16);
+      color: #d6e0e8;
+    }
+    body[data-theme="dark"] .diff-inline-comment {
+      background: linear-gradient(180deg, rgba(51, 42, 31, 0.9), rgba(33, 28, 23, 0.9));
+      border-color: var(--review-border-strong);
+      box-shadow: 0 14px 30px rgba(0,0,0,0.22);
+    }
+    body[data-theme="dark"] .diff-inline-comment-fallback {
+      background: rgba(16, 23, 30, 0.98);
+      border-color: rgba(186, 200, 214, 0.14);
+      color: #eef4f8;
+    }
+    body[data-theme="dark"] .diff-line-comment-button {
+      background: rgba(42, 55, 68, 0.98);
+      border-color: rgba(214, 171, 120, 0.22);
+      color: #f5cb98;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.22);
+    }
+    body[data-theme="dark"] .diff-line-comment-button.has-comments {
+      background: rgba(214, 171, 120, 0.24);
+      border-color: rgba(242, 198, 147, 0.34);
+      color: #ffe3bf;
+    }
+    body[data-theme="dark"] .diff-line-comment-button:hover,
+    body[data-theme="dark"] .diff-line-comment-button:focus-visible {
+      background: rgba(67, 52, 34, 0.95);
+      border-color: rgba(242, 198, 147, 0.34);
+      color: #ffe1bb;
+    }
     body[data-theme="dark"] .diff-unified-line.context { color: var(--text); }
-    body[data-theme="dark"] .diff-unified-line.add { color: #9ee0ba; }
-    body[data-theme="dark"] .diff-unified-line.remove { color: #ffb4a7; }
+    body[data-theme="dark"] .diff-unified-line.header { color: #f1c997; }
+    body[data-theme="dark"] .diff-unified-line.add { background: var(--review-add-line-bg); color: var(--review-add-text); }
+    body[data-theme="dark"] .diff-unified-line.remove { background: var(--review-remove-line-bg); color: var(--review-remove-text); }
     body[data-theme="dark"] .toastui-editor-defaultUI,
     body[data-theme="dark"] .toastui-editor-main,
     body[data-theme="dark"] .toastui-editor-md-container,
@@ -289,6 +473,100 @@
     body[data-theme="dark"] .toastui-editor-mode-switch .tab-item,
     body[data-theme="dark"] .toastui-editor-defaultUI button {
       color: var(--text) !important;
+    }
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-defaultUI {
+      border-color: var(--review-border) !important;
+      background: var(--review-panel-strong) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+      border-width: 1px !important;
+      border-radius: 10px;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-defaultUI,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-main,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-container,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-container {
+      background: var(--review-panel-strong) !important;
+    }
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-toolbar,
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-mode-switch,
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-md-tab-container,
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-ww-tab-container {
+      background: var(--review-toolbar) !important;
+      border-color: var(--review-toolbar-divider) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-group,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider {
+      border-color: var(--review-toolbar-divider) !important;
+    }
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-defaultUI button {
+      background-color: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+    }
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-mode-switch .tab-item {
+      background: transparent !important;
+      border-color: var(--review-toolbar-divider) !important;
+    }
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-defaultUI button:hover,
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-defaultUI button:focus-visible,
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-mode-switch .tab-item:hover,
+    body[data-theme="dark"] .human-review-editor-shell .toastui-editor-mode-switch .tab-item.active {
+      background-color: rgba(255,255,255,0.06) !important;
+      color: #ffe2bd !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-container,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-container,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-main {
+      background: linear-gradient(180deg, rgba(21, 30, 38, 0.98), rgba(16, 23, 30, 0.98)) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-preview,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-contents,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-splitter,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-gutters,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-scroll,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror {
+      background: var(--review-editor-surface) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-gutters,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-splitter {
+      background: var(--review-editor-gutter) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-preview,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-contents,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-preview p,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-contents p,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror pre,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-line,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror p {
+      color: var(--text) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-cursor {
+      border-left-color: var(--text) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-selected,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-focused .CodeMirror-selected,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror-selectednode {
+      background: rgba(214, 171, 120, 0.24) !important;
+    }
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-mode-switch,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-tab-container,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-tab-container,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-group,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider {
+      color: var(--text) !important;
+    }
+    body[data-theme="dark"] .human-review-editor-shell .editor-textarea,
+    body[data-theme="dark"] #task-human-review-editor-fallback {
+      background: var(--review-editor-surface);
+      border-color: rgba(186, 200, 214, 0.12);
+      color: var(--text);
+      border-top: 0;
+      border-radius: 0;
     }
     body[data-theme="dark"] .toastui-editor-contents,
     body[data-theme="dark"] .toastui-editor-contents p,
@@ -386,8 +664,8 @@
     body.modal-open { overflow: hidden; }
     header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    button { padding: 9px 14px; border: 1px solid var(--text); background: #fff9ef; cursor: pointer; font: inherit; color: var(--text); }
-    body[data-theme="dark"] button { background: rgba(31,42,54,0.94); }
+    button { padding: 9px 14px; border: 1px solid var(--text); background-color: #fff9ef; cursor: pointer; font: inherit; color: var(--text); }
+    body[data-theme="dark"] button { background-color: rgba(31,42,54,0.94); }
     button.primary { background: var(--accent); border-color: var(--accent-strong); color: #fff; }
     .accent-button { background: #8b5a2b; border-color: #72461f; color: #fff; }
     .ghost-button { background: transparent; border-color: var(--border); }
@@ -2960,7 +3238,7 @@
         const params = new URLSearchParams();
         if (refresh) params.set('refresh', 'true');
         const selectedAssistant = runtimeCodingAssistantInput.value || 'opencode';
-        if (selectedAssistant) params.set('assistant', selectedAssistant);
+        if (refresh && selectedAssistant) params.set('assistant', selectedAssistant);
         const query = params.toString();
         const response = await fetch(`/api/settings/models${query ? `?${query}` : ''}`);
         const data = await response.json();
