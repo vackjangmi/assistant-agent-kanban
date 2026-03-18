@@ -4189,8 +4189,8 @@
     }
 
     const embeddedPlanImageRe = /!\[(?<alt>[^\]]*)\]\((?<url>data:image\/(?<subtype>png|jpeg|jpg|gif|webp);base64,[^)]+)\)/g;
-    const planAttachmentMaxDimension = 1600;
-    const planAttachmentWebpQuality = 0.72;
+    const planAttachmentMaxDimension = 1280;
+    const planAttachmentWebpQuality = 0.6;
 
     function attachmentUploadName(uploadName = '', fallbackType = 'image/png') {
       const trimmed = (uploadName || '').trim();

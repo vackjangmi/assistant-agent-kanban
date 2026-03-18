@@ -1939,6 +1939,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "callback(uploaded.relative_path, uploaded.filename);" in response.text
     assert "return false;" in response.text
     assert "function rewriteAttachmentPaths(markdown, taskId)" in response.text
+    assert "const planAttachmentMaxDimension = 1280;" in response.text
+    assert "const planAttachmentWebpQuality = 0.6;" in response.text
     assert "async function compressPlanAttachmentBlob(blob, uploadName = '')" in response.text
     assert "async function replaceEmbeddedPlanImagesWithUploads(content)" in response.text
     assert "const compressedBlob = await canvasToBlob(canvas, 'image/webp', planAttachmentWebpQuality);" in response.text
