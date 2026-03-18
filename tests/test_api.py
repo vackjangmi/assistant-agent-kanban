@@ -1798,6 +1798,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "payload.request_upload_token = requestUploadToken;" in response.text
     assert "function generateRequestUploadToken()" in response.text
     assert "fetch(`/api/request-uploads?upload_token=${encodeURIComponent(uploadToken)}`" in response.text
+    assert "boardPhaseManuallySelected = true;" in response.text
+    assert "activeBoardPhase = 'plan';" in response.text
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
     assert "fs-kanban-agent.last-target-repo" in response.text

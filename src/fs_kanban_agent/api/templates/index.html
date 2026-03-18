@@ -5325,6 +5325,8 @@
         persistLastTargetRepo(payload.target_repo);
         resetFormState();
         setModalOpen(false);
+        boardPhaseManuallySelected = true;
+        activeBoardPhase = 'plan';
         await loadBoard();
       } catch (error) {
         formError.hidden = false;
