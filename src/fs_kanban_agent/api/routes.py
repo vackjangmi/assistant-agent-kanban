@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import asyncio
+from collections.abc import Mapping
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from typing import Literal
@@ -20,12 +21,21 @@ from ..omo_config import read_omo_delegation_snapshot
 from ..repo_branches import describe_target_repo_branches
 from ..repo_discovery import discover_target_repos
 from ..language import runtime_language_code_to_request_language
-from ..request_creator import RequestTemplateData, build_default_scope_sections_for_language, create_request, split_lines
+from ..request_creator import (
+    RequestTemplateData,
+    build_default_scope_sections_for_language,
+    create_request,
+    delete_request_uploads,
+    get_request_upload,
+    save_request_upload,
+    split_lines,
+)
 
 
 class CreateRequestPayload(BaseModel):
     title: str
     goal: str
+    request_upload_token: str | None = None
     background: str | None = None
     scope: str | None = None
     out_of_scope: str | None = None
@@ -166,7 +176,7 @@ def _apply_config_update(target, updated) -> None:
     target.loaded_local_from = updated.loaded_local_from
 
 
-def _settings_response(runtime, snapshot, *, config_path: str | None = None, saved: bool = False) -> dict[str, object]:
+def _settings_response(runtime, snapshot, *, config_path: str | None = None, saved: bool = False) -> Mapping[str, object]:
     active_backend = snapshot.backend
     active_config = runtime.config if runtime.config.active_backend() == active_backend else runtime.config.model_copy(deep=True)
     active_config.runtime.coding_assistant = active_backend
@@ -290,13 +300,13 @@ def build_router() -> APIRouter:
         return runtime.board_service.get_board()
 
     @router.get("/api/settings/models")
-    async def get_model_settings(request: Request, refresh: bool = False, assistant: str | None = None) -> dict[str, object]:
+    async def get_model_settings(request: Request, refresh: bool = False, assistant: str | None = None) -> Mapping[str, object]:
         runtime = request.app.state.runtime
         snapshot = await _resolve_settings_snapshot(runtime, refresh=refresh, assistant=assistant)
         return _settings_response(runtime, snapshot)
 
     @router.put("/api/settings/models")
-    async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> dict[str, object]:
+    async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> Mapping[str, object]:
         runtime = request.app.state.runtime
         next_config = runtime.config.model_copy(deep=True)
         previous_backend = runtime.config.active_backend()
@@ -452,6 +462,31 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return FileResponse(path, media_type=media_type)
 
+    @router.post("/api/request-uploads")
+    async def upload_request_attachment(upload_token: str, request: Request, file: UploadFile = File(...)):
+        runtime = request.app.state.runtime
+        data = await file.read()
+        try:
+            saved = save_request_upload(runtime.config, upload_token, file.filename or "image", file.content_type, data)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return saved
+
+    @router.get("/api/request-uploads/{upload_token}/{filename}")
+    async def request_attachment(upload_token: str, filename: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            path, media_type = get_request_upload(runtime.config, upload_token, filename)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return FileResponse(path, media_type=media_type)
+
+    @router.delete("/api/request-uploads/{upload_token}")
+    async def delete_request_attachment_uploads(upload_token: str, request: Request):
+        runtime = request.app.state.runtime
+        delete_request_uploads(runtime.config, upload_token)
+        return {"deleted": True}
+
     @router.get("/api/target-repos")
     async def target_repos(request: Request):
         runtime = request.app.state.runtime
@@ -500,6 +535,7 @@ def build_router() -> APIRouter:
                 ),
                 target_repo_root=Path(payload.target_repo),
                 base_branch=normalized_base_branch,
+                request_upload_token=payload.request_upload_token,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

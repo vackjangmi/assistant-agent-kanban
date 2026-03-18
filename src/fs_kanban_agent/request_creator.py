@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import mimetypes
+import re
+import shutil
+import uuid
 import secrets
 from pathlib import Path
 
@@ -9,6 +15,14 @@ from .config import AppConfig
 from .enums import TaskState
 from .language import runtime_language_code_to_request_language
 from .target_repo_guard import resolve_safe_target_repo_root
+
+
+ATTACHMENT_NAME_RE = re.compile(r"[^a-zA-Z0-9]+")
+ALLOWED_ATTACHMENT_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+EMBEDDED_IMAGE_RE = re.compile(
+    r"!\[(?P<alt>[^\]]*)\]\((?P<url>data:image/(?P<subtype>png|jpeg|jpg|gif|webp);base64,(?P<data>[^)]+))\)"
+)
+REQUEST_UPLOAD_TOKEN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 
 
 class RequestTemplateData(BaseModel):
@@ -62,6 +76,7 @@ def create_request(
     template: RequestTemplateData,
     target_repo_root: Path,
     base_branch: str | None = None,
+    request_upload_token: str | None = None,
 ) -> Path:
     title = template.title.strip()
     goal = (template.goal or "").strip()
@@ -70,29 +85,176 @@ def create_request(
     requests_dir = config.state_dir(TaskState.REQUESTS)
     task_dir = requests_dir / _generate_task_key(config.kanban_root)
     task_dir.mkdir(parents=True, exist_ok=False)
-    request_path = task_dir / "REQUEST.md"
-    resolved_repo = resolve_safe_target_repo_root(target_repo_root)
-    request_language = runtime_language_code_to_request_language(config.runtime.language)
-    lines = [
-        "---",
-        f"title: {title}",
-        f"language: {request_language}",
-        "target:",
-        f"  repo_root: {resolved_repo}",
-        f"  base_branch: {base_branch or config.base_branch}",
-        "---",
-        "",
-        f"# {title}",
-    ]
-    lines.extend(_render_request_sections(template.model_copy(update={"title": title, "goal": goal or None}), language_code=request_language))
-    request_path.write_text("\n".join(lines))
-    return task_dir
+    try:
+        normalized_template = template.model_copy(
+            update={
+                "goal": _normalize_markdown_attachments(
+                    task_dir,
+                    _finalize_request_uploads(config, task_dir, goal or None, request_upload_token),
+                ),
+                "background": _normalize_markdown_attachments(
+                    task_dir,
+                    _finalize_request_uploads(config, task_dir, template.background, request_upload_token),
+                ),
+            }
+        )
+        request_path = task_dir / "REQUEST.md"
+        resolved_repo = resolve_safe_target_repo_root(target_repo_root)
+        request_language = runtime_language_code_to_request_language(config.runtime.language)
+        lines = [
+            "---",
+            f"title: {title}",
+            f"language: {request_language}",
+            "target:",
+            f"  repo_root: {resolved_repo}",
+            f"  base_branch: {base_branch or config.base_branch}",
+            "---",
+            "",
+            f"# {title}",
+        ]
+        lines.extend(_render_request_sections(normalized_template.model_copy(update={"title": title}), language_code=request_language))
+        request_path.write_text("\n".join(lines))
+        _clear_request_uploads(config, request_upload_token)
+        return task_dir
+    except Exception:
+        shutil.rmtree(task_dir, ignore_errors=True)
+        raise
 
 
 def split_lines(value: str | None) -> list[str]:
     if value is None:
         return []
     return [line.strip().lstrip("- ").strip() for line in value.splitlines() if line.strip()]
+
+
+def save_request_upload(config: AppConfig, upload_token: str, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
+    token = _normalize_request_upload_token(upload_token)
+    upload_dir = _request_upload_dir(config, token, create=True)
+    saved = _store_attachment_in_dir(upload_dir, upload_name, content_type, data)
+    saved["upload_token"] = token
+    saved["url"] = f"/api/request-uploads/{token}/{saved['filename']}"
+    saved["relative_path"] = saved["url"]
+    return saved
+
+
+def get_request_upload(config: AppConfig, upload_token: str, filename: str) -> tuple[Path, str]:
+    token = _normalize_request_upload_token(upload_token)
+    upload_dir = _request_upload_dir(config, token)
+    path = (upload_dir / filename).resolve()
+    if path.parent != upload_dir or not path.exists():
+        raise ValueError("request upload not found")
+    return path, mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def delete_request_uploads(config: AppConfig, upload_token: str) -> None:
+    _clear_request_uploads(config, upload_token)
+
+
+def _normalize_markdown_attachments(task_dir: Path, content: str | None) -> str | None:
+    if not content or not content.strip():
+        return content
+
+    def replace(match: re.Match[str]) -> str:
+        alt_text = match.group("alt")
+        subtype = match.group("subtype")
+        raw_data = re.sub(r"\s+", "", match.group("data"))
+        try:
+            decoded = base64.b64decode(raw_data, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError("embedded image data is invalid") from exc
+        suffix = ".jpg" if subtype == "jpeg" else f".{subtype}"
+        upload_name = f"{alt_text.strip() or 'image'}{suffix}"
+        saved = _store_attachment(task_dir, upload_name, f"image/{subtype}", decoded)
+        return f"![{alt_text}]({saved['relative_path']})"
+
+    return EMBEDDED_IMAGE_RE.sub(replace, content)
+
+
+def _finalize_request_uploads(config: AppConfig, task_dir: Path, content: str | None, upload_token: str | None) -> str | None:
+    if not content or not content.strip() or not upload_token:
+        return content
+    token = _normalize_request_upload_token(upload_token)
+    upload_dir = _request_upload_dir(config, token)
+    pattern = re.compile(rf"(?P<prefix>!\[[^\]]*\]\()/api/request-uploads/{re.escape(token)}/(?P<filename>[^)]+)(?P<suffix>\))")
+
+    def replace(match: re.Match[str]) -> str:
+        filename = Path(match.group("filename")).name
+        source = (upload_dir / filename).resolve()
+        if source.parent != upload_dir or not source.exists():
+            raise ValueError("request upload not found")
+        saved = _move_attachment_into_task(task_dir, source)
+        return f"{match.group('prefix')}{saved['relative_path']}{match.group('suffix')}"
+
+    return pattern.sub(replace, content)
+
+
+def _store_attachment(task_dir: Path, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
+    return _store_attachment_in_dir(task_dir / "_attachments", upload_name, content_type, data)
+
+
+def _store_attachment_in_dir(target_dir: Path, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
+    suffix = Path(upload_name).suffix.lower()
+    if suffix not in ALLOWED_ATTACHMENT_SUFFIXES:
+        raise ValueError("only png, jpg, jpeg, gif, and webp attachments are supported")
+    if content_type and not content_type.startswith("image/"):
+        raise ValueError("only image attachments are supported")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stem = ATTACHMENT_NAME_RE.sub("-", Path(upload_name).stem.lower()).strip("-") or "image"
+    stored_name = f"{stem}-{uuid.uuid4().hex[:8]}{suffix}"
+    path = target_dir / stored_name
+    path.write_bytes(data)
+    return {
+        "filename": stored_name,
+        "content_type": content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
+        "relative_path": f"_attachments/{stored_name}",
+        "url": str(path),
+    }
+
+
+def _move_attachment_into_task(task_dir: Path, source: Path) -> dict[str, str]:
+    suffix = source.suffix.lower()
+    if suffix not in ALLOWED_ATTACHMENT_SUFFIXES:
+        raise ValueError("only png, jpg, jpeg, gif, and webp attachments are supported")
+    attachments_dir = task_dir / "_attachments"
+    attachments_dir.mkdir(parents=True, exist_ok=True)
+    stem = ATTACHMENT_NAME_RE.sub("-", source.stem.lower()).strip("-") or "image"
+    stored_name = f"{stem}-{uuid.uuid4().hex[:8]}{suffix}"
+    target = attachments_dir / stored_name
+    source.replace(target)
+    return {
+        "filename": stored_name,
+        "content_type": mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
+        "relative_path": f"_attachments/{stored_name}",
+        "url": f"/api/tasks/{task_dir.name}/attachments/{stored_name}",
+    }
+
+
+def _request_upload_dir(config: AppConfig, upload_token: str, *, create: bool = False) -> Path:
+    token = _normalize_request_upload_token(upload_token)
+    root = config.request_uploads_dir.resolve()
+    path = (root / token).resolve()
+    if path.parent != root:
+        raise ValueError("request upload token is invalid")
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _normalize_request_upload_token(upload_token: str | None) -> str:
+    token = (upload_token or "").strip()
+    if not REQUEST_UPLOAD_TOKEN_RE.fullmatch(token):
+        raise ValueError("request upload token is invalid")
+    return token
+
+
+def _clear_request_uploads(config: AppConfig, upload_token: str | None) -> None:
+    if not upload_token:
+        return
+    try:
+        upload_dir = _request_upload_dir(config, upload_token)
+    except ValueError:
+        return
+    shutil.rmtree(upload_dir, ignore_errors=True)
 
 
 def _render_request_sections(template: RequestTemplateData, *, language_code: str) -> list[str]:

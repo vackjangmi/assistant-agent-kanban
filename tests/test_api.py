@@ -279,6 +279,30 @@ def test_api_uploads_and_serves_plan_attachments(configured_paths):
         assert download.headers["content-type"] == "image/png"
 
 
+def test_api_uploads_and_serves_request_attachments(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        upload = client.post(
+            "/api/request-uploads?upload_token=request-upload-token",
+            files={"file": ("diagram.png", b"pngdata", "image/png")},
+        )
+        assert upload.status_code == 200
+        payload = upload.json()
+        assert payload["upload_token"] == "request-upload-token"
+        assert payload["url"].endswith(payload["filename"])
+        assert payload["relative_path"] == payload["url"]
+
+        upload_dir = config.request_uploads_dir / "request-upload-token"
+        assert (upload_dir / payload["filename"]).read_bytes() == b"pngdata"
+
+        download = client.get(payload["url"])
+        assert download.status_code == 200
+        assert download.content == b"pngdata"
+        assert download.headers["content-type"] == "image/png"
+
+
 def test_api_extracts_embedded_plan_data_images_to_attachments(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-embedded-image-task")
@@ -952,6 +976,69 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert "## Out of Scope" in request_markdown
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
     assert "Do not modify files under `records/kanban-docs` unless the request explicitly asks for it." in request_markdown
+
+
+def test_api_extracts_embedded_request_goal_images_to_attachments(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    embedded = base64.b64encode(b"pngdata").decode()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Request image attachment task",
+                "goal": f"Need this diagram.\n\n![diagram](data:image/png;base64,{embedded})",
+                "target_repo": str(target_repo),
+                "base_branch": "main",
+            },
+        )
+
+    assert response.status_code == 200
+    task_dir = _locate_task_dir(config, Path(response.json()["task_path"]).name)
+    request_markdown = (task_dir / "REQUEST.md").read_text()
+    assert "![diagram](_attachments/" in request_markdown
+    attachments = list((task_dir / "_attachments").glob("*.png"))
+    assert len(attachments) == 1
+    assert attachments[0].read_bytes() == b"pngdata"
+
+
+def test_api_finalizes_uploaded_request_goal_images_to_task_attachments(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        upload = client.post(
+            "/api/request-uploads?upload_token=request-upload-token",
+            files={"file": ("diagram.png", b"pngdata", "image/png")},
+        )
+        assert upload.status_code == 200
+        upload_payload = upload.json()
+
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Request uploaded image attachment task",
+                "goal": f"Need this diagram.\n\n![diagram]({upload_payload['url']})",
+                "request_upload_token": "request-upload-token",
+                "target_repo": str(target_repo),
+                "base_branch": "main",
+            },
+        )
+
+    assert response.status_code == 200
+    task_dir = _locate_task_dir(config, Path(response.json()["task_path"]).name)
+    request_markdown = (task_dir / "REQUEST.md").read_text()
+    assert "![diagram](_attachments/" in request_markdown
+    attachments = list((task_dir / "_attachments").glob("*.png"))
+    assert len(attachments) == 1
+    assert attachments[0].read_bytes() == b"pngdata"
+    assert not (config.request_uploads_dir / "request-upload-token").exists()
 
 
 def test_ui_injects_configured_target_repo_docs_root_into_request_defaults(configured_paths):
@@ -1682,6 +1769,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "task-viewer-host" in response.text
     assert "Approve plan" in response.text
     assert "toastui-editor" in response.text
+    assert 'id="request-goal-editor-host"' in response.text
+    assert 'id="request-goal-editor-fallback"' in response.text
     assert "buildScopeDefaults" in response.text
     assert "buildOutOfScopeDefaults" in response.text
     assert "const requestTranslations = {" in response.text
@@ -1702,6 +1791,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'class="diff-cell ${line.kind}"' in response.text
     assert 'class="diff-unified"' in response.text
     assert "translateRequest('validationGoal')" in response.text
+    assert "function ensureRequestGoalEditor()" in response.text
+    assert "syncRequestGoalField();" in response.text
+    assert "addImageBlobHook: async (blob, callback) => {" in response.text
+    assert "async function uploadRequestAttachment(blob, options = {})" in response.text
+    assert "payload.request_upload_token = requestUploadToken;" in response.text
+    assert "function generateRequestUploadToken()" in response.text
+    assert "fetch(`/api/request-uploads?upload_token=${encodeURIComponent(uploadToken)}`" in response.text
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
     assert "fs-kanban-agent.last-target-repo" in response.text
@@ -1843,6 +1939,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "callback(uploaded.relative_path, uploaded.filename);" in response.text
     assert "return false;" in response.text
     assert "function rewriteAttachmentPaths(markdown, taskId)" in response.text
+    assert "async function compressPlanAttachmentBlob(blob, uploadName = '')" in response.text
+    assert "async function replaceEmbeddedPlanImagesWithUploads(content)" in response.text
+    assert "const compressedBlob = await canvasToBlob(canvas, 'image/webp', planAttachmentWebpQuality);" in response.text
+    assert "const normalizedContent = await replaceEmbeddedPlanImagesWithUploads(getPlanEditorContent());" in response.text
     assert "async function refreshActiveTaskDetailAfterComment(taskId)" in response.text
     assert "await refreshActiveTaskDetailAfterComment(activeTaskId);" in response.text
     assert "function resetArtifactViewerScroll()" in response.text

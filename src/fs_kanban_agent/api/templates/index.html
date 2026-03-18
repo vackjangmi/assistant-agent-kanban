@@ -970,6 +970,10 @@
     .human-review-panel { display: grid; gap: 12px; height: 100%; min-height: 0; }
     .human-review-box { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; min-height: 0; height: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; overflow: hidden; }
     .human-review-editor-shell { min-height: 0; height: 100%; display: grid; }
+    .request-goal-editor-shell { min-height: 320px; }
+    .request-goal-editor-shell .editor-host,
+    .request-goal-editor-shell .editor-textarea { min-height: 320px; height: 320px; }
+    .request-goal-editor-shell .editor-textarea { resize: vertical; }
     .human-review-footer { display: grid; gap: 8px; }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
@@ -1121,16 +1125,20 @@
                 <datalist id="base-branch-options"></datalist>
                 <div class="error-text" data-error-for="base_branch"></div>
               </div>
-              <div class="field">
+              <div class="field span-full">
                 <label id="request-background-label" for="background">Background / Why</label>
                 <span id="request-background-description">Context that helps the planner understand motivation and history.</span>
                 <textarea id="background" name="background"></textarea>
                 <div class="error-text" data-error-for="background"></div>
               </div>
-              <div class="field">
-                <label id="request-goal-label" for="goal">Goal</label>
+              <div class="field span-full">
+                <label id="request-goal-label" for="request-goal-editor-fallback">Goal</label>
                 <span id="request-goal-description">The concrete outcome you want from the implementation.</span>
-                <textarea id="goal" name="goal" required></textarea>
+                <textarea id="goal" name="goal" hidden></textarea>
+                <div class="human-review-editor-shell request-goal-editor-shell">
+                  <div id="request-goal-editor-host" class="editor-host" aria-labelledby="request-goal-label"></div>
+                  <textarea id="request-goal-editor-fallback" class="editor-textarea" aria-labelledby="request-goal-label" hidden></textarea>
+                </div>
                 <div class="error-text" data-error-for="goal"></div>
               </div>
             </div>
@@ -1540,6 +1548,9 @@
     const submitButton = document.getElementById('submit-request');
     const saveSettingsButton = document.getElementById('save-settings');
     const formError = document.getElementById('form-error');
+    const goalInput = document.getElementById('goal');
+    const requestGoalEditorHost = document.getElementById('request-goal-editor-host');
+    const requestGoalEditorFallback = document.getElementById('request-goal-editor-fallback');
     const targetRepoInput = document.getElementById('target_repo');
     const targetRepoOptions = document.getElementById('target-repo-options');
     const baseBranchInput = document.getElementById('base_branch');
@@ -1670,6 +1681,8 @@
     let planSourceMarkdown = '';
     let planEditMode = false;
     let planEditor = null;
+    let requestGoalEditor = null;
+    let requestUploadToken = '';
     let humanReviewEditor = null;
     let humanReviewSourceMarkdown = '';
     let markdownViewer = null;
@@ -3639,7 +3652,11 @@
 
     function resetFormState() {
       invalidateBranchLookup();
+      const previousUploadToken = requestUploadToken;
+      requestUploadToken = generateRequestUploadToken();
+      void cleanupRequestUploads(previousUploadToken);
       requestForm.reset();
+      setRequestGoalEditorContent('');
       targetRepoInput.value = defaultTargetRepo;
       targetRepoInput.dataset.autofilled = defaultTargetRepo ? 'true' : 'false';
       baseBranchInput.value = defaultBaseBranch;
@@ -4171,6 +4188,93 @@
         .replace(/\/api\/tasks\/([^/]+)\/attachments\/_attachments\//g, '/api/tasks/$1/attachments/');
     }
 
+    const embeddedPlanImageRe = /!\[(?<alt>[^\]]*)\]\((?<url>data:image\/(?<subtype>png|jpeg|jpg|gif|webp);base64,[^)]+)\)/g;
+    const planAttachmentMaxDimension = 1600;
+    const planAttachmentWebpQuality = 0.72;
+
+    function attachmentUploadName(uploadName = '', fallbackType = 'image/png') {
+      const trimmed = (uploadName || '').trim();
+      if (trimmed) return trimmed;
+      const fallbackExtension = fallbackType === 'image/jpeg' ? '.jpg' : fallbackType === 'image/gif' ? '.gif' : fallbackType === 'image/webp' ? '.webp' : '.png';
+      return `image${fallbackExtension}`;
+    }
+
+    function attachmentRenamedToWebp(uploadName = '') {
+      const normalized = attachmentUploadName(uploadName, 'image/png');
+      return normalized.replace(/\.[a-zA-Z0-9]+$/, '') + '.webp';
+    }
+
+    function loadImageElement(src) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error(translateTask('failedImageUpload')));
+        image.src = src;
+      });
+    }
+
+    function canvasToBlob(canvas, type, quality) {
+      return new Promise((resolve) => {
+        canvas.toBlob(resolve, type, quality);
+      });
+    }
+
+    async function compressPlanAttachmentBlob(blob, uploadName = '') {
+      const normalizedName = attachmentUploadName(uploadName, blob.type || 'image/png');
+      if (!blob.type.startsWith('image/') || blob.type === 'image/gif') {
+        return { blob, uploadName: normalizedName };
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      try {
+        const image = await loadImageElement(objectUrl);
+        const width = image.naturalWidth || image.width;
+        const height = image.naturalHeight || image.height;
+        if (!width || !height) return { blob, uploadName: normalizedName };
+        const scale = Math.min(1, planAttachmentMaxDimension / Math.max(width, height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const context = canvas.getContext('2d', { alpha: true });
+        if (!context) return { blob, uploadName: normalizedName };
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const compressedBlob = await canvasToBlob(canvas, 'image/webp', planAttachmentWebpQuality);
+        if (!compressedBlob || !compressedBlob.size || compressedBlob.size >= blob.size) {
+          return { blob, uploadName: normalizedName };
+        }
+        return { blob: compressedBlob, uploadName: attachmentRenamedToWebp(normalizedName) };
+      } catch (_error) {
+        return { blob, uploadName: normalizedName };
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    }
+
+    async function dataUrlToBlob(dataUrl) {
+      const response = await fetch(dataUrl);
+      if (!response.ok) throw new Error(translateTask('failedImageUpload'));
+      return response.blob();
+    }
+
+    async function replaceEmbeddedPlanImagesWithUploads(content) {
+      const matches = Array.from(content.matchAll(embeddedPlanImageRe));
+      if (!matches.length) return content;
+      let normalized = '';
+      let lastIndex = 0;
+      for (const match of matches) {
+        const alt = match.groups?.alt || '';
+        const subtype = match.groups?.subtype || 'png';
+        const dataUrl = match.groups?.url || '';
+        const extension = subtype === 'jpeg' ? 'jpg' : subtype;
+        const uploadName = `${(alt.trim() || 'image').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '').toLowerCase() || 'image'}.${extension}`;
+        const blob = await dataUrlToBlob(dataUrl);
+        const uploaded = await uploadPlanAttachment(blob, { uploadName });
+        normalized += content.slice(lastIndex, match.index) + `![${alt}](${uploaded.relative_path})`;
+        lastIndex = (match.index || 0) + match[0].length;
+      }
+      normalized += content.slice(lastIndex);
+      return normalized;
+    }
+
     function ensurePlanEditor() {
       if (planEditor || !window.toastui || !window.toastui.Editor) return planEditor;
       planEditor = new window.toastui.Editor({
@@ -4204,14 +4308,108 @@
       return planEditor;
     }
 
-    async function uploadPlanAttachment(blob) {
+    function clearRequestFieldError(fieldName) {
+      const fieldError = document.querySelector(`[data-error-for="${fieldName}"]`);
+      if (fieldError) fieldError.textContent = '';
+    }
+
+    function syncRequestGoalField(value) {
+      goalInput.value = typeof value === 'string' ? value : getRequestGoalEditorContent();
+      return goalInput.value;
+    }
+
+    function generateRequestUploadToken() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+      return `request-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    }
+
+    async function cleanupRequestUploads(uploadToken = requestUploadToken) {
+      if (!uploadToken) return;
+      try {
+        await fetch(`/api/request-uploads/${encodeURIComponent(uploadToken)}`, { method: 'DELETE' });
+      } catch (_error) {
+      }
+    }
+
+    async function uploadRequestAttachment(blob, options = {}) {
+      const { uploadName = '' } = options;
+      const uploadToken = requestUploadToken || generateRequestUploadToken();
+      requestUploadToken = uploadToken;
+      const optimized = await compressPlanAttachmentBlob(blob, uploadName || blob.name || '');
+      const formData = new FormData();
+      formData.append('file', optimized.blob, optimized.uploadName);
+      const response = await fetch(`/api/request-uploads?upload_token=${encodeURIComponent(uploadToken)}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateTask('failedImageUpload'));
+      return payload;
+    }
+
+    function ensureRequestGoalEditor() {
+      if (requestGoalEditor || !window.toastui || !window.toastui.Editor) return requestGoalEditor;
+      requestGoalEditor = new window.toastui.Editor({
+        el: requestGoalEditorHost,
+        height: '320px',
+        initialEditType: 'markdown',
+        previewStyle: 'tab',
+        hideModeSwitch: true,
+        hooks: {
+          addImageBlobHook: async (blob, callback) => {
+            try {
+              const uploaded = await uploadRequestAttachment(blob, { uploadName: blob.name || '' });
+              callback(uploaded.url, uploaded.filename);
+              syncRequestGoalField(requestGoalEditor.getMarkdown());
+              clearRequestFieldError('goal');
+              return false;
+            } catch (error) {
+              formError.hidden = false;
+              formError.textContent = error.message;
+              return false;
+            }
+          },
+        },
+        usageStatistics: false,
+      });
+      requestGoalEditor.on('change', () => {
+        syncRequestGoalField(requestGoalEditor.getMarkdown());
+        clearRequestFieldError('goal');
+      });
+      requestGoalEditorFallback.hidden = true;
+      requestGoalEditorHost.hidden = false;
+      return requestGoalEditor;
+    }
+
+    function setRequestGoalEditorContent(value) {
+      const nextValue = value || '';
+      syncRequestGoalField(nextValue);
+      const editor = ensureRequestGoalEditor();
+      if (editor) {
+        editor.setMarkdown(nextValue);
+        requestGoalEditorFallback.hidden = true;
+        requestGoalEditorHost.hidden = false;
+        return;
+      }
+      requestGoalEditorHost.hidden = true;
+      requestGoalEditorFallback.hidden = false;
+      requestGoalEditorFallback.value = nextValue;
+    }
+
+    function getRequestGoalEditorContent() {
+      const editor = ensureRequestGoalEditor();
+      if (editor) return editor.getMarkdown();
+      return requestGoalEditorFallback.value;
+    }
+
+    async function uploadPlanAttachment(blob, options = {}) {
+      const { uploadName = '' } = options;
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans' || activeArtifactName !== 'PLAN.md') {
         throw new Error(translateTask('imageAttachmentsRestricted'));
       }
+      const optimized = await compressPlanAttachmentBlob(blob, uploadName || blob.name || '');
       const formData = new FormData();
-      const fallbackExtension = blob.type === 'image/jpeg' ? '.jpg' : blob.type === 'image/gif' ? '.gif' : blob.type === 'image/webp' ? '.webp' : '.png';
-      const fallbackName = blob.name && /\.[a-zA-Z0-9]+$/.test(blob.name) ? blob.name : `image${fallbackExtension}`;
-      formData.append('file', blob, fallbackName);
+      formData.append('file', optimized.blob, optimized.uploadName);
       setTaskEditorMessage(translateTask('uploadingImage'));
       const response = await fetch(`/api/tasks/${activeTaskId}/attachments?artifact=PLAN.md`, {
         method: 'POST',
@@ -4947,14 +5145,16 @@
       savePlanButton.disabled = true;
       setTaskEditorMessage(translateTask('savingPlan'));
       try {
+        const normalizedContent = await replaceEmbeddedPlanImagesWithUploads(getPlanEditorContent());
+        setPlanEditorContent(normalizedContent);
         const response = await fetch(`/api/tasks/${activeTaskId}/artifacts/PLAN.md`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: getPlanEditorContent() }),
+          body: JSON.stringify({ content: normalizedContent }),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedSavePlan'));
-        planSourceMarkdown = getPlanEditorContent();
+        planSourceMarkdown = normalizedContent;
         setTaskEditorMessage(translateTask('savedPlan'));
         if (taskDetailStale) scheduleActiveTaskRefresh();
       } catch (error) {
@@ -5087,6 +5287,7 @@
     }
 
     function validateForm() {
+      syncRequestGoalField();
       const data = new FormData(requestForm);
       const errors = {};
       const title = (data.get('title') || '').toString().trim();
@@ -5107,8 +5308,10 @@
       event.preventDefault();
       clearMessages();
       applyRepoDefaults();
+      syncRequestGoalField();
       if (!validateForm()) return;
       const payload = Object.fromEntries(new FormData(requestForm).entries());
+      payload.request_upload_token = requestUploadToken;
       submitButton.disabled = true;
       submitButton.textContent = translateRequest('creating');
       try {
@@ -5229,7 +5432,7 @@
     approvePlanButton.addEventListener('click', approvePlan);
     startVerificationButton.addEventListener('click', startVerification);
     deleteTaskButton.addEventListener('click', deleteTask);
-    ['title', 'goal', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
+    ['title', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
     targetRepoInput.addEventListener('input', () => { targetRepoInput.dataset.autofilled = 'false'; });
     targetRepoInput.addEventListener('input', applyRepoDefaults);
     targetRepoInput.addEventListener('input', queueTargetRepoBranchLookup);
@@ -5238,6 +5441,11 @@
     targetRepoInput.addEventListener('blur', loadTargetRepoBranches);
     runtimeThemeInput.addEventListener('change', () => applyRuntimeTheme(runtimeThemeInput.value));
     baseBranchInput.addEventListener('input', () => { baseBranchInput.dataset.autofilled = 'false'; });
+    requestGoalEditorFallback.addEventListener('input', () => {
+      syncRequestGoalField(requestGoalEditorFallback.value);
+      clearRequestFieldError('goal');
+    });
+    requestGoalEditorFallback.addEventListener('blur', validateForm);
     scopeField.addEventListener('input', () => { scopeField.dataset.autofilled = 'false'; });
     outOfScopeField.addEventListener('input', () => { outOfScopeField.dataset.autofilled = 'false'; });
     resetFormState();
