@@ -486,6 +486,10 @@
       border-width: 1px !important;
       border-radius: 10px;
     }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-defaultUI {
+      border-color: rgba(186, 200, 214, 0.16) !important;
+      background: rgba(20, 28, 36, 0.98) !important;
+    }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-defaultUI,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-main,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-container,
@@ -503,6 +507,17 @@
       background: var(--review-toolbar) !important;
       border-color: var(--review-toolbar-divider) !important;
     }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-toolbar,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-mode-switch,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-tab-container,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-ww-tab-container {
+      background: var(--review-toolbar) !important;
+      border-color: var(--review-toolbar-divider) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-toolbar-group,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-toolbar-divider {
+      border-color: var(--review-toolbar-divider) !important;
+    }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-group,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-toolbar-group,
@@ -514,7 +529,16 @@
       border-color: transparent !important;
       box-shadow: none !important;
     }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-defaultUI button {
+      background-color: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+    }
     body[data-theme="dark"] .human-review-editor-shell .toastui-editor-mode-switch .tab-item {
+      background: transparent !important;
+      border-color: var(--review-toolbar-divider) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-mode-switch .tab-item {
       background: transparent !important;
       border-color: var(--review-toolbar-divider) !important;
     }
@@ -525,6 +549,13 @@
       background-color: rgba(255,255,255,0.06) !important;
       color: #ffe2bd !important;
     }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-defaultUI button:hover,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-defaultUI button:focus-visible,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-mode-switch .tab-item:hover,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-mode-switch .tab-item.active {
+      background-color: rgba(255,255,255,0.06) !important;
+      color: #ffe2bd !important;
+    }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-container,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-container,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-main,
@@ -532,6 +563,23 @@
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-ww-container,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-main {
       background: linear-gradient(180deg, rgba(21, 30, 38, 0.98), rgba(16, 23, 30, 0.98)) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-main,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-container,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-ww-container,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-preview,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-contents,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-splitter,
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror,
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror-gutters,
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror-scroll,
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror {
+      background: rgba(20, 28, 36, 0.98) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror-gutters,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-splitter {
+      background: rgba(24, 34, 44, 0.98) !important;
     }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-md-preview,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-contents,
@@ -577,6 +625,25 @@
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror p {
       color: var(--text) !important;
     }
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-preview,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-contents,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-preview p,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-contents p,
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror,
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror pre,
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror-line,
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror,
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror p {
+      color: var(--text) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror-cursor {
+      border-left-color: var(--text) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror-selected,
+    body[data-theme="dark"] .request-goal-editor-shell .CodeMirror-focused .CodeMirror-selected,
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror-selectednode {
+      background: rgba(214, 171, 120, 0.24) !important;
+    }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .CodeMirror-cursor,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .CodeMirror-cursor {
       border-left-color: var(--text) !important;
@@ -595,6 +662,12 @@
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-ww-tab-container,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-group,
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .toastui-editor-toolbar-divider,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-toolbar,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-mode-switch,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-tab-container,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-ww-tab-container,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-toolbar-group,
+    body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-toolbar-divider,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-toolbar,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-mode-switch,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .toastui-editor-md-tab-container,
@@ -1548,6 +1621,7 @@
     const submitButton = document.getElementById('submit-request');
     const saveSettingsButton = document.getElementById('save-settings');
     const formError = document.getElementById('form-error');
+    const requestTitleInput = document.getElementById('title');
     const goalInput = document.getElementById('goal');
     const requestGoalEditorHost = document.getElementById('request-goal-editor-host');
     const requestGoalEditorFallback = document.getElementById('request-goal-editor-fallback');
@@ -3419,11 +3493,23 @@
       }
     }
 
+    let requestModalFocusToken = 0;
+
+    function focusRequestTitleWhenReady(token) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (token !== requestModalFocusToken || modal.hidden) return;
+          requestTitleInput.focus();
+        });
+      });
+    }
+
     function setModalOpen(isOpen) {
       modal.hidden = !isOpen;
       modal.setAttribute('aria-hidden', String(!isOpen));
       syncBodyModalState();
-      if (isOpen) document.getElementById('title').focus();
+      requestModalFocusToken += 1;
+      if (isOpen) focusRequestTitleWhenReady(requestModalFocusToken);
     }
 
     function setTaskModalOpen(isOpen) {
@@ -3656,7 +3742,7 @@
       requestUploadToken = generateRequestUploadToken();
       void cleanupRequestUploads(previousUploadToken);
       requestForm.reset();
-      setRequestGoalEditorContent('');
+      setRequestGoalEditorContent('', { initialize: false });
       targetRepoInput.value = defaultTargetRepo;
       targetRepoInput.dataset.autofilled = defaultTargetRepo ? 'true' : 'false';
       baseBranchInput.value = defaultBaseBranch;
@@ -4353,6 +4439,7 @@
         el: requestGoalEditorHost,
         height: '320px',
         initialEditType: 'markdown',
+        initialValue: goalInput.value || requestGoalEditorFallback.value || '',
         previewStyle: 'tab',
         hideModeSwitch: true,
         hooks: {
@@ -4381,10 +4468,12 @@
       return requestGoalEditor;
     }
 
-    function setRequestGoalEditorContent(value) {
+    function setRequestGoalEditorContent(value, options = {}) {
+      const { initialize = true } = options;
       const nextValue = value || '';
       syncRequestGoalField(nextValue);
-      const editor = ensureRequestGoalEditor();
+      requestGoalEditorFallback.value = nextValue;
+      const editor = initialize ? ensureRequestGoalEditor() : requestGoalEditor;
       if (editor) {
         editor.setMarkdown(nextValue);
         requestGoalEditorFallback.hidden = true;

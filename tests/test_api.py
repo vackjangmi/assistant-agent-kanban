@@ -1733,6 +1733,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_coding_assistant" in response.text
     assert "function applyRuntimeTheme(theme)" in response.text
     assert "applyRuntimeTheme(initialRuntimeTheme);" in response.text
+    assert "let requestModalFocusToken = 0;" in response.text
+    assert "function focusRequestTitleWhenReady(token)" in response.text
+    assert "if (token !== requestModalFocusToken || modal.hidden) return;" in response.text
+    assert "requestTitleInput.focus();" in response.text
+    assert "setRequestGoalEditorContent('', { initialize: false });" in response.text
+    assert "const editor = initialize ? ensureRequestGoalEditor() : requestGoalEditor;" in response.text
     assert "const settingsTranslations = {" in response.text
     assert "applyRuntimeSettingsTranslations();" in response.text
     assert "const taskTranslations = {" in response.text
@@ -1793,6 +1799,16 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "translateRequest('validationGoal')" in response.text
     assert "function ensureRequestGoalEditor()" in response.text
     assert "syncRequestGoalField();" in response.text
+    assert "body[data-theme=\"dark\"] .request-goal-editor-shell .toastui-editor-defaultUI" in response.text
+    assert "body[data-theme=\"dark\"] .request-goal-editor-shell .toastui-editor-toolbar" in response.text
+    assert "background: var(--review-toolbar) !important;" in response.text
+    assert "border-color: var(--review-toolbar-divider) !important;" in response.text
+    assert "body[data-theme=\"dark\"] .request-goal-editor-shell .toastui-editor-defaultUI button:hover" in response.text
+    assert "body[data-theme=\"dark\"] .request-goal-editor-shell .toastui-editor-mode-switch .tab-item.active" in response.text
+    assert "color: #ffe2bd !important;" in response.text
+    assert "body[data-theme=\"dark\"] .request-goal-editor-shell .toastui-editor-contents" in response.text
+    assert "body[data-theme=\"dark\"] .request-goal-editor-shell .CodeMirror-cursor" in response.text
+    assert "body[data-theme=\"dark\"] .request-goal-editor-shell .CodeMirror-selected" in response.text
     assert "addImageBlobHook: async (blob, callback) => {" in response.text
     assert "async function uploadRequestAttachment(blob, options = {})" in response.text
     assert "payload.request_upload_token = requestUploadToken;" in response.text
