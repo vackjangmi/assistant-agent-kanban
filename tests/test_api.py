@@ -1854,7 +1854,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "target-branch-label" in response.text
     assert "target-branch-icon" in response.text
     assert ".final-board .column-cards { overflow-x: hidden; }" in response.text
-    assert ".final-board .card { min-width: 0; max-width: 100%; overflow: hidden; }" in response.text
+    assert ".final-board .card { min-width: 0; max-width: 100%; min-height: 88px; overflow: hidden; }" in response.text
     assert ".final-board .card-button { display: block; min-width: 0; max-width: 100%; padding-right: 0; }" in response.text
     assert ".final-board .card-meta-row { min-width: 0; max-width: 100%; }" in response.text
     assert ".final-board .card-tag-row { min-width: 0; max-width: 100%; overflow: hidden; }" in response.text
