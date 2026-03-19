@@ -1759,7 +1759,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_theme" in response.text
     assert "runtime_coding_assistant" in response.text
     assert "worker_live_logs_enabled" in response.text
-    assert "THINKING MODE" in response.text
+    assert "THINK LOG" in response.text
+    assert "DEFAULT LOG" in response.text
+    assert "OpenCode LogMode" not in response.text
     assert "function applyRuntimeTheme(theme)" in response.text
     assert "applyRuntimeTheme(initialRuntimeTheme);" in response.text
     assert "let requestModalFocusToken = 0;" in response.text
@@ -1778,6 +1780,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'id="settings-agents-heading"' in response.text
     assert 'class="settings-grid-basic-top"' in response.text
     assert 'class="settings-grid-basic-bottom"' in response.text
+    assert ".settings-grid-basic { display: grid; gap: 14px; }" in response.text
+    assert ".settings-grid-basic-top { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; }" in response.text
+    assert "@media (max-width: 960px) {" in response.text
+    assert ".settings-toolbar-actions { justify-content: flex-start; margin-left: 0; }" in response.text
+    assert ".settings-toolbar-field { display: inline-grid; grid-template-columns: auto auto; gap: 8px; align-items: center; justify-content: start; }" in response.text
+    assert 'id="settings-live-logs-field"' in response.text
     assert 'class="settings-role-inline"' in response.text
     assert 'class="settings-role-inline settings-role-inline-commit"' in response.text
     assert "Agent" in response.text
@@ -1797,14 +1805,15 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "repo_discovery_max_depth" in response.text
     assert "readNumericSettingInput" in response.text
     assert "assistant-model-options" in response.text
-    assert "Refresh discovered models" in response.text
+    assert "Refresh models" in response.text
     assert "Save settings" in response.text
     assert "window.location.reload();" in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
-    assert "Log mode" in response.text
-    assert "Log display mode." in response.text
-    assert "models loaded ·" in response.text
+    assert "OpenCode LogMode" not in response.text
+    assert "Log display mode." not in response.text
+    assert "This mode uses more tokens." not in response.text
+    assert "loaded ·" in response.text
     assert "task-viewer-host" in response.text
     assert "Approve plan" in response.text
     assert "toastui-editor" in response.text
@@ -2023,7 +2032,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function captureTaskLogScrollState()" in response.text
     assert "function restoreTaskLogScrollState(state)" in response.text
     assert "function scrollTaskLogViewerToBottom()" in response.text
-    assert "function updateWorkerLiveLogsNoteVisibility()" in response.text
+    assert "function updateWorkerLiveLogsControlVisibility()" in response.text
+    assert "if (!isOpenCode) workerLiveLogsModeInput.value = 'false';" in response.text
+    assert "workerLiveLogsModeInput.disabled = !isOpenCode;" in response.text
+    assert "field.style.display = isOpenCode ? '' : 'none';" in response.text
+    assert "runtimeCodingAssistantInput.addEventListener('input', handleAssistantModeVisibilityChange);" in response.text
     assert "function updateTaskLogViewerContent(previousContent, nextContent)" in response.text
     assert "hadScrollableOverflow: maxScrollTop > 0," in response.text
     assert "if (state.wasNearBottom || (!state.hadScrollableOverflow && nextMax > 0)) {" in response.text
@@ -2034,7 +2047,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const shouldScrollToBottomAfterLoad = !preserveSelection || !activeTaskLogs || !activeLogName;" in response.text
     assert "if (!preserveSelection || !activeTaskLogs || !taskLogViewer.textContent || taskLogViewer.textContent === translateTask('runtimeLogSummaryEmpty')) {" in response.text
     assert "if (shouldScrollToBottomAfterLoad) scrollTaskLogViewerToBottom();" in response.text
-    assert "workerLiveLogsModeInput.addEventListener('change', updateWorkerLiveLogsNoteVisibility);" in response.text
+    assert "window.alert('이 모드는 더 많은 토큰을 사용합니다.');" in response.text
     assert "if (activeTaskTab === 'logs') {" in response.text
     assert "if (appendWorkerLogPayload(payload)) return;" in response.text
     assert "source.addEventListener('worker_log_file', (event) => {" in response.text
@@ -2133,7 +2146,7 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert "리뷰 완료" in response.text
     assert "인간 리뷰중" in response.text
     assert "완료" in response.text
-    assert "발견된 모델 새로고침" in response.text
+    assert "모델 새로고침" in response.text
     assert "저장" in response.text
 
 

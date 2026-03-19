@@ -933,19 +933,21 @@
     .settings-section-head span { color: var(--muted); font-size: 0.92rem; }
     .settings-toolbar-cluster { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .settings-toolbar-actions { justify-content: flex-end; margin-left: auto; }
-    .settings-toolbar-field { display: inline-grid; grid-template-columns: auto minmax(120px, auto); gap: 8px; align-items: center; }
+    .settings-toolbar-field { display: inline-grid; grid-template-columns: auto auto; gap: 8px; align-items: center; justify-content: start; }
     .settings-toolbar-field label { font-size: 0.78rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
     .settings-toolbar-field select { min-width: 132px; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 9px 12px; font: inherit; color: var(--text); }
     .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; }
-    .settings-grid-basic { gap: 14px; }
-    .settings-grid-basic-top { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 14px; }
+    .settings-grid-basic { display: grid; gap: 14px; }
+    .settings-grid-basic-top { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; }
     .settings-grid-basic-bottom { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 14px; }
     .settings-card { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }
     .settings-card strong { font-size: 1rem; }
     .settings-card span { color: var(--muted); font-size: 0.95rem; }
     .settings-card input, .settings-card select { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
     .settings-card small { color: var(--muted); font-size: 0.88rem; }
-    #settings-live-logs-note { min-height: 1.2em; }
+    @media (max-width: 960px) {
+      .settings-toolbar-actions { justify-content: flex-start; margin-left: 0; }
+    }
     .settings-role-inline { display: grid; grid-template-columns: 64px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
     .settings-role-inline-commit { grid-template-columns: minmax(0, 1fr) 110px; }
     .settings-field-compact input { text-align: center; }
@@ -1301,15 +1303,6 @@
                 </select>
                 <small id="settings-theme-note">Light mode is the default.</small>
                 </label>
-                <label class="settings-card" for="worker_live_logs_enabled">
-                <strong id="settings-live-logs-title">Log mode</strong>
-                <span id="settings-live-logs-description">Log display mode.</span>
-                <select id="worker_live_logs_enabled" name="worker_live_logs_enabled">
-                  <option value="false">DEFAULT</option>
-                  <option value="true">THINKING MODE</option>
-                </select>
-                <small id="settings-live-logs-note" style="visibility: hidden;">This mode uses more tokens.</small>
-                </label>
               </div>
               <div class="settings-grid-basic-bottom">
                 <label class="settings-card" for="repo_discovery_root">
@@ -1341,10 +1334,16 @@
                     <option value="codex">Codex CLI</option>
                   </select>
                 </div>
+                <div class="settings-toolbar-field" id="settings-live-logs-field">
+                  <select id="worker_live_logs_enabled" name="worker_live_logs_enabled">
+                    <option value="false">DEFAULT LOG</option>
+                    <option value="true">THINK LOG</option>
+                  </select>
+                </div>
               </div>
               <div class="settings-toolbar-cluster settings-toolbar-actions">
                 <p id="settings-discovery-summary">Open the panel to load current model options.</p>
-                <button type="button" id="refresh-model-options" class="ghost-button">Refresh discovered models</button>
+                <button type="button" id="refresh-model-options" class="ghost-button">Refresh models</button>
               </div>
             </div>
             <div class="settings-grid">
@@ -1822,17 +1821,14 @@
         settingsCopyTitle: 'Quick setup',
         settingsCopyBody: 'Save once to update the live runtime and your local config.',
         discoveryIdle: 'Open the panel to load current model options.',
-        refreshModels: 'Refresh discovered models',
+        refreshModels: 'Refresh models',
         basicsHeading: 'Basics',
-        basicsDescription: 'Language, theme, log mode, and repository defaults.',
+        basicsDescription: 'Language, theme, and repository defaults.',
         agentsHeading: 'Runtime roles',
         agentsDescription: 'Models, token budgets, and parallel slots.',
         codingAssistantLabel: 'Assistant',
-        liveLogsTitle: 'Log mode',
-        liveLogsDescription: 'Log display mode.',
-        liveLogsNote: 'This mode uses more tokens.',
-        liveLogsDefault: 'DEFAULT',
-        liveLogsThinking: 'THINKING MODE',
+        liveLogsDefault: 'DEFAULT LOG',
+        liveLogsThinking: 'THINK LOG',
         languageTitle: 'Language',
         languageDescription: 'Default for new requests.',
         languageNote: 'Only <code>EN</code> and <code>KO</code>.',
@@ -1878,7 +1874,7 @@
         statusSaved: 'Saved settings.',
         errorModelNotDiscovered: '{field} must be one of the discovered models.',
         summaryAvailableOne: '{count} model loaded · {refreshedAt}',
-        summaryAvailableMany: '{count} models loaded · {refreshedAt}',
+        summaryAvailableMany: '{count} loaded · {refreshedAt}',
         summaryEmpty: 'No cached models yet.',
         justNow: 'just now',
       },
@@ -1890,17 +1886,14 @@
         settingsCopyTitle: '빠른 설정',
         settingsCopyBody: '저장하면 현재 런타임과 로컬 설정 파일에 바로 반영됩니다.',
         discoveryIdle: '패널을 열면 현재 모델 옵션을 불러옵니다.',
-        refreshModels: '발견된 모델 새로고침',
+        refreshModels: '모델 새로고침',
         basicsHeading: '기본값',
-        basicsDescription: '언어, 테마, 로그 모드, 저장소 기본 설정입니다.',
+        basicsDescription: '언어, 테마, 저장소 기본 설정입니다.',
         agentsHeading: '런타임 역할',
         agentsDescription: '모델, 토큰 예산, 병렬 수를 정합니다.',
         codingAssistantLabel: '어시스턴트',
-        liveLogsTitle: '로그 모드',
-        liveLogsDescription: '로그 표시 모드입니다.',
-        liveLogsNote: '이 모드는 더 많은 토큰을 사용합니다.',
-        liveLogsDefault: 'DEFAULT',
-        liveLogsThinking: 'THINKING MODE',
+        liveLogsDefault: 'DEFAULT LOG',
+        liveLogsThinking: 'THINK LOG',
         languageTitle: '언어',
         languageDescription: '새 요청 기본 언어입니다.',
         languageNote: '<code>EN</code>과 <code>KO</code>만 지원합니다.',
@@ -1945,8 +1938,8 @@
         statusDiscoveryEmpty: 'OpenCode는 응답했지만 모델 옵션을 돌려주지 않았습니다. 직접 입력은 계속 사용할 수 있습니다.',
         statusSaved: '설정을 저장했습니다.',
         errorModelNotDiscovered: '{field} 모델은 발견된 모델 목록 중 하나여야 합니다.',
-        summaryAvailableOne: '모델 {count}개 로드됨 · {refreshedAt}',
-        summaryAvailableMany: '모델 {count}개 로드됨 · {refreshedAt}',
+        summaryAvailableOne: '{count}개 로드됨 · {refreshedAt}',
+        summaryAvailableMany: '{count}개 로드됨 · {refreshedAt}',
         summaryEmpty: '캐시된 모델이 없습니다.',
         justNow: '방금 전',
       },
@@ -2640,9 +2633,6 @@
       setSettingsHtml('settings-copy-body', 'settingsCopyBody');
       refreshModelOptionsButton.textContent = translateSettings('refreshModels');
       setSettingsText('settings-coding-assistant-label', 'codingAssistantLabel');
-      setSettingsText('settings-live-logs-title', 'liveLogsTitle');
-      setSettingsText('settings-live-logs-description', 'liveLogsDescription');
-      setSettingsText('settings-live-logs-note', 'liveLogsNote');
       workerLiveLogsModeInput.querySelector('option[value="false"]').textContent = translateSettings('liveLogsDefault');
       workerLiveLogsModeInput.querySelector('option[value="true"]').textContent = translateSettings('liveLogsThinking');
       setSettingsText('settings-basics-heading', 'basicsHeading');
@@ -2752,6 +2742,15 @@
       runtimeCodingAssistantInput.value = items.some((item) => item.value === selectedValue) ? selectedValue : items[0].value;
     }
 
+    function updateWorkerLiveLogsControlVisibility() {
+      const field = document.getElementById('settings-live-logs-field');
+      const isOpenCode = runtimeCodingAssistantInput.value === 'opencode';
+      if (!isOpenCode) workerLiveLogsModeInput.value = 'false';
+      workerLiveLogsModeInput.disabled = !isOpenCode;
+      field.hidden = !isOpenCode;
+      field.style.display = isOpenCode ? '' : 'none';
+    }
+
     function captureSettingsState() {
       return {
         language: runtimeLanguageInput.value || 'EN',
@@ -2780,8 +2779,8 @@
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions(lastSettingsPayload?.available_assistants || null, state.coding_assistant || 'opencode');
+      updateWorkerLiveLogsControlVisibility();
       workerLiveLogsModeInput.value = state.worker_live_logs_enabled ? 'true' : 'false';
-      updateWorkerLiveLogsNoteVisibility();
       repoDiscoveryRootInput.value = state.repo_discovery_root || '../';
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, state.repo_discovery_max_depth, 2);
       plannerModelInput.value = state.planner_model || '';
@@ -2800,11 +2799,6 @@
       applyRequestTranslations();
       applyHumanReviewTranslations();
       refreshRequestDerivedText();
-    }
-
-    function updateWorkerLiveLogsNoteVisibility() {
-      const note = document.getElementById('settings-live-logs-note');
-      note.style.visibility = workerLiveLogsModeInput.value === 'true' ? 'visible' : 'hidden';
     }
 
     function applyRuntimeTheme(theme) {
@@ -3494,8 +3488,8 @@
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        updateWorkerLiveLogsControlVisibility();
         workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
-        updateWorkerLiveLogsNoteVisibility();
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
@@ -3562,8 +3556,8 @@
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        updateWorkerLiveLogsControlVisibility();
         workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
-        updateWorkerLiveLogsNoteVisibility();
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
@@ -5741,8 +5735,18 @@
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
-    workerLiveLogsModeInput.addEventListener('change', updateWorkerLiveLogsNoteVisibility);
+    function handleAssistantModeVisibilityChange() {
+      updateWorkerLiveLogsControlVisibility();
+    }
+
+    workerLiveLogsModeInput.addEventListener('change', () => {
+      if (workerLiveLogsModeInput.value === 'true') {
+        window.alert('이 모드는 더 많은 토큰을 사용합니다.');
+      }
+    });
+    runtimeCodingAssistantInput.addEventListener('input', handleAssistantModeVisibilityChange);
     runtimeCodingAssistantInput.addEventListener('change', () => {
+      handleAssistantModeVisibilityChange();
       loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error'));
     });
     board.addEventListener('click', (event) => {
