@@ -937,12 +937,15 @@
     .settings-toolbar-field label { font-size: 0.78rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
     .settings-toolbar-field select { min-width: 132px; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 9px 12px; font: inherit; color: var(--text); }
     .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; }
-    .settings-grid-basic { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
+    .settings-grid-basic { gap: 14px; }
+    .settings-grid-basic-top { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 14px; }
+    .settings-grid-basic-bottom { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 14px; }
     .settings-card { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }
     .settings-card strong { font-size: 1rem; }
     .settings-card span { color: var(--muted); font-size: 0.95rem; }
     .settings-card input, .settings-card select { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
     .settings-card small { color: var(--muted); font-size: 0.88rem; }
+    #settings-live-logs-note { min-height: 1.2em; }
     .settings-role-inline { display: grid; grid-template-columns: 64px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
     .settings-role-inline-commit { grid-template-columns: minmax(0, 1fr) 110px; }
     .settings-field-compact input { text-align: center; }
@@ -1276,10 +1279,11 @@
           <section class="settings-section">
             <div class="settings-section-head">
               <strong id="settings-basics-heading">Basics</strong>
-              <span id="settings-basics-description">Language and repository defaults.</span>
+              <span id="settings-basics-description">Language, theme, log mode, and repository defaults.</span>
             </div>
-            <div class="settings-grid settings-grid-basic">
-              <label class="settings-card" for="runtime_language">
+            <div class="settings-grid-basic">
+              <div class="settings-grid-basic-top">
+                <label class="settings-card" for="runtime_language">
                 <strong id="settings-language-title">Language</strong>
                 <span id="settings-language-description">Default for new requests.</span>
                 <select id="runtime_language" name="language">
@@ -1287,8 +1291,8 @@
                   <option value="KO">Korean</option>
                 </select>
                 <small id="settings-language-note">Only <code>EN</code> and <code>KO</code>.</small>
-              </label>
-              <label class="settings-card" for="runtime_theme">
+                </label>
+                <label class="settings-card" for="runtime_theme">
                 <strong id="settings-theme-title">Theme</strong>
                 <span id="settings-theme-description">Dashboard appearance default.</span>
                 <select id="runtime_theme" name="theme">
@@ -1296,19 +1300,31 @@
                   <option value="dark">Dark</option>
                 </select>
                 <small id="settings-theme-note">Light mode is the default.</small>
-              </label>
-              <label class="settings-card" for="repo_discovery_root">
+                </label>
+                <label class="settings-card" for="worker_live_logs_enabled">
+                <strong id="settings-live-logs-title">Log mode</strong>
+                <span id="settings-live-logs-description">Log display mode.</span>
+                <select id="worker_live_logs_enabled" name="worker_live_logs_enabled">
+                  <option value="false">DEFAULT</option>
+                  <option value="true">THINKING MODE</option>
+                </select>
+                <small id="settings-live-logs-note" style="visibility: hidden;">This mode uses more tokens.</small>
+                </label>
+              </div>
+              <div class="settings-grid-basic-bottom">
+                <label class="settings-card" for="repo_discovery_root">
                 <strong id="settings-repo-root-title">Repo discovery root</strong>
                 <span id="settings-repo-root-description">Where repo suggestions are scanned.</span>
                 <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
                 <small id="settings-repo-root-note">Use <code>../</code> or an absolute path.</small>
-              </label>
-              <label class="settings-card" for="repo_discovery_max_depth">
+                </label>
+                <label class="settings-card" for="repo_discovery_max_depth">
                 <strong id="settings-repo-depth-title">Repo discovery depth</strong>
                 <span id="settings-repo-depth-description">How deep discovery scans.</span>
                 <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
                 <small id="settings-repo-depth-note">Increase only for nested repos.</small>
-              </label>
+                </label>
+              </div>
             </div>
           </section>
           <section class="settings-section">
@@ -1650,6 +1666,7 @@
     const runtimeLanguageInput = document.getElementById('runtime_language');
     const runtimeThemeInput = document.getElementById('runtime_theme');
     const runtimeCodingAssistantInput = document.getElementById('runtime_coding_assistant');
+    const workerLiveLogsModeInput = document.getElementById('worker_live_logs_enabled');
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const plannerAgentCountInput = document.getElementById('planner_agent_count');
@@ -1807,10 +1824,15 @@
         discoveryIdle: 'Open the panel to load current model options.',
         refreshModels: 'Refresh discovered models',
         basicsHeading: 'Basics',
-        basicsDescription: 'Language and repository defaults.',
+        basicsDescription: 'Language, theme, log mode, and repository defaults.',
         agentsHeading: 'Runtime roles',
         agentsDescription: 'Models, token budgets, and parallel slots.',
         codingAssistantLabel: 'Assistant',
+        liveLogsTitle: 'Log mode',
+        liveLogsDescription: 'Log display mode.',
+        liveLogsNote: 'This mode uses more tokens.',
+        liveLogsDefault: 'DEFAULT',
+        liveLogsThinking: 'THINKING MODE',
         languageTitle: 'Language',
         languageDescription: 'Default for new requests.',
         languageNote: 'Only <code>EN</code> and <code>KO</code>.',
@@ -1870,10 +1892,15 @@
         discoveryIdle: '패널을 열면 현재 모델 옵션을 불러옵니다.',
         refreshModels: '발견된 모델 새로고침',
         basicsHeading: '기본값',
-        basicsDescription: '언어와 저장소 기본 설정입니다.',
+        basicsDescription: '언어, 테마, 로그 모드, 저장소 기본 설정입니다.',
         agentsHeading: '런타임 역할',
         agentsDescription: '모델, 토큰 예산, 병렬 수를 정합니다.',
         codingAssistantLabel: '어시스턴트',
+        liveLogsTitle: '로그 모드',
+        liveLogsDescription: '로그 표시 모드입니다.',
+        liveLogsNote: '이 모드는 더 많은 토큰을 사용합니다.',
+        liveLogsDefault: 'DEFAULT',
+        liveLogsThinking: 'THINKING MODE',
         languageTitle: '언어',
         languageDescription: '새 요청 기본 언어입니다.',
         languageNote: '<code>EN</code>과 <code>KO</code>만 지원합니다.',
@@ -1899,7 +1926,7 @@
         commitTitle: 'Commit 모델',
         commitDescription: '커밋 메시지 생성용입니다.',
         modelLabel: '모델',
-        tokenLabel: '토큰',
+        tokenLabel: 'Token',
         agentsLabel: '에이전트',
         plannerNote: '모델, 토큰 예산, 병렬 수.',
         implementerNote: '모델, 토큰 예산, 병렬 수.',
@@ -2613,6 +2640,11 @@
       setSettingsHtml('settings-copy-body', 'settingsCopyBody');
       refreshModelOptionsButton.textContent = translateSettings('refreshModels');
       setSettingsText('settings-coding-assistant-label', 'codingAssistantLabel');
+      setSettingsText('settings-live-logs-title', 'liveLogsTitle');
+      setSettingsText('settings-live-logs-description', 'liveLogsDescription');
+      setSettingsText('settings-live-logs-note', 'liveLogsNote');
+      workerLiveLogsModeInput.querySelector('option[value="false"]').textContent = translateSettings('liveLogsDefault');
+      workerLiveLogsModeInput.querySelector('option[value="true"]').textContent = translateSettings('liveLogsThinking');
       setSettingsText('settings-basics-heading', 'basicsHeading');
       setSettingsText('settings-basics-description', 'basicsDescription');
       setSettingsText('settings-agents-heading', 'agentsHeading');
@@ -2725,6 +2757,7 @@
         language: runtimeLanguageInput.value || 'EN',
         theme: runtimeThemeInput.value || 'light',
         coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
+        worker_live_logs_enabled: workerLiveLogsModeInput.value === 'true',
         repo_discovery_root: repoDiscoveryRootInput.value || '../',
         repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
         planner_model: plannerModelInput.value || '',
@@ -2747,6 +2780,8 @@
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions(lastSettingsPayload?.available_assistants || null, state.coding_assistant || 'opencode');
+      workerLiveLogsModeInput.value = state.worker_live_logs_enabled ? 'true' : 'false';
+      updateWorkerLiveLogsNoteVisibility();
       repoDiscoveryRootInput.value = state.repo_discovery_root || '../';
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, state.repo_discovery_max_depth, 2);
       plannerModelInput.value = state.planner_model || '';
@@ -2765,6 +2800,11 @@
       applyRequestTranslations();
       applyHumanReviewTranslations();
       refreshRequestDerivedText();
+    }
+
+    function updateWorkerLiveLogsNoteVisibility() {
+      const note = document.getElementById('settings-live-logs-note');
+      note.style.visibility = workerLiveLogsModeInput.value === 'true' ? 'visible' : 'hidden';
     }
 
     function applyRuntimeTheme(theme) {
@@ -3454,6 +3494,8 @@
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
+        updateWorkerLiveLogsNoteVisibility();
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
@@ -3498,6 +3540,7 @@
             language: runtimeLanguageInput.value || 'EN',
             theme: runtimeThemeInput.value || 'light',
             coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
+            worker_live_logs_enabled: workerLiveLogsModeInput.value === 'true',
             repo_discovery_root: repoDiscoveryRootInput.value,
             repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
             planner_model: plannerModelInput.value,
@@ -3519,6 +3562,8 @@
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
+        updateWorkerLiveLogsNoteVisibility();
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
@@ -5182,6 +5227,22 @@
       return true;
     }
 
+    function appendWorkerLogFilePayload(payload) {
+      if (!payload || !activeTaskLogs || !payload.log_name) return false;
+      const entries = Array.isArray(activeTaskLogs.entries) ? activeTaskLogs.entries : [];
+      activeTaskLogs.entries = entries;
+      if (entries.some((entry) => entry.name === payload.log_name)) return true;
+      entries.push({
+        name: payload.log_name,
+        path: '',
+        rendered_content: null,
+        debug_rendered_content: null,
+        updated_at: new Date().toISOString(),
+      });
+      renderTaskLogButtons(entries);
+      return true;
+    }
+
     async function loadTaskLogs(taskId, { preserveSelection = true } = {}) {
       const requestToken = ++activeTaskLogRequestToken;
       const shouldScrollToBottomAfterLoad = !preserveSelection || !activeTaskLogs || !activeLogName;
@@ -5680,6 +5741,7 @@
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
+    workerLiveLogsModeInput.addEventListener('change', updateWorkerLiveLogsNoteVisibility);
     runtimeCodingAssistantInput.addEventListener('change', () => {
       loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error'));
     });
@@ -5808,6 +5870,16 @@
         return;
       }
       scheduleActiveTaskRefresh({ reloadArtifact: false });
+    });
+    source.addEventListener('worker_log_file', (event) => {
+      if (taskModal.hidden) return;
+      const payload = JSON.parse(event.data);
+      if (activeTaskId !== payload.task_id || activeTaskTab !== 'logs') return;
+      if (appendWorkerLogFilePayload(payload)) return;
+      loadTaskLogs(activeTaskId).catch((error) => {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+      });
     });
     loadBoard();
   </script>

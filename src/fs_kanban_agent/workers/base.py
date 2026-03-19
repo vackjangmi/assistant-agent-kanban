@@ -46,6 +46,9 @@ class WorkerBase:
     async def emit(self, event: str, task_id: str, **payload: object) -> None:
         await self.event_bus.publish(WorkerEvent(event=event, task_id=task_id, payload=dict(payload)))
 
+    async def announce_log_file(self, task_id: str, log_name: str) -> None:
+        await self.emit("worker_log_file", task_id, log_name=log_name)
+
     def task_log_dir(self, task_id: str) -> Path:
         path = self.config.runs_dir / task_id
         path.mkdir(parents=True, exist_ok=True)
@@ -191,3 +194,6 @@ class WorkerBase:
         if adapter is None:
             raise RuntimeError(f"no adapter registered for backend: {backend}")
         return adapter
+
+    def worker_live_logs_enabled(self, run_config: AppConfig) -> bool:
+        return run_config.active_backend() == "opencode" and run_config.opencode.worker_live_logs_enabled

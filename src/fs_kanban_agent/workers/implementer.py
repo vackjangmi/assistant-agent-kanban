@@ -59,6 +59,7 @@ class ImplementerWorker(WorkerBase):
             live_prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
             finalize_prompt = self._build_finalize_prompt(implementing.task_dir, implementing.metadata)
             loop = asyncio.get_running_loop()
+            await self.announce_log_file(implementing.metadata.task_id, log_name)
             session_id = self.reuse_session_id(
                 session_id=implementing.metadata.implementation.session_id,
                 session_tokens=implementing.metadata.implementation.session_tokens,
@@ -67,6 +68,67 @@ class ImplementerWorker(WorkerBase):
             prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
             run_config = self.resolve_task_run_config(implementing.task_dir, implementing.metadata)
             adapter = self.resolve_task_adapter(implementing.task_dir, implementing.metadata)
+
+            if not self.worker_live_logs_enabled(run_config):
+                self.append_log_marker(log_path=log_path, phase="run", cycle=cycle)
+                result = await asyncio.to_thread(
+                    adapter.run,
+                    agent=run_config.role_agent("implementer"),
+                    prompt=live_prompt,
+                    cwd=workspace_repo,
+                    run_log_path=log_path,
+                    config=run_config,
+                    session_id=session_id,
+                    cancel_key=implementing.metadata.task_id,
+                )
+                implementing.metadata.implementation.resolved_model = result.resolved_model
+                implementing.metadata.implementation.session_id = result.session_id
+                implementing.metadata.implementation.last_run_tokens = result.total_tokens
+                implementing.metadata.implementation.session_tokens = self.next_session_token_total(
+                    reused_session_id=session_id,
+                    returned_session_id=result.session_id,
+                    prior_session_tokens=prior_session_tokens,
+                    run_tokens=result.total_tokens,
+                )
+                implementing.metadata.cycle += 1
+                has_changes = self.workspace_has_changes(workspace_repo)
+                has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
+                success = result.ok and has_changes and not has_local_commits
+                implementing.metadata.implementation.iteration = implementing.metadata.cycle
+                implementing.metadata.implementation.last_result = "success" if success else "failure"
+                if not has_changes:
+                    implementing.metadata.errors.append(TaskErrorInfo(code="implementation-no-changes", message="implementer produced no workspace changes"))
+                if has_local_commits:
+                    implementing.metadata.errors.append(TaskErrorInfo(code="implementation-local-commits", message="implementer must not create local git commits"))
+                if not result.ok:
+                    implementing.metadata.errors.append(TaskErrorInfo(code="implementation-failed", message=result.stderr.strip() or "implementer run failed"))
+                if success and not result.assistant_text.strip():
+                    success = False
+                    implementing.metadata.implementation.last_result = "failure"
+                    implementing.metadata.errors.append(TaskErrorInfo(code="implementation-artifact-failed", message="implementer did not produce a final work artifact"))
+                if success:
+                    work_name = f"WORK-{implementing.metadata.cycle:03d}"
+                    self.write_result_artifacts(implementing.task_dir, work_name, result)
+                    clear_retry_gate(implementing.metadata)
+                    self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                    done = self.transitions.move(implementing, TaskState.WAITING_REVIEWS, by=self.worker_name)
+                else:
+                    if any(error.code == "implementation-artifact-failed" for error in implementing.metadata.errors):
+                        apply_retry_gate(implementing.metadata, reason="implementation-artifact-failed")
+                        note = "implementation artifact generation failed"
+                    elif not has_changes:
+                        apply_retry_gate(implementing.metadata, reason="implementation-no-changes")
+                        note = "implementation produced no workspace changes"
+                    elif has_local_commits:
+                        apply_retry_gate(implementing.metadata, reason="implementation-local-commits")
+                        note = "implementation created local commits"
+                    else:
+                        apply_retry_gate(implementing.metadata, reason="implementation-failed")
+                        note = "implementation failed"
+                    self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                    done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=note)
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
 
             self.append_log_marker(log_path=log_path, phase="handshake", cycle=cycle)
             handshake_result = await asyncio.to_thread(

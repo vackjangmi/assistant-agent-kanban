@@ -210,6 +210,29 @@ def test_planner_worker_rolls_over_session_after_budget_is_exceeded(configured_p
     assert updated.metadata.plan.session_tokens == 3200
 
 
+def test_planner_worker_uses_single_json_run_when_live_logs_disabled(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "planner-single-run-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(["## Summary\nsingle plan"], session_ids=["ses_single_plan"], total_tokens=[77])
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    task = scanner.scan()[0]
+    assert len(adapter.run_calls) == 1
+    assert adapter.run_calls[0]["output_format"] == "json"
+    assert adapter.run_calls[0]["show_thinking"] is False
+    assert (task.task_dir / "PLAN.md").read_text() == "## Summary\nsingle plan\n"
+    plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
+    assert plan_json["session_id"] == "ses_single_plan"
+    assert plan_json["total_tokens"] == 77
+
+
 def test_planner_markdown_edits_do_not_modify_plan_json(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "planner-edit-task")
@@ -500,3 +523,29 @@ def test_planner_worker_emits_realtime_worker_log_events(configured_paths):
     assert event.payload["debug_rendered_delta"] == "live planning"
     assert event.payload["rendered_content"] == "live planning"
     assert event.payload["debug_rendered_content"] == "live planning"
+
+
+def test_planner_worker_announces_log_file(configured_paths):
+    async def receive_worker_log_file(event_bus):
+        async for event in event_bus.subscribe():
+            if event.event == "worker_log_file":
+                return event
+
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-log-file-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    event_bus = EventBus()
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan")))
+
+    async def scenario():
+        event_task = asyncio.create_task(receive_worker_log_file(event_bus))
+        await asyncio.sleep(0)
+        await worker.run_once()
+        return await asyncio.wait_for(event_task, timeout=1)
+
+    event = asyncio.run(scenario())
+    assert event is not None
+    assert event.payload["log_name"] == "planner.jsonl"

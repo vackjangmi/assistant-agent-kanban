@@ -247,6 +247,53 @@ def test_implementer_worker_rolls_over_session_after_budget_is_exceeded(configur
     assert second_pass.metadata.implementation.session_tokens == 30
 
 
+def test_implementer_worker_uses_single_json_run_when_live_logs_disabled(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "implementer-single-run-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nplan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd: Path) -> None:
+        (cwd / "app.txt").write_text("implemented\n")
+
+    adapter = FakeAdapter(
+        ["## Summary\nimplemented"],
+        side_effect=modify_workspace,
+        side_effect_output_formats={"json"},
+        session_ids=["ses_impl_single"],
+        total_tokens=[55],
+    )
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.scan()[0]
+    assert len(adapter.run_calls) == 1
+    assert adapter.run_calls[0]["output_format"] == "json"
+    assert updated.state == TaskState.WAITING_REVIEWS
+    work_json = json.loads((updated.task_dir / "WORK-001.json").read_text())
+    assert work_json["session_id"] == "ses_impl_single"
+    assert work_json["total_tokens"] == 55
+
+
 def test_implementer_worker_clones_task_target_repo(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
@@ -256,6 +303,7 @@ def test_implementer_worker_clones_task_target_repo(tmp_path):
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add target file"], check=True, capture_output=True, text=True)
 
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.opencode.worker_live_logs_enabled = True
     config.bootstrap()
     create_request_task(config, "target-repo-task", target_repo_root=target_repo)
     metadata_store = MetadataStore()
@@ -303,6 +351,7 @@ def test_implementer_worker_supports_named_base_branch_in_cloned_workspace(tmp_p
     subprocess.run(["git", "-C", str(target_repo), "checkout", "main"], check=True, capture_output=True, text=True)
 
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.opencode.worker_live_logs_enabled = True
     config.bootstrap()
     create_request_task(config, "named-base-branch-task", target_repo_root=target_repo, base_branch="v1.0.8")
     metadata_store = MetadataStore()
@@ -420,6 +469,7 @@ def test_implementer_worker_restarts_from_latest_base_on_workspace_sync_conflict
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add app file"], check=True, capture_output=True, text=True)
 
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.opencode.worker_live_logs_enabled = True
     config.bootstrap()
     create_request_task(config, "implement-conflict-task", target_repo_root=target_repo)
     metadata_store = MetadataStore()
@@ -480,6 +530,7 @@ def test_workspace_manager_refreshes_existing_workspace_with_relative_kanban_roo
     monkeypatch.chdir(tmp_path)
 
     config = AppConfig(kanban_root=Path(".kanban-agent"), repo_root=tmp_path / "unused-default")
+    config.opencode.worker_live_logs_enabled = True
     config.bootstrap()
     create_request_task(config, "implement-relative-refresh-task", target_repo_root=target_repo)
     task = KanbanScanner(config, MetadataStore()).scan()[0]
@@ -674,3 +725,47 @@ def test_implementer_worker_emits_realtime_worker_log_events(configured_paths):
     assert event.payload["debug_rendered_delta"] == "implemented live"
     assert event.payload["rendered_content"] == "implemented live"
     assert event.payload["debug_rendered_content"] == "implemented live"
+
+
+def test_implementer_worker_announces_log_file(configured_paths):
+    async def receive_worker_log_file(event_bus):
+        async for event in event_bus.subscribe():
+            if event.event == "worker_log_file":
+                return event
+
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-log-file-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd: Path) -> None:
+        (cwd / "app.txt").write_text("implemented\n")
+
+    event_bus = EventBus()
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        event_bus,
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    async def scenario():
+        event_task = asyncio.create_task(receive_worker_log_file(event_bus))
+        await worker.run_once()
+        return await asyncio.wait_for(event_task, timeout=1)
+
+    event = asyncio.run(scenario())
+    assert event is not None
+    assert event.payload["log_name"] == "implementer.jsonl"

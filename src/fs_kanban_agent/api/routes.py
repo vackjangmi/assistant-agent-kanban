@@ -85,6 +85,7 @@ class ModelSettingsPayload(BaseModel):
     language: str | None = None
     theme: Literal["light", "dark"] | None = None
     coding_assistant: str | None = None
+    worker_live_logs_enabled: bool | None = None
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
     planner_agent_count: int | None = Field(default=None, ge=1)
@@ -185,6 +186,7 @@ def _settings_response(runtime, snapshot, *, config_path: str | None = None, sav
         "language": runtime.config.runtime.language,
         "theme": runtime.config.runtime.theme,
         "coding_assistant": active_backend,
+        "worker_live_logs_enabled": runtime.config.opencode.worker_live_logs_enabled,
         "planner_model": active_config.role_model("planner"),
         "planner_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("planner")),
         "planner_agent_count": runtime.config.runtime.planner_agent_count,
@@ -317,6 +319,8 @@ def build_router() -> APIRouter:
             next_config.runtime.theme = payload.theme
         if "coding_assistant" in fields_set:
             next_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(payload.coding_assistant)
+        if "worker_live_logs_enabled" in fields_set and payload.worker_live_logs_enabled is not None:
+            next_config.opencode.worker_live_logs_enabled = payload.worker_live_logs_enabled
         if "planner_model" in fields_set:
             next_config.set_role_model("planner", _normalize_model_override(payload.planner_model))
         if "planner_session_token_budget" in fields_set:

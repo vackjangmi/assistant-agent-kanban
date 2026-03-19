@@ -40,7 +40,8 @@ def reviewer_cycle_responses(
     return [greeting, live, finalize_json]
 
 
-def _task_ready_for_review(config):
+def _task_ready_for_review(config, *, worker_live_logs_enabled: bool = True):
+    config.opencode.worker_live_logs_enabled = worker_live_logs_enabled
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
@@ -55,6 +56,8 @@ def _task_ready_for_review(config):
     def modify_workspace(cwd):
         (cwd / "app.txt").write_text("review me\n")
 
+    implementer_responses = ["hello", "implemented live", "## Summary\nimplemented"] if worker_live_logs_enabled else ["## Summary\nimplemented"]
+    side_effect_formats = {"default"} if worker_live_logs_enabled else {"json"}
     implementer = ImplementerWorker(
         config,
         scanner,
@@ -62,7 +65,7 @@ def _task_ready_for_review(config):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["hello", "implemented live", "## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(implementer_responses, side_effect=modify_workspace, side_effect_output_formats=side_effect_formats),
         workspace_manager=WorkspaceManager(config),
     )
     asyncio.run(implementer.run_once())
@@ -274,16 +277,23 @@ def test_reviewer_worker_rolls_over_session_after_budget_is_exceeded(configured_
     config, _, _ = configured_paths
     config.opencode.reviewer_session_token_budget = 100
     create_request_task(config, "review-session-budget-task")
-    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config, worker_live_logs_enabled=False)
     task = scanner.scan()[0]
     task.metadata.review.session_id = "ses_rev_1"
     task.metadata.review.session_tokens = 120
     metadata_store.save(task.task_dir, task.metadata)
 
     adapter = FakeAdapter(
-        reviewer_cycle_responses(),
-        session_ids=["ses_rev_2", "ses_rev_2", "ses_rev_2"],
-        total_tokens=[20, 0, 15],
+        [json.dumps({
+            "schema_version": 1,
+            "artifact_type": "review",
+            "task_id": "TASK-TEST",
+            "cycle": 1,
+            "verdict": "PASS",
+            "markdown": "Verdict: PASS\n\n## Acceptance Criteria Check\nReady",
+        })],
+        session_ids=["ses_rev_2"],
+        total_tokens=[35],
     )
     worker = ReviewerWorker(
         config,
@@ -300,8 +310,47 @@ def test_reviewer_worker_rolls_over_session_after_budget_is_exceeded(configured_
     updated = scanner.scan()[0]
     assert adapter.run_calls[0]["session_id"] is None
     assert updated.metadata.review.session_id == "ses_rev_2"
-    assert updated.metadata.review.last_run_tokens == 15
+    assert updated.metadata.review.last_run_tokens == 35
     assert updated.metadata.review.session_tokens == 35
+
+
+def test_reviewer_worker_uses_single_json_run_when_live_logs_disabled(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "reviewer-single-run-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config, worker_live_logs_enabled=False)
+    adapter = FakeAdapter(
+        [json.dumps({
+            "schema_version": 1,
+            "artifact_type": "review",
+            "task_id": "TASK-TEST",
+            "cycle": 1,
+            "verdict": "PASS",
+            "markdown": "Verdict: PASS\n\n## Acceptance Criteria Check\nReady",
+        })],
+        session_ids=["ses_review_single"],
+        total_tokens=[33],
+    )
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.scan()[0]
+    assert len(adapter.run_calls) == 1
+    assert adapter.run_calls[0]["output_format"] == "json"
+    assert updated.state == TaskState.COMPLETED_REVIEWS
+    review_json = json.loads((updated.task_dir / "REVIEW-001.json").read_text())
+    assert review_json["session_id"] == "ses_review_single"
+    assert review_json["total_tokens"] == 33
 
 
 def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_paths):
@@ -423,3 +472,35 @@ def test_reviewer_finalize_failure_returns_to_waiting_reviews(configured_paths):
     assert updated.state == TaskState.TODOS
     assert any(error.code == "review-finalize-failed" for error in updated.metadata.errors)
     assert updated.metadata.review.last_verdict is None
+
+
+def test_reviewer_worker_announces_log_file(configured_paths):
+    async def receive_worker_log_file(event_bus):
+        async for event in event_bus.subscribe():
+            if event.event == "worker_log_file":
+                return event
+
+    config, _, _ = configured_paths
+    create_request_task(config, "review-log-file-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    event_bus = EventBus()
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        event_bus,
+        adapter=FakeAdapter(reviewer_cycle_responses()),
+        integration_manager=IntegrationManager(config),
+    )
+
+    async def scenario():
+        event_task = asyncio.create_task(receive_worker_log_file(event_bus))
+        await asyncio.sleep(0)
+        await worker.run_once()
+        return await asyncio.wait_for(event_task, timeout=1)
+
+    event = asyncio.run(scenario())
+    assert event is not None
+    assert event.payload["log_name"] == "reviewer.jsonl"

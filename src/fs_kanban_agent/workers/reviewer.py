@@ -85,6 +85,7 @@ class ReviewerWorker(WorkerBase):
             )
             finalize_prompt = self._build_finalize_prompt(reviewing.task_dir, reviewing.metadata)
             await self.emit("task_moved", reviewing.metadata.task_id, state=reviewing.state.value)
+            await self.announce_log_file(reviewing.metadata.task_id, log_name)
             loop = asyncio.get_running_loop()
             session_id = self.reuse_session_id(
                 session_id=reviewing.metadata.review.session_id,
@@ -94,6 +95,74 @@ class ReviewerWorker(WorkerBase):
             prior_session_tokens = reviewing.metadata.review.session_tokens if session_id else 0
             run_config = self.resolve_task_run_config(reviewing.task_dir, reviewing.metadata)
             adapter = self.resolve_task_adapter(reviewing.task_dir, reviewing.metadata)
+
+            if not self.worker_live_logs_enabled(run_config):
+                self.append_log_marker(log_path=log_path, phase="run", cycle=cycle)
+                result = await asyncio.to_thread(
+                    adapter.run,
+                    agent=run_config.role_agent("reviewer"),
+                    prompt=finalize_prompt,
+                    cwd=workspace_path,
+                    run_log_path=log_path,
+                    config=run_config,
+                    session_id=session_id,
+                    cancel_key=reviewing.metadata.task_id,
+                )
+                reviewing.metadata.review.resolved_model = result.resolved_model
+                reviewing.metadata.review.session_id = result.session_id
+                reviewing.metadata.review.last_run_tokens = result.total_tokens
+                reviewing.metadata.review.session_tokens = self.next_session_token_total(
+                    reused_session_id=session_id,
+                    returned_session_id=result.session_id,
+                    prior_session_tokens=prior_session_tokens,
+                    run_tokens=result.total_tokens,
+                )
+                artifact = self._parse_finalize_artifact(result.assistant_text)
+                if not result.ok or artifact is None:
+                    reviewing.metadata.errors.append(
+                        TaskErrorInfo(code="review-finalize-failed", message=result.stderr.strip() or "review finalize artifact invalid")
+                    )
+                    apply_retry_gate(reviewing.metadata, reason="review-finalize-failed")
+                    self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                    done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review finalize failed")
+                    await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                    return True
+                reviewing.metadata.implementation.iteration = reviewing.metadata.cycle
+                reviewing.metadata.review.iteration = reviewing.metadata.cycle
+                verdict: Literal["PASS", "NEEDS_CHANGES"] = artifact["verdict"]
+                reviewing.metadata.review.last_verdict = verdict
+                review_name = f"REVIEW-{reviewing.metadata.cycle:03d}"
+                finalized_result = RunResult(
+                    ok=result.ok,
+                    returncode=result.returncode,
+                    assistant_text=cast(str, artifact["markdown"]),
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    raw_events_path=result.raw_events_path,
+                    command=result.command,
+                    resolved_model=reviewing.metadata.review.resolved_model,
+                    session_id=reviewing.metadata.review.session_id,
+                    total_tokens=result.total_tokens,
+                )
+                markdown_path, json_path = self.write_result_artifacts(reviewing.task_dir, review_name, finalized_result)
+                review_payload = json.loads((reviewing.task_dir / json_path).read_text())
+                review_payload["schema_version"] = artifact["schema_version"]
+                review_payload["artifact_type"] = artifact["artifact_type"]
+                review_payload["task_id"] = artifact["task_id"]
+                review_payload["cycle"] = artifact["cycle"]
+                review_payload["verdict"] = verdict
+                (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
+                self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                if verdict != "PASS":
+                    apply_retry_gate(reviewing.metadata, reason="review-needs-changes")
+                    self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                    done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review needs changes")
+                else:
+                    clear_retry_gate(reviewing.metadata)
+                    self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                    done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
 
             self.append_log_marker(log_path=log_path, phase="handshake", cycle=cycle)
             handshake_result = await asyncio.to_thread(

@@ -19,6 +19,7 @@ class FakeAdapter(AssistantAdapter):
         self,
         responses: list[str] | None = None,
         side_effect: Callable[[Path], None] | None = None,
+        side_effect_output_formats: set[str] | None = None,
         *,
         ok: bool = True,
         returncode: int = 0,
@@ -31,6 +32,7 @@ class FakeAdapter(AssistantAdapter):
         self.responses = responses or []
         self._last_response: str | None = None
         self.side_effect = side_effect
+        self.side_effect_output_formats = side_effect_output_formats or {"default"}
         self.ok = ok
         self.returncode = returncode
         self.stderr = stderr
@@ -70,7 +72,7 @@ class FakeAdapter(AssistantAdapter):
                 "show_thinking": show_thinking,
             }
         )
-        if self.side_effect is not None and output_format == "default":
+        if self.side_effect is not None and output_format in self.side_effect_output_formats:
             self.side_effect(cwd)
         if self.responses:
             content = self.responses.pop(0)
@@ -130,6 +132,7 @@ def configured_paths(tmp_path: Path) -> tuple[AppConfig, Path, Path]:
     init_git_repo(repo_root)
     kanban_root = tmp_path / ".kanban-agent"
     config = AppConfig(kanban_root=kanban_root, repo_root=repo_root)
+    config.opencode.worker_live_logs_enabled = True
     config.bootstrap()
     return config, repo_root, kanban_root
 

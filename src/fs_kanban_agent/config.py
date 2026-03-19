@@ -35,6 +35,7 @@ def normalize_runtime_assistant(value: str | None) -> str | None:
 
 class OpenCodeConfig(BaseModel):
     binary: str = "opencode"
+    worker_live_logs_enabled: bool = False
     planner_agent: str = "fs-kanban-planner"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)

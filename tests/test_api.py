@@ -1126,6 +1126,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["language"] == "EN"
         assert get_response.json()["theme"] == "light"
         assert get_response.json()["coding_assistant"] == "opencode"
+        assert get_response.json()["worker_live_logs_enabled"] is True
         assert get_response.json()["available_assistants"] == [
             {"value": "opencode", "label": "OpenCode"},
             {"value": "codex", "label": "Codex CLI"},
@@ -1158,6 +1159,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             json={
                 "language": "KO",
                 "coding_assistant": "opencode",
+                "worker_live_logs_enabled": False,
                 "planner_model": "gpt-5",
                 "planner_session_token_budget": 210,
                 "planner_agent_count": 2,
@@ -1179,6 +1181,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["saved"] is True
     assert payload["language"] == "KO"
     assert payload["coding_assistant"] == "opencode"
+    assert payload["worker_live_logs_enabled"] is False
     assert payload["planner_model"] == "gpt-5"
     assert payload["planner_session_token_budget"] == 210
     assert payload["planner_agent_count"] == 2
@@ -1195,6 +1198,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.opencode.planner_model == "gpt-5"
     assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
+    assert app.state.runtime.config.opencode.worker_live_logs_enabled is False
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.runtime.planner_agent_count == 2
     assert app.state.runtime.config.opencode.implementer_model == "o3-mini"
@@ -1351,6 +1355,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
                 "language": "KO",
                 "theme": "dark",
                 "coding_assistant": "opencode",
+                "worker_live_logs_enabled": False,
                 "planner_session_token_budget": 180,
                 "planner_agent_count": 2,
                 "implementer_model": None,
@@ -1373,6 +1378,7 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         assert persisted.runtime.language == "KO"
         assert persisted.runtime.theme == "dark"
         assert persisted.runtime.coding_assistant == "opencode"
+        assert persisted.opencode.worker_live_logs_enabled is False
         assert persisted.opencode.planner_session_token_budget == 180000
         assert persisted.runtime.planner_agent_count == 2
         assert persisted.opencode.reviewer_model == "reviewer-y"
@@ -1402,6 +1408,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
                 "planner_model": "planner-x",
                 "theme": "dark",
                 "coding_assistant": "opencode",
+                "worker_live_logs_enabled": False,
                 "planner_session_token_budget": 260,
                 "implementer_agent_count": 2,
                 "implementer_model": None,
@@ -1418,6 +1425,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     assert response.json()["language"] == "KO"
     assert response.json()["theme"] == "dark"
     assert response.json()["coding_assistant"] == "opencode"
+    assert response.json()["worker_live_logs_enabled"] is False
     assert response.json()["repo_discovery_root"] == "../custom-root"
     assert response.json()["repo_discovery_max_depth"] == 5
     assert response.json()["planner_agent_count"] == 5
@@ -1426,6 +1434,7 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.runtime.theme == "dark"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
+    assert app.state.runtime.config.opencode.worker_live_logs_enabled is False
     assert app.state.runtime.config.runtime.planner_agent_count == 5
     assert app.state.runtime.config.runtime.implementer_agent_count == 2
 
@@ -1749,6 +1758,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_language" in response.text
     assert "runtime_theme" in response.text
     assert "runtime_coding_assistant" in response.text
+    assert "worker_live_logs_enabled" in response.text
+    assert "THINKING MODE" in response.text
     assert "function applyRuntimeTheme(theme)" in response.text
     assert "applyRuntimeTheme(initialRuntimeTheme);" in response.text
     assert "let requestModalFocusToken = 0;" in response.text
@@ -1765,6 +1776,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'class="settings-sections"' in response.text
     assert 'id="settings-basics-heading"' in response.text
     assert 'id="settings-agents-heading"' in response.text
+    assert 'class="settings-grid-basic-top"' in response.text
+    assert 'class="settings-grid-basic-bottom"' in response.text
     assert 'class="settings-role-inline"' in response.text
     assert 'class="settings-role-inline settings-role-inline-commit"' in response.text
     assert "Agent" in response.text
@@ -1789,6 +1802,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "window.location.reload();" in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
+    assert "Log mode" in response.text
+    assert "Log display mode." in response.text
     assert "models loaded ·" in response.text
     assert "task-viewer-host" in response.text
     assert "Approve plan" in response.text
@@ -1997,15 +2012,18 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".diff-mobile { font-size: 0.82rem; }" in response.text
     assert "loadTaskDetail(button.dataset.taskId, false, { snapshot: boardTaskSnapshots.get(button.dataset.taskId) || null });" in response.text
     assert "worker_log" in response.text
+    assert "worker_log_file" in response.text
     assert 'id="task-tab-logs"' in response.text
     assert 'id="task-panel-logs"' in response.text
     assert "const taskTabLogs = document.getElementById('task-tab-logs');" in response.text
     assert "function renderTaskLogs(logs, { preserveSelection = true } = {})" in response.text
     assert "function appendWorkerLogPayload(payload)" in response.text
+    assert "function appendWorkerLogFilePayload(payload)" in response.text
     assert "function appendTaskLogDelta(renderedDelta, debugDelta)" in response.text
     assert "function captureTaskLogScrollState()" in response.text
     assert "function restoreTaskLogScrollState(state)" in response.text
     assert "function scrollTaskLogViewerToBottom()" in response.text
+    assert "function updateWorkerLiveLogsNoteVisibility()" in response.text
     assert "function updateTaskLogViewerContent(previousContent, nextContent)" in response.text
     assert "hadScrollableOverflow: maxScrollTop > 0," in response.text
     assert "if (state.wasNearBottom || (!state.hadScrollableOverflow && nextMax > 0)) {" in response.text
@@ -2016,8 +2034,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const shouldScrollToBottomAfterLoad = !preserveSelection || !activeTaskLogs || !activeLogName;" in response.text
     assert "if (!preserveSelection || !activeTaskLogs || !taskLogViewer.textContent || taskLogViewer.textContent === translateTask('runtimeLogSummaryEmpty')) {" in response.text
     assert "if (shouldScrollToBottomAfterLoad) scrollTaskLogViewerToBottom();" in response.text
+    assert "workerLiveLogsModeInput.addEventListener('change', updateWorkerLiveLogsNoteVisibility);" in response.text
     assert "if (activeTaskTab === 'logs') {" in response.text
     assert "if (appendWorkerLogPayload(payload)) return;" in response.text
+    assert "source.addEventListener('worker_log_file', (event) => {" in response.text
     assert "loadTaskLogs(activeTaskId).catch((error) => {" in response.text
     assert "maybeStartLogPolling" not in response.text
     assert "setInterval(() => {" not in response.text
