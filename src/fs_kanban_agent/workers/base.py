@@ -95,13 +95,19 @@ class WorkerBase:
 
     def make_log_callback(self, loop: asyncio.AbstractEventLoop, task_id: str, log_name: str):
         content = ""
+        rendered_content = ""
+        debug_content = ""
 
         def callback(raw_line: str, rendered_line: str | None) -> None:
-            nonlocal content
+            nonlocal content, rendered_content, debug_content
             next_chunk = raw_line if raw_line.endswith("\n") else f"{raw_line}\n"
             content = f"{content}{next_chunk}"
-            rendered_delta = render_assistant_log(next_chunk) or None
-            debug_delta = render_assistant_log(next_chunk, debug=True) or None
+            rendered_delta = rendered_line or render_assistant_log(next_chunk) or None
+            debug_delta = rendered_line or render_assistant_log(next_chunk, debug=True) or None
+            if rendered_delta:
+                rendered_content = f"{rendered_content}{rendered_delta}"
+            if debug_delta:
+                debug_content = f"{debug_content}{debug_delta}"
             loop.call_soon_threadsafe(
                 asyncio.create_task,
                 self.emit(
@@ -110,8 +116,8 @@ class WorkerBase:
                     log_name=log_name,
                     rendered_delta=rendered_delta,
                     debug_rendered_delta=debug_delta,
-                    rendered_content=render_assistant_log(content) or None,
-                    debug_rendered_content=render_assistant_log(content, debug=True) or None,
+                    rendered_content=rendered_content or render_assistant_log(content) or None,
+                    debug_rendered_content=debug_content or render_assistant_log(content, debug=True) or None,
                 ),
             )
 

@@ -504,3 +504,47 @@ def test_reviewer_worker_announces_log_file(configured_paths):
     event = asyncio.run(scenario())
     assert event is not None
     assert event.payload["log_name"] == "reviewer.jsonl"
+
+
+def test_reviewer_worker_emits_realtime_worker_log_events_when_live_logs_disabled(configured_paths):
+    async def receive_worker_log(event_bus):
+        async for event in event_bus.subscribe():
+            if event.event == "worker_log":
+                return event
+
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "review-log-default-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config, worker_live_logs_enabled=False)
+    event_bus = EventBus()
+    adapter = FakeAdapter([
+        json.dumps({
+            "schema_version": 1,
+            "artifact_type": "review",
+            "task_id": "TASK-TEST",
+            "cycle": 1,
+            "verdict": "PASS",
+            "markdown": "Verdict: PASS\n\n## Acceptance Criteria Check\nReady",
+        })
+    ])
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        event_bus,
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    async def scenario():
+        event_task = asyncio.create_task(receive_worker_log(event_bus))
+        await asyncio.sleep(0)
+        await worker.run_once()
+        return await asyncio.wait_for(event_task, timeout=1)
+
+    event = asyncio.run(scenario())
+    assert event is not None
+    assert event.payload["log_name"] == "reviewer.jsonl"
+    assert "Verdict: PASS" in event.payload["rendered_content"]

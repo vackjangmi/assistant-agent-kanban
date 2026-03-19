@@ -80,6 +80,7 @@ class ImplementerWorker(WorkerBase):
                     config=run_config,
                     session_id=session_id,
                     cancel_key=implementing.metadata.task_id,
+                    on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, log_name),
                 )
                 implementing.metadata.implementation.resolved_model = result.resolved_model
                 implementing.metadata.implementation.session_id = result.session_id

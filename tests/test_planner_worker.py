@@ -549,3 +549,31 @@ def test_planner_worker_announces_log_file(configured_paths):
     event = asyncio.run(scenario())
     assert event is not None
     assert event.payload["log_name"] == "planner.jsonl"
+
+
+def test_planner_worker_emits_realtime_worker_log_events_when_live_logs_disabled(configured_paths):
+    async def receive_worker_log(event_bus):
+        async for event in event_bus.subscribe():
+            if event.event == "worker_log":
+                return event
+
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "planner-log-default-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    event_bus = EventBus()
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(["## Summary\nplan"]))
+
+    async def scenario():
+        event_task = asyncio.create_task(receive_worker_log(event_bus))
+        await asyncio.sleep(0)
+        await worker.run_once()
+        return await asyncio.wait_for(event_task, timeout=1)
+
+    event = asyncio.run(scenario())
+    assert event is not None
+    assert event.payload["log_name"] == "planner.jsonl"
+    assert event.payload["rendered_content"] == "## Summary\nplan"

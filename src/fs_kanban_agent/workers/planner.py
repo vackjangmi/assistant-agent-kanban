@@ -76,6 +76,7 @@ class PlanningWorker(WorkerBase):
                     config=run_config,
                     session_id=session_id,
                     cancel_key=planning.metadata.task_id,
+                    on_log_line=self.make_log_callback(loop, planning.metadata.task_id, log_name),
                 )
                 planning.metadata.plan.resolved_model = result.resolved_model
                 planning.metadata.plan.session_id = result.session_id
