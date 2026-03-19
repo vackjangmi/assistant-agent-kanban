@@ -1779,6 +1779,7 @@
     let activeTaskTab = 'overview';
     let activeTaskDetail = null;
     let activeTaskLogs = null;
+    let taskLogViewerPinnedToBottom = true;
     let activeChangedFileId = null;
     let activeChangedFileDetail = null;
     let activeArtifactName = null;
@@ -5150,7 +5151,7 @@
         scrollTop: taskLogViewer.scrollTop,
         scrollHeight: taskLogViewer.scrollHeight,
         hadScrollableOverflow: maxScrollTop > 0,
-        wasNearBottom: maxScrollTop - taskLogViewer.scrollTop <= 24,
+        wasNearBottom: taskLogViewerPinnedToBottom || maxScrollTop - taskLogViewer.scrollTop <= 24,
       };
     }
 
@@ -5168,6 +5169,12 @@
 
     function scrollTaskLogViewerToBottom() {
       taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
+      taskLogViewerPinnedToBottom = true;
+    }
+
+    function updateTaskLogViewerPinnedToBottom() {
+      const maxScrollTop = Math.max(0, taskLogViewer.scrollHeight - taskLogViewer.clientHeight);
+      taskLogViewerPinnedToBottom = maxScrollTop - taskLogViewer.scrollTop <= 24;
     }
 
     function updateTaskLogViewerContent(previousContent, nextContent) {
@@ -5259,6 +5266,7 @@
         taskLogName.textContent = translateTask('noLogSelected');
         taskLogStatus.textContent = translateTask('failedLoadLogs');
         taskLogViewer.textContent = translateTask('unableLoadLogs');
+        taskLogViewerPinnedToBottom = true;
       }
     }
 
@@ -5286,6 +5294,7 @@
         taskLogName.textContent = translateTask('noLogSelected');
         taskLogStatus.textContent = translateTask('selectRuntimeLog');
         taskLogViewer.textContent = translateTask('runtimeLogSummaryEmpty');
+        taskLogViewerPinnedToBottom = true;
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder(translateTask('selectChangedTabToInspect'));
         setHumanReviewEditorContent('');
@@ -5796,6 +5805,7 @@
       renderTaskLogs(activeTaskLogs);
       scrollTaskLogViewerToBottom();
     });
+    taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
     taskDiffShell.addEventListener('click', (event) => {
       const lineCommentButton = event.target.closest('[data-line-comment-action]');

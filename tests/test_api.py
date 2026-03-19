@@ -2037,8 +2037,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "workerLiveLogsModeInput.disabled = !isOpenCode;" in response.text
     assert "field.style.display = isOpenCode ? '' : 'none';" in response.text
     assert "runtimeCodingAssistantInput.addEventListener('input', handleAssistantModeVisibilityChange);" in response.text
+    assert "let taskLogViewerPinnedToBottom = true;" in response.text
+    assert "function updateTaskLogViewerPinnedToBottom()" in response.text
     assert "function updateTaskLogViewerContent(previousContent, nextContent)" in response.text
     assert "hadScrollableOverflow: maxScrollTop > 0," in response.text
+    assert "wasNearBottom: taskLogViewerPinnedToBottom || maxScrollTop - taskLogViewer.scrollTop <= 24," in response.text
     assert "if (state.wasNearBottom || (!state.hadScrollableOverflow && nextMax > 0)) {" in response.text
     assert "if (appendTaskLogDelta(payload.rendered_delta, payload.debug_rendered_delta)) {" in response.text
     assert "if (suffix) taskLogViewer.textContent += suffix;" in response.text
@@ -2048,6 +2051,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "if (!preserveSelection || !activeTaskLogs || !taskLogViewer.textContent || taskLogViewer.textContent === translateTask('runtimeLogSummaryEmpty')) {" in response.text
     assert "if (shouldScrollToBottomAfterLoad) scrollTaskLogViewerToBottom();" in response.text
     assert "window.alert('이 모드는 더 많은 토큰을 사용합니다.');" in response.text
+    assert "taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);" in response.text
     assert "if (activeTaskTab === 'logs') {" in response.text
     assert "if (appendWorkerLogPayload(payload)) return;" in response.text
     assert "source.addEventListener('worker_log_file', (event) => {" in response.text
