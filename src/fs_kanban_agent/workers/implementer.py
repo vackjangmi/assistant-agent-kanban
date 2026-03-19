@@ -53,9 +53,8 @@ class ImplementerWorker(WorkerBase):
                 return True
 
             cycle = implementing.metadata.cycle + 1
-            handshake_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{cycle:03d}-handshake.jsonl"
-            live_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{cycle:03d}.jsonl"
-            finalize_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{cycle:03d}-finalize.jsonl"
+            log_path = self.task_log_dir(task.metadata.task_id) / "implementer.jsonl"
+            log_name = log_path.name
             handshake_prompt = self._build_handshake_prompt(implementing.metadata)
             live_prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
             finalize_prompt = self._build_finalize_prompt(implementing.task_dir, implementing.metadata)
@@ -69,12 +68,13 @@ class ImplementerWorker(WorkerBase):
             run_config = self.resolve_task_run_config(implementing.task_dir, implementing.metadata)
             adapter = self.resolve_task_adapter(implementing.task_dir, implementing.metadata)
 
+            self.append_log_marker(log_path=log_path, phase="handshake", cycle=cycle)
             handshake_result = await asyncio.to_thread(
                 adapter.run,
                 agent=run_config.role_agent("implementer"),
                 prompt=handshake_prompt,
                 cwd=workspace_repo,
-                run_log_path=handshake_log_path,
+                run_log_path=log_path,
                 config=run_config,
                 session_id=session_id,
                 cancel_key=implementing.metadata.task_id,
@@ -101,12 +101,14 @@ class ImplementerWorker(WorkerBase):
                 return True
 
             active_session_id = handshake_result.session_id or session_id
+            self.append_log_marker(log_path=log_path, phase="live", cycle=cycle)
             live_result = await self._run_adapter_with_retry(
                 adapter=adapter,
                 implementing=implementing,
                 prompt=live_prompt,
                 workspace_repo=workspace_repo,
-                run_log_path=live_log_path,
+                run_log_path=log_path,
+                log_name=log_name,
                 run_config=run_config,
                 session_id=active_session_id,
                 loop=loop,
@@ -135,12 +137,13 @@ class ImplementerWorker(WorkerBase):
                 )
 
             if success:
+                self.append_log_marker(log_path=log_path, phase="finalize", cycle=cycle)
                 finalize_result = await asyncio.to_thread(
                     adapter.run,
                     agent=run_config.role_agent("implementer"),
                     prompt=finalize_prompt,
                     cwd=workspace_repo,
-                    run_log_path=finalize_log_path,
+                    run_log_path=log_path,
                     config=run_config,
                     session_id=live_result.session_id or active_session_id,
                     cancel_key=implementing.metadata.task_id,
@@ -236,6 +239,7 @@ class ImplementerWorker(WorkerBase):
         prompt: str,
         workspace_repo: Path,
         run_log_path: Path,
+        log_name: str,
         run_config,
         session_id: str | None,
         loop,
@@ -252,7 +256,7 @@ class ImplementerWorker(WorkerBase):
             config=run_config,
             session_id=session_id,
             cancel_key=implementing.metadata.task_id,
-            on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
+            on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, log_name),
             output_format=output_format,
             stream_stderr_to_log=stream_stderr_to_log,
             show_thinking=show_thinking,
@@ -268,7 +272,7 @@ class ImplementerWorker(WorkerBase):
             config=run_config,
             session_id=session_id,
             cancel_key=implementing.metadata.task_id,
-            on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
+            on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, log_name),
             output_format=output_format,
             stream_stderr_to_log=stream_stderr_to_log,
             show_thinking=show_thinking,

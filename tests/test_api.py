@@ -1622,7 +1622,7 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert "model: openai/gpt-5.4-mini" in implementer_agent_path.read_text()
         assert "model: github-copilot/gpt-5" in reviewer_agent_path.read_text()
         assert "Do not call `task()` or delegate helper subtasks." in planner_agent_path.read_text()
-        assert "Return markdown only when the prompt does not provide an artifact path." in planner_agent_path.read_text()
+        assert "If the prompt says this is a handshake/session-prep step, return only a short greeting." in planner_agent_path.read_text()
         assert "Do not delegate the final file edits" in implementer_agent_path.read_text()
         assert "If the prompt says this is a final review-artifact step, return only the requested strict JSON object." in reviewer_agent_path.read_text()
         assert "Prefer `Verdict: PASS` when only minor follow-up notes remain" in reviewer_agent_path.read_text()
@@ -2002,8 +2002,20 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const taskTabLogs = document.getElementById('task-tab-logs');" in response.text
     assert "function renderTaskLogs(logs, { preserveSelection = true } = {})" in response.text
     assert "function appendWorkerLogPayload(payload)" in response.text
+    assert "function appendTaskLogDelta(renderedDelta, debugDelta)" in response.text
+    assert "function captureTaskLogScrollState()" in response.text
+    assert "function restoreTaskLogScrollState(state)" in response.text
+    assert "function scrollTaskLogViewerToBottom()" in response.text
     assert "function updateTaskLogViewerContent(previousContent, nextContent)" in response.text
+    assert "hadScrollableOverflow: maxScrollTop > 0," in response.text
+    assert "if (state.wasNearBottom || (!state.hadScrollableOverflow && nextMax > 0)) {" in response.text
+    assert "if (appendTaskLogDelta(payload.rendered_delta, payload.debug_rendered_delta)) {" in response.text
+    assert "if (suffix) taskLogViewer.textContent += suffix;" in response.text
+    assert "restoreTaskLogScrollState(scrollState);" in response.text
     assert "async function loadTaskLogs(taskId, { preserveSelection = true } = {})" in response.text
+    assert "const shouldScrollToBottomAfterLoad = !preserveSelection || !activeTaskLogs || !activeLogName;" in response.text
+    assert "if (!preserveSelection || !activeTaskLogs || !taskLogViewer.textContent || taskLogViewer.textContent === translateTask('runtimeLogSummaryEmpty')) {" in response.text
+    assert "if (shouldScrollToBottomAfterLoad) scrollTaskLogViewerToBottom();" in response.text
     assert "if (activeTaskTab === 'logs') {" in response.text
     assert "if (appendWorkerLogPayload(payload)) return;" in response.text
     assert "loadTaskLogs(activeTaskId).catch((error) => {" in response.text
@@ -2013,6 +2025,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "let activeArtifactRequestToken = 0;" in response.text
     assert "function scheduleActiveTaskRefresh(options = {})" in response.text
     assert "if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;" in response.text
+    assert "if (resolvedTab === 'logs' && (!softRefresh || !activeTaskLogs)) await loadTaskLogs(taskId);" in response.text
     assert "encodeURIComponent(activeArtifactName)" in response.text
     assert "if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;" in response.text
     assert "translateTask('stalePlanMessage')" in response.text

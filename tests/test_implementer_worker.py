@@ -669,6 +669,8 @@ def test_implementer_worker_emits_realtime_worker_log_events(configured_paths):
 
     assert event is not None
     assert event.task_id is not None
-    assert event.payload["log_name"].startswith("implementer-")
+    assert event.payload["log_name"] == "implementer.jsonl"
+    assert event.payload["rendered_delta"] == "implemented live"
+    assert event.payload["debug_rendered_delta"] == "implemented live"
     assert event.payload["rendered_content"] == "implemented live"
     assert event.payload["debug_rendered_content"] == "implemented live"

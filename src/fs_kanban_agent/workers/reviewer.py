@@ -75,9 +75,8 @@ class ReviewerWorker(WorkerBase):
                 return True
 
             cycle = reviewing.metadata.cycle
-            handshake_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{cycle:03d}-handshake.jsonl"
-            live_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{cycle:03d}.jsonl"
-            finalize_log_path = self.task_log_dir(task.metadata.task_id) / f"reviewer-{cycle:03d}-finalize.jsonl"
+            log_path = self.task_log_dir(task.metadata.task_id) / "reviewer.jsonl"
+            log_name = log_path.name
             handshake_prompt = self._build_handshake_prompt(reviewing.metadata)
             live_prompt = self.build_prompt(
                 self._build_reviewer_source(reviewing.task_dir, reviewing.metadata),
@@ -96,12 +95,13 @@ class ReviewerWorker(WorkerBase):
             run_config = self.resolve_task_run_config(reviewing.task_dir, reviewing.metadata)
             adapter = self.resolve_task_adapter(reviewing.task_dir, reviewing.metadata)
 
+            self.append_log_marker(log_path=log_path, phase="handshake", cycle=cycle)
             handshake_result = await asyncio.to_thread(
                 adapter.run,
                 agent=run_config.role_agent("reviewer"),
                 prompt=handshake_prompt,
                 cwd=workspace_path,
-                run_log_path=handshake_log_path,
+                run_log_path=log_path,
                 config=run_config,
                 session_id=session_id,
                 cancel_key=reviewing.metadata.task_id,
@@ -127,16 +127,17 @@ class ReviewerWorker(WorkerBase):
                 return True
 
             active_session_id = handshake_result.session_id or session_id
+            self.append_log_marker(log_path=log_path, phase="live", cycle=cycle)
             live_result = await asyncio.to_thread(
                 adapter.run,
                 agent=run_config.role_agent("reviewer"),
                 prompt=live_prompt,
                 cwd=workspace_path,
-                run_log_path=live_log_path,
+                run_log_path=log_path,
                 config=run_config,
                 session_id=active_session_id,
                 cancel_key=reviewing.metadata.task_id,
-                on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, live_log_path.name),
+                on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, log_name),
             )
             if not live_result.ok:
                 reviewing.metadata.errors.append(
@@ -148,12 +149,13 @@ class ReviewerWorker(WorkerBase):
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
 
+            self.append_log_marker(log_path=log_path, phase="finalize", cycle=cycle)
             finalize_result = await asyncio.to_thread(
                 adapter.run,
                 agent=run_config.role_agent("reviewer"),
                 prompt=finalize_prompt,
                 cwd=workspace_path,
-                run_log_path=finalize_log_path,
+                run_log_path=log_path,
                 config=run_config,
                 session_id=live_result.session_id or active_session_id,
                 cancel_key=reviewing.metadata.task_id,

@@ -97,18 +97,34 @@ class WorkerBase:
             nonlocal content
             next_chunk = raw_line if raw_line.endswith("\n") else f"{raw_line}\n"
             content = f"{content}{next_chunk}"
+            rendered_delta = render_assistant_log(next_chunk) or None
+            debug_delta = render_assistant_log(next_chunk, debug=True) or None
             loop.call_soon_threadsafe(
                 asyncio.create_task,
                 self.emit(
                     "worker_log",
                     task_id,
                     log_name=log_name,
+                    rendered_delta=rendered_delta,
+                    debug_rendered_delta=debug_delta,
                     rendered_content=render_assistant_log(content) or None,
                     debug_rendered_content=render_assistant_log(content, debug=True) or None,
                 ),
             )
 
         return callback
+
+    def append_log_marker(
+        self,
+        *,
+        log_path: Path,
+        phase: str,
+        cycle: int,
+    ) -> None:
+        marker = f"\n===== phase={phase} cycle={cycle} =====\n"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a") as handle:
+            handle.write(marker)
 
     def write_result_artifacts(self, task_dir: Path, stem: str, result: RunResult) -> tuple[str, str]:
         markdown_path = task_dir / f"{stem}.md"

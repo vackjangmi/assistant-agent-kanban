@@ -72,7 +72,7 @@ class TaskService:
         markdown_files = self._sorted_markdown_files(task.task_dir)
         json_files = sorted(path.name for path in task.task_dir.glob("*.json") if path.name != "metadata.json")
         log_dir = self._task_runs_dir(task.metadata.task_id)
-        log_files = sorted(path.name for path in log_dir.glob("*")) if log_dir.exists() else []
+        log_files = self._visible_log_files(log_dir)
         changed_files = self._load_changed_files_for_task(task, require_available=False) if include_changed_files else []
         return TaskDetail(
             metadata=task.metadata,
@@ -97,7 +97,7 @@ class TaskService:
         entries: list[TaskLogEntry] = []
         if log_dir.exists():
             paths = sorted(
-                [path for path in log_dir.glob("*.jsonl") if path.is_file()],
+                [path for path in log_dir.glob("*.jsonl") if path.is_file() and self._should_show_log_file(path.name)],
                 key=lambda path: path.stat().st_mtime,
                 reverse=False,
             )
@@ -115,6 +115,14 @@ class TaskService:
                     )
                 )
         return TaskLogs(task_id=task.metadata.task_id, entries=entries)
+
+    def _visible_log_files(self, log_dir: Path) -> list[str]:
+        if not log_dir.exists():
+            return []
+        return sorted(path.name for path in log_dir.glob("*") if self._should_show_log_file(path.name))
+
+    def _should_show_log_file(self, filename: str) -> bool:
+        return not filename.endswith(("-handshake.jsonl", "-finalize.jsonl"))
 
     def get_changed_file(self, task_id: str, changed_file_id: str) -> ChangedFileDetail:
         task = self._find_task(task_id)

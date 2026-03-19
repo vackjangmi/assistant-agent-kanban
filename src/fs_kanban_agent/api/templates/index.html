@@ -5087,15 +5087,62 @@
       };
     }
 
+    function appendTaskLogDelta(renderedDelta, debugDelta) {
+      const hasRenderedDelta = typeof renderedDelta === 'string' && renderedDelta.length > 0;
+      const hasDebugDelta = typeof debugDelta === 'string' && debugDelta.length > 0;
+      if (!hasRenderedDelta && !hasDebugDelta) return false;
+      const scrollState = captureTaskLogScrollState();
+      const currentText = taskLogViewer.textContent || '';
+      if (hasRenderedDelta && hasDebugDelta && renderedDelta.trim() !== debugDelta.trim()) {
+        const separator = currentText.includes('----- Debug / Thinking -----')
+          ? ''
+          : `${currentText ? '\n\n' : ''}----- Debug / Thinking -----\n\n`;
+        taskLogViewer.textContent = `${currentText}${hasRenderedDelta ? renderedDelta : ''}${separator}${debugDelta}`;
+      } else {
+        taskLogViewer.textContent = `${currentText}${hasRenderedDelta ? renderedDelta : debugDelta}`;
+      }
+      restoreTaskLogScrollState(scrollState);
+      return true;
+    }
+
+    function captureTaskLogScrollState() {
+      const maxScrollTop = Math.max(0, taskLogViewer.scrollHeight - taskLogViewer.clientHeight);
+      return {
+        scrollTop: taskLogViewer.scrollTop,
+        scrollHeight: taskLogViewer.scrollHeight,
+        hadScrollableOverflow: maxScrollTop > 0,
+        wasNearBottom: maxScrollTop - taskLogViewer.scrollTop <= 24,
+      };
+    }
+
+    function restoreTaskLogScrollState(state) {
+      if (!state) return;
+      const nextMax = Math.max(0, taskLogViewer.scrollHeight - taskLogViewer.clientHeight);
+      if (state.wasNearBottom || (!state.hadScrollableOverflow && nextMax > 0)) {
+        taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
+        return;
+      }
+      const previousMax = Math.max(0, state.scrollHeight - taskLogViewer.clientHeight);
+      const relativeOffset = previousMax - state.scrollTop;
+      taskLogViewer.scrollTop = Math.max(0, nextMax - relativeOffset);
+    }
+
+    function scrollTaskLogViewerToBottom() {
+      taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
+    }
+
     function updateTaskLogViewerContent(previousContent, nextContent) {
+      const scrollState = captureTaskLogScrollState();
       const prior = previousContent || '';
       const next = nextContent || translateTask('runtimeLogUnavailable');
       if (prior && next.startsWith(prior)) {
         const suffix = next.slice(prior.length);
-        taskLogViewer.textContent = `${taskLogViewer.textContent || prior}${suffix}`;
+        if (suffix) taskLogViewer.textContent += suffix;
+        restoreTaskLogScrollState(scrollState);
         return;
       }
       taskLogViewer.textContent = next;
+      restoreTaskLogScrollState(scrollState);
     }
 
     function appendWorkerLogPayload(payload) {
@@ -5122,6 +5169,11 @@
       if (shouldSelectNewEntry) activeLogName = payload.log_name;
       if (existingIndex < 0 || shouldSelectNewEntry) renderTaskLogButtons(entries);
       if (activeLogName !== payload.log_name) return true;
+      if (appendTaskLogDelta(payload.rendered_delta, payload.debug_rendered_delta)) {
+        taskLogName.textContent = nextEntry.name || translateTask('noLogSelected');
+        taskLogStatus.textContent = translateTask('viewingLog', { name: nextEntry.name || translateTask('noLogSelected') });
+        return true;
+      }
       const previousContent = displayTaskLogContent(previousEntry);
       const nextContent = displayTaskLogContent(nextEntry);
       taskLogName.textContent = nextEntry.name || translateTask('noLogSelected');
@@ -5132,15 +5184,19 @@
 
     async function loadTaskLogs(taskId, { preserveSelection = true } = {}) {
       const requestToken = ++activeTaskLogRequestToken;
+      const shouldScrollToBottomAfterLoad = !preserveSelection || !activeTaskLogs || !activeLogName;
       if (!preserveSelection) activeLogName = null;
       taskLogStatus.textContent = translateTask('loadingLogs');
-      taskLogViewer.textContent = translateTask('loadingLogs');
+      if (!preserveSelection || !activeTaskLogs || !taskLogViewer.textContent || taskLogViewer.textContent === translateTask('runtimeLogSummaryEmpty')) {
+        taskLogViewer.textContent = translateTask('loadingLogs');
+      }
       try {
         const response = await fetch(`/api/tasks/${taskId}/logs`);
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedLoadLogs'));
         if (requestToken !== activeTaskLogRequestToken || taskId !== activeTaskId) return;
         renderTaskLogs(payload, { preserveSelection });
+        if (shouldScrollToBottomAfterLoad) scrollTaskLogViewerToBottom();
       } catch (error) {
         if (requestToken !== activeTaskLogRequestToken || taskId !== activeTaskId) return;
         taskModalError.hidden = false;
@@ -5199,7 +5255,7 @@
         const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
         const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
         if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab, { load: false });
-        if (resolvedTab === 'logs') await loadTaskLogs(taskId);
+        if (resolvedTab === 'logs' && (!softRefresh || !activeTaskLogs)) await loadTaskLogs(taskId);
         if (resolvedTab === 'changed-files' && detail.changed_files_available) {
           await ensureChangedFileSummaries(taskId);
           if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId || activeTaskTab !== 'changed-files' || !activeTaskDetail?.changed_files.length) return;
@@ -5672,6 +5728,7 @@
       if (!button || !activeTaskLogs) return;
       activeLogName = button.dataset.logName;
       renderTaskLogs(activeTaskLogs);
+      scrollTaskLogViewerToBottom();
     });
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
     taskDiffShell.addEventListener('click', (event) => {

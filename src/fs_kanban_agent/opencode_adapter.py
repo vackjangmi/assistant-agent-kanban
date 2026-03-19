@@ -93,7 +93,7 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
 
         stdout_chunks: list[str] = []
         stderr_chunks: list[str] = []
-        log_handle = run_log_path.open("w")
+        log_handle = run_log_path.open("a")
         log_lock = threading.Lock()
 
         def append_log_line(line: str) -> None:

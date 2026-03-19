@@ -87,7 +87,7 @@ class SubprocessCodexAdapter(AssistantAdapter):
 
         def read_stdout() -> None:
             assert process.stdout is not None
-            with run_log_path.open("w") as handle:
+            with run_log_path.open("a") as handle:
                 for line in process.stdout:
                     stdout_chunks.append(line)
                     handle.write(line)
