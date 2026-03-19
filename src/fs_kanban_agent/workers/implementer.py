@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from ..assistant_adapter import AssistantAdapter
 from ..enums import TaskState
 from ..exceptions import WorkspaceSyncError
+from ..language import generation_language_name
 from ..models import RunResult, TaskErrorInfo
-from ..assistant_adapter import AssistantAdapter
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from ..workspace_manager import WorkspaceManager
 from .base import WorkerBase
@@ -50,8 +51,14 @@ class ImplementerWorker(WorkerBase):
                 done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note="workspace preparation failed")
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
-            run_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{implementing.metadata.cycle + 1:03d}.jsonl"
-            prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
+
+            cycle = implementing.metadata.cycle + 1
+            handshake_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{cycle:03d}-handshake.jsonl"
+            live_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{cycle:03d}.jsonl"
+            finalize_log_path = self.task_log_dir(task.metadata.task_id) / f"implementer-{cycle:03d}-finalize.jsonl"
+            handshake_prompt = self._build_handshake_prompt(implementing.metadata)
+            live_prompt = self.build_prompt(self._build_implementer_source(implementing.task_dir), implementing.metadata, phase="implementer")
+            finalize_prompt = self._build_finalize_prompt(implementing.task_dir, implementing.metadata)
             loop = asyncio.get_running_loop()
             session_id = self.reuse_session_id(
                 session_id=implementing.metadata.implementation.session_id,
@@ -61,33 +68,59 @@ class ImplementerWorker(WorkerBase):
             prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
             run_config = self.resolve_task_run_config(implementing.task_dir, implementing.metadata)
             adapter = self.resolve_task_adapter(implementing.task_dir, implementing.metadata)
-            result = await self._run_adapter_with_retry(
-                adapter=adapter,
-                implementing=implementing,
-                prompt=prompt,
-                workspace_repo=workspace_repo,
-                run_log_path=run_log_path,
-                run_config=run_config,
+
+            handshake_result = await asyncio.to_thread(
+                adapter.run,
+                agent=run_config.role_agent("implementer"),
+                prompt=handshake_prompt,
+                cwd=workspace_repo,
+                run_log_path=handshake_log_path,
+                config=run_config,
                 session_id=session_id,
-                loop=loop,
+                cancel_key=implementing.metadata.task_id,
             )
-            implementing.metadata.implementation.resolved_model = result.resolved_model
-            implementing.metadata.implementation.session_id = result.session_id
-            implementing.metadata.implementation.last_run_tokens = result.total_tokens
+            implementing.metadata.implementation.resolved_model = handshake_result.resolved_model
+            implementing.metadata.implementation.session_id = handshake_result.session_id
+            implementing.metadata.implementation.last_run_tokens = handshake_result.total_tokens
             implementing.metadata.implementation.session_tokens = self.next_session_token_total(
                 reused_session_id=session_id,
-                returned_session_id=result.session_id,
+                returned_session_id=handshake_result.session_id,
                 prior_session_tokens=prior_session_tokens,
-                run_tokens=result.total_tokens,
+                run_tokens=handshake_result.total_tokens,
             )
+            self.metadata_store.save(implementing.task_dir, implementing.metadata)
+            if not handshake_result.ok:
+                implementing.metadata.implementation.last_result = "failure"
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-failed", message=handshake_result.stderr.strip() or "implementer handshake failed")
+                )
+                apply_retry_gate(implementing.metadata, reason="implementation-failed")
+                self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note="implementation handshake failed")
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
+
+            active_session_id = handshake_result.session_id or session_id
+            live_result = await self._run_adapter_with_retry(
+                adapter=adapter,
+                implementing=implementing,
+                prompt=live_prompt,
+                workspace_repo=workspace_repo,
+                run_log_path=live_log_path,
+                run_config=run_config,
+                session_id=active_session_id,
+                loop=loop,
+                output_format="default",
+                stream_stderr_to_log=True,
+            )
+
             implementing.metadata.cycle += 1
             has_changes = self.workspace_has_changes(workspace_repo)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
-            success = result.ok and has_changes and not has_local_commits
+            success = live_result.ok and has_changes and not has_local_commits
             implementing.metadata.implementation.iteration = implementing.metadata.cycle
             implementing.metadata.implementation.last_result = "success" if success else "failure"
-            work_name = f"WORK-{implementing.metadata.cycle:03d}"
-            self.write_result_artifacts(implementing.task_dir, work_name, result)
+
             if not has_changes:
                 implementing.metadata.errors.append(
                     TaskErrorInfo(code="implementation-no-changes", message="implementer produced no workspace changes")
@@ -96,12 +129,65 @@ class ImplementerWorker(WorkerBase):
                 implementing.metadata.errors.append(
                     TaskErrorInfo(code="implementation-local-commits", message="implementer must not create local git commits")
                 )
-            if not result.ok:
+            if not live_result.ok:
                 implementing.metadata.errors.append(
-                    TaskErrorInfo(code="implementation-failed", message=result.stderr.strip() or "implementer run failed")
+                    TaskErrorInfo(code="implementation-failed", message=live_result.stderr.strip() or "implementer run failed")
                 )
-            self.metadata_store.save(implementing.task_dir, implementing.metadata)
+
             if success:
+                finalize_result = await asyncio.to_thread(
+                    adapter.run,
+                    agent=run_config.role_agent("implementer"),
+                    prompt=finalize_prompt,
+                    cwd=workspace_repo,
+                    run_log_path=finalize_log_path,
+                    config=run_config,
+                    session_id=live_result.session_id or active_session_id,
+                    cancel_key=implementing.metadata.task_id,
+                )
+                implementing.metadata.implementation.resolved_model = (
+                    finalize_result.resolved_model or live_result.resolved_model or handshake_result.resolved_model
+                )
+                implementing.metadata.implementation.session_id = finalize_result.session_id or live_result.session_id or active_session_id
+                implementing.metadata.implementation.last_run_tokens = finalize_result.total_tokens
+                implementing.metadata.implementation.session_tokens = self.next_session_token_total(
+                    reused_session_id=active_session_id,
+                    returned_session_id=finalize_result.session_id,
+                    prior_session_tokens=implementing.metadata.implementation.session_tokens,
+                    run_tokens=finalize_result.total_tokens,
+                )
+                if not finalize_result.ok or not finalize_result.assistant_text.strip():
+                    implementing.metadata.implementation.last_result = "failure"
+                    implementing.metadata.errors.append(
+                        TaskErrorInfo(
+                            code="implementation-artifact-failed",
+                            message=finalize_result.stderr.strip() or "implementer did not produce a final work artifact",
+                        )
+                    )
+                    apply_retry_gate(implementing.metadata, reason="implementation-artifact-failed")
+                    self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                    done = self.transitions.move(
+                        implementing,
+                        TaskState.TODOS,
+                        by=self.worker_name,
+                        note="implementation artifact generation failed",
+                    )
+                    await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                    return True
+                finalized_result = RunResult(
+                    ok=finalize_result.ok,
+                    returncode=finalize_result.returncode,
+                    assistant_text=finalize_result.assistant_text,
+                    stdout=finalize_result.stdout,
+                    stderr=finalize_result.stderr,
+                    raw_events_path=finalize_result.raw_events_path,
+                    command=finalize_result.command,
+                    resolved_model=implementing.metadata.implementation.resolved_model,
+                    session_id=implementing.metadata.implementation.session_id,
+                    total_tokens=finalize_result.total_tokens,
+                )
+                work_name = f"WORK-{implementing.metadata.cycle:03d}"
+                self.write_result_artifacts(implementing.task_dir, work_name, finalized_result)
                 clear_retry_gate(implementing.metadata)
                 self.metadata_store.save(implementing.task_dir, implementing.metadata)
                 done = self.transitions.move(implementing, TaskState.WAITING_REVIEWS, by=self.worker_name)
@@ -153,6 +239,9 @@ class ImplementerWorker(WorkerBase):
         run_config,
         session_id: str | None,
         loop,
+        output_format: str = "json",
+        stream_stderr_to_log: bool = False,
+        show_thinking: bool = False,
     ) -> RunResult:
         result = await asyncio.to_thread(
             adapter.run,
@@ -164,6 +253,9 @@ class ImplementerWorker(WorkerBase):
             session_id=session_id,
             cancel_key=implementing.metadata.task_id,
             on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
+            output_format=output_format,
+            stream_stderr_to_log=stream_stderr_to_log,
+            show_thinking=show_thinking,
         )
         if not self._is_interrupted_run(result):
             return result
@@ -177,6 +269,9 @@ class ImplementerWorker(WorkerBase):
             session_id=session_id,
             cancel_key=implementing.metadata.task_id,
             on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, run_log_path.name),
+            output_format=output_format,
+            stream_stderr_to_log=stream_stderr_to_log,
+            show_thinking=show_thinking,
         )
 
     def _is_interrupted_run(self, result) -> bool:
@@ -197,3 +292,29 @@ class ImplementerWorker(WorkerBase):
         if latest_human_verify:
             sections.extend(["", "# Latest Human Verification", "", latest_human_verify[-1].read_text().rstrip()])
         return "\n".join(section for section in sections if section is not None)
+
+    def _build_handshake_prompt(self, metadata) -> str:
+        requested_language = generation_language_name(metadata.request.language)
+        return "\n".join(
+            [
+                "You are preparing a reusable fs-kanban implementer session.",
+                f"Reply with one short greeting in {requested_language}.",
+                "Do not analyze the plan yet.",
+                "Do not modify files yet.",
+                "Do not produce the final work artifact yet.",
+            ]
+        )
+
+    def _build_finalize_prompt(self, task_dir, metadata) -> str:
+        source = self._build_implementer_source(task_dir)
+        instructions = "\n".join(
+            [
+                source,
+                "",
+                "# Finalize Work Artifact",
+                "- Summarize the implementation that already exists in the current workspace.",
+                "- Do not make additional file edits or create git commits.",
+                "- Return only the final markdown artifact with the required sections.",
+            ]
+        )
+        return self.build_prompt(instructions, metadata, phase="implementer")

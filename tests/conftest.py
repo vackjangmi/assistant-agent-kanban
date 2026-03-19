@@ -70,7 +70,7 @@ class FakeAdapter(AssistantAdapter):
                 "show_thinking": show_thinking,
             }
         )
-        if self.side_effect is not None:
+        if self.side_effect is not None and output_format == "default":
             self.side_effect(cwd)
         if self.responses:
             content = self.responses.pop(0)

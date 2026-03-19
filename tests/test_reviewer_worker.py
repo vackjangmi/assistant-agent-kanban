@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import cast
 
 from fs_kanban_agent.config import AppConfig
 from fs_kanban_agent.enums import TaskState
@@ -16,6 +17,27 @@ from fs_kanban_agent.workers.implementer import ImplementerWorker
 from fs_kanban_agent.workers.reviewer import ReviewerWorker
 
 from .conftest import FakeAdapter, create_request_task, init_git_repo
+
+
+def reviewer_cycle_responses(
+    greeting: str = "hello",
+    live: str = "live review",
+    *,
+    verdict: str = "PASS",
+    markdown: str | None = None,
+) -> list[str]:
+    final_markdown = markdown or f"Verdict: {verdict}\n\n## Acceptance Criteria Check\nReady"
+    finalize_json = json.dumps(
+        {
+            "schema_version": 1,
+            "artifact_type": "review",
+            "task_id": "TASK-TEST",
+            "cycle": 1,
+            "verdict": verdict,
+            "markdown": final_markdown,
+        }
+    )
+    return [greeting, live, finalize_json]
 
 
 def _task_ready_for_review(config):
@@ -40,7 +62,7 @@ def _task_ready_for_review(config):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(["hello", "implemented live", "## Summary\nimplemented"], side_effect=modify_workspace),
         workspace_manager=WorkspaceManager(config),
     )
     asyncio.run(implementer.run_once())
@@ -58,7 +80,7 @@ def test_reviewer_worker_returns_to_todos_on_needs_changes(configured_paths):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["Verdict: NEEDS_CHANGES\n- fix it"]),
+        adapter=FakeAdapter(reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- fix it")),
         integration_manager=IntegrationManager(config),
     )
 
@@ -83,7 +105,7 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["Verdict: PASS\nReady"], resolved_models=["github-copilot/gpt-5"]),
+        adapter=FakeAdapter(reviewer_cycle_responses(), resolved_models=["github-copilot/gpt-5", "github-copilot/gpt-5"]),
         integration_manager=IntegrationManager(config),
     )
 
@@ -93,6 +115,7 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert scanner.scan()[0].metadata.review.iteration == 1
     assert (repo_root / "app.txt").read_text() == "hello\n"
     review_json = json.loads((scanner.scan()[0].task_dir / "REVIEW-001.json").read_text())
+    assert review_json["verdict"] == "PASS"
     assert "Verdict: PASS" in review_json["assistant_text"]
     assert review_json["resolved_model"] == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.review.resolved_model == "github-copilot/gpt-5"
@@ -110,7 +133,7 @@ def test_reviewer_worker_uses_pinned_backend_after_global_change(configured_path
     metadata_store.save(task.task_dir, task.metadata)
     config.runtime.coding_assistant = "codex"
     config.codex.reviewer_model = "gpt-5.3-codex"
-    opencode_adapter = FakeAdapter(["Verdict: PASS\nReady"], resolved_models=["openai/gpt-5.4"])
+    opencode_adapter = FakeAdapter(reviewer_cycle_responses(), resolved_models=["openai/gpt-5.4", "openai/gpt-5.4"])
     codex_adapter = FakeAdapter(["Verdict: PASS\nWrong backend"], resolved_models=["gpt-5.3-codex"])
     worker = ReviewerWorker(
         config,
@@ -126,7 +149,7 @@ def test_reviewer_worker_uses_pinned_backend_after_global_change(configured_path
 
     assert asyncio.run(worker.run_once()) is True
     updated = scanner.scan()[0]
-    assert len(opencode_adapter.run_calls) == 1
+    assert len(opencode_adapter.run_calls) == 3
     assert len(codex_adapter.run_calls) == 0
     assert updated.metadata.review.resolved_model == "openai/gpt-5.4"
 
@@ -146,7 +169,7 @@ def test_reviewer_worker_leaves_target_repo_clean_until_human_verification(tmp_p
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["Verdict: PASS\nReady"]),
+        adapter=FakeAdapter(reviewer_cycle_responses()),
         integration_manager=IntegrationManager(config),
     )
 
@@ -181,7 +204,7 @@ def test_reviewer_worker_rejects_tasks_with_no_workspace_changes(configured_path
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["Verdict: PASS\nlooks good"]),
+        adapter=FakeAdapter(reviewer_cycle_responses()),
         integration_manager=IntegrationManager(config),
     )
 
@@ -196,7 +219,11 @@ def test_reviewer_worker_rejects_tasks_with_no_workspace_changes(configured_path
 def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths):
     class PromptCapturingAdapter(FakeAdapter):
         def __init__(self):
-            super().__init__(["Verdict: NEEDS_CHANGES\n- revise", "Verdict: PASS\nReady"], session_ids=["ses_rev_1", "ses_rev_1"])
+            super().__init__(
+                reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- revise")
+                + reviewer_cycle_responses(),
+                session_ids=cast(list[str | None], ["ses_rev_1"] * 6),
+            )
             self.prompts: list[str] = []
 
         def run(self, **kwargs):
@@ -232,7 +259,7 @@ def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths
     updated = scanner.scan()[0]
     assert updated.metadata.review.session_id == "ses_rev_1"
     assert adapter.run_calls[0]["session_id"] == "ses_rev_1"
-    prompt = adapter.prompts[0]
+    prompt = adapter.prompts[1]
     assert "# Work History" in prompt
     assert "WORK-000.md" in prompt
     assert "WORK-001.md" in prompt
@@ -254,9 +281,9 @@ def test_reviewer_worker_rolls_over_session_after_budget_is_exceeded(configured_
     metadata_store.save(task.task_dir, task.metadata)
 
     adapter = FakeAdapter(
-        ["Verdict: PASS\nLooks good"],
-        session_ids=["ses_rev_2"],
-        total_tokens=[35],
+        reviewer_cycle_responses(),
+        session_ids=["ses_rev_2", "ses_rev_2", "ses_rev_2"],
+        total_tokens=[20, 0, 15],
     )
     worker = ReviewerWorker(
         config,
@@ -273,7 +300,7 @@ def test_reviewer_worker_rolls_over_session_after_budget_is_exceeded(configured_
     updated = scanner.scan()[0]
     assert adapter.run_calls[0]["session_id"] is None
     assert updated.metadata.review.session_id == "ses_rev_2"
-    assert updated.metadata.review.last_run_tokens == 35
+    assert updated.metadata.review.last_run_tokens == 15
     assert updated.metadata.review.session_tokens == 35
 
 
@@ -292,7 +319,7 @@ def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_path
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["Verdict: NEEDS_CHANGES\n- still broken"]),
+        adapter=FakeAdapter(reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- still broken")),
         integration_manager=IntegrationManager(config),
     )
 
@@ -306,7 +333,7 @@ def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_path
 def test_reviewer_worker_localizes_review_source_for_korean_requests(configured_paths):
     class PromptCapturingAdapter(FakeAdapter):
         def __init__(self):
-            super().__init__(["Verdict: PASS\n준비 완료"])
+            super().__init__(reviewer_cycle_responses(markdown="Verdict: PASS\n\n## Acceptance Criteria Check\n준비 완료"))
             self.prompts: list[str] = []
 
         def run(self, **kwargs):
@@ -333,7 +360,7 @@ def test_reviewer_worker_localizes_review_source_for_korean_requests(configured_
     )
 
     assert asyncio.run(worker.run_once()) is True
-    prompt = adapter.prompts[0]
+    prompt = adapter.prompts[1]
     assert "Return the markdown artifact in Korean." in prompt
     assert "# 계획" in prompt
     assert "# 리뷰 지침" in prompt
@@ -343,7 +370,7 @@ def test_reviewer_worker_localizes_review_source_for_korean_requests(configured_
 def test_reviewer_worker_falls_back_to_english_for_unsupported_request_language(configured_paths):
     class PromptCapturingAdapter(FakeAdapter):
         def __init__(self):
-            super().__init__(["Verdict: PASS\nLooks good"])
+            super().__init__(reviewer_cycle_responses())
             self.prompts: list[str] = []
 
         def run(self, **kwargs):
@@ -370,6 +397,29 @@ def test_reviewer_worker_falls_back_to_english_for_unsupported_request_language(
     )
 
     assert asyncio.run(worker.run_once()) is True
-    prompt = adapter.prompts[0]
+    prompt = adapter.prompts[1]
     assert "Return the markdown artifact in English." in prompt
     assert "# Review Instructions" in prompt
+
+
+def test_reviewer_finalize_failure_returns_to_waiting_reviews(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-finalize-failure-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    adapter = FakeAdapter(["hello", "live review", "not-json"])
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert any(error.code == "review-finalize-failed" for error in updated.metadata.errors)
+    assert updated.metadata.review.last_verdict is None

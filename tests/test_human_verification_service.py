@@ -595,7 +595,9 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert not live_runs_dir.exists()
     assert archive_runs_dir.exists()
     assert done.metadata.integration.patch_path == str(archive_runs_dir / "review-001.patch")
+    assert (archive_runs_dir / "implementer-001-handshake.jsonl").exists()
     assert (archive_runs_dir / "implementer-001.jsonl").exists()
+    assert (archive_runs_dir / "implementer-001-finalize.jsonl").exists()
     assert (archive_runs_dir / "review-001.patch").exists()
     expected_message = "\n".join(
         [
@@ -620,7 +622,12 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert (docs_root / "PLAN.md").exists()
     assert (docs_root / "HUMAN-VERIFY-001.md").exists()
     assert (docs_root / "COMMIT.md").exists()
-    assert detail.log_files == ["implementer-001.jsonl", "review-001.patch"]
+    assert detail.log_files == [
+        "implementer-001-finalize.jsonl",
+        "implementer-001-handshake.jsonl",
+        "implementer-001.jsonl",
+        "review-001.patch",
+    ]
     changed_file = next(file for file in detail.changed_files if file.path == "app.txt")
     assert task_service.get_changed_file(done.metadata.task_id, changed_file.id).summary.path == "app.txt"
 

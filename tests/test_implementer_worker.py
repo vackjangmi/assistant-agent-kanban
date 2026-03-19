@@ -21,14 +21,19 @@ from fs_kanban_agent.workers.implementer import ImplementerWorker
 from .conftest import FakeAdapter, create_request_task, init_git_repo
 
 
+def implementer_cycle_responses(greeting: str = "hello", live: str = "implemented live", artifact: str = "## Summary\nimplemented") -> list[str]:
+    return [greeting, live, artifact]
+
+
 class InterruptedThenSuccessAdapter(FakeAdapter):
     def __init__(self, *, side_effect=None) -> None:
-        super().__init__(responses=["## Summary\nimplemented"], side_effect=side_effect)
+        super().__init__(responses=implementer_cycle_responses(), side_effect=side_effect)
         self.calls = 0
 
     def run(self, **kwargs) -> RunResult:
-        self.calls += 1
-        if self.calls == 1:
+        if kwargs.get("output_format") == "default":
+            self.calls += 1
+        if kwargs.get("output_format") == "default" and self.calls == 1:
             run_log_path = kwargs["run_log_path"]
             run_log_path.parent.mkdir(parents=True, exist_ok=True)
             run_log_path.write_text("")
@@ -64,6 +69,7 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     def modify_workspace(cwd):
         (cwd / "app.txt").write_text("changed\n")
 
+    adapter = FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace, resolved_models=["openai/gpt-5.4", "openai/gpt-5.4"])
     worker = ImplementerWorker(
         config,
         scanner,
@@ -71,7 +77,7 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace, resolved_models=["openai/gpt-5.4"]),
+        adapter=adapter,
         workspace_manager=WorkspaceManager(config),
     )
 
@@ -87,6 +93,7 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert work_json["assistant_text"] == "## Summary\nimplemented"
     assert work_json["resolved_model"] == "openai/gpt-5.4"
     assert updated.metadata.implementation.resolved_model == "openai/gpt-5.4"
+    assert [call["output_format"] for call in adapter.run_calls] == ["json", "default", "json"]
 
 
 def test_implementer_worker_uses_pinned_backend_after_global_change(configured_paths):
@@ -112,7 +119,7 @@ def test_implementer_worker_uses_pinned_backend_after_global_change(configured_p
     def modify_workspace(cwd):
         (cwd / "app.txt").write_text("changed\n")
 
-    opencode_adapter = FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace, resolved_models=["openai/gpt-5.3-codex"])
+    opencode_adapter = FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace, resolved_models=["openai/gpt-5.3-codex", "openai/gpt-5.3-codex"])
     codex_adapter = FakeAdapter(["## Summary\nwrong backend"], side_effect=modify_workspace, resolved_models=["gpt-5.4"])
     worker = ImplementerWorker(
         config,
@@ -128,7 +135,7 @@ def test_implementer_worker_uses_pinned_backend_after_global_change(configured_p
 
     assert asyncio.run(worker.run_once()) is True
     updated = scanner.scan()[0]
-    assert len(opencode_adapter.run_calls) == 1
+    assert len(opencode_adapter.run_calls) == 3
     assert len(codex_adapter.run_calls) == 0
     assert updated.metadata.implementation.resolved_model == "openai/gpt-5.3-codex"
 
@@ -151,9 +158,10 @@ def test_implementer_worker_persists_and_reuses_session_id(configured_paths):
         (cwd / "app.txt").write_text("changed\n")
 
     adapter = FakeAdapter(
-        ["## Summary\nimplemented once", "## Summary\nimplemented twice"],
+        implementer_cycle_responses(greeting="hello-1", live="live-1", artifact="## Summary\nimplemented once")
+        + implementer_cycle_responses(greeting="hello-2", live="live-2", artifact="## Summary\nimplemented twice"),
         side_effect=modify_workspace,
-        session_ids=["ses_impl_1", "ses_impl_1"],
+        session_ids=["ses_impl_1", "ses_impl_1", "ses_impl_1", "ses_impl_1", "ses_impl_1", "ses_impl_1"],
     )
     worker = ImplementerWorker(
         config,
@@ -170,6 +178,8 @@ def test_implementer_worker_persists_and_reuses_session_id(configured_paths):
     first_pass = scanner.scan()[0]
     assert first_pass.metadata.implementation.session_id == "ses_impl_1"
     assert adapter.run_calls[0]["session_id"] is None
+    assert adapter.run_calls[1]["output_format"] == "default"
+    assert adapter.run_calls[2]["output_format"] == "json"
 
     waiting_review = first_pass
     assert waiting_review.state == TaskState.WAITING_REVIEWS
@@ -180,7 +190,7 @@ def test_implementer_worker_persists_and_reuses_session_id(configured_paths):
     assert asyncio.run(worker.run_once()) is True
     second_pass = scanner.scan()[0]
     assert second_pass.metadata.implementation.session_id == "ses_impl_1"
-    assert adapter.run_calls[1]["session_id"] == "ses_impl_1"
+    assert adapter.run_calls[3]["session_id"] == "ses_impl_1"
 
 
 def test_implementer_worker_rolls_over_session_after_budget_is_exceeded(configured_paths):
@@ -202,10 +212,11 @@ def test_implementer_worker_rolls_over_session_after_budget_is_exceeded(configur
         (cwd / "app.txt").write_text("changed\n")
 
     adapter = FakeAdapter(
-        ["## Summary\nimplemented once", "## Summary\nimplemented twice"],
+        implementer_cycle_responses(greeting="hello-1", live="live-1", artifact="## Summary\nimplemented once")
+        + implementer_cycle_responses(greeting="hello-2", live="live-2", artifact="## Summary\nimplemented twice"),
         side_effect=modify_workspace,
-        session_ids=["ses_impl_1", "ses_impl_2"],
-        total_tokens=[120, 30],
+        session_ids=["ses_impl_1", "ses_impl_1", "ses_impl_1", "ses_impl_2", "ses_impl_2", "ses_impl_2"],
+        total_tokens=[80, 0, 40, 20, 0, 10],
     )
     worker = ImplementerWorker(
         config,
@@ -221,7 +232,7 @@ def test_implementer_worker_rolls_over_session_after_budget_is_exceeded(configur
     assert asyncio.run(worker.run_once()) is True
     first_pass = scanner.scan()[0]
     assert first_pass.metadata.implementation.session_id == "ses_impl_1"
-    assert first_pass.metadata.implementation.last_run_tokens == 120
+    assert first_pass.metadata.implementation.last_run_tokens == 40
     assert first_pass.metadata.implementation.session_tokens == 120
 
     reviewing = transitions.move(first_pass, TaskState.REVIEWING, by="reviewer")
@@ -230,9 +241,9 @@ def test_implementer_worker_rolls_over_session_after_budget_is_exceeded(configur
 
     assert asyncio.run(worker.run_once()) is True
     second_pass = scanner.scan()[0]
-    assert adapter.run_calls[1]["session_id"] is None
+    assert adapter.run_calls[3]["session_id"] is None
     assert second_pass.metadata.implementation.session_id == "ses_impl_2"
-    assert second_pass.metadata.implementation.last_run_tokens == 30
+    assert second_pass.metadata.implementation.last_run_tokens == 10
     assert second_pass.metadata.implementation.session_tokens == 30
 
 
@@ -268,7 +279,7 @@ def test_implementer_worker_clones_task_target_repo(tmp_path):
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace),
         workspace_manager=WorkspaceManager(config),
     )
 
@@ -316,7 +327,7 @@ def test_implementer_worker_supports_named_base_branch_in_cloned_workspace(tmp_p
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace),
         workspace_manager=WorkspaceManager(config),
     )
 
@@ -348,7 +359,7 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"]),
+        adapter=FakeAdapter(implementer_cycle_responses()),
         workspace_manager=WorkspaceManager(config),
     )
 
@@ -435,7 +446,7 @@ def test_implementer_worker_restarts_from_latest_base_on_workspace_sync_conflict
         assert (cwd / "stale-only.txt").exists() is False
         (cwd / "app.txt").write_text("fresh implementation\n")
 
-    adapter = FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace)
+    adapter = FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace)
     worker = ImplementerWorker(
         config,
         scanner,
@@ -504,7 +515,7 @@ def test_implementer_worker_skips_retry_gated_todos(configured_paths):
     todo.metadata.retry_gate.not_before = utc_now() + timedelta(minutes=5)
     metadata_store.save(todo.task_dir, todo.metadata)
 
-    adapter = FakeAdapter(["## Summary\nimplemented"])
+    adapter = FakeAdapter(implementer_cycle_responses())
     worker = ImplementerWorker(
         config,
         scanner,
@@ -517,7 +528,7 @@ def test_implementer_worker_skips_retry_gated_todos(configured_paths):
     )
 
     assert asyncio.run(worker.run_once()) is False
-    assert adapter.responses == ["## Summary\nimplemented"]
+    assert adapter.responses == implementer_cycle_responses()
 
 
 def test_implementer_worker_moves_to_implementing_before_workspace_prepare(configured_paths):
@@ -550,7 +561,7 @@ def test_implementer_worker_moves_to_implementing_before_workspace_prepare(confi
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace),
         workspace_manager=InspectingWorkspaceManager(config),
     )
 
@@ -587,7 +598,7 @@ def test_implementer_worker_returns_to_todos_when_workspace_prepare_fails_after_
         await original_publish(event)
 
     event_bus.publish = capture_publish
-    adapter = FakeAdapter(["## Summary\nimplemented"])
+    adapter = FakeAdapter(implementer_cycle_responses())
     worker = ImplementerWorker(
         config,
         scanner,
@@ -645,7 +656,7 @@ def test_implementer_worker_emits_realtime_worker_log_events(configured_paths):
         locks,
         transitions,
         event_bus,
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace),
         workspace_manager=WorkspaceManager(config),
     )
 
@@ -659,5 +670,5 @@ def test_implementer_worker_emits_realtime_worker_log_events(configured_paths):
     assert event is not None
     assert event.task_id is not None
     assert event.payload["log_name"].startswith("implementer-")
-    assert event.payload["rendered_content"] == "## Summary\n\nimplemented"
-    assert event.payload["debug_rendered_content"] == "## Summary\n\nimplemented"
+    assert event.payload["rendered_content"] == "implemented live"
+    assert event.payload["debug_rendered_content"] == "implemented live"

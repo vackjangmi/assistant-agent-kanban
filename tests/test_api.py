@@ -1622,9 +1622,9 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert "model: openai/gpt-5.4-mini" in implementer_agent_path.read_text()
         assert "model: github-copilot/gpt-5" in reviewer_agent_path.read_text()
         assert "Do not call `task()` or delegate helper subtasks." in planner_agent_path.read_text()
-        assert "Write the plan directly in this response." in planner_agent_path.read_text()
+        assert "Return markdown only when the prompt does not provide an artifact path." in planner_agent_path.read_text()
         assert "Do not delegate the final file edits" in implementer_agent_path.read_text()
-        assert "Write the review directly in this response." in reviewer_agent_path.read_text()
+        assert "If the prompt says this is a final review-artifact step, return only the requested strict JSON object." in reviewer_agent_path.read_text()
         assert "Prefer `Verdict: PASS` when only minor follow-up notes remain" in reviewer_agent_path.read_text()
 
         second_save = client.put(

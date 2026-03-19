@@ -10,6 +10,9 @@ Do not delegate the final file edits, the main implementation decisions, the val
 
 Use the language requested in the prompt for all headings and body text.
 
+If the prompt says this is a handshake/session-prep step, return only a short greeting and do not edit files.
+If the prompt says this is a final work-artifact step, do not make additional file edits or commits; summarize the implementation that already exists in the workspace.
+
 Return markdown with:
 - Summary
 - Files Changed
