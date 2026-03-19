@@ -684,22 +684,36 @@
       border-top: 0;
       border-radius: 0;
     }
-    body[data-theme="dark"] .toastui-editor-contents,
-    body[data-theme="dark"] .toastui-editor-contents p,
-    body[data-theme="dark"] .toastui-editor-contents li,
-    body[data-theme="dark"] .toastui-editor-contents code,
-    body[data-theme="dark"] .toastui-editor-contents pre,
-    body[data-theme="dark"] .toastui-editor-md-preview,
-    body[data-theme="dark"] .toastui-editor-md-preview p,
-    body[data-theme="dark"] .toastui-editor-md-preview li,
-    body[data-theme="dark"] .toastui-editor-md-preview code,
-    body[data-theme="dark"] .toastui-editor-md-preview pre {
-      background: transparent !important;
-      color: var(--text) !important;
-    }
-    body[data-theme="dark"] .toastui-editor-contents h1,
-    body[data-theme="dark"] .toastui-editor-contents h2,
-    body[data-theme="dark"] .toastui-editor-contents h3,
+     body[data-theme="dark"] .toastui-editor-contents,
+     body[data-theme="dark"] .toastui-editor-contents p,
+     body[data-theme="dark"] .toastui-editor-contents li,
+     body[data-theme="dark"] .toastui-editor-contents pre,
+     body[data-theme="dark"] .toastui-editor-md-preview,
+     body[data-theme="dark"] .toastui-editor-md-preview p,
+     body[data-theme="dark"] .toastui-editor-md-preview li,
+     body[data-theme="dark"] .toastui-editor-md-preview pre {
+       background: transparent !important;
+       color: var(--text) !important;
+     }
+     body[data-theme="dark"] .toastui-editor-contents code,
+     body[data-theme="dark"] .toastui-editor-md-preview code {
+       background: rgba(214, 171, 120, 0.14) !important;
+       border: 1px solid rgba(214, 171, 120, 0.2) !important;
+       border-radius: 4px !important;
+       color: #f6ddb9 !important;
+       padding: 0.08em 0.35em !important;
+     }
+     body[data-theme="dark"] .toastui-editor-contents pre code,
+     body[data-theme="dark"] .toastui-editor-md-preview pre code {
+       background: transparent !important;
+       border: 0 !important;
+       border-radius: 0 !important;
+       color: var(--text) !important;
+       padding: 0 !important;
+     }
+     body[data-theme="dark"] .toastui-editor-contents h1,
+     body[data-theme="dark"] .toastui-editor-contents h2,
+     body[data-theme="dark"] .toastui-editor-contents h3,
     body[data-theme="dark"] .toastui-editor-contents h4,
     body[data-theme="dark"] .toastui-editor-contents h5,
     body[data-theme="dark"] .toastui-editor-contents h6,
@@ -2867,6 +2881,35 @@
         board.innerHTML = visibleColumns.map((column) => renderBoardColumn(column)).join('');
       }
       refreshRunningClocks();
+      refreshActiveTaskFromBoardSnapshot();
+    }
+
+    function refreshActiveTaskFromBoardSnapshot() {
+      if (taskModal.hidden || !activeTaskId || !activeTaskDetail) return;
+      const snapshot = boardTaskSnapshots.get(activeTaskId);
+      if (!snapshot) return;
+      const activeMetadata = activeTaskDetail.metadata || {};
+      const stateChanged = snapshot.state !== activeMetadata.state;
+      const updatedAtChanged = Boolean(snapshot.updated_at) && snapshot.updated_at !== activeMetadata.updated_at;
+      if (!stateChanged && !updatedAtChanged) return;
+      const nextMetadata = {
+        ...activeMetadata,
+        state: stateChanged ? snapshot.state : activeMetadata.state,
+        updated_at: updatedAtChanged ? snapshot.updated_at : activeMetadata.updated_at,
+      };
+      const nextMarkdownFiles = snapshot.state === 'waiting-check-plans' && !activeTaskDetail.markdown_files.includes('PLAN.md')
+        ? ['PLAN.md', ...activeTaskDetail.markdown_files]
+        : activeTaskDetail.markdown_files;
+      activeTaskDetail = {
+        ...activeTaskDetail,
+        metadata: nextMetadata,
+        markdown_files: nextMarkdownFiles,
+      };
+      hydrateTaskModalChrome(snapshot, { preserveTab: true });
+      updatePlanActionState();
+      updateHumanVerificationState();
+      updateTaskDeleteState();
+      scheduleActiveTaskRefresh({ reloadArtifact: stateChanged || updatedAtChanged });
     }
 
     async function loadBoard() {
@@ -4463,7 +4506,7 @@
       if (planEditor || !window.toastui || !window.toastui.Editor) return planEditor;
       planEditor = new window.toastui.Editor({
         el: taskEditorHost,
-        height: '420px',
+        height: `${calculatePlanEditorHeight()}px`,
         initialEditType: 'markdown',
         previewStyle: 'tab',
         hideModeSwitch: true,
@@ -4489,7 +4532,23 @@
         },
         usageStatistics: false,
       });
+      syncPlanEditorHeight();
       return planEditor;
+    }
+
+    function calculatePlanEditorHeight() {
+      if (!taskPlanEditorShell) return 320;
+      const shellHeight = Math.floor(taskPlanEditorShell.getBoundingClientRect().height || 0);
+      return Math.max(220, shellHeight || 320);
+    }
+
+    function syncPlanEditorHeight() {
+      const nextHeight = calculatePlanEditorHeight();
+      taskEditorHost.style.height = `${nextHeight}px`;
+      taskEditor.style.height = `${nextHeight}px`;
+      if (planEditor && typeof planEditor.setHeight === 'function') {
+        planEditor.setHeight(`${nextHeight}px`);
+      }
     }
 
     function clearRequestFieldError(fieldName) {
@@ -4611,6 +4670,7 @@
       ensureMarkdownViewer(value || '');
       if (planEditor) planEditor.setMarkdown(value || '');
       taskEditor.value = value || '';
+      requestAnimationFrame(() => syncPlanEditorHeight());
     }
 
     function setTaskEditorMessage(value) {
@@ -4751,10 +4811,12 @@
           editor.setMarkdown(taskEditor.value || planSourceMarkdown || '');
           taskEditor.hidden = true;
           taskEditorHost.hidden = false;
+          requestAnimationFrame(() => syncPlanEditorHeight());
         } else {
           taskEditor.hidden = false;
           taskEditor.disabled = false;
           taskEditor.readOnly = false;
+          requestAnimationFrame(() => syncPlanEditorHeight());
         }
       } else {
         taskEditorHost.hidden = true;
@@ -5829,7 +5891,10 @@
     });
     taskDiffShell.addEventListener('input', (event) => { if (event.target.matches('[data-inline-comment-fallback]')) updateInlineCommentComposerState(); });
     taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
-    window.addEventListener('resize', () => { if (activeTaskTab === 'review-note') syncHumanReviewEditorHeight(); });
+    window.addEventListener('resize', () => {
+      if (activeTaskTab === 'review-note') syncHumanReviewEditorHeight();
+      if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') syncPlanEditorHeight();
+    });
     saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
     requestChangesButton.addEventListener('click', rejectVerification);
     approveHumanReviewButton.addEventListener('click', openApprovalChoiceModal);
