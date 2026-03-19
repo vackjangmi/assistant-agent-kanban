@@ -697,10 +697,10 @@
      }
      body[data-theme="dark"] .toastui-editor-contents code,
      body[data-theme="dark"] .toastui-editor-md-preview code {
-       background: rgba(214, 171, 120, 0.14) !important;
-       border: 1px solid rgba(214, 171, 120, 0.2) !important;
+       background: rgba(124, 164, 255, 0.16) !important;
+       border: 1px solid rgba(148, 184, 255, 0.24) !important;
        border-radius: 4px !important;
-       color: #f6ddb9 !important;
+       color: #f4f8ff !important;
        padding: 0.08em 0.35em !important;
      }
      body[data-theme="dark"] .toastui-editor-contents pre code,
@@ -1150,8 +1150,8 @@
     .human-review-editor-shell .editor-host,
     .human-review-editor-shell .editor-textarea { min-height: 0; height: 100%; }
     .human-review-editor-shell .editor-textarea { resize: none; overflow: auto; }
-    .viewer-host { min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; }
-    .artifact-edit-shell { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
+    .viewer-host { grid-row: 3; min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; }
+    .artifact-edit-shell { grid-row: 3; min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; overflow: hidden; }
     .artifact-edit-shell-copy { display: grid; gap: 4px; }
     .editor-host[hidden] { display: none; }
     .viewer-host[hidden] { display: none; }
@@ -1780,6 +1780,7 @@
     const taskPlanEditorShellStatus = document.getElementById('task-plan-editor-shell-status');
     const taskEditorHost = document.getElementById('task-editor-host');
     const taskEditor = document.getElementById('task-editor');
+    const taskPlanEditorBody = taskEditorHost.parentElement;
     const taskArtifactName = document.getElementById('task-artifact-name');
     const taskModeBadge = document.getElementById('task-mode-badge');
     const taskEditorStatus = document.getElementById('task-editor-status');
@@ -4537,8 +4538,8 @@
     }
 
     function calculatePlanEditorHeight() {
-      if (!taskPlanEditorShell) return 320;
-      const shellHeight = Math.floor(taskPlanEditorShell.getBoundingClientRect().height || 0);
+      if (!taskPlanEditorBody) return 320;
+      const shellHeight = Math.floor(taskPlanEditorBody.getBoundingClientRect().height || 0);
       return Math.max(220, shellHeight || 320);
     }
 
