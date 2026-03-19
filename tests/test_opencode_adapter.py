@@ -257,3 +257,52 @@ def test_subprocess_adapter_reuses_explicit_session_id(monkeypatch, tmp_path):
     assert "--session" in command
     assert command[command.index("--session") + 1] == "ses_existing"
     assert result.session_id == "ses_existing"
+
+
+def test_subprocess_adapter_supports_default_format_live_logs(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = ["\x1b[32m## Summary\x1b[0m\n", "plan\n"]
+            self.stderr = ["planner note\n"]
+            self.command = command
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessOpenCodeAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.bootstrap()
+    run_log_path = tmp_path / "planner-live.jsonl"
+
+    result = adapter.run(
+        agent="fs-kanban-planner",
+        prompt="sample",
+        cwd=tmp_path,
+        run_log_path=run_log_path,
+        config=config,
+        session_id="ses_bootstrap",
+        output_format="default",
+        stream_stderr_to_log=True,
+        show_thinking=True,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert "--thinking" in command
+    assert command[command.index("--format") + 1] == "default"
+    assert result.assistant_text == "## Summary\nplan"
+    assert result.session_id == "ses_bootstrap"
+    assert result.total_tokens == 0
+    log_text = run_log_path.read_text()
+    assert "## Summary" in log_text
+    assert "planner note" in log_text
+    assert "\x1b[32m" not in result.stdout

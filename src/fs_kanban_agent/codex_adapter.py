@@ -47,6 +47,9 @@ class SubprocessCodexAdapter(AssistantAdapter):
         session_id: str | None = None,
         cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
+        output_format: str = "json",
+        stream_stderr_to_log: bool = False,
+        show_thinking: bool = False,
     ) -> RunResult:
         command = [
             config.codex.binary,

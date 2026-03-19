@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
+
+
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
 def render_assistant_log(raw_content: str, *, debug: bool = False) -> str:
@@ -13,11 +17,11 @@ def render_assistant_log(raw_content: str, *, debug: bool = False) -> str:
 
 
 def render_assistant_event_line(raw_line: str, *, debug: bool = False) -> str | None:
-    line = raw_line.strip()
+    line = strip_ansi(raw_line).strip()
     if not line:
         return None
     try:
-        payload = json.loads(line)
+        payload = json.loads(raw_line.strip())
     except json.JSONDecodeError:
         return line
     event_type = payload.get("type")
@@ -31,11 +35,11 @@ def render_opencode_log(raw_content: str, *, debug: bool = False) -> str:
 
 
 def render_opencode_event_line(raw_line: str, *, debug: bool = False) -> str | None:
-    line = raw_line.strip()
+    line = strip_ansi(raw_line).strip()
     if not line:
         return None
     try:
-        payload = json.loads(line)
+        payload = json.loads(raw_line.strip())
     except json.JSONDecodeError:
         return line
     event_type = payload.get("type")
@@ -69,11 +73,11 @@ def render_opencode_event_line(raw_line: str, *, debug: bool = False) -> str | N
 
 
 def render_codex_event_line(raw_line: str, *, debug: bool = False) -> str | None:
-    line = raw_line.strip()
+    line = strip_ansi(raw_line).strip()
     if not line:
         return None
     try:
-        payload = json.loads(line)
+        payload = json.loads(raw_line.strip())
     except json.JSONDecodeError:
         return line
     event_type = payload.get("type")
@@ -172,3 +176,7 @@ def _int_field(payload: dict[str, object], *keys: str) -> int | None:
             return None
         current = current.get(key)
     return current if isinstance(current, int) else None
+
+
+def strip_ansi(value: str) -> str:
+    return ANSI_ESCAPE_RE.sub("", value)

@@ -58,6 +58,9 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
         session_id: str | None = None,
         cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
+        output_format: str = "json",
+        stream_stderr_to_log: bool = False,
+        show_thinking: bool = False,
     ) -> RunResult:
         command = [config.opencode.binary, "run"]
         agent_path = ensure_runtime_agent(config, agent)
@@ -66,7 +69,9 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
             command.extend(["--session", session_id])
         if resolved_model:
             command.extend(["--model", resolved_model])
-        command.extend(["--agent", agent, "--format", "json", "--", prompt])
+        if show_thinking:
+            command.append("--thinking")
+        command.extend(["--agent", agent, "--format", output_format, "--", prompt])
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["XDG_CONFIG_HOME"] = str(runtime_config_home(config))
@@ -88,21 +93,32 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
 
         stdout_chunks: list[str] = []
         stderr_chunks: list[str] = []
+        log_handle = run_log_path.open("w")
+        log_lock = threading.Lock()
+
+        def append_log_line(line: str) -> None:
+            with log_lock:
+                log_handle.write(line)
+                log_handle.flush()
 
         def read_stdout() -> None:
             assert process.stdout is not None
-            with run_log_path.open("w") as handle:
-                for line in process.stdout:
-                    stdout_chunks.append(line)
-                    handle.write(line)
-                    handle.flush()
-                    if on_log_line is not None:
-                        on_log_line(line.rstrip("\n"), render_opencode_event_line(line))
+            for line in process.stdout:
+                normalized = _normalize_stream_line(line, output_format=output_format)
+                stdout_chunks.append(normalized)
+                append_log_line(normalized)
+                if on_log_line is not None:
+                    on_log_line(normalized.rstrip("\n"), render_opencode_event_line(normalized))
 
         def read_stderr() -> None:
             assert process.stderr is not None
             for line in process.stderr:
-                stderr_chunks.append(line)
+                normalized = _normalize_stream_line(line, output_format=output_format)
+                stderr_chunks.append(normalized)
+                if stream_stderr_to_log:
+                    append_log_line(normalized)
+                    if on_log_line is not None:
+                        on_log_line(normalized.rstrip("\n"), render_opencode_event_line(normalized))
 
         stdout_thread = threading.Thread(target=read_stdout, name=f"{agent}-stdout", daemon=True)
         stderr_thread = threading.Thread(target=read_stderr, name=f"{agent}-stderr", daemon=True)
@@ -114,15 +130,13 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
                 returncode = process.wait(timeout=config.opencode.timeout_seconds)
             except subprocess.TimeoutExpired as exc:
                 process.kill()
-                stdout_thread.join(timeout=1)
-                stderr_thread.join(timeout=1)
                 raise AdapterRunError(f"opencode timed out for agent {agent}") from exc
 
             stdout_thread.join(timeout=1)
             stderr_thread.join(timeout=1)
             stdout = "".join(stdout_chunks)
             stderr = "".join(stderr_chunks)
-            assistant_text = _extract_assistant_text(stdout)
+            assistant_text = _extract_assistant_text(stdout) if output_format == "json" else _extract_default_assistant_text(stdout, stderr)
             resolved_session_id = _extract_session_id(stdout) or session_id
             return RunResult(
                 ok=returncode == 0,
@@ -134,9 +148,12 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
                 command=command,
                 resolved_model=resolved_model,
                 session_id=resolved_session_id,
-                total_tokens=_extract_total_tokens(stdout),
+                total_tokens=_extract_total_tokens(stdout) if output_format == "json" else 0,
             )
         finally:
+            stdout_thread.join(timeout=1)
+            stderr_thread.join(timeout=1)
+            log_handle.close()
             if cancel_key:
                 with self._process_lock:
                     processes = self._task_processes.get(cancel_key)
@@ -169,6 +186,13 @@ def _extract_assistant_text(stdout: str) -> str:
             if isinstance(part, dict) and isinstance(part.get("text"), str):
                 return part["text"]
     return ""
+
+
+def _extract_default_assistant_text(stdout: str, stderr: str) -> str:
+    visible_stdout = stdout.strip()
+    if visible_stdout:
+        return visible_stdout
+    return stderr.strip()
 
 
 def _extract_session_id(stdout: str) -> str | None:
@@ -206,6 +230,16 @@ def _extract_total_tokens(stdout: str) -> int:
         if isinstance(total, int):
             total_tokens += total
     return total_tokens
+
+
+def _normalize_stream_line(line: str, *, output_format: str) -> str:
+    if output_format == "json":
+        return line
+    return _strip_ansi(line)
+
+
+def _strip_ansi(value: str) -> str:
+    return _ANSI_ESCAPE_RE.sub("", value)
 
 
 def _read_agent_model(path: Path | None) -> str | None:
@@ -298,3 +332,6 @@ def _unique_models(models: list[str]) -> list[str]:
         seen.add(normalized)
         unique.append(normalized)
     return unique
+
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")

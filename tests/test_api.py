@@ -133,6 +133,24 @@ def test_api_renders_tool_only_runtime_logs_for_task(configured_paths):
     assert payload["entries"][0]["rendered_content"] == "Started agent step\n\nTool `read` failed: Error: File not found"
 
 
+def test_api_renders_default_format_runtime_logs_for_task(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "default-log-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+    log_dir = config.runs_dir / task.metadata.task_id
+    log_dir.mkdir(parents=True)
+    (log_dir / "planner-001.jsonl").write_text("\x1b[32m## Summary\x1b[0m\nplan line\n")
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{task.metadata.task_id}/logs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entries"][0]["rendered_content"] == "## Summary\n\nplan line"
+
+
 def test_api_exposes_debug_runtime_log_metadata_for_task(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -1942,10 +1960,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const cardStateClass = summary.is_current ? ' current' : reached ? ' reached' : ' upcoming';" in response.text
     assert "<div class=\"stage-timing-row\" style=\"--stage-columns:${states.length}\">${cards}</div>" in response.text
     assert "segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0)" in response.text
-    assert "/api/tasks/${taskId}/logs" not in response.text
-    assert "debug_rendered_content" not in response.text
-    assert "(no debug metadata for this log yet)" not in response.text
-    assert "(no readable log output for this file)" not in response.text
+    assert "/api/tasks/${taskId}/logs" in response.text
+    assert "debug_rendered_content" in response.text
     assert "artifact-group-label" in response.text
     assert "task-artifact-subtabs" in response.text
     assert "function buildArtifactEntries(files)" in response.text
@@ -1981,9 +1997,16 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".diff-mobile { font-size: 0.82rem; }" in response.text
     assert "loadTaskDetail(button.dataset.taskId, false, { snapshot: boardTaskSnapshots.get(button.dataset.taskId) || null });" in response.text
     assert "worker_log" in response.text
-    assert 'id="task-tab-logs"' not in response.text
-    assert 'id="task-panel-logs"' not in response.text
-    assert "loadTaskLogs(activeTaskId, true)" not in response.text
+    assert 'id="task-tab-logs"' in response.text
+    assert 'id="task-panel-logs"' in response.text
+    assert "const taskTabLogs = document.getElementById('task-tab-logs');" in response.text
+    assert "function renderTaskLogs(logs, { preserveSelection = true } = {})" in response.text
+    assert "function appendWorkerLogPayload(payload)" in response.text
+    assert "function updateTaskLogViewerContent(previousContent, nextContent)" in response.text
+    assert "async function loadTaskLogs(taskId, { preserveSelection = true } = {})" in response.text
+    assert "if (activeTaskTab === 'logs') {" in response.text
+    assert "if (appendWorkerLogPayload(payload)) return;" in response.text
+    assert "loadTaskLogs(activeTaskId).catch((error) => {" in response.text
     assert "maybeStartLogPolling" not in response.text
     assert "setInterval(() => {" not in response.text
     assert "let activeTaskRequestToken = 0;" in response.text
@@ -2064,6 +2087,7 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
     assert "최종 완료" in response.text
     assert "작업 상세" in response.text
     assert "대상 프로젝트" in response.text
+    assert "로그" in response.text
     assert "작업 내역" in response.text
     assert "변경 파일" in response.text
     assert "요구사항" in response.text

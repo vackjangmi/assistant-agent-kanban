@@ -286,8 +286,30 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         config = AppConfig.model_validate(raw)
         config.loaded_from = loaded_from
         config.loaded_local_from = loaded_local_from
+    _normalize_loaded_root_paths(config)
     config.bootstrap()
     return config
+
+
+def _normalize_loaded_root_paths(config: AppConfig) -> None:
+    anchor = None
+    if config.loaded_local_from is not None:
+        anchor = config.loaded_local_from.parent
+    elif config.loaded_from is not None:
+        anchor = config.loaded_from.parent
+    if anchor is None:
+        return
+    config.kanban_root = _resolve_config_root_path(config.kanban_root, anchor)
+    config.repo_root = _resolve_config_root_path(config.repo_root, anchor)
+    if config.workspace.root is not None:
+        config.workspace.root = _resolve_config_root_path(config.workspace.root, anchor)
+
+
+def _resolve_config_root_path(path: Path, anchor: Path) -> Path:
+    expanded = path.expanduser()
+    if expanded.is_absolute():
+        return expanded.resolve()
+    return (anchor / expanded).resolve()
 
 
 def _read_yaml_dict(path: Path) -> dict[str, Any]:

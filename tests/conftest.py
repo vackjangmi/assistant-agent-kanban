@@ -29,6 +29,7 @@ class FakeAdapter(AssistantAdapter):
         total_tokens: list[int] | None = None,
     ) -> None:
         self.responses = responses or []
+        self._last_response: str | None = None
         self.side_effect = side_effect
         self.ok = ok
         self.returncode = returncode
@@ -52,6 +53,9 @@ class FakeAdapter(AssistantAdapter):
         session_id: str | None = None,
         cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
+        output_format: str = "json",
+        stream_stderr_to_log: bool = False,
+        show_thinking: bool = False,
     ) -> RunResult:
         self.run_calls.append(
             {
@@ -61,11 +65,20 @@ class FakeAdapter(AssistantAdapter):
                 "run_log_path": run_log_path,
                 "session_id": session_id,
                 "cancel_key": cancel_key,
+                "output_format": output_format,
+                "stream_stderr_to_log": stream_stderr_to_log,
+                "show_thinking": show_thinking,
             }
         )
         if self.side_effect is not None:
             self.side_effect(cwd)
-        content = self.responses.pop(0) if self.responses else f"{agent}: ok"
+        if self.responses:
+            content = self.responses.pop(0)
+            self._last_response = content
+        elif self._last_response is not None:
+            content = self._last_response
+        else:
+            content = f"{agent}: ok"
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         run_log_path.write_text(content + "\n")
         if on_log_line is not None:

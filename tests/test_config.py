@@ -68,7 +68,7 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
 
     config = load_config()
 
-    assert config.kanban_root == Path("./base-kanban")
+    assert config.kanban_root == (base_path.parent / "base-kanban").resolve()
     assert config.opencode.planner_model == "planner-local"
     assert config.repo_discovery.max_depth == 2
     assert config.runtime.auto_dispatch is False
@@ -79,6 +79,30 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
     assert config.runtime.reviewer_agent_count == 1
     assert config.loaded_from == base_path.resolve()
     assert config.loaded_local_from == local_path.resolve()
+
+
+def test_load_config_normalizes_root_paths_against_loaded_local_config(tmp_path):
+    config_dir = tmp_path / "nested"
+    config_dir.mkdir(parents=True)
+    base_path = config_dir / "config.yaml"
+    local_path = config_dir / "config.local.yaml"
+    base_path.write_text(
+        "\n".join(
+            [
+                "kanban_root: .kanban-agent",
+                "repo_root: .",
+                "workspace:",
+                "  root: .kanban-agent/_runtime/workspaces-custom",
+            ]
+        )
+    )
+    local_path.write_text("runtime:\n  language: ko\n  coding_assistant: opencode\n")
+
+    config = load_config(base_path)
+
+    assert config.kanban_root == (config_dir / ".kanban-agent").resolve()
+    assert config.repo_root == config_dir.resolve()
+    assert config.workspace.root == (config_dir / ".kanban-agent" / "_runtime" / "workspaces-custom").resolve()
 
 
 def test_resolve_repo_discovery_root_defaults_from_project_root_when_unloaded(tmp_path, monkeypatch):

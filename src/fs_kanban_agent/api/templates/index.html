@@ -1180,7 +1180,7 @@
             <div class="composer-grid">
               <div class="field span-full">
                 <label id="request-title-label" for="title">Title</label>
-                <span id="request-title-description">Short task name used for the request heading and task folder slug.</span>
+                <span id="request-title-description">Short task name used for the request heading and internal metadata slug.</span>
                 <input id="title" name="title" maxlength="80" required>
                 <div class="error-text" data-error-for="title"></div>
               </div>
@@ -1431,6 +1431,7 @@
       <div id="task-modal-error" class="form-error" hidden></div>
       <div class="task-tabs">
         <button type="button" id="task-tab-overview" class="active">Overview</button>
+        <button type="button" id="task-tab-logs" hidden>Logs</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
         <button type="button" id="task-tab-review-note" hidden>Review note</button>
@@ -1438,6 +1439,20 @@
       <section id="task-panel-overview" class="task-panel">
         <div class="task-panel-scroll">
           <div id="task-overview" class="muted">Select a task to inspect.</div>
+        </div>
+      </section>
+      <section id="task-panel-logs" class="task-panel" hidden>
+        <div class="artifact-layout">
+          <div id="task-log-files" class="log-file-list"></div>
+          <div class="artifact-stage">
+            <div class="editor-toolbar">
+              <div>
+                <strong id="task-log-name">No log selected</strong>
+                <div><span id="task-log-mode-badge" class="mode-pill">Runtime logs</span><span id="task-log-status" class="muted">Select a runtime log to view.</span></div>
+              </div>
+            </div>
+            <pre id="task-log-viewer" class="log-viewer">No runtime log files recorded for this task yet.</pre>
+          </div>
         </div>
       </section>
       <section id="task-panel-changed-files" class="task-panel" hidden>
@@ -1678,10 +1693,12 @@
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
+    const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
     const taskTabReviewNote = document.getElementById('task-tab-review-note');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
+    const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
     const taskPanelReviewNote = document.getElementById('task-panel-review-note');
     const taskPanelEditor = document.getElementById('task-panel-editor');
@@ -1722,6 +1739,11 @@
     const retrospectiveCreateBranchButton = document.getElementById('retrospective-create-branch');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
     const taskArtifactSubtabs = document.getElementById('task-artifact-subtabs');
+    const taskLogFiles = document.getElementById('task-log-files');
+    const taskLogModeBadge = document.getElementById('task-log-mode-badge');
+    const taskLogName = document.getElementById('task-log-name');
+    const taskLogStatus = document.getElementById('task-log-status');
+    const taskLogViewer = document.getElementById('task-log-viewer');
     const taskViewerHost = document.getElementById('task-viewer-host');
     const taskPlanEditorShell = document.getElementById('task-plan-editor-shell');
     const taskPlanEditorTitle = document.getElementById('task-plan-editor-title');
@@ -1740,10 +1762,13 @@
     let activeTaskId = null;
     let activeTaskTab = 'overview';
     let activeTaskDetail = null;
+    let activeTaskLogs = null;
     let activeChangedFileId = null;
     let activeChangedFileDetail = null;
     let activeArtifactName = null;
+    let activeLogName = null;
     let activeArtifactRequestToken = 0;
+    let activeTaskLogRequestToken = 0;
     let runningTimerHandle = null;
     let activeTaskRequestToken = 0;
     let activeTaskRefreshTimer = null;
@@ -1913,7 +1938,7 @@
         repoHeading: 'Repo scope',
         repoDescription: 'Target repo, branch, and delivery guardrails.',
         titleLabel: 'Title',
-        titleDescription: 'Short task name for the request and task folder.',
+        titleDescription: 'Short task name for the request and internal metadata slug.',
         goalLabel: 'Goal',
         goalDescription: 'The concrete outcome you want.',
         backgroundLabel: 'Background / Why',
@@ -1959,7 +1984,7 @@
         repoHeading: '저장소 범위',
         repoDescription: '대상 프로젝트, 기준 브랜치, 작업 범위를 정합니다.',
         titleLabel: '제목',
-        titleDescription: '요청 제목과 task 폴더 이름에 쓰입니다.',
+        titleDescription: '요청 제목과 내부 metadata slug 생성에 쓰입니다.',
         goalLabel: '목표',
         goalDescription: '원하는 결과를 구체적으로 적습니다.',
         backgroundLabel: '배경 / 이유',
@@ -2111,9 +2136,18 @@
         close: 'Close',
         closeAria: 'Close task details',
         tabOverview: 'Overview',
+        tabLogs: 'Logs',
         tabTimeline: 'Timeline',
         tabViewer: 'Work log',
         tabChangedFiles: 'Changed files',
+        runtimeLogs: 'Runtime logs',
+        noLogSelected: 'No log selected',
+        selectRuntimeLog: 'Select a runtime log to view.',
+        loadingLogs: 'Loading runtime logs...',
+        failedLoadLogs: 'Failed to load runtime logs.',
+        unableLoadLogs: 'Unable to load runtime logs.',
+        runtimeLogUnavailable: 'This log has no readable output yet.',
+        viewingLog: 'Viewing {name}.',
         reviewNoteTitle: 'Review note',
         changedFilesHeading: 'Changed files',
         readOnlyPatch: 'Read-only patch view',
@@ -2273,9 +2307,18 @@
         close: '닫기',
         closeAria: '작업 상세 닫기',
         tabOverview: '개요',
+        tabLogs: '로그',
         tabTimeline: '타임라인',
         tabViewer: '작업 내역',
         tabChangedFiles: '변경 파일',
+        runtimeLogs: '런타임 로그',
+        noLogSelected: '선택된 로그 없음',
+        selectRuntimeLog: '볼 런타임 로그를 선택하세요.',
+        loadingLogs: '런타임 로그를 불러오는 중...',
+        failedLoadLogs: '런타임 로그를 불러오지 못했습니다.',
+        unableLoadLogs: '런타임 로그를 표시할 수 없습니다.',
+        runtimeLogUnavailable: '이 로그에는 아직 표시할 수 있는 출력이 없습니다.',
+        viewingLog: '{name} 로그를 보고 있습니다.',
         reviewNoteTitle: '리뷰 노트',
         changedFilesHeading: '변경 파일',
         readOnlyPatch: '읽기 전용 패치 보기',
@@ -2510,13 +2553,22 @@
       retrospectiveCreateTargetButton.textContent = translateTask('retrospectiveCreateTarget');
       retrospectiveCreateBranchButton.textContent = translateTask('retrospectiveCreateBranch');
       taskTabOverview.textContent = translateTask('tabOverview');
+      taskTabLogs.textContent = translateTask('tabLogs');
       taskTabEditor.textContent = translateTask('tabViewer');
       taskTabChangedFiles.textContent = translateTask('tabChangedFiles');
+      taskLogModeBadge.textContent = translateTask('runtimeLogs');
       document.getElementById('task-human-review-note-title').textContent = translateTask('reviewNoteTitle');
       document.querySelector('#task-changed-file-summary strong').textContent = translateTask('changedFilesHeading');
       document.querySelector('#task-changed-file-summary .diff-badge').textContent = translateTask('readOnlyPatch');
       if (!activeTaskDetail) {
         taskOverview.innerHTML = `<div class="muted">${escapeHtml(translateTask('selectTask'))}</div>`;
+      }
+      if (!activeTaskLogs) {
+        taskLogName.textContent = translateTask('noLogSelected');
+        taskLogStatus.textContent = translateTask('selectRuntimeLog');
+        taskLogViewer.textContent = translateTask('runtimeLogSummaryEmpty');
+      } else {
+        renderTaskLogs(activeTaskLogs);
       }
       if (!activeRetrospectiveRecord) {
         retrospectiveStatus.textContent = translateTask('retrospectiveIdle');
@@ -3519,7 +3571,10 @@
         setApprovalChoiceModalOpen(false, { force: true });
         clearTaskRefreshTimer();
         activeTaskRequestToken += 1;
+        activeTaskLogRequestToken += 1;
         taskDetailStale = false;
+        activeTaskLogs = null;
+        activeLogName = null;
         activeInlineCommentAnchor = null;
       }
       syncBodyModalState();
@@ -3763,15 +3818,18 @@
     function setTaskTab(tab, { load = true } = {}) {
       activeTaskTab = tab;
       taskTabOverview.classList.toggle('active', tab === 'overview');
+      taskTabLogs.classList.toggle('active', tab === 'logs');
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
       taskTabReviewNote.classList.toggle('active', tab === 'review-note');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskPanelOverview.hidden = tab !== 'overview';
+      taskPanelLogs.hidden = tab !== 'logs';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
       taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
       if (tab === 'review-note') requestAnimationFrame(() => syncHumanReviewEditorHeight());
       if (!load) return;
+      if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
     }
@@ -4856,10 +4914,13 @@
       const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
       const reviewNoteVisible = metadata.state === 'human-verifying';
       const viewerVisible = detail.markdown_files.length > 0;
+      const logsVisible = detail.log_files.length > 0 || ['planning', 'implementing', 'reviewing'].includes(metadata.state);
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
+      taskTabLogs.hidden = !logsVisible;
       taskTabChangedFiles.hidden = !changedFilesVisible;
       taskTabReviewNote.hidden = !reviewNoteVisible;
       taskTabEditor.hidden = !viewerVisible;
+      if (!logsVisible && taskTabLogs.classList.contains('active')) setTaskTab(viewerVisible ? 'editor' : 'overview');
       if (!changedFilesVisible && taskTabChangedFiles.classList.contains('active')) setTaskTab('overview');
       if (!reviewNoteVisible && taskTabReviewNote.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
@@ -4979,6 +5040,117 @@
       taskArtifactName.textContent = activeArtifactName || translateTask('noDocumentSelected');
     }
 
+    function renderTaskLogButtons(entries) {
+      if (!entries.length) {
+        taskLogFiles.innerHTML = `<div class="muted">${escapeHtml(translateTask('runtimeLogSummaryEmpty'))}</div>`;
+        return;
+      }
+      taskLogFiles.innerHTML = entries.map((entry) => `<button type="button" class="${entry.name === activeLogName ? 'active' : ''}" data-log-name="${escapeHtml(entry.name)}">${escapeHtml(entry.name)}</button>`).join('');
+    }
+
+    function renderTaskLogs(logs, { preserveSelection = true } = {}) {
+      activeTaskLogs = logs;
+      const entries = Array.isArray(logs?.entries) ? logs.entries : [];
+      const fallbackLogName = entries[entries.length - 1]?.name || null;
+      const hasCurrentSelection = preserveSelection && activeLogName && entries.some((entry) => entry.name === activeLogName);
+      activeLogName = hasCurrentSelection ? activeLogName : fallbackLogName;
+      renderTaskLogButtons(entries);
+      if (!entries.length || !activeLogName) {
+        taskLogName.textContent = translateTask('noLogSelected');
+        taskLogStatus.textContent = translateTask('runtimeLogSummaryEmpty');
+        taskLogViewer.textContent = translateTask('runtimeLogSummaryEmpty');
+        return;
+      }
+      const activeEntry = entries.find((entry) => entry.name === activeLogName) || entries[entries.length - 1];
+      activeLogName = activeEntry?.name || null;
+      taskLogName.textContent = activeEntry?.name || translateTask('noLogSelected');
+      taskLogStatus.textContent = activeEntry ? translateTask('viewingLog', { name: activeEntry.name }) : translateTask('selectRuntimeLog');
+      taskLogViewer.textContent = activeEntry ? displayTaskLogContent(activeEntry) : translateTask('selectRuntimeLog');
+    }
+
+    function displayTaskLogContent(entry) {
+      if (!entry) return translateTask('runtimeLogUnavailable');
+      const rendered = (entry.rendered_content || '').trim();
+      const debug = (entry.debug_rendered_content || '').trim();
+      if (rendered && debug && rendered !== debug) {
+        return `${rendered}\n\n----- Debug / Thinking -----\n\n${debug}`;
+      }
+      return rendered || debug || translateTask('runtimeLogUnavailable');
+    }
+
+    function mergeTaskLogSnapshot(previous, incoming) {
+      return {
+        ...previous,
+        ...incoming,
+        rendered_content: incoming.rendered_content ?? previous.rendered_content ?? null,
+        debug_rendered_content: incoming.debug_rendered_content ?? previous.debug_rendered_content ?? null,
+      };
+    }
+
+    function updateTaskLogViewerContent(previousContent, nextContent) {
+      const prior = previousContent || '';
+      const next = nextContent || translateTask('runtimeLogUnavailable');
+      if (prior && next.startsWith(prior)) {
+        const suffix = next.slice(prior.length);
+        taskLogViewer.textContent = `${taskLogViewer.textContent || prior}${suffix}`;
+        return;
+      }
+      taskLogViewer.textContent = next;
+    }
+
+    function appendWorkerLogPayload(payload) {
+      if (!payload || !activeTaskLogs || !payload.log_name) return false;
+      const entries = Array.isArray(activeTaskLogs.entries) ? activeTaskLogs.entries : [];
+      activeTaskLogs.entries = entries;
+      const existingIndex = entries.findIndex((entry) => entry.name === payload.log_name);
+      const previousEntry = existingIndex >= 0 ? entries[existingIndex] : null;
+      const nextEntry = mergeTaskLogSnapshot(previousEntry || {
+        name: payload.log_name,
+        path: '',
+        rendered_content: null,
+        debug_rendered_content: null,
+        updated_at: new Date().toISOString(),
+      }, {
+        name: payload.log_name,
+        rendered_content: payload.rendered_content ?? null,
+        debug_rendered_content: payload.debug_rendered_content ?? null,
+        updated_at: new Date().toISOString(),
+      });
+      if (existingIndex >= 0) entries[existingIndex] = nextEntry;
+      else entries.push(nextEntry);
+      const shouldSelectNewEntry = !activeLogName;
+      if (shouldSelectNewEntry) activeLogName = payload.log_name;
+      if (existingIndex < 0 || shouldSelectNewEntry) renderTaskLogButtons(entries);
+      if (activeLogName !== payload.log_name) return true;
+      const previousContent = displayTaskLogContent(previousEntry);
+      const nextContent = displayTaskLogContent(nextEntry);
+      taskLogName.textContent = nextEntry.name || translateTask('noLogSelected');
+      taskLogStatus.textContent = translateTask('viewingLog', { name: nextEntry.name || translateTask('noLogSelected') });
+      updateTaskLogViewerContent(previousContent, nextContent);
+      return true;
+    }
+
+    async function loadTaskLogs(taskId, { preserveSelection = true } = {}) {
+      const requestToken = ++activeTaskLogRequestToken;
+      if (!preserveSelection) activeLogName = null;
+      taskLogStatus.textContent = translateTask('loadingLogs');
+      taskLogViewer.textContent = translateTask('loadingLogs');
+      try {
+        const response = await fetch(`/api/tasks/${taskId}/logs`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedLoadLogs'));
+        if (requestToken !== activeTaskLogRequestToken || taskId !== activeTaskId) return;
+        renderTaskLogs(payload, { preserveSelection });
+      } catch (error) {
+        if (requestToken !== activeTaskLogRequestToken || taskId !== activeTaskId) return;
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskLogName.textContent = translateTask('noLogSelected');
+        taskLogStatus.textContent = translateTask('failedLoadLogs');
+        taskLogViewer.textContent = translateTask('unableLoadLogs');
+      }
+    }
+
     async function loadTaskDetail(taskId, preserveTab = false, options = {}) {
       const { softRefresh = false, reloadArtifact = true } = options;
       const snapshot = options.snapshot || boardTaskSnapshots.get(taskId) || null;
@@ -4989,6 +5161,7 @@
       setTaskDetailStale(false);
       if (!softRefresh) {
         activeTaskDetail = null;
+        activeTaskLogs = null;
         activeChangedFileId = null;
         activeChangedFileDetail = null;
         activeInlineCommentAnchor = null;
@@ -4998,6 +5171,10 @@
           document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags();
         }
         taskOverview.innerHTML = `<div class="muted">${escapeHtml(translateTask('loadingTaskDetails'))}</div>`;
+        taskLogFiles.innerHTML = '';
+        taskLogName.textContent = translateTask('noLogSelected');
+        taskLogStatus.textContent = translateTask('selectRuntimeLog');
+        taskLogViewer.textContent = translateTask('runtimeLogSummaryEmpty');
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder(translateTask('selectChangedTabToInspect'));
         setHumanReviewEditorContent('');
@@ -5006,6 +5183,7 @@
         setPlanEditorContent('');
         setArtifactMode(false);
         activeArtifactName = null;
+        activeLogName = null;
         planEditMode = false;
         savePlanButton.disabled = true;
         taskModeBadge.textContent = translateTask('viewerMode');
@@ -5021,6 +5199,7 @@
         const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
         const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
         if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab, { load: false });
+        if (resolvedTab === 'logs') await loadTaskLogs(taskId);
         if (resolvedTab === 'changed-files' && detail.changed_files_available) {
           await ensureChangedFileSummaries(taskId);
           if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId || activeTaskTab !== 'changed-files' || !activeTaskDetail?.changed_files.length) return;
@@ -5484,9 +5663,16 @@
       loadBoard();
     });
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
+    taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
+    taskLogFiles.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-log-name]');
+      if (!button || !activeTaskLogs) return;
+      activeLogName = button.dataset.logName;
+      renderTaskLogs(activeTaskLogs);
+    });
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
     taskDiffShell.addEventListener('click', (event) => {
       const lineCommentButton = event.target.closest('[data-line-comment-action]');
@@ -5556,6 +5742,14 @@
       if (taskModal.hidden) return;
       const payload = JSON.parse(event.data);
       if (activeTaskId !== payload.task_id) return;
+      if (activeTaskTab === 'logs') {
+        if (appendWorkerLogPayload(payload)) return;
+        loadTaskLogs(activeTaskId).catch((error) => {
+          taskModalError.hidden = false;
+          taskModalError.textContent = error.message;
+        });
+        return;
+      }
       scheduleActiveTaskRefresh({ reloadArtifact: false });
     });
     loadBoard();
