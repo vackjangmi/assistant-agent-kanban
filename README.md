@@ -12,6 +12,25 @@ That led to the idea behind `Assistant Agent Kanban`: combine an OpenCode-based 
 
 The current version is best described as a public MVP. The core workflow, dashboard, and tests are in place, but it is not yet a fully hardened production system.
 
+### Demo
+
+Full video: [Watch on YouTube](https://youtu.be/gpdcVGiLxaQ)
+
+**1. Plan**  
+![Plan Demo](./docs/gifs/assistant-agent-kanban-plan-demo.gif)
+
+**2. Implement & Review**  
+![Implement and Review Demo](./docs/gifs/assistant-agent-kanban-implement&review-demo.gif)
+
+**3. Human Verify**  
+![Human Verify Demo](./docs/gifs/assistant-agent-kanban-human-verify-demo.gif)
+
+**4. Retry Implement & Review**  
+![Retry Implement and Review Demo](./docs/gifs/assistant-agent-kanban-retry-implement&review-demo.gif)
+
+**5. Human Verify & Complete**  
+![Complete Demo](./docs/gifs/assistant-agent-kanban-complete-demo.gif)
+
 ### Core Goals
 
 - Preserve every stage of work as files and workflow state
@@ -319,6 +338,25 @@ See `CONTRIBUTING.md` for details.
 그래서 실제 업무에서 익숙하게 사용하던 스프린트/칸반 프로세스를 OpenCode 기반 Agent 개발 흐름과 결합해, 파일 기반 기록과 웹 기반 가시성을 갖춘 도구를 만들어 보자는 목표로 `Assistant Agent Kanban`을 만들게 되었습니다.
 
 현재 버전은 공개 가능한 MVP에 가깝습니다. 핵심 워크플로, 대시보드, 테스트는 갖추고 있지만 production hardening이나 인증까지 모두 포함한 상태는 아닙니다.
+
+### 데모
+
+전체 영상: [Watch on YouTube](https://youtu.be/gpdcVGiLxaQ)
+
+**1. 계획**  
+![Plan Demo](./docs/gifs/assistant-agent-kanban-plan-demo.gif)
+
+**2. 구현 및 리뷰**  
+![Implement and Review Demo](./docs/gifs/assistant-agent-kanban-implement&review-demo.gif)
+
+**3. 사람 검증**  
+![Human Verify Demo](./docs/gifs/assistant-agent-kanban-human-verify-demo.gif)
+
+**4. 재요청 구현 및 리뷰**  
+![Retry Implement and Review Demo](./docs/gifs/assistant-agent-kanban-retry-implement&review-demo.gif)
+
+**5. 사람 검증 및 완료**  
+![Complete Demo](./docs/gifs/assistant-agent-kanban-complete-demo.gif)
 
 ### 핵심 목표
 
