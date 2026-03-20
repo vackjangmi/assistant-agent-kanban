@@ -24,7 +24,7 @@ def create_app(config: AppConfig, planner_adapter, implementer_adapter, reviewer
         finally:
             await runtime.stop()
 
-    app = FastAPI(title="fs-kanban-agent", lifespan=lifespan)
+    app = FastAPI(title="Assistant Agent Kanban", lifespan=lifespan)
     app.state.runtime = runtime
     app.include_router(build_router())
     app.include_router(build_sse_router())

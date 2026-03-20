@@ -1,4 +1,4 @@
-# FS Kanban AI Agent Project Rules
+# Assistant Agent Kanban Project Rules
 
 이 프로젝트는 **파일/디렉토리 기반 칸반 + OpenCode orchestration + FastAPI SSE dashboard** 를 구현한다.
 
