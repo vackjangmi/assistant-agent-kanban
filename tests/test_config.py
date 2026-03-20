@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fs_kanban_agent.config import AppConfig, PROJECT_ROOT, load_config
-from fs_kanban_agent.enums import STATE_ORDER
+from assistant_agent_kanban.config import AppConfig, PROJECT_ROOT, load_config
+from assistant_agent_kanban.enums import STATE_ORDER
 
 
 def test_app_config_bootstrap_creates_state_and_runtime_dirs(tmp_path):
@@ -40,8 +40,8 @@ def test_resolve_repo_discovery_root_uses_loaded_config_directory(tmp_path):
 def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
     base_path = tmp_path / "config.yaml"
     local_path = tmp_path / "config.local.yaml"
-    monkeypatch.setattr("fs_kanban_agent.config.DEFAULT_CONFIG_PATH", base_path)
-    monkeypatch.setattr("fs_kanban_agent.config.DEFAULT_LOCAL_CONFIG_PATH", local_path)
+    monkeypatch.setattr("assistant_agent_kanban.config.DEFAULT_CONFIG_PATH", base_path)
+    monkeypatch.setattr("assistant_agent_kanban.config.DEFAULT_LOCAL_CONFIG_PATH", local_path)
     base_path.write_text(
         "\n".join(
             [

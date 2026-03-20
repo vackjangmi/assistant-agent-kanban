@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fs_kanban_agent.log_parser import render_opencode_event_line, render_opencode_log
+from assistant_agent_kanban.log_parser import render_opencode_event_line, render_opencode_log
 
 
 def test_render_opencode_log_includes_tool_errors_as_readable_text():

@@ -156,7 +156,7 @@ UI는 처음에는 단순해야 한다.
 
 최종적으로 아래가 있어야 한다.
 
-- `src/fs_kanban_agent/...`
+- `src/assistant_agent_kanban/...`
 - `tests/...`
 - `README.md`
 - 예시 설정 파일

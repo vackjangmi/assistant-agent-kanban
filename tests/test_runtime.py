@@ -4,11 +4,11 @@ import asyncio
 from types import MethodType
 from types import SimpleNamespace
 
-from fs_kanban_agent.events import EventBus
-from fs_kanban_agent.models import BoardSnapshot
-from fs_kanban_agent.runtime import RuntimeSupervisor
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.metadata_store import MetadataStore
+from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.models import BoardSnapshot
+from assistant_agent_kanban.runtime import RuntimeSupervisor
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.metadata_store import MetadataStore
 
 from .conftest import create_request_task
 

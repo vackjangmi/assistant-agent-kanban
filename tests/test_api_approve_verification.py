@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from fs_kanban_agent.api.app import create_app
-from fs_kanban_agent.exceptions import IntegrationError
+from assistant_agent_kanban.api.app import create_app
+from assistant_agent_kanban.exceptions import IntegrationError
 
 from .conftest import FakeAdapter, create_request_task
 from .test_api import _task_ready_for_completed_reviews

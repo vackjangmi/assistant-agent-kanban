@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from fs_kanban_agent.commit_manager import CommitManager
-from fs_kanban_agent.config import AppConfig, PROJECT_ROOT
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.exceptions import CommitError, IntegrationError
-from fs_kanban_agent.integration_manager import IntegrationManager
-from fs_kanban_agent.metadata_store import MetadataStore, slugify
-from fs_kanban_agent.request_creator import RequestTemplateData, create_request
+from assistant_agent_kanban.commit_manager import CommitManager
+from assistant_agent_kanban.config import AppConfig, PROJECT_ROOT
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.exceptions import CommitError, IntegrationError
+from assistant_agent_kanban.integration_manager import IntegrationManager
+from assistant_agent_kanban.metadata_store import MetadataStore, slugify
+from assistant_agent_kanban.request_creator import RequestTemplateData, create_request
 
 
 def test_create_request_rejects_orchestrator_project_as_target(tmp_path):

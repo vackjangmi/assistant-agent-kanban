@@ -7,21 +7,21 @@ from pathlib import Path
 
 import pytest
 
-from fs_kanban_agent.commit_manager import CommitManager
-from fs_kanban_agent.config import AppConfig
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.events import EventBus
-from fs_kanban_agent.exceptions import IntegrationError, TransitionError
-from fs_kanban_agent.integration_manager import IntegrationManager
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.services.task_service import TaskService
-from fs_kanban_agent.services.human_verification_service import HumanVerificationService
-from fs_kanban_agent.transitions import TransitionManager
-from fs_kanban_agent.workspace_manager import WorkspaceManager
-from fs_kanban_agent.workers.implementer import ImplementerWorker
+from assistant_agent_kanban.commit_manager import CommitManager
+from assistant_agent_kanban.config import AppConfig
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.exceptions import IntegrationError, TransitionError
+from assistant_agent_kanban.integration_manager import IntegrationManager
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.services.task_service import TaskService
+from assistant_agent_kanban.services.human_verification_service import HumanVerificationService
+from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.workspace_manager import WorkspaceManager
+from assistant_agent_kanban.workers.implementer import ImplementerWorker
 
 from .conftest import FakeAdapter, create_request_task, init_git_repo
 

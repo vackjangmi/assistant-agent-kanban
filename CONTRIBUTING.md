@@ -61,9 +61,9 @@ pytest -q
 
 ## 저장소 구조 요약
 
-- `src/fs_kanban_agent/`: 도메인, worker, runtime, API
-- `src/fs_kanban_agent/workers/`: planner, implementer, reviewer, committer
-- `src/fs_kanban_agent/api/`: FastAPI app, routes, SSE, UI
+- `src/assistant_agent_kanban/`: 도메인, worker, runtime, API
+- `src/assistant_agent_kanban/workers/`: planner, implementer, reviewer, committer
+- `src/assistant_agent_kanban/api/`: FastAPI app, routes, SSE, UI
 - `tests/`: 단위/통합 테스트
 - `.opencode/agents/`: 역할별 에이전트 프롬프트 계약
 - `examples/`: 설정 예시와 bootstrap 예시

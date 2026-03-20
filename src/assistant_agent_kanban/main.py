@@ -15,7 +15,7 @@ from .services.task_service import TaskService
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="fs-kanban-agent")
+    parser = argparse.ArgumentParser(prog="assistant-agent-kanban")
     subparsers = parser.add_subparsers(dest="command")
 
     serve_parser = subparsers.add_parser("serve")
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 os.environ.pop(CONFIG_ENV_VAR, None)
             uvicorn.run(
-                "fs_kanban_agent.api.main:create_app",
+                "assistant_agent_kanban.api.main:create_app",
                 host=getattr(args, "host", "127.0.0.1"),
                 port=getattr(args, "port", 8000),
                 reload=True,

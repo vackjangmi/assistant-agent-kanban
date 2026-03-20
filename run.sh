@@ -12,7 +12,7 @@ CONFIG_PATH=${CONFIG_PATH:-}
 HOST=${HOST:-127.0.0.1}
 PORT=${PORT:-8000}
 RELOAD=${RELOAD:-0}
-DEPS_STAMP_FILE="$VENV_DIR/.fs-kanban-agent-deps-stamp"
+DEPS_STAMP_FILE="$VENV_DIR/.assistant-agent-kanban-deps-stamp"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -66,13 +66,13 @@ if [ -z "$CONFIG_PATH" ]; then
     fi
 fi
 
-if [ ! -x "$VENV_DIR/bin/fs-kanban-agent" ] || [ ! -f "$DEPS_STAMP_FILE" ] || [ "$REPO_ROOT/pyproject.toml" -nt "$DEPS_STAMP_FILE" ]; then
+if [ ! -x "$VENV_DIR/bin/assistant-agent-kanban" ] || [ ! -f "$DEPS_STAMP_FILE" ] || [ "$REPO_ROOT/pyproject.toml" -nt "$DEPS_STAMP_FILE" ]; then
     "$REPO_ROOT/init.sh" --config "$CONFIG_PATH"
 fi
 
 cd "$REPO_ROOT"
 
-set -- "$VENV_DIR/bin/fs-kanban-agent" serve --config "$CONFIG_PATH" --host "$HOST" --port "$PORT"
+set -- "$VENV_DIR/bin/assistant-agent-kanban" serve --config "$CONFIG_PATH" --host "$HOST" --port "$PORT"
 if [ "$RELOAD" = "1" ]; then
     set -- "$@" --reload
 fi

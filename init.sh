@@ -9,7 +9,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$SCRIPT_DIR
 VENV_DIR=${VENV_DIR:-"$REPO_ROOT/.venv"}
 CONFIG_PATH=${CONFIG_PATH:-}
-DEPS_STAMP_FILE="$VENV_DIR/.fs-kanban-agent-deps-stamp"
+DEPS_STAMP_FILE="$VENV_DIR/.assistant-agent-kanban-deps-stamp"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -67,10 +67,10 @@ if [ ! -f "$CONFIG_PATH" ]; then
     cp "$REPO_ROOT/examples/config.yaml" "$CONFIG_PATH"
 fi
 
-FS_KANBAN_CONFIG=$CONFIG_PATH \
-    "$PYTHON_BIN" -c 'import os; from fs_kanban_agent.config import load_config; load_config(os.environ["FS_KANBAN_CONFIG"])' >/dev/null
+ASSISTANT_AGENT_KANBAN_CONFIG=$CONFIG_PATH \
+    "$PYTHON_BIN" -c 'import os; from assistant_agent_kanban.config import load_config; load_config(os.environ["ASSISTANT_AGENT_KANBAN_CONFIG"])' >/dev/null
 
-printf '%s\n' "Initialized fs-kanban-agent"
+printf '%s\n' "Initialized assistant-agent-kanban"
 printf 'venv: %s\n' "$VENV_DIR"
 printf 'config: %s\n' "$CONFIG_PATH"
 printf 'next: ./run.sh\n'

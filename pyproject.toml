@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fs-kanban-agent"
+name = "assistant-agent-kanban"
 version = "0.1.0"
 description = "Assistant Agent Kanban for filesystem-backed AI workflow orchestration"
 readme = "README.md"
@@ -27,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]
-fs-kanban-agent = "fs_kanban_agent.main:main"
+assistant-agent-kanban = "assistant_agent_kanban.main:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

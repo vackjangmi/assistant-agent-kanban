@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.exceptions import LockError
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.recovery import RecoveryService
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.transitions import TransitionManager
-from fs_kanban_agent.models import utc_now
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.exceptions import LockError
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.recovery import RecoveryService
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.models import utc_now
 
 from .conftest import create_request_task
 

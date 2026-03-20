@@ -5,14 +5,14 @@ import subprocess
 
 import pytest
 
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.exceptions import TransitionError
-from fs_kanban_agent.integration_manager import IntegrationManager
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.services.task_deletion_service import TaskDeletionService
-from fs_kanban_agent.transitions import TransitionManager
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.exceptions import TransitionError
+from assistant_agent_kanban.integration_manager import IntegrationManager
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.services.task_deletion_service import TaskDeletionService
+from assistant_agent_kanban.transitions import TransitionManager
 
 from .conftest import create_request_task
 

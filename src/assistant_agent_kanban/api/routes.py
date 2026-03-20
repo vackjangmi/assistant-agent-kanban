@@ -286,7 +286,7 @@ async def _resolve_settings_snapshot(runtime, *, refresh: bool, assistant: str |
 
 def _uses_builtin_runtime_adapter(runtime) -> bool:
     adapter = getattr(runtime.planner, "adapter", None)
-    return adapter.__class__.__module__.startswith("fs_kanban_agent.") if adapter is not None else False
+    return adapter.__class__.__module__.startswith("assistant_agent_kanban.") if adapter is not None else False
 
 
 def build_router() -> APIRouter:

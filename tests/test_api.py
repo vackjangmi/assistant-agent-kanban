@@ -10,21 +10,21 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
-from fs_kanban_agent.api.app import create_app
-from fs_kanban_agent.api.ui import TEMPLATE_PATH
-from fs_kanban_agent import config as config_module
-from fs_kanban_agent.config import PROJECT_ROOT, load_config
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.events import EventBus
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.models import HistoryEntry
-from fs_kanban_agent.opencode_adapter import _parse_discovered_models
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.transitions import TransitionManager
-from fs_kanban_agent.workspace_manager import WorkspaceManager
-from fs_kanban_agent.workers.implementer import ImplementerWorker
-from fs_kanban_agent.models import utc_now
+from assistant_agent_kanban.api.app import create_app
+from assistant_agent_kanban.api.ui import TEMPLATE_PATH
+from assistant_agent_kanban import config as config_module
+from assistant_agent_kanban.config import PROJECT_ROOT, load_config
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.models import HistoryEntry
+from assistant_agent_kanban.opencode_adapter import _parse_discovered_models
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.workspace_manager import WorkspaceManager
+from assistant_agent_kanban.workers.implementer import ImplementerWorker
+from assistant_agent_kanban.models import utc_now
 
 from .conftest import FakeAdapter, create_request_task
 
@@ -1860,7 +1860,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "activeBoardPhase = 'plan';" in response.text
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
-    assert "fs-kanban-agent.last-target-repo" in response.text
+    assert "assistant-agent-kanban.last-target-repo" in response.text
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
     assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text

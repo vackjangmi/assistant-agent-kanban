@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from fs_kanban_agent import config as config_module
-from fs_kanban_agent.assistant_adapter import AssistantAdapter
-from fs_kanban_agent.config import AppConfig
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.models import RunResult
-from fs_kanban_agent.exceptions import AdapterRunError
+from assistant_agent_kanban import config as config_module
+from assistant_agent_kanban.assistant_adapter import AssistantAdapter
+from assistant_agent_kanban.config import AppConfig
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.models import RunResult
+from assistant_agent_kanban.exceptions import AdapterRunError
 
 
 class FakeAdapter(AssistantAdapter):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.metadata_store import MetadataStore, slugify
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.metadata_store import MetadataStore, slugify
 
 
 def test_metadata_store_bootstrap_and_load_round_trip(tmp_path):

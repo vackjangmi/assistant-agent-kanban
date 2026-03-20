@@ -5,8 +5,8 @@ from typing import cast
 
 import subprocess
 
-from fs_kanban_agent.config import AppConfig
-from fs_kanban_agent.opencode_adapter import SubprocessOpenCodeAdapter, _extract_assistant_text, _extract_session_id, _extract_total_tokens
+from assistant_agent_kanban.config import AppConfig
+from assistant_agent_kanban.opencode_adapter import SubprocessOpenCodeAdapter, _extract_assistant_text, _extract_session_id, _extract_total_tokens
 
 
 def test_extract_assistant_text_prefers_final_event():

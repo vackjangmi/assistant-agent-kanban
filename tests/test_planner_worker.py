@@ -5,15 +5,15 @@ import json
 from datetime import timedelta
 import pytest
 
-from fs_kanban_agent.exceptions import AdapterRunError
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.events import EventBus
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.transitions import TransitionManager
-from fs_kanban_agent.workers.planner import PlanningWorker
-from fs_kanban_agent.models import utc_now
+from assistant_agent_kanban.exceptions import AdapterRunError
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.workers.planner import PlanningWorker
+from assistant_agent_kanban.models import utc_now
 
 from .conftest import FakeAdapter, create_request_task
 
@@ -370,7 +370,7 @@ def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeyp
         called["value"] = True
         return func(*args, **kwargs)
 
-    monkeypatch.setattr("fs_kanban_agent.workers.planner.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr("assistant_agent_kanban.workers.planner.asyncio.to_thread", fake_to_thread)
 
     assert asyncio.run(worker.run_once()) is True
     assert called["value"] is True

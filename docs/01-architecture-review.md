@@ -80,7 +80,7 @@ repo-root/
 │     ├─ runs/
 │     ├─ board-cache/
 │     └─ events/
-└─ src/fs_kanban_agent/
+└─ src/assistant_agent_kanban/
 ```
 
 핵심 원칙:

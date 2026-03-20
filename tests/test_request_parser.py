@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fs_kanban_agent.request_parser import extract_goal_text, has_required_request_fields
+from assistant_agent_kanban.request_parser import extract_goal_text, has_required_request_fields
 
 
 def test_request_parser_extracts_goal_from_korean_heading():

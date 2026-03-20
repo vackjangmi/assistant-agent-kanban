@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.transitions import TransitionManager
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.models import HistoryEntry
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.models import HistoryEntry
 
 from .conftest import create_request_task
 
@@ -146,7 +146,7 @@ def test_scanner_preserves_bootstrapped_request_language_after_request_edits(con
 
 
 def test_scanner_backfills_cycle_from_legacy_iterations(tmp_path):
-    from fs_kanban_agent.config import AppConfig
+    from assistant_agent_kanban.config import AppConfig
 
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.bootstrap()

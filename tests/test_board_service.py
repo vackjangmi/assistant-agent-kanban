@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fs_kanban_agent.models import BoardSnapshot
-from fs_kanban_agent.services.board_service import BoardService
+from assistant_agent_kanban.models import BoardSnapshot
+from assistant_agent_kanban.services.board_service import BoardService
 
 
 class RecordingScanner:

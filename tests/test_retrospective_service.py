@@ -4,12 +4,12 @@ import subprocess
 
 import pytest
 
-from fs_kanban_agent.commit_manager import CommitManager
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.scanner import KanbanScanner
-from fs_kanban_agent.exceptions import CommitError
-from fs_kanban_agent.services.retrospective_service import RetrospectiveService
+from assistant_agent_kanban.commit_manager import CommitManager
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.exceptions import CommitError
+from assistant_agent_kanban.services.retrospective_service import RetrospectiveService
 
 from .conftest import FakeAdapter, create_request_task
 from .test_human_verification_service import _task_ready_for_human_verification

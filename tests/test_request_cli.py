@@ -3,9 +3,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from fs_kanban_agent.config import AppConfig
-from fs_kanban_agent.enums import TaskState
-from fs_kanban_agent.main import main
+from assistant_agent_kanban.config import AppConfig
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.main import main
 
 from .conftest import init_git_repo
 

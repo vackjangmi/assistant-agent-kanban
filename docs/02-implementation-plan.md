@@ -37,7 +37,7 @@
 ## 패키지 구조 제안
 
 ```text
-src/fs_kanban_agent/
+src/assistant_agent_kanban/
 ├─ __init__.py
 ├─ config.py
 ├─ models.py

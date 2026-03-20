@@ -5,8 +5,8 @@ from typing import cast
 
 import subprocess
 
-from fs_kanban_agent.codex_adapter import CODEX_KNOWN_MODELS, SubprocessCodexAdapter
-from fs_kanban_agent.config import AppConfig
+from assistant_agent_kanban.codex_adapter import CODEX_KNOWN_MODELS, SubprocessCodexAdapter
+from assistant_agent_kanban.config import AppConfig
 
 
 def test_codex_adapter_builds_exec_command(monkeypatch, tmp_path):

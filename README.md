@@ -87,22 +87,22 @@ pip install -e .[dev]
 ./run.sh
 ```
 
-직접 CLI를 사용하려면(`fs-kanban-agent`는 현재 패키지의 실제 실행 명령입니다):
+직접 CLI를 사용하려면(`assistant-agent-kanban`는 현재 패키지의 실제 실행 명령입니다):
 
 ```bash
-fs-kanban-agent serve --config ./examples/config.yaml --host 127.0.0.1 --port 8000
+assistant-agent-kanban serve --config ./examples/config.yaml --host 127.0.0.1 --port 8000
 ```
 
 또는 Uvicorn으로 바로 띄울 수 있습니다.
 
 ```bash
-uvicorn fs_kanban_agent.api.main:app
+uvicorn assistant_agent_kanban.api.main:app
 ```
 
 자동 리로드가 필요하면:
 
 ```bash
-fs-kanban-agent serve --reload --config ./examples/config.yaml
+assistant-agent-kanban serve --reload --config ./examples/config.yaml
 ```
 
 앱을 실행한 뒤 브라우저에서 `http://127.0.0.1:8000/`으로 접속하면 대시보드를 볼 수 있습니다.
@@ -146,7 +146,7 @@ repo-root/
 │     ├─ workspaces/
 │     ├─ runs/
 │     └─ events/
-└─ src/fs_kanban_agent/
+└─ src/assistant_agent_kanban/
 ```
 
 구성 요소는 크게 네 층으로 나뉩니다.
@@ -255,7 +255,7 @@ human-verifying -> done
 ### 요청 생성
 
 ```bash
-fs-kanban-agent request "로그인 플로우 리팩터링" \
+assistant-agent-kanban request "로그인 플로우 리팩터링" \
   --target-repo /path/to/target-project \
   --kanban-root ./.kanban-agent \
   --base-branch main
@@ -266,13 +266,13 @@ fs-kanban-agent request "로그인 플로우 리팩터링" \
 ### 로그 확인
 
 ```bash
-fs-kanban-agent logs TASK-0001 --kanban-root ./.kanban-agent
+assistant-agent-kanban logs TASK-0001 --kanban-root ./.kanban-agent
 ```
 
 ### 앱 실행
 
 ```bash
-fs-kanban-agent serve --config ./config.local.yaml --host 0.0.0.0 --port 8000
+assistant-agent-kanban serve --config ./config.local.yaml --host 0.0.0.0 --port 8000
 ```
 
 ## 웹 UI에서 할 수 있는 일
@@ -345,9 +345,9 @@ runtime:
 
 ## 저장소 구조
 
-- `src/fs_kanban_agent/`: 도메인 모델, scanner, locks, transitions, runtime, workers, API
-- `src/fs_kanban_agent/workers/`: planner, implementer, reviewer, committer
-- `src/fs_kanban_agent/api/`: FastAPI app, routes, SSE, UI
+- `src/assistant_agent_kanban/`: 도메인 모델, scanner, locks, transitions, runtime, workers, API
+- `src/assistant_agent_kanban/workers/`: planner, implementer, reviewer, committer
+- `src/assistant_agent_kanban/api/`: FastAPI app, routes, SSE, UI
 - `tests/`: scanner, locks, transitions, workers, recovery, API 테스트
 - `.opencode/agents/`: 역할별 prompt contract
 - `examples/config.yaml`: 예시 설정
@@ -357,9 +357,9 @@ runtime:
 ## 최소 Python 사용 예시
 
 ```python
-from fs_kanban_agent.api.app import create_app
-from fs_kanban_agent.assistant_factory import build_role_adapters
-from fs_kanban_agent.config import load_config
+from assistant_agent_kanban.api.app import create_app
+from assistant_agent_kanban.assistant_factory import build_role_adapters
+from assistant_agent_kanban.config import load_config
 
 config = load_config("examples/config.yaml")
 planner, implementer, reviewer, committer, branch_summary = build_role_adapters(config)
@@ -424,9 +424,9 @@ uvicorn mymodule:app
 - `README.md`
 - `examples/config.yaml`
 - `examples/bootstrap/README.md`
-- `src/fs_kanban_agent/main.py`
-- `src/fs_kanban_agent/api/app.py`
-- `src/fs_kanban_agent/api/main.py`
+- `src/assistant_agent_kanban/main.py`
+- `src/assistant_agent_kanban/api/app.py`
+- `src/assistant_agent_kanban/api/main.py`
 - `docs/01-architecture-review.md`
 - `docs/02-implementation-plan.md`
 - `docs/03-agent-task.md`

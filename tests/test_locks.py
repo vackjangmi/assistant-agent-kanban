@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from fs_kanban_agent.exceptions import LockError
-from fs_kanban_agent.locks import TaskLockManager
-from fs_kanban_agent.metadata_store import MetadataStore
-from fs_kanban_agent.scanner import KanbanScanner
+from assistant_agent_kanban.exceptions import LockError
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.scanner import KanbanScanner
 
 from .conftest import create_request_task
 

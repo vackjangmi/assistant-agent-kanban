@@ -1793,7 +1793,8 @@
       { phase: 'plan', states: ['requests', 'planning'] },
       { phase: 'final', states: ['done'] },
     ];
-    const lastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
+    const lastTargetRepoStorageKey = 'assistant-agent-kanban.last-target-repo';
+    const legacyLastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
@@ -3444,7 +3445,12 @@
 
     function readLastTargetRepo() {
       try {
-        return normalizeRepoPath(window.localStorage.getItem(lastTargetRepoStorageKey));
+        const current = normalizeRepoPath(window.localStorage.getItem(lastTargetRepoStorageKey));
+        if (current) return current;
+        const legacy = normalizeRepoPath(window.localStorage.getItem(legacyLastTargetRepoStorageKey));
+        if (!legacy) return '';
+        window.localStorage.setItem(lastTargetRepoStorageKey, legacy);
+        return legacy;
       } catch (_error) {
         return '';
       }
