@@ -289,6 +289,31 @@
       border-color: var(--review-border) !important;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 14px 28px rgba(0,0,0,0.22) !important;
     }
+    body[data-theme="dark"] #task-plan-editor-shell {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      padding: 0;
+    }
+    #task-plan-editor-shell {
+      min-height: 0;
+      height: 100%;
+    }
+    #task-plan-editor-shell .human-review-editor-shell {
+      min-height: 0;
+      height: 100%;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr);
+    }
+    #task-plan-editor-shell .editor-host,
+    #task-plan-editor-shell .editor-textarea,
+    #task-plan-editor-shell .toastui-editor-defaultUI,
+    #task-plan-editor-shell .toastui-editor-main,
+    #task-plan-editor-shell .toastui-editor-md-container,
+    #task-plan-editor-shell .toastui-editor-ww-container {
+      min-height: 0;
+      height: 100%;
+    }
     body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell {
       border: 0;
@@ -624,6 +649,23 @@
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror p {
       color: var(--text) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror .toastui-editor-md-code,
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror .toastui-editor-md-code.toastui-editor-md-marked-text,
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror .toastui-editor-md-code .toastui-editor-md-marked-text,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror .toastui-editor-md-code,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror .toastui-editor-md-code.toastui-editor-md-marked-text,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror .toastui-editor-md-code .toastui-editor-md-marked-text,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror .toastui-editor-md-code,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror .toastui-editor-md-code.toastui-editor-md-marked-text,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror .toastui-editor-md-code .toastui-editor-md-marked-text {
+      color: #f4f8ff !important;
+      background: rgba(124, 164, 255, 0.16) !important;
+    }
+    body[data-theme="dark"] .request-goal-editor-shell .ProseMirror .toastui-editor-md-code.toastui-editor-md-delimiter,
+    body[data-theme="dark"] #task-panel-review-note .human-review-editor-shell .ProseMirror .toastui-editor-md-code.toastui-editor-md-delimiter,
+    body[data-theme="dark"] #task-panel-editor .artifact-edit-shell .human-review-editor-shell .ProseMirror .toastui-editor-md-code.toastui-editor-md-delimiter {
+      color: rgba(214, 228, 255, 0.8) !important;
     }
     body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-md-preview,
     body[data-theme="dark"] .request-goal-editor-shell .toastui-editor-contents,
@@ -1150,9 +1192,41 @@
     .human-review-editor-shell .editor-host,
     .human-review-editor-shell .editor-textarea { min-height: 0; height: 100%; }
     .human-review-editor-shell .editor-textarea { resize: none; overflow: auto; }
-    .viewer-host { grid-row: 3; min-height: 0; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; }
+    .viewer-host { grid-row: 3; min-height: 0; min-width: 0; width: 100%; height: 100%; border: 1px solid var(--border); background: #fff; overflow: auto; padding: 18px; box-sizing: border-box; }
+    #task-viewer-host,
+    #task-viewer-host > *,
+    #task-viewer-host .toastui-editor-defaultUI,
+    #task-viewer-host .toastui-editor-main,
+    #task-viewer-host .toastui-editor-md-container,
+    #task-viewer-host .toastui-editor-ww-container,
+    #task-viewer-host .toastui-editor-contents {
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    #task-viewer-host .toastui-editor-contents,
+    #task-viewer-host .toastui-editor-contents > * {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    #task-viewer-host .toastui-editor-contents {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    #task-viewer-host .toastui-editor-contents pre,
+    #task-viewer-host .toastui-editor-contents table,
+    #task-viewer-host .toastui-editor-contents img,
+    #task-viewer-host .toastui-editor-contents iframe {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
     .artifact-edit-shell { grid-row: 3; min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; overflow: hidden; }
+    .artifact-edit-shell[hidden] { display: none; }
+    #task-plan-editor-shell { border: 0; background: transparent; box-shadow: none; padding: 0; grid-template-rows: minmax(0, 1fr); gap: 0; }
+    #task-plan-editor-shell .human-review-editor-shell { min-height: 0; height: 100%; grid-template-rows: minmax(0, 1fr); align-self: stretch; }
     .artifact-edit-shell-copy { display: grid; gap: 4px; }
+    .artifact-edit-shell-copy[hidden] { display: none; }
     .editor-host[hidden] { display: none; }
     .viewer-host[hidden] { display: none; }
     .mode-pill { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); background: #f7efe1; color: var(--accent-strong); font-size: 0.9rem; margin-right: 8px; }
@@ -1546,7 +1620,7 @@
             <div id="task-artifact-subtabs" class="artifact-subtabs" hidden></div>
             <div id="task-viewer-host" class="viewer-host"></div>
             <div id="task-plan-editor-shell" class="human-review-box artifact-edit-shell" hidden>
-              <div class="artifact-edit-shell-copy">
+              <div class="artifact-edit-shell-copy" hidden aria-hidden="true">
                 <strong id="task-plan-editor-title">PLAN.md</strong>
                 <div id="task-plan-editor-shell-status" class="muted">Edit the current PLAN draft and keep attachments inline.</div>
               </div>
@@ -1812,6 +1886,8 @@
     let planSourceMarkdown = '';
     let planEditMode = false;
     let planEditor = null;
+    let planEditorHeightSyncToken = 0;
+    let planEditorResizeObserver = null;
     let requestGoalEditor = null;
     let requestUploadToken = '';
     let humanReviewEditor = null;
@@ -2471,7 +2547,7 @@
         renderedPreviewEditable: '렌더된 markdown 미리보기입니다. 문서를 바꾸려면 Edit PLAN.md를 사용하세요.',
         renderedPreviewReadonly: '이 작업 상태에서는 렌더된 markdown 미리보기만 제공합니다.',
         loadingArtifact: '{name} 불러오는 중...',
-        viewingPlan: '렌더된 PLAN.md를 보고 있습니다. Edit PLAN.md로 편집 모드로 전환하세요.',
+        viewingPlan: '',
         editingPlan: 'PLAN.md markdown을 편집 중입니다. 승인 전에 초안을 저장하세요.',
         renderedArtifact: '{name} 문서를 렌더된 markdown으로 표시합니다.',
         unableLoadArtifact: '{name} 문서를 불러올 수 없습니다.',
@@ -3912,6 +3988,7 @@
       taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
       if (tab === 'review-note') requestAnimationFrame(() => syncHumanReviewEditorHeight());
+      if (tab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') schedulePlanEditorHeightSync();
       if (!load) return;
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
@@ -4533,8 +4610,42 @@
         },
         usageStatistics: false,
       });
-      syncPlanEditorHeight();
+      ensurePlanEditorResizeObserver();
+      schedulePlanEditorHeightSync();
       return planEditor;
+    }
+
+    function planEditorHeightSyncNeeded() {
+      return activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md' && !taskPanelEditor.hidden && !taskPlanEditorShell.hidden;
+    }
+
+    function runPlanEditorHeightSyncAfterFrames(token, framesRemaining) {
+      window.requestAnimationFrame(() => {
+        if (token !== planEditorHeightSyncToken) return;
+        if (framesRemaining > 1) {
+          runPlanEditorHeightSyncAfterFrames(token, framesRemaining - 1);
+          return;
+        }
+        if (!planEditorHeightSyncNeeded()) return;
+        syncPlanEditorHeight();
+      });
+    }
+
+    function schedulePlanEditorHeightSync(frameCount = 3) {
+      const nextFrameCount = Math.max(1, Number(frameCount) || 1);
+      const token = ++planEditorHeightSyncToken;
+      runPlanEditorHeightSyncAfterFrames(token, nextFrameCount);
+    }
+
+    function ensurePlanEditorResizeObserver() {
+      if (planEditorResizeObserver || typeof ResizeObserver !== 'function') return;
+      planEditorResizeObserver = new ResizeObserver(() => {
+        if (!planEditorHeightSyncNeeded()) return;
+        schedulePlanEditorHeightSync(2);
+      });
+      [taskPanelEditor, taskPlanEditorShell, taskPlanEditorBody].forEach((node) => {
+        if (node) planEditorResizeObserver.observe(node);
+      });
     }
 
     function calculatePlanEditorHeight() {
@@ -4671,11 +4782,11 @@
       ensureMarkdownViewer(value || '');
       if (planEditor) planEditor.setMarkdown(value || '');
       taskEditor.value = value || '';
-      requestAnimationFrame(() => syncPlanEditorHeight());
+      if (planEditorHeightSyncNeeded()) schedulePlanEditorHeightSync();
     }
 
     function setTaskEditorMessage(value) {
-      taskEditorStatus.textContent = value;
+      taskEditorStatus.textContent = '';
       taskPlanEditorShellStatus.textContent = value;
     }
 
@@ -4812,12 +4923,12 @@
           editor.setMarkdown(taskEditor.value || planSourceMarkdown || '');
           taskEditor.hidden = true;
           taskEditorHost.hidden = false;
-          requestAnimationFrame(() => syncPlanEditorHeight());
+          schedulePlanEditorHeightSync();
         } else {
           taskEditor.hidden = false;
           taskEditor.disabled = false;
           taskEditor.readOnly = false;
-          requestAnimationFrame(() => syncPlanEditorHeight());
+          schedulePlanEditorHeightSync();
         }
       } else {
         taskEditorHost.hidden = true;
@@ -5032,7 +5143,7 @@
       if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files, metadata);
       planEditMode = false;
       taskModeBadge.textContent = translateTask('viewerMode');
-      setTaskEditorMessage(planEditable ? translateTask('renderedPreviewEditable') : translateTask('renderedPreviewReadonly'));
+      setTaskEditorMessage('');
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
@@ -5569,11 +5680,7 @@
         const editable = activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md' && planEditMode;
         setArtifactMode(editable);
         updatePlanActionState();
-        if (activeArtifactName === 'PLAN.md' && activeTaskDetail.metadata.state === 'waiting-check-plans') {
-          setTaskEditorMessage(planEditMode ? translateTask('editingPlan') : translateTask('viewingPlan'));
-        } else {
-          setTaskEditorMessage(translateTask('renderedArtifact', { name: activeArtifactName }));
-        }
+        setTaskEditorMessage('');
         requestAnimationFrame(resetArtifactViewerScroll);
       } catch (error) {
         taskModalError.hidden = false;
@@ -5894,7 +6001,7 @@
     taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
     window.addEventListener('resize', () => {
       if (activeTaskTab === 'review-note') syncHumanReviewEditorHeight();
-      if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') syncPlanEditorHeight();
+      if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') schedulePlanEditorHeightSync();
     });
     saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
     requestChangesButton.addEventListener('click', rejectVerification);
