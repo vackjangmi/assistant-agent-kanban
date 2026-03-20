@@ -10,6 +10,10 @@ class LockError(FsKanbanError):
     pass
 
 
+class ServerAlreadyRunningError(FsKanbanError):
+    pass
+
+
 class TaskNotFoundError(FsKanbanError):
     pass
 
