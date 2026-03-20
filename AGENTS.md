@@ -1,53 +1,50 @@
 # Assistant Agent Kanban Project Rules
 
-이 프로젝트는 **파일/디렉토리 기반 칸반 + OpenCode orchestration + FastAPI SSE dashboard** 를 구현한다.
+This is the short operating rules document that humans and AI agents should read first in this repository.
 
-## 먼저 읽을 문서
+For deeper detail, read these documents.
 
-반드시 아래 문서를 먼저 읽고 작업한다.
+- `docs/01-architecture-review.md` — current architecture and invariants
+- `docs/02-implementation-plan.md` — implementation map from a code structure and maintenance perspective
+- `docs/03-agent-task.md` — practical brief for agents doing real work
 
-- `docs/01-architecture-review.md`
-- `docs/02-implementation-plan.md`
-- `docs/03-agent-task.md`
+## Mission
 
-## 목표
+This repository implements **filesystem-backed workflow state + AI worker orchestration + FastAPI SSE dashboard**.
 
-아래 요구를 만족하는 Python 시스템을 구현한다.
+- Product name: `Assistant Agent Kanban`
+- Python package: `assistant_agent_kanban`
+- CLI: `assistant-agent-kanban`
 
-- 상태 디렉토리 기반 workflow
-- `opencode run` 으로 각 단계 수행
-- planner / implementer / reviewer worker
-- isolated workspace (`clone-overlay`)
-- metadata / lock / recovery
-- FastAPI + SSE 칸반 대시보드
+## Core Invariants
 
-## 핵심 제약
+Always keep these rules intact.
 
-1. **workflow state의 진실 소스는 디렉토리 상태 + `metadata.json`** 이다.
-2. `oh-my-opencode` 내부 state 파일에 의존하지 않는다.
-3. **task 디렉토리와 코드 workspace는 분리**한다.
-4. 구현은 workspace에서만 한다.
-5. review 통과 후에만 human verification 을 시작할 수 있다.
-6. target repo patch apply 는 `completed-reviews -> human-verifying` 에서만 수행한다.
-7. 최종 commit은 `human-verifying -> done` 에서만 수행한다.
-8. lock 없이 task state를 바꾸지 않는다.
+1. The source of truth for workflow state is **the state directory location + `metadata.json`**.
+2. Never use OpenCode or oh-my-opencode internal state files as the source of truth.
+3. Keep the task directory separate from the real code workspace.
+4. Perform implementation only inside the workspace.
+5. Never change task state without a lock.
+6. Human verification can start only after review passes.
+7. Apply the target repo patch only during `completed-reviews -> human-verifying`.
+8. Create the final commit only during `human-verifying -> done`.
 
-## 상태 디렉토리
+## State Machine
 
-반드시 아래 상태를 사용한다.
+### States
 
-- `requests`
-- `planning`
-- `waiting-check-plans`
-- `todos`
-- `implementing`
-- `waiting-reviews`
-- `reviewing`
-- `completed-reviews`
-- `human-verifying`
-- `done`
+- `requests` — initial request state
+- `planning` — planner is generating a plan
+- `waiting-check-plans` — human reviews or edits the plan
+- `todos` — waiting for implementation
+- `implementing` — implementer is working in the workspace
+- `waiting-reviews` — waiting for reviewer
+- `reviewing` — review is in progress
+- `completed-reviews` — AI review passed, waiting to start human verification
+- `human-verifying` — human is verifying in the target repo
+- `done` — final approval and commit are complete
 
-## 허용 전이
+### Allowed Transitions
 
 - `requests -> planning`
 - `planning -> waiting-check-plans`
@@ -62,69 +59,98 @@
 - `human-verifying -> todos`
 - `human-verifying -> done`
 
-허용되지 않은 전이는 코드로 막아라.
+The code must block any transition that is not allowed.
 
-## metadata 규칙
+## Human-Gated Steps
 
-모든 task는 `metadata.json` 을 가진다.
+These are the main decision points that require human judgment.
 
-최소 포함 필드:
+- `waiting-check-plans -> todos` — approve implementation after reviewing or editing the plan
+- `completed-reviews -> human-verifying` — start verification by applying the reviewed result to the real target repo
+- `human-verifying -> done` — final approval after human verification
+
+## Role Responsibilities
+
+### PlanningWorker
+
+- Input state: `requests`
+- Input document: `REQUEST.md`
+- Output document: `PLAN.md`
+- Result state: `waiting-check-plans`
+- Planner should remain a read-only document producer by default.
+
+### ImplementerWorker
+
+- Input state: `todos`
+- Work location: workspace under `_runtime/workspaces/{task_id}`
+- Output document: `WORK-{n}.md`
+- Result state: `waiting-reviews` if there are changes, otherwise `todos`
+
+### ReviewerWorker
+
+- Input state: `waiting-reviews`
+- Output document: `REVIEW-{n}.md`
+- Result state: `completed-reviews` on `PASS`, otherwise `todos`
+
+### Commit / Human Verification Flow
+
+- Input states: `completed-reviews`, `human-verifying`
+- Apply the patch to the target repo only when a human starts verification.
+- If the human rejects it, go back to `todos`.
+- If the human approves it, move to `done`.
+
+## Workspace Rules
+
+- Default strategy: `clone-overlay`
+- Always place the workspace under `_runtime/workspaces/{task_id}`.
+- Never place the full repo workspace inside the task directory.
+- The target repo is not the active implementation area before human verification.
+
+## Metadata And Lock Rules
+
+Every task must have `metadata.json`.
+
+Minimum required fields:
+
 - `task_id`
 - `title`
 - `slug`
 - `state`
 - `created_at`
 - `updated_at`
-- `plan.revision`
-- `implementation.iteration`
-- `review.iteration`
+- `plan`
+- `implementation`
+- `review`
 - `integration`
 - `commit`
 - `lease`
 - `history`
 - `errors`
 
-## workspace 규칙
+Additional rules:
 
-기본 전략은 **`clone-overlay`** 다.
+- Use atomic writes for metadata updates.
+- Place lock files in a stable runtime path, not inside a moving task directory.
+- `metadata.state` must always match the actual directory state.
 
-- local clone 사용
-- overlay copy / symlink manifest 사용
-- 순수 worktree only 전략은 기본값으로 채택하지 않는다
-- workspace는 반드시 `_runtime/workspaces/{task_id}` 아래에 둔다
+## OpenCode / Codex Runtime Rules
 
-## OpenCode 사용 규칙
+- OpenCode and Codex CLI are the execution engines.
+- The Python application is the workflow and state machine engine.
+- Planner and reviewer should stay focused on producing markdown results.
+- Implementer edits real code inside the workspace.
+- Store raw run results, and keep human-facing markdown outputs separately.
 
-- `opencode serve` + `opencode run --attach` 사용 가능하도록 설계
-- `--format json` 결과를 저장
-- planner/reviewer는 **stdout markdown 반환형**
-- implementer는 workspace에서 코드 수정
-- commit message는 AI 생성 또는 규칙 기반 생성 가능
+## Quality And Testing Rules
 
-## 구현 우선순위
+- Python 3.11+
+- Pydantic v2
+- Keep functions small and testable
+- Isolate subprocess wrappers
+- Convert exceptions into domain exceptions
+- Never log sensitive information
 
-1. filesystem scanner + metadata + lock
-2. PlanningWorker
-3. ImplementerWorker
-4. ReviewerWorker
-5. IntegrationManager
-6. CommitWorker
-7. FastAPI + SSE dashboard
-8. recovery + tests
-
-## 코드 품질 규칙
-
-- Python 3.11+ 타입 힌트 사용
-- Pydantic v2 모델 사용
-- 함수는 작고 테스트 가능하게 유지
-- subprocess 래퍼는 반드시 분리
-- 파일 쓰기는 atomic write 사용
-- 예외는 의미 있는 도메인 예외로 변환
-- 로그에 비밀값을 남기지 말 것
-
-## 테스트 규칙
-
-최소 아래 테스트를 작성한다.
+Minimum test areas:
 
 - scanner
 - transitions
@@ -133,32 +159,26 @@
 - implementer worker
 - reviewer worker
 - recovery
-- board API
+- board/API
 
-## UI 규칙
+## Deliverables
 
-UI는 처음에는 단순해야 한다.
-
-- 단일 HTML 페이지
-- vanilla JS
-- `/api/board` 초기 fetch
-- `/api/events` SSE 실시간 반영
-
-## 작업 방식
-
-- 각 phase마다 작은 단위로 구현
-- 먼저 domain layer
-- 다음 orchestration layer
-- 마지막에 API/UI
-- 구현이 끝날 때마다 테스트 추가
-
-## 산출물
-
-최종적으로 아래가 있어야 한다.
+Work in this repository should keep at least these outputs in place.
 
 - `src/assistant_agent_kanban/...`
 - `tests/...`
 - `README.md`
-- 예시 설정 파일
-- 예시 state root bootstrap
-- FastAPI 앱 엔트리포인트
+- example config files
+- bootstrap examples
+- FastAPI app entrypoint
+
+## Prompt Contract References
+
+The real prompt contract sources for each role are these files.
+
+- `.opencode/agents/fs-kanban-planner.md`
+- `.opencode/agents/fs-kanban-implementer.md`
+- `.opencode/agents/fs-kanban-reviewer.md`
+- `.opencode/agents/fs-kanban-committer.md`
+
+Do not copy long prompts into `AGENTS.md`. Keep only repository rules and invariants here.

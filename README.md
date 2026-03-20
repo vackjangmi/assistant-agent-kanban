@@ -352,7 +352,9 @@ runtime:
 - `.opencode/agents/`: 역할별 prompt contract
 - `examples/config.yaml`: 예시 설정
 - `examples/bootstrap/`: kanban root 부트스트랩 예시
-- `docs/`: 설계 검토, 구현 계획, 에이전트 작업 브리프
+- `docs/`: 아키텍처 기준 문서, 구현/유지보수 맵, agent 작업 브리프
+
+공개 사용자는 우선 `README.md`를 보면 되고, 저장소를 수정하거나 agent 동작 규칙을 이해하려면 `AGENTS.md`와 `docs/*`를 함께 보면 된다.
 
 ## 최소 Python 사용 예시
 

@@ -1,44 +1,33 @@
-# 구현 계획서 (AI Agent 실행용)
+# Assistant Agent Kanban Implementation And Maintenance Map
 
-## 목표
+This document is no longer an early implementation plan. It is a **maintenance-oriented map of the current codebase**.
 
-다음 시스템을 Python으로 구현한다.
+It is meant to answer:
 
-- 파일/디렉토리 기반 칸반 상태 머신
-- `opencode run` 기반 Planner / Implementer / Reviewer / Committer orchestration
-- metadata / lock / recovery
-- isolated workspace (`clone-overlay`)
-- FastAPI + SSE 기반 read-only dashboard
+- what lives where
+- which module owns which responsibility
+- which tests and docs are affected when behavior changes
 
-이 문서는 **실제 구현 순서**와 **acceptance criteria**를 정의한다.
+## Current Scope
 
----
+The repository currently includes:
 
-## 기술 스택
+- filesystem-backed state machine
+- planner / implementer / reviewer / commit workflow
+- clone-overlay workspaces
+- human verification flow
+- retrospective support
+- FastAPI + SSE dashboard
+- request creation, task detail, markdown artifact viewing/editing, and verification-related API/UI
 
-- Python 3.11+
-- FastAPI
-- Uvicorn
-- Pydantic v2
-- watchfiles
-- filelock
-- Jinja2 또는 순수 HTML 템플릿
-- subprocess (`opencode run`, `git`)
-- pytest
+## Package Layout
 
-선택:
-- orjson
-- structlog
-- tenacity
-- rich (CLI 보조 도구가 필요할 때만)
-
----
-
-## 패키지 구조 제안
+The current Python package lives under `src/assistant_agent_kanban/`.
 
 ```text
 src/assistant_agent_kanban/
 ├─ __init__.py
+├─ main.py
 ├─ config.py
 ├─ models.py
 ├─ enums.py
@@ -47,13 +36,26 @@ src/assistant_agent_kanban/
 ├─ locks.py
 ├─ transitions.py
 ├─ events.py
+├─ assistant_adapter.py
+├─ assistant_factory.py
 ├─ opencode_adapter.py
+├─ codex_adapter.py
 ├─ workspace_manager.py
 ├─ integration_manager.py
+├─ commit_manager.py
 ├─ recovery.py
+├─ request_creator.py
+├─ request_parser.py
+├─ repo_discovery.py
+├─ repo_branches.py
+├─ log_parser.py
+├─ agent_materializer.py
 ├─ services/
 │  ├─ board_service.py
-│  └─ task_service.py
+│  ├─ task_service.py
+│  ├─ task_deletion_service.py
+│  ├─ human_verification_service.py
+│  └─ retrospective_service.py
 ├─ workers/
 │  ├─ base.py
 │  ├─ planner.py
@@ -62,436 +64,271 @@ src/assistant_agent_kanban/
 │  └─ committer.py
 └─ api/
    ├─ app.py
+   ├─ main.py
    ├─ routes.py
    ├─ sse.py
-   └─ ui.py
+   ├─ ui.py
+   └─ templates/index.html
 ```
 
-테스트:
-
-```text
-tests/
-├─ test_scanner.py
-├─ test_transitions.py
-├─ test_metadata_store.py
-├─ test_locks.py
-├─ test_planner_worker.py
-├─ test_implementer_worker.py
-├─ test_reviewer_worker.py
-├─ test_committer_worker.py
-├─ test_recovery.py
-└─ test_api.py
-```
-
----
-
-## Phase 0 — 설정/부트스트랩
-
-### 할 일
-1. 프로젝트 초기화
-2. 설정 모델 작성
-3. 상태 디렉토리/런타임 디렉토리 bootstrap 함수 작성
-4. Enum / Pydantic 모델 정의
-
-### 주요 모델
-- `TaskState`
-- `TaskMetadata`
-- `BoardSnapshot`
-- `WorkerLease`
-- `WorkspaceSpec`
-- `IntegrationSpec`
-- `RunResult`
-
-### acceptance criteria
-- 설정 파일 없이도 sensible default로 기동 가능
-- 첫 실행 시 누락된 state/runtime 디렉토리를 자동 생성
-- 모든 상태값이 enum으로 통제됨
-
----
-
-## Phase 1 — 파일시스템 스캐너 + metadata store
-
-### 할 일
-1. 상태 디렉토리 전체 스캔
-2. task 디렉토리 인식
-3. `metadata.json` 읽기/생성/업데이트
-4. canonical task_id / slug 생성
-5. atomic write 유틸 구현
-
-### 상세 요구사항
-- 사람이 `requests/<제목>/REQUEST.md`를 만들면 스캐너가 task로 인식
-- `metadata.json` 없으면 bootstrap
-- title과 dir name 불일치 허용
-- board snapshot은 매번 스캔으로 재구성
-
-### acceptance criteria
-- 빈 상태 디렉토리 스캔 가능
-- `REQUEST.md`만 있는 폴더도 정상 bootstrap
-- `metadata.json`은 temp file + replace로 저장
-- 스캔 결과가 deterministic
-
----
-
-## Phase 2 — lock / transition engine
-
-### 할 일
-1. per-task lock 구현
-2. transition validator 구현
-3. state move 유틸 구현
-4. `history` 기록
-5. `lease` / heartbeat 갱신
-
-### transition rule
-허용 전이만 엔진에서 통과시킨다.
-
-#### 허용 전이
-- requests -> planning
-- planning -> waiting-check-plans
-- waiting-check-plans -> todos
-- todos -> implementing
-- implementing -> todos
-- implementing -> waiting-reviews
-- waiting-reviews -> reviewing
-- reviewing -> todos
-- reviewing -> completed-reviews
-- completed-reviews -> human-verifying
-- human-verifying -> todos
-- human-verifying -> done
-
-### acceptance criteria
-- 동시에 두 worker가 같은 task를 잡지 못함
-- transition 시 metadata.state와 실제 디렉토리 상태가 일치
-- 잘못된 전이는 에러로 처리
-- lock path는 task 바깥 stable runtime dir에 있음
-
----
-
-## Phase 3 — OpenCode adapter
-
-### 할 일
-1. `opencode run` subprocess 래퍼 작성
-2. cwd 지정
-3. attach URL 지원
-4. timeout / cancellation 처리
-5. stdout/stderr/raw JSON log 저장
-6. final assistant text 추출
-
-### 입력 예시
-- planner prompt
-- implementer prompt
-- reviewer prompt
-- commit prompt
-
-### 요구사항
-- `--attach` 설정 시 attach 사용
-- 미설정 시 일반 `opencode run`
-- `--format json` 기본 사용
-- 각 phase run log를 `_runtime/runs/{task_id}/...`에 저장
-
-### acceptance criteria
-- mock subprocess로도 테스트 가능
-- 실패/timeout/cancel이 `RunResult`로 표준화
-- planner/reviewer 출력 markdown을 안전하게 추출 가능
-
----
-
-## Phase 4 — PlanningWorker
-
-### 입력 상태
-- `requests`
-
-### 흐름
-1. task lock 획득
-2. task bootstrap / canonical rename
-3. `planning` 이동
-4. planner prompt 생성
-5. `opencode run`
-6. final text를 `PLAN.md` 저장
-7. metadata.plan.revision 갱신
-8. `waiting-check-plans` 이동
-
-### planner prompt 계약
-반드시 아래 섹션을 포함하게 한다.
-
-- Summary
-- Scope
-- Out of Scope
-- File Map
-- Step-by-step Plan
-- Validation Plan
-- Acceptance Criteria
-- Risks
-- Open Questions
-
-### acceptance criteria
-- `REQUEST.md`가 있으면 planner가 자동 실행됨
-- `PLAN.md`가 생성됨
-- 실패 시 task가 `planning`에 고착되지 않고 error 기록 후 `requests` 또는 재시도 정책으로 처리됨
-
----
-
-## Phase 5 — WorkspaceManager + ImplementerWorker
-
-### 목표
-review 전까지는 **항상 격리된 workspace** 에서 구현한다.
-
-### WorkspaceManager 할 일
-1. workspace root 생성
-2. local clone 수행
-3. base branch checkout
-4. task branch 생성
-5. overlay copy / symlink 적용
-6. workspace spec metadata 반영
-
-### clone 명령 권장
-```bash
-git clone --reference-if-able <repo_root> --dissociate <repo_root> <workspace_repo>
-```
-
-### ImplementerWorker 흐름
-1. `todos` 감지
-2. task lock 획득
-3. workspace 준비
-4. `implementing` 이동
-5. implementer prompt 실행 (cwd=workspace repo)
-6. focused validation 명령 실행
-7. 결과 요약을 `WORK-{n}.md` 저장
-8. 실제 workspace git 변경이 있으면 `waiting-reviews` 이동
-9. 변경이 없거나 구현 실패면 `todos` 복귀 + error 기록
-
-### implementer prompt 계약
-최종 응답에는 아래가 있어야 한다.
-
-- Summary
-- Files Changed
-- Commands Run
-- Validation Result
-- Known Risks
-- Reviewer Notes
-
-### acceptance criteria
-- workspace path가 task 디렉토리 밖에 생성됨
-- implementer run은 workspace cwd에서 수행됨
-- `WORK-001.md`가 생성됨
-- 재작업 시 `WORK-002.md`, `WORK-003.md` 증가
-
----
-
-## Phase 6 — ReviewerWorker + IntegrationManager
-
-### ReviewerWorker 흐름
-1. `waiting-reviews` 감지
-2. lock 획득
-3. `reviewing` 이동
-4. reviewer prompt 실행
-5. `REVIEW-{n}.md` 저장
-6. verdict 분기
-
-#### verdict = NEEDS_CHANGES
-- error/finding 요약 기록
-- `todos` 이동
-
-#### verdict = PASS
-- `completed-reviews` 이동
-
-### reviewer prompt 계약
-최종 응답에는 아래가 있어야 한다.
-
-- Verdict (`PASS` 또는 `NEEDS_CHANGES`)
-- Acceptance Criteria Check
-- Findings
-- Risks
-- Integration Readiness
-- Required Follow-ups
-
-### Human verification 시작 시 할 일
-1. workspace diff 생성
-2. target repo clean 확인
-3. patch 생성
-4. patch apply (`git apply --3way --index`)
-5. metadata.integration 갱신
-
-### acceptance criteria
-- review pass/fail이 분기됨
-- `completed-reviews` 시점에는 아직 target repo를 건드리지 않음
-- `human-verifying` 시점에는 target repo에서 사람이 실행 가능
-
----
-
-## Phase 7 — CommitWorker
-
-### 입력 상태
-- `human-verifying`
-
-### 흐름
-1. target repo 상태 검증
-2. commit prompt 또는 규칙 기반 commit message 생성
-3. `COMMIT.md` 저장
-4. `git commit`
-5. sha 기록
-6. `done` 이동
-
-### acceptance criteria
-- 사람이 `human-verifying -> done` 승인 시 commit 수행
-- commit sha가 metadata와 `COMMIT.md`에 기록됨
-- commit 실패 시 done으로 이동하지 않음
-
----
-
-## Phase 8 — Recovery
-
-### 할 일
-1. startup orphan scan
-2. stale heartbeat 판단
-3. recovering policy 적용
-4. recovery event SSE 발행
-
-### 기본 정책
-- planning orphan -> requests
-- implementing orphan -> todos
-- reviewing orphan -> waiting-reviews
-
-### acceptance criteria
-- 서버가 죽었다 다시 떠도 stuck task 정리 가능
-- recovery 결과가 board/UI에 보임
-
----
-
-## Phase 9 — FastAPI + SSE Dashboard
-
-### API
-- `GET /healthz`
-- `GET /api/board`
-- `GET /api/tasks/{task_id}`
-- `GET /api/events`
-- `GET /`
-
-### UI 요구사항
-- 10개 상태 컬럼
-- 각 카드에 최소 표시:
-  - title
-  - task_id
-  - updated_at
-  - current iteration
-  - error badge
-- 자동 새로고침은 SSE 기반
-- 수동 새로고침 버튼도 제공
-
-### SSE 이벤트
-- `board_snapshot`
-- `task_updated`
-- `task_moved`
-- `worker_heartbeat`
-- `recovery_event`
-
-### acceptance criteria
-- 브라우저를 열면 현재 board snapshot이 보임
-- task 이동 시 자동으로 카드 위치가 갱신됨
-- 새로고침 없이 상태 변화를 볼 수 있음
-
----
-
-## 설정 파일 예시
-
-```yaml
-kanban_root: ./.kanban-agent
-repo_root: .
-base_branch: main
-
-opencode:
-  binary: opencode
-  attach_url: http://127.0.0.1:4096
-  planner_agent: fs-kanban-planner
-  planner_model: null
-  implementer_agent: fs-kanban-implementer
-  implementer_model: null
-  reviewer_agent: fs-kanban-reviewer
-  reviewer_model: null
-  commit_agent: plan
-  commit_model: null
-  timeout_seconds: 1800
-
-workspace:
-  strategy: clone-overlay
-root: ./.kanban-agent/_runtime/workspaces
-  overlay_copy:
-    - .env
-    - .env.local
-    - .fvm
-    - android/local.properties
-    - .tool-versions
-    - .npmrc
-  overlay_symlink: []
-
-locks:
-  heartbeat_seconds: 10
-  stale_after_seconds: 60
-```
-
----
-
-## 구현 우선순위
-
-### 1순위
-- Phase 0 ~ 4
-- Planning 자동화
-- Board snapshot API
-
-### 2순위
-- Implementer / Reviewer
-- clone-overlay
-- SSE UI
-
-### 3순위
-- CommitWorker
-- Recovery
-- polish
-
----
-
-## 테스트 전략
-
-### 단위 테스트
-- state validation
-- metadata atomic write
-- lock acquisition / release
-- scanner normalization
-- prompt renderer
-
-### 통합 테스트
-- request 생성 -> plan 생성
-- todos 이동 -> implementation -> review
-- review fail -> todos 복귀
-- review pass -> completed-reviews
-- completed-reviews -> human-verifying -> done
-- server restart recovery
-
-### e2e smoke
-- tmp repo 생성
-- sample request 작성
-- fake opencode adapter로 전체 흐름 돌리기
-- board API / SSE 검증
-
----
-
-## Definition of Done
-
-아래가 모두 충족되면 완료다.
-
-1. 상태 디렉토리만으로 workflow가 추적된다
-2. metadata/lock/recovery가 동작한다
-3. planner/implementer/reviewer가 자동 실행된다
-4. 구현은 isolated workspace에서 수행된다
-5. human verification 시작 후 target repo에서 사람이 실제로 실행 가능하다
-6. FastAPI board에서 상태가 실시간 반영된다
-7. 테스트가 작성되어 있다
-
----
-
-## 구현 중 금지사항
-
-- task 디렉토리 안에 전체 repo workspace를 두지 말 것
-- `oh-my-opencode` 내부 상태파일을 source of truth로 쓰지 말 것
-- integration 전에 원본 repo에 변경을 미리 반영하지 말 것
-- 수동 승인 단계를 삭제하지 말 것
-- lock 없는 rename/state change를 하지 말 것
+## Runtime Entrypoints
+
+### CLI
+
+- Distribution / CLI name: `assistant-agent-kanban`
+- Entrypoint: `assistant_agent_kanban.main:main`
+
+Main commands:
+
+- `assistant-agent-kanban serve`
+- `assistant-agent-kanban request`
+- `assistant-agent-kanban logs`
+
+### ASGI
+
+- App object: `assistant_agent_kanban.api.main:app`
+- App factory: `assistant_agent_kanban.api.main:create_app`
+
+## Responsibility Map
+
+### Config / Bootstrap
+
+Relevant files:
+
+- `src/assistant_agent_kanban/config.py`
+- `init.sh`
+- `run.sh`
+- `examples/config.yaml`
+
+Responsibilities:
+
+- load base configuration
+- bootstrap `kanban_root` and runtime directories
+- define runtime backend settings for OpenCode / Codex
+- maintain workspace, lock, and repo discovery settings
+
+Maintenance note:
+
+- If config keys change, update `README.md`, `examples/config.yaml`, and the settings UI/API together.
+
+### Scanner And Metadata
+
+Relevant files:
+
+- `src/assistant_agent_kanban/scanner.py`
+- `src/assistant_agent_kanban/metadata_store.py`
+- `src/assistant_agent_kanban/models.py`
+
+Responsibilities:
+
+- scan state directories
+- bootstrap tasks when needed
+- read/write metadata
+- materialize board and task snapshots
+
+Key contracts:
+
+- scans must be deterministic
+- `metadata.json` writes must be atomic
+- directory state and `metadata.state` must match
+
+### Locks And Transitions
+
+Relevant files:
+
+- `src/assistant_agent_kanban/locks.py`
+- `src/assistant_agent_kanban/transitions.py`
+- `src/assistant_agent_kanban/enums.py`
+
+Responsibilities:
+
+- per-task locking
+- allowed transition validation
+- state moves and history tracking
+
+Key contracts:
+
+- never mutate state without a lock
+- invalid transitions must fail loudly
+
+### Assistant Adapter Layer
+
+Relevant files:
+
+- `src/assistant_agent_kanban/assistant_adapter.py`
+- `src/assistant_agent_kanban/opencode_adapter.py`
+- `src/assistant_agent_kanban/codex_adapter.py`
+- `src/assistant_agent_kanban/assistant_factory.py`
+- `src/assistant_agent_kanban/agent_materializer.py`
+
+Responsibilities:
+
+- invoke OpenCode / Codex
+- capture raw results
+- extract final assistant text
+- wire role-specific adapters
+
+Key contracts:
+
+- runtime adapter state is not the workflow source of truth
+- adapters normalize execution results for the rest of the system
+
+### Planning Worker
+
+Relevant files:
+
+- `src/assistant_agent_kanban/workers/planner.py`
+
+Responsibilities:
+
+- read `requests` tasks
+- produce `PLAN.md`
+- move tasks to `waiting-check-plans`
+
+When changing this area, also check:
+
+- `PLAN.md` document format
+- plan approval UI
+- task detail artifact viewer/editor behavior
+
+### Workspace And Implementer Worker
+
+Relevant files:
+
+- `src/assistant_agent_kanban/workspace_manager.py`
+- `src/assistant_agent_kanban/workers/implementer.py`
+
+Responsibilities:
+
+- prepare workspaces
+- apply clone-overlay strategy
+- run implementation iterations
+- record `WORK-{n}.md`
+
+When changing this area, also check:
+
+- workspace root location
+- no-op implementation handling
+- transition rules for review readiness
+
+### Reviewer Worker And Integration
+
+Relevant files:
+
+- `src/assistant_agent_kanban/workers/reviewer.py`
+- `src/assistant_agent_kanban/integration_manager.py`
+- `src/assistant_agent_kanban/commit_manager.py`
+
+Responsibilities:
+
+- generate review verdicts
+- decide entry into `completed-reviews`
+- prepare integration/patch application before human verification
+
+Key contracts:
+
+- `completed-reviews` does not apply the target repo yet
+- target repo patch apply happens only when human verification starts
+
+### Human Verification And Retrospective
+
+Relevant files:
+
+- `src/assistant_agent_kanban/services/human_verification_service.py`
+- `src/assistant_agent_kanban/services/retrospective_service.py`
+- `src/assistant_agent_kanban/api/routes.py`
+
+Responsibilities:
+
+- verification start / reject / approve flow
+- branch summary generation
+- retrospective generation and retrieval
+
+When changing this area, also check:
+
+- target repo clean rule
+- reject rollback behavior
+- completion modes (`new-branch`, `target-branch`)
+
+### API And Dashboard
+
+Relevant files:
+
+- `src/assistant_agent_kanban/api/app.py`
+- `src/assistant_agent_kanban/api/main.py`
+- `src/assistant_agent_kanban/api/routes.py`
+- `src/assistant_agent_kanban/api/sse.py`
+- `src/assistant_agent_kanban/api/templates/index.html`
+
+Responsibilities:
+
+- serve board snapshots
+- expose task detail, logs, and markdown artifact APIs
+- provide request creation UI
+- provide plan editor, review note, and verification UI
+- stream SSE updates
+
+When changing this area, also check:
+
+- task modal layout
+- markdown artifact viewer/editor behavior
+- localStorage keys and settings UI
+- HTML string assertions in tests
+
+## Test Map
+
+Major tests include:
+
+- `tests/test_scanner.py`
+- `tests/test_metadata_store.py`
+- `tests/test_transitions.py`
+- `tests/test_locks.py`
+- `tests/test_planner_worker.py`
+- `tests/test_implementer_worker.py`
+- `tests/test_reviewer_worker.py`
+- `tests/test_human_verification_service.py`
+- `tests/test_retrospective_service.py`
+- `tests/test_api.py`
+- `tests/test_main.py`
+
+Maintenance rules:
+
+- If you change workflow semantics, check transitions/worker/recovery tests together.
+- If you change UI text or DOM structure, check `tests/test_api.py` together.
+- If you change package or CLI identity, check `tests/test_main.py`, install flow, and entrypoints together.
+
+## Frequently Coupled Contracts
+
+The following kinds of changes tend to affect code, tests, and docs together.
+
+- package / CLI naming
+- state names or allowed transitions
+- markdown artifact names or formats
+- human verification completion modes
+- settings payload/response shape
+- task detail modal structure
+
+## Maintenance Checklist
+
+Before finalizing a change, check:
+
+1. Did you preserve the source-of-truth rule?
+2. Did you preserve task directory vs workspace separation?
+3. Did you avoid weakening human gates?
+4. Do the transition rules and UI still agree?
+5. Did you update the relevant tests?
+6. Did you keep `README.md`, `AGENTS.md`, and `docs/*` in sync?
+
+## Deferred Work
+
+Based on the current implementation, the following remain secondary.
+
+- production auth / access control
+- operational hardening
+- richer metrics / observability
+- better multi-repo UX
+- issue / PR template cleanup
+
+## Conclusion
+
+This document is not about “what should we build?” but about “what exists now, where it lives, and what else must be checked when one part changes.” Read it together with `docs/01-architecture-review.md` and `AGENTS.md` before making workflow-impacting changes.
