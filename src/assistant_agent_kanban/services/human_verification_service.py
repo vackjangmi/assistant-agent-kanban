@@ -16,6 +16,7 @@ from ..exceptions import AdapterRunError, IntegrationConflictError, IntegrationE
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
+from ..retry_policy import clear_retry_gate
 from ..assistant_adapter import AssistantAdapter
 from ..models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, TaskContext, TaskErrorInfo, utc_now
 from ..scanner import KanbanScanner
@@ -70,6 +71,7 @@ class HumanVerificationService:
                 self.metadata_store.save(context.task_dir, context.metadata)
                 return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
             except IntegrationConflictError as exc:
+                self._recover_from_integration_conflict(context.metadata)
                 context.metadata.human_verification.note_markdown = str(exc)
                 self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="CONFLICT")
                 context.metadata.errors.append(TaskErrorInfo(code="integration-conflict", message=str(exc)))
@@ -434,6 +436,21 @@ class HumanVerificationService:
         metadata.implementation.workspace = None
         self.metadata_store.save(context.task_dir, metadata)
         self._delete_workspace_root(metadata, workspace_path)
+
+    def _recover_from_integration_conflict(self, metadata) -> None:
+        self.integration_manager.rollback_workspace(metadata)
+        self._reset_implementation_context(metadata)
+        clear_retry_gate(metadata)
+        self._delete_workspace_root(metadata, metadata.implementation.workspace)
+        metadata.implementation.workspace = None
+        metadata.implementation.branch = None
+
+    def _reset_implementation_context(self, metadata) -> None:
+        metadata.implementation.last_result = None
+        metadata.implementation.resolved_model = None
+        metadata.implementation.session_id = None
+        metadata.implementation.last_run_tokens = 0
+        metadata.implementation.session_tokens = 0
 
     def _archived_patch_path(self, metadata, live_runs_dir: Path, archive_runs_dir: Path) -> Path | None:
         if not metadata.integration.patch_path:

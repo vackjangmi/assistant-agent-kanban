@@ -72,8 +72,7 @@ class IntegrationManager:
         )
         if apply_result.returncode != 0:
             self._cleanup_review_branch(target_repo_root, metadata)
-            metadata.integration.original_branch = None
-            metadata.integration.review_branch = None
+            self._reset_transient_integration_state(metadata)
             raise IntegrationConflictError(apply_result.stderr.strip() or "failed to apply patch")
         metadata.integration.patch_path = str(patch_path)
         metadata.integration.applied = True
@@ -86,11 +85,7 @@ class IntegrationManager:
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
         self._cleanup_managed_branches(target_repo_root, metadata)
-        metadata.integration.applied = False
-        metadata.integration.applied_at = None
-        metadata.integration.original_branch = None
-        metadata.integration.review_branch = None
-        metadata.integration.final_branch = None
+        self._reset_transient_integration_state(metadata)
 
     def finalize_workspace(self, metadata: TaskMetadata) -> None:
         try:
@@ -107,6 +102,13 @@ class IntegrationManager:
         metadata.integration.applied_at = None
         metadata.integration.original_branch = None
         metadata.integration.review_branch = None
+
+    def _reset_transient_integration_state(self, metadata: TaskMetadata) -> None:
+        metadata.integration.applied = False
+        metadata.integration.applied_at = None
+        metadata.integration.original_branch = None
+        metadata.integration.review_branch = None
+        metadata.integration.final_branch = None
 
     def _patch_path(self, task_id: str, cycle: int) -> Path:
         return (self.config.runs_dir / task_id / f"review-{cycle:03d}.patch").expanduser().resolve()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import os
 import subprocess
@@ -50,7 +51,11 @@ def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effe
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented"], side_effect=modify_workspace),
+        adapter=FakeAdapter(
+            ["## Summary\nimplemented"],
+            side_effect=modify_workspace,
+            side_effect_output_formats={"json", "default"},
+        ),
         workspace_manager=WorkspaceManager(config),
     )
     import asyncio
@@ -477,6 +482,7 @@ def test_human_verification_start_returns_to_todos_on_integration_conflict(confi
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-start-conflict-task")
     scanner, service, completed = _task_ready_for_human_verification(config)
+    original_workspace = Path(completed.metadata.implementation.workspace or "")
     (repo_root / "app.txt").write_text("upstream change\n")
     subprocess.run(["git", "-C", str(repo_root), "add", "app.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
@@ -489,6 +495,14 @@ def test_human_verification_start_returns_to_todos_on_integration_conflict(confi
     assert any(error.code == "integration-conflict" for error in refreshed.metadata.errors)
     assert refreshed.metadata.commit.status == "pending"
     assert refreshed.metadata.commit.sha is None
+    assert refreshed.metadata.implementation.workspace is None
+    assert refreshed.metadata.implementation.branch is None
+    assert refreshed.metadata.implementation.last_result is None
+    assert refreshed.metadata.implementation.resolved_model is None
+    assert refreshed.metadata.implementation.session_id is None
+    assert refreshed.metadata.retry_gate.reason is None
+    assert refreshed.metadata.retry_gate.not_before is None
+    assert not original_workspace.exists()
     current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == "main"
     branches = subprocess.run(["git", "-C", str(repo_root), "branch", "--list", f"review/{completed.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
@@ -498,6 +512,58 @@ def test_human_verification_start_returns_to_todos_on_integration_conflict(confi
     artifact = refreshed.task_dir / "HUMAN-VERIFY-001.md"
     assert artifact.exists()
     assert "Verdict: CONFLICT" in artifact.read_text()
+
+
+def test_human_verification_conflict_forces_next_implementation_cycle_to_start_from_latest_base(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    (target_repo / "app.txt").write_text("base\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add app file"], check=True, capture_output=True, text=True)
+
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-start-conflict-rerun-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(
+        config,
+        workspace_side_effect=lambda cwd: (cwd / "stale-only.txt").write_text("stale\n"),
+    )
+
+    (target_repo / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+
+    moved = service.start(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.TODOS
+
+    metadata_store = scanner.metadata_store
+    locks = service.locks
+    transitions = service.transitions
+
+    def modify_workspace(cwd: Path):
+        assert (cwd / "app.txt").read_text() == "upstream change\n"
+        assert (cwd / "stale-only.txt").exists() is False
+        (cwd / "app.txt").write_text("fresh implementation\n")
+
+    implementer = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["## Summary\nimplemented again"], side_effect=modify_workspace, side_effect_output_formats={"json"}),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(implementer.run_once()) is True
+    updated = scanner.find_task(completed.metadata.task_id)
+    assert updated.state == TaskState.WAITING_REVIEWS
+    assert updated.metadata.cycle == 2
+    assert (updated.task_dir / "WORK-002.md").exists()
+    assert Path(updated.metadata.implementation.workspace or "", "app.txt").read_text() == "fresh implementation\n"
 
 
 def test_human_verification_start_rolls_back_when_post_apply_step_fails(configured_paths):
