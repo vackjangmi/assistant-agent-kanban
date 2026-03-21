@@ -416,6 +416,30 @@ def test_api_supports_human_verification_start_and_reject(configured_paths):
         assert (repo_root / "app.txt").read_text() == "hello\n"
 
 
+def test_api_returns_todos_and_clears_stale_workspace_on_verification_conflict(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-start-conflict-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-start-conflict-task")
+    original_workspace = Path(completed.metadata.implementation.workspace or "")
+
+    (repo_root / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+
+    assert start.status_code == 200
+    assert start.json()["state"] == TaskState.TODOS.value
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.implementation.workspace is None
+    assert refreshed.metadata.implementation.session_id is None
+    assert refreshed.metadata.retry_gate.reason is None
+    assert not original_workspace.exists()
+
+
 def test_api_blocks_reject_without_note_or_line_comment(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
