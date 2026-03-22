@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-import base64
-import binascii
 from collections import OrderedDict
 from datetime import datetime, timezone
 import mimetypes
 from pathlib import Path
 import re
 import subprocess
-import uuid
 
 from ..enums import STATE_ORDER, TaskState
 from ..exceptions import TaskNotFoundError, TransitionError
 from ..log_parser import render_assistant_log
+from ..markdown_attachments import attachments_dir_for_task, normalize_markdown_attachments, store_attachment
 from ..models import (
     ChangedFileDetail,
     ChangedFileHunk,
@@ -37,11 +35,6 @@ from ..target_repo_guard import resolve_safe_target_repo_root
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
 ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
-ATTACHMENT_NAME_RE = re.compile(r"[^a-zA-Z0-9]+")
-ALLOWED_ATTACHMENT_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-EMBEDDED_IMAGE_RE = re.compile(
-    r"!\[(?P<alt>[^\]]*)\]\((?P<url>data:image/(?P<subtype>png|jpeg|jpg|gif|webp);base64,(?P<data>[^)]+))\)"
-)
 AI_ACTIVE_STATES = {
     TaskState.PLANNING,
     TaskState.IMPLEMENTING,
@@ -152,49 +145,13 @@ class TaskService:
         path = self._validate_writable_markdown_artifact(task.task_dir, filename)
         if not content.strip():
             raise TransitionError("PLAN.md cannot be empty")
-        normalized = self._normalize_markdown_attachments(task.task_dir, content)
+        normalized = normalize_markdown_attachments(task.task_dir, content)
         path.write_text(normalized.rstrip() + "\n")
 
     def save_attachment(self, task_id: str, artifact_filename: str, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
         task = self._find_task(task_id)
-        if task.state != "waiting-check-plans":
-            raise TransitionError("attachments are only allowed in waiting-check-plans")
-        self._validate_writable_markdown_artifact(task.task_dir, artifact_filename)
-        return self._store_attachment(task.task_dir, upload_name, content_type, data)
-
-    def _normalize_markdown_attachments(self, task_dir: Path, content: str) -> str:
-        def replace(match: re.Match[str]) -> str:
-            alt_text = match.group("alt")
-            subtype = match.group("subtype")
-            raw_data = re.sub(r"\s+", "", match.group("data"))
-            try:
-                decoded = base64.b64decode(raw_data, validate=True)
-            except (ValueError, binascii.Error) as exc:
-                raise TransitionError("embedded image data is invalid") from exc
-            suffix = ".jpg" if subtype == "jpeg" else f".{subtype}"
-            upload_name = f"{alt_text.strip() or 'image'}{suffix}"
-            saved = self._store_attachment(task_dir, upload_name, f"image/{subtype}", decoded)
-            return f"![{alt_text}]({saved['relative_path']})"
-
-        return EMBEDDED_IMAGE_RE.sub(replace, content)
-
-    def _store_attachment(self, task_dir: Path, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
-        suffix = Path(upload_name).suffix.lower()
-        if suffix not in ALLOWED_ATTACHMENT_SUFFIXES:
-            raise TransitionError("only png, jpg, jpeg, gif, and webp attachments are supported")
-        if content_type and not content_type.startswith("image/"):
-            raise TransitionError("only image attachments are supported")
-        attachments_dir = self._attachments_dir(task_dir, create=True)
-        stem = ATTACHMENT_NAME_RE.sub("-", Path(upload_name).stem.lower()).strip("-") or "image"
-        stored_name = f"{stem}-{uuid.uuid4().hex[:8]}{suffix}"
-        path = attachments_dir / stored_name
-        path.write_bytes(data)
-        return {
-            "filename": stored_name,
-            "content_type": content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
-            "relative_path": f"_attachments/{stored_name}",
-            "url": f"/api/tasks/{task_dir.name}/attachments/{stored_name}",
-        }
+        self._validate_attachment_artifact(task, artifact_filename)
+        return store_attachment(task.task_dir, upload_name, content_type, data)
 
     def get_attachment(self, task_id: str, filename: str) -> tuple[Path, str]:
         task = self._find_task(task_id)
@@ -220,15 +177,18 @@ class TaskService:
             raise TransitionError("only PLAN.md is editable")
         return self._validate_readable_markdown_artifact(task_dir, filename)
 
+    def _validate_attachment_artifact(self, task, filename: str) -> Path:
+        if task.state == TaskState.WAITING_CHECK_PLANS:
+            return self._validate_writable_markdown_artifact(task.task_dir, filename)
+        if task.state == TaskState.HUMAN_VERIFYING:
+            note_path = task.metadata.human_verification.note_path or f"HUMAN-VERIFY-{task.metadata.cycle:03d}.md"
+            if filename != note_path:
+                raise TransitionError("attachments are only allowed for the active HUMAN-VERIFY note during human-verifying")
+            return self._validate_readable_markdown_artifact(task.task_dir, filename)
+        raise TransitionError("attachments are only allowed in waiting-check-plans or human-verifying")
+
     def _attachments_dir(self, task_dir: Path, *, create: bool = False) -> Path:
-        path = task_dir / "_attachments"
-        if create:
-            path.mkdir(parents=True, exist_ok=True)
-        resolved_task_dir = task_dir.resolve()
-        resolved = path.resolve()
-        if resolved.parent != resolved_task_dir or resolved.name != "_attachments":
-            raise TransitionError("attachments directory must stay inside the task directory")
-        return resolved
+        return attachments_dir_for_task(task_dir, create=create)
 
     def _validate_readable_attachment(self, task_dir: Path, filename: str) -> Path:
         attachments_dir = self._attachments_dir(task_dir)
