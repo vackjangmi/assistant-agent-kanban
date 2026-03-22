@@ -2386,10 +2386,12 @@
         noTextHunks: 'No textual hunks were captured for this file.',
         changedFilesPatchAvailable: 'Changed files appear here when a stored review patch is available for this task.',
         selectChangedTabToInspect: 'Select the Changed files tab to inspect the stored review patch.',
-        attachedPlanImage: 'Attached {filename} to PLAN.md.',
-        imageUploadFailed: 'Image upload failed.',
-        imageAttachmentsRestricted: 'Image attachments are only available while editing PLAN.md in waiting-check-plans.',
-        uploadingImage: 'Uploading image attachment...',
+      attachedPlanImage: 'Attached {filename} to PLAN.md.',
+      attachedHumanReviewImage: 'Attached {filename} to the current HUMAN-VERIFY note.',
+      imageUploadFailed: 'Image upload failed.',
+      imageAttachmentsRestricted: 'Image attachments are only available while editing PLAN.md in waiting-check-plans.',
+      humanReviewImageAttachmentsRestricted: 'Image attachments are only available while editing the current HUMAN-VERIFY note in human-verifying.',
+      uploadingImage: 'Uploading image attachment...',
         failedImageUpload: 'Failed to upload image attachment.',
         failedHumanReviewSave: 'Failed to save human review note.',
         backToViewer: 'Back to viewer',
@@ -2543,10 +2545,12 @@
         noTextHunks: '이 파일에는 기록된 텍스트 hunk가 없습니다.',
         changedFilesPatchAvailable: '저장된 리뷰 패치가 있으면 변경 파일이 여기에 표시됩니다.',
         selectChangedTabToInspect: '저장된 리뷰 패치를 보려면 변경 파일 탭을 선택하세요.',
-        attachedPlanImage: '{filename} 이미지를 PLAN.md에 첨부했습니다.',
-        imageUploadFailed: '이미지 업로드에 실패했습니다.',
-        imageAttachmentsRestricted: '이미지 첨부는 waiting-check-plans 상태에서 PLAN.md를 편집할 때만 가능합니다.',
-        uploadingImage: '이미지 첨부를 업로드하는 중...',
+      attachedPlanImage: '{filename} 이미지를 PLAN.md에 첨부했습니다.',
+      attachedHumanReviewImage: '{filename} 이미지를 현재 HUMAN-VERIFY 노트에 첨부했습니다.',
+      imageUploadFailed: '이미지 업로드에 실패했습니다.',
+      imageAttachmentsRestricted: '이미지 첨부는 waiting-check-plans 상태에서 PLAN.md를 편집할 때만 가능합니다.',
+      humanReviewImageAttachmentsRestricted: '이미지 첨부는 human-verifying 상태에서 현재 HUMAN-VERIFY 노트를 편집할 때만 가능합니다.',
+      uploadingImage: '이미지 첨부를 업로드하는 중...',
         failedImageUpload: '이미지 첨부를 업로드하지 못했습니다.',
         failedHumanReviewSave: '인간 리뷰 노트를 저장하지 못했습니다.',
         backToViewer: '보기로 돌아가기',
@@ -4795,6 +4799,25 @@
       return payload;
     }
 
+    async function uploadHumanReviewAttachment(blob, options = {}) {
+      const { uploadName = '' } = options;
+      const notePath = activeTaskDetail?.human_review?.note_path || activeTaskDetail?.metadata?.human_verification?.note_path || '';
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying' || !notePath) {
+        throw new Error(translateTask('humanReviewImageAttachmentsRestricted'));
+      }
+      const optimized = await compressPlanAttachmentBlob(blob, uploadName || blob.name || '');
+      const formData = new FormData();
+      formData.append('file', optimized.blob, optimized.uploadName);
+      taskHumanReviewNoteStatus.textContent = translateTask('uploadingImage');
+      const response = await fetch(`/api/tasks/${activeTaskId}/attachments?artifact=${encodeURIComponent(notePath)}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateTask('failedImageUpload'));
+      return payload;
+    }
+
     function setPlanEditorContent(value) {
       ensureMarkdownViewer(value || '');
       if (planEditor) planEditor.setMarkdown(value || '');
@@ -4821,6 +4844,19 @@
         initialEditType: 'markdown',
         previewStyle: 'tab',
         hideModeSwitch: true,
+        hooks: {
+          addImageBlobHook: async (blob, callback) => {
+            try {
+              const uploaded = await uploadHumanReviewAttachment(blob, { uploadName: blob.name || '' });
+              callback(uploaded.relative_path, uploaded.filename);
+              taskHumanReviewNoteStatus.textContent = translateTask('attachedHumanReviewImage', { filename: uploaded.filename });
+              return false;
+            } catch (error) {
+              taskHumanReviewNoteStatus.textContent = error.message || translateTask('imageUploadFailed');
+              return false;
+            }
+          },
+        },
         usageStatistics: false,
       });
       humanReviewEditor.on('change', updateHumanReviewPanel);
@@ -4881,7 +4917,7 @@
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || translateTask('failedHumanReviewSave'));
-      humanReviewSourceMarkdown = getHumanReviewEditorContent();
+      setHumanReviewEditorContent(payload.content || '');
       taskHumanReviewNoteStatus.textContent = translateHumanReview('noteSaved');
       updateHumanReviewPanel();
     }
