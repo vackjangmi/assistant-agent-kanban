@@ -756,6 +756,97 @@ def test_api_saves_human_review_note(configured_paths):
         assert detail.json()["human_review"]["note_markdown"] == "## Note\nPlease keep the animation timing."
 
 
+def test_api_uploads_human_review_note_attachments(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-note-attachment-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-note-attachment-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        upload = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/attachments?artifact=HUMAN-VERIFY-001.md",
+            files={"file": ("review-diagram.png", b"pngdata", "image/png")},
+        )
+        assert upload.status_code == 200
+        payload = upload.json()
+        assert payload["filename"].endswith(".png")
+        assert payload["relative_path"].startswith("_attachments/")
+
+        save_note = client.put(
+            f"/api/tasks/{completed.metadata.task_id}/human-review-note",
+            json={"content": f"![diagram]({payload['relative_path']})"},
+        )
+        assert save_note.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["human_review"]["note_markdown"] == f"![diagram]({payload['relative_path']})"
+
+        download = client.get(payload["url"])
+        assert download.status_code == 200
+        assert download.content == b"pngdata"
+        assert download.headers["content-type"] == "image/png"
+
+
+def test_api_extracts_embedded_human_review_note_images_to_attachments(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-note-embedded-image-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-note-embedded-image-task")
+
+    embedded = base64.b64encode(b"pngdata").decode()
+    markdown = f"![diagram](data:image/png;base64,{embedded})"
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        save_note = client.put(
+            f"/api/tasks/{completed.metadata.task_id}/human-review-note",
+            json={"content": markdown},
+        )
+        assert save_note.status_code == 200
+        assert save_note.json()["content"].startswith("![diagram](_attachments/")
+
+    task = KanbanScanner(config).find_task(completed.metadata.task_id)
+    assert task.metadata.human_verification.note_markdown.startswith("![diagram](_attachments/")
+    assert task.metadata.human_verification.note_markdown.endswith(")")
+    attachments = list((task.task_dir / "_attachments").glob("*.png"))
+    assert len(attachments) == 1
+    assert attachments[0].read_bytes() == b"pngdata"
+
+
+def test_api_reject_verification_normalizes_embedded_note_images(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-note-reject-image-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-review-note-reject-image-task")
+
+    embedded = base64.b64encode(b"pngdata").decode()
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        reject = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/reject-verification",
+            json={"note": f"![diagram](data:image/png;base64,{embedded})"},
+        )
+        assert reject.status_code == 200
+
+    task = scanner.find_task(completed.metadata.task_id)
+    assert task.metadata.human_verification.note_markdown.startswith("![diagram](_attachments/")
+    attachments = list((task.task_dir / "_attachments").glob("*.png"))
+    assert len(attachments) == 1
+    assert attachments[0].read_bytes() == b"pngdata"
+
+
 def test_api_creates_line_comment_for_changed_file(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False

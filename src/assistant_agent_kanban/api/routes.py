@@ -584,7 +584,11 @@ def build_router() -> APIRouter:
         except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
-        return {"saved": True, "task_id": context.metadata.task_id}
+        return {
+            "saved": True,
+            "task_id": context.metadata.task_id,
+            "content": context.metadata.human_verification.note_markdown,
+        }
 
     @router.post("/api/tasks/{task_id}/reject-verification")
     async def reject_verification(task_id: str, payload: HumanVerificationPayload, request: Request):
