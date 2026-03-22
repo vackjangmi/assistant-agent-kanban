@@ -1524,6 +1524,7 @@
         </div>
         <div class="task-modal-actions">
           <button type="button" id="start-verification" class="accent-button" hidden>Start verification</button>
+          <button type="button" id="retry-verification-apply" class="accent-button" hidden>Retry apply</button>
           <button type="button" id="approve-plan" class="primary" hidden disabled>Approve plan</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
           <span id="approve-human-review-shell" class="header-action-shell" hidden><button type="button" id="approve-human-review-button" class="primary">Approve</button></span>
@@ -1808,6 +1809,7 @@
     const taskPanelReviewNote = document.getElementById('task-panel-review-note');
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const startVerificationButton = document.getElementById('start-verification');
+    const retryVerificationApplyButton = document.getElementById('retry-verification-apply');
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');
     const taskChangedFileSummary = document.getElementById('task-changed-file-summary');
@@ -2244,6 +2246,7 @@
         modalTitle: 'Task details',
         modalSubtitle: 'Inspect task metadata, current agent activity, and task artifacts.',
         startVerification: 'Start verification',
+        retryVerificationApply: 'Retry apply',
         approvePlan: 'Approve plan',
         deleteTask: 'Delete task',
         close: 'Close',
@@ -2407,6 +2410,8 @@
         failedApprovePlan: 'Failed to approve plan.',
         planApproved: 'Plan approved.',
         failedStartVerification: 'Failed to start verification.',
+        failedRetryVerificationApply: 'Failed to retry verification apply.',
+        approvalBlockedRetryApply: 'Approval is blocked until verification apply succeeds.',
         failedRejectVerification: 'Failed to reject verification.',
         failedApproveVerification: 'Failed to approve verification.',
         deleteConfirm: 'Delete task {title}? This stops any running task work and removes managed artifacts for {taskId}.',
@@ -2415,6 +2420,7 @@
         modalTitle: '작업 상세',
         modalSubtitle: '작업 메타데이터, 현재 에이전트 활동, 산출물을 확인합니다.',
         startVerification: '검증 시작',
+        retryVerificationApply: '검증 재적용',
         approvePlan: '플랜 승인',
         deleteTask: '작업 삭제',
         close: '닫기',
@@ -2561,6 +2567,8 @@
         failedApprovePlan: '플랜 승인을 실패했습니다.',
         planApproved: '플랜을 승인했습니다.',
         failedStartVerification: '검증 시작에 실패했습니다.',
+        failedRetryVerificationApply: '검증 재적용에 실패했습니다.',
+        approvalBlockedRetryApply: '검증 재적용이 성공하기 전에는 승인을 진행할 수 없습니다.',
         failedRejectVerification: '검증 반려에 실패했습니다.',
         failedApproveVerification: '검증 승인에 실패했습니다.',
         deleteConfirm: '작업 {title}을(를) 삭제할까요? 실행 중인 작업을 중단하고 {taskId}의 관리 산출물을 제거합니다.',
@@ -2658,6 +2666,7 @@
       retrospectiveCompareBranchInput.placeholder = translateTask('retrospectiveComparePlaceholder');
       retrospectiveCompareHelp.textContent = translateTask('retrospectiveCompareHelp');
       startVerificationButton.textContent = translateTask('startVerification');
+      retryVerificationApplyButton.textContent = translateTask('retryVerificationApply');
       approvePlanButton.textContent = translateTask('approvePlan');
       deleteTaskButton.textContent = translateTask('deleteTask');
       closeTaskModalButton.textContent = translateTask('close');
@@ -4027,6 +4036,8 @@
       approvePlanButton.disabled = state !== 'waiting-check-plans';
       startVerificationButton.hidden = state !== 'completed-reviews';
       startVerificationButton.disabled = state !== 'completed-reviews';
+      retryVerificationApplyButton.hidden = state !== 'human-verifying';
+      retryVerificationApplyButton.disabled = state !== 'human-verifying';
       requestChangesButton.hidden = state !== 'human-verifying';
       requestChangesShell.hidden = state !== 'human-verifying';
       approveHumanReviewButton.hidden = state !== 'human-verifying';
@@ -4877,16 +4888,18 @@
 
     function updateHumanReviewPanel() {
       const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
+      const integrationApplied = Boolean(activeTaskDetail?.metadata?.integration?.applied);
       const currentCommentCount = Number(activeTaskDetail?.human_review?.total_comment_count || 0);
       const noteExists = canVerify && getHumanReviewEditorContent().trim().length > 0;
-      const hasFeedback = noteExists || currentCommentCount > 0;
-      const approvalBlockedByContent = noteExists || currentCommentCount > 0;
+      const hasFeedback = !integrationApplied || noteExists || currentCommentCount > 0;
+      const approvalBlockedByContent = !integrationApplied || noteExists || currentCommentCount > 0;
       taskHumanReviewPanel.hidden = !canVerify;
       requestChangesShell.hidden = !canVerify;
       approveHumanReviewShell.hidden = !canVerify;
       if (!canVerify) return;
       taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
       saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
+      retryVerificationApplyButton.disabled = taskDetailStale || integrationApplied;
       requestChangesButton.disabled = taskDetailStale || !hasFeedback;
       approveHumanReviewButton.disabled = taskDetailStale || approvalBlockedByContent;
 
@@ -4900,6 +4913,8 @@
       let approvalReason = '';
       if (taskDetailStale) {
         approvalReason = translateHumanReview('actionBlockedStale');
+      } else if (!integrationApplied) {
+        approvalReason = translateTask('approvalBlockedRetryApply');
       } else if (noteExists && currentCommentCount > 0) {
         approvalReason = translateHumanReview(currentCommentCount === 1 ? 'approvalBlockedNoteAndCommentsOne' : 'approvalBlockedNoteAndCommentsMany', { count: currentCommentCount });
       } else if (noteExists) {
@@ -4960,10 +4975,14 @@
 
     function updateHumanVerificationState() {
       const state = activeTaskDetail?.metadata?.state;
+      const integrationApplied = Boolean(activeTaskDetail?.metadata?.integration?.applied);
       const canStart = state === 'completed-reviews';
       const canApproveOrReject = state === 'human-verifying';
+      const canRetryApply = canApproveOrReject && !integrationApplied;
       startVerificationButton.hidden = !canStart;
       startVerificationButton.disabled = !canStart || taskDetailStale;
+      retryVerificationApplyButton.hidden = !canRetryApply;
+      retryVerificationApplyButton.disabled = !canRetryApply || taskDetailStale;
       requestChangesButton.hidden = !canApproveOrReject;
       requestChangesShell.hidden = !canApproveOrReject;
       approveHumanReviewButton.hidden = !canApproveOrReject;
@@ -5772,6 +5791,26 @@
       }
     }
 
+    async function retryVerificationApply() {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
+      retryVerificationApplyButton.disabled = true;
+      taskHumanReviewNoteStatus.textContent = translateTask('retryVerificationApply');
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/retry-verification-apply`, { method: 'POST' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedRetryVerificationApply'));
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true);
+        if (!taskTabChangedFiles.hidden) setTaskTab('changed-files');
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskHumanReviewNoteStatus.textContent = error.message;
+      } finally {
+        updateHumanVerificationState();
+      }
+    }
+
     async function rejectVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
       setApprovalChoiceModalOpen(false);
@@ -6020,6 +6059,7 @@
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
     startVerificationButton.addEventListener('click', startVerification);
+    retryVerificationApplyButton.addEventListener('click', retryVerificationApply);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
     targetRepoInput.addEventListener('input', () => { targetRepoInput.dataset.autofilled = 'false'; });

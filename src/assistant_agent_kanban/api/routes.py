@@ -566,6 +566,16 @@ def build_router() -> APIRouter:
         await runtime.rescan_and_publish()
         return moved.metadata
 
+    @router.post("/api/tasks/{task_id}/retry-verification-apply")
+    async def retry_verification_apply(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            context = await asyncio.to_thread(runtime.verification_service.retry_apply, task_id, by="human")
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return context.metadata
+
     @router.put("/api/tasks/{task_id}/human-review-note")
     async def save_human_review_note(task_id: str, payload: HumanReviewNotePayload, request: Request):
         runtime = request.app.state.runtime
