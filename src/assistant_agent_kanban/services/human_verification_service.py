@@ -15,6 +15,7 @@ from ..enums import TaskState
 from ..exceptions import AdapterRunError, IntegrationConflictError, IntegrationError, TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
+from ..markdown_attachments import attachments_dir_for_task, normalize_markdown_attachments
 from ..metadata_store import MetadataStore
 from ..retry_policy import clear_retry_gate
 from ..assistant_adapter import AssistantAdapter
@@ -82,7 +83,8 @@ class HumanVerificationService:
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("human verification note editing is only allowed from human-verifying")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-note"):
-            context.metadata.human_verification.note_markdown = content.rstrip()
+            normalized = normalize_markdown_attachments(context.task_dir, content)
+            context.metadata.human_verification.note_markdown = normalized.rstrip()
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
             self.metadata_store.save(context.task_dir, context.metadata)
             return context
@@ -155,7 +157,8 @@ class HumanVerificationService:
             if not self._has_current_human_review_feedback(context.task_dir, context.metadata, note=note):
                 raise TransitionError("request changes is only available after adding a review note or line comment")
             if note.strip():
-                context.metadata.human_verification.note_markdown = note.strip()
+                normalized = normalize_markdown_attachments(context.task_dir, note)
+                context.metadata.human_verification.note_markdown = normalized.rstrip()
             recapture_error: str | None = None
             if context.metadata.integration.applied:
                 try:
@@ -347,6 +350,9 @@ class HumanVerificationService:
         docs_root.mkdir(parents=True, exist_ok=True)
         for path in sorted(task_dir.glob("*.md")):
             shutil.copy2(path, docs_root / path.name)
+        attachments_dir = attachments_dir_for_task(task_dir)
+        if attachments_dir.exists():
+            shutil.copytree(attachments_dir, docs_root / attachments_dir.name, dirs_exist_ok=True)
         comments_path = self._comments_artifact_path(task_dir, metadata)
         if comments_path.exists():
             shutil.copy2(comments_path, docs_root / comments_path.name)

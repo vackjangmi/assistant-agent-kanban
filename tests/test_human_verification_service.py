@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from datetime import datetime, timezone
 import os
 import subprocess
@@ -390,6 +391,46 @@ def test_human_verification_approval_is_blocked_when_review_note_exists(configur
 
     with pytest.raises(TransitionError, match="approval is blocked until the review note is cleared"):
         service.approve(completed.metadata.task_id, by="human")
+
+
+def test_human_verification_save_note_extracts_embedded_images_to_attachments(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-note-embedded-image-task")
+    _, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    embedded = base64.b64encode(b"pngdata").decode()
+    refreshed = service.save_note(
+        completed.metadata.task_id,
+        by="human",
+        content=f"![diagram](data:image/png;base64,{embedded})",
+    )
+
+    assert refreshed.metadata.human_verification.note_markdown.startswith("![diagram](_attachments/")
+    attachments = list((refreshed.task_dir / "_attachments").glob("*.png"))
+    assert len(attachments) == 1
+    assert attachments[0].read_bytes() == b"pngdata"
+
+
+def test_human_verification_reject_normalizes_embedded_note_images(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-note-reject-embedded-image-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    embedded = base64.b64encode(b"pngdata").decode()
+    moved = service.reject(
+        completed.metadata.task_id,
+        by="human",
+        note=f"![diagram](data:image/png;base64,{embedded})",
+    )
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.human_verification.note_markdown.startswith("![diagram](_attachments/")
+    attachments = list((refreshed.task_dir / "_attachments").glob("*.png"))
+    assert len(attachments) == 1
+    assert attachments[0].read_bytes() == b"pngdata"
 
 
 def test_human_verification_reject_supports_relative_workspace_path(configured_paths):
@@ -798,6 +839,35 @@ def test_human_verification_approve_uses_configured_target_docs_root(tmp_path):
     review_date = datetime.now(timezone.utc)
     docs_root = target_repo / "records" / "kanban-docs" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / moved.metadata.task_id
     assert (docs_root / "REQUEST.md").exists()
+
+
+def test_human_verification_approve_copies_note_attachments_to_docs_root(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-approve-attachments-docs-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    embedded = base64.b64encode(b"pngdata").decode()
+    refreshed = service.save_note(
+        completed.metadata.task_id,
+        by="human",
+        content=f"![diagram](data:image/png;base64,{embedded})",
+    )
+    attachment_name = next((refreshed.task_dir / "_attachments").glob("*.png")).name
+    refreshed.metadata.human_verification.note_markdown = ""
+    scanner.metadata_store.save(refreshed.task_dir, refreshed.metadata)
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    review_date = datetime.now(timezone.utc)
+    docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / moved.metadata.task_id
+    copied_attachment = docs_root / "_attachments" / attachment_name
+    assert copied_attachment.exists()
+    assert copied_attachment.read_bytes() == b"pngdata"
 
 
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):
