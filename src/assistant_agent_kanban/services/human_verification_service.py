@@ -53,41 +53,29 @@ class HumanVerificationService:
         if context.state != TaskState.COMPLETED_REVIEWS:
             raise TransitionError("human verification can only start from completed-reviews")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-verifying"):
-            workspace_repo = context.metadata.implementation.workspace
-            if workspace_repo is None:
-                raise IntegrationError("workspace path missing")
-            context.metadata.integration.final_branch = None
-            context.metadata.commit.review_sha = None
+            self._run_verification_apply(context)
+            self.metadata_store.save(context.task_dir, context.metadata)
             try:
-                self._ensure_human_verification_note(context.task_dir, context.metadata, verdict="IN_PROGRESS")
-                if not context.metadata.integration.final_branch_summary:
-                    context.metadata.integration.final_branch_summary = self._generate_branch_summary(context)
-                self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
-                self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
-                review_sha = self.commit_manager.commit_task(context.task_dir, context.metadata)
-                context.metadata.commit.status = "review-committed"
-                context.metadata.commit.review_sha = review_sha
-                context.metadata.commit.sha = review_sha
-                self.metadata_store.save(context.task_dir, context.metadata)
                 return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
-            except IntegrationConflictError as exc:
-                self._recover_from_integration_conflict(context.metadata)
-                context.metadata.human_verification.note_markdown = str(exc)
-                self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="CONFLICT")
-                context.metadata.errors.append(TaskErrorInfo(code="integration-conflict", message=str(exc)))
-                context.metadata.commit.status = "pending"
-                context.metadata.commit.sha = None
-                self.metadata_store.save(context.task_dir, context.metadata)
-                return self.transitions.move(context, TaskState.TODOS, by=by, note="human verification blocked: integration conflict")
-            except Exception as exc:
-                try:
+            except Exception:
+                if context.metadata.integration.applied:
                     self.integration_manager.rollback_workspace(context.metadata)
-                except Exception as cleanup_exc:
-                    raise IntegrationError(f"{exc}; cleanup failed: {cleanup_exc}") from exc
-                context.metadata.commit.status = "pending"
-                context.metadata.commit.sha = None
-                self.metadata_store.save(context.task_dir, context.metadata)
+                    context.metadata.commit.status = "pending"
+                    context.metadata.commit.sha = None
+                    context.metadata.commit.review_sha = None
+                    self.metadata_store.save(context.task_dir, context.metadata)
                 raise
+
+    def retry_apply(self, task_id: str, *, by: str) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("verification apply retry is only allowed from human-verifying")
+        if context.metadata.integration.applied:
+            raise TransitionError("verification apply has already succeeded")
+        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-verifying-retry"):
+            self._run_verification_apply(context)
+            self.metadata_store.save(context.task_dir, context.metadata)
+            return context
 
     def save_note(self, task_id: str, *, by: str, content: str) -> TaskContext:
         context = self._find_task(task_id)
@@ -168,7 +156,8 @@ class HumanVerificationService:
                 raise TransitionError("request changes is only available after adding a review note or line comment")
             if note.strip():
                 context.metadata.human_verification.note_markdown = note.strip()
-            self._capture_review_branch_to_workspace(context.metadata)
+            if context.metadata.integration.applied:
+                self._capture_review_branch_to_workspace(context.metadata)
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="REQUEST_CHANGES")
             self.integration_manager.rollback_workspace(context.metadata)
             context.metadata.commit.status = "pending"
@@ -188,6 +177,8 @@ class HumanVerificationService:
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-approve"):
             done_context: TaskContext | None = None
             try:
+                if not context.metadata.integration.applied:
+                    raise TransitionError("approval is blocked until verification apply succeeds")
                 if context.metadata.human_verification.note_markdown.strip():
                     raise TransitionError("approval is blocked until the review note is cleared")
                 unresolved_comments = [comment for comment in self._load_comments_artifact(context.task_dir, context.metadata).comments if not comment.resolved]
@@ -241,6 +232,8 @@ class HumanVerificationService:
         self._write_human_verification_artifact(task_dir, metadata, verdict=verdict)
 
     def _has_current_human_review_feedback(self, task_dir: Path, metadata, *, note: str = "") -> bool:
+        if not metadata.integration.applied:
+            return True
         if note.strip() or metadata.human_verification.note_markdown.strip():
             return True
         return bool(self._load_comments_artifact(task_dir, metadata).comments)
@@ -437,13 +430,40 @@ class HumanVerificationService:
         self.metadata_store.save(context.task_dir, metadata)
         self._delete_workspace_root(metadata, workspace_path)
 
-    def _recover_from_integration_conflict(self, metadata) -> None:
-        self.integration_manager.rollback_workspace(metadata)
-        self._reset_implementation_context(metadata)
-        clear_retry_gate(metadata)
-        self._delete_workspace_root(metadata, metadata.implementation.workspace)
-        metadata.implementation.workspace = None
-        metadata.implementation.branch = None
+    def _run_verification_apply(self, context: TaskContext) -> None:
+        workspace_repo = context.metadata.implementation.workspace
+        if workspace_repo is None:
+            raise IntegrationError("workspace path missing")
+        context.metadata.integration.final_branch = None
+        context.metadata.commit.review_sha = None
+        self._ensure_human_verification_note(context.task_dir, context.metadata, verdict="IN_PROGRESS")
+        if not context.metadata.integration.final_branch_summary:
+            context.metadata.integration.final_branch_summary = self._generate_branch_summary(context)
+        try:
+            self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
+            self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
+            review_sha = self.commit_manager.commit_task(context.task_dir, context.metadata)
+            context.metadata.commit.status = "review-committed"
+            context.metadata.commit.review_sha = review_sha
+            context.metadata.commit.sha = review_sha
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
+        except IntegrationConflictError as exc:
+            self.integration_manager.rollback_workspace(context.metadata)
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="CONFLICT")
+            context.metadata.errors.append(TaskErrorInfo(code="integration-conflict", message=str(exc)))
+            context.metadata.commit.status = "pending"
+            context.metadata.commit.sha = None
+            context.metadata.commit.review_sha = None
+            clear_retry_gate(context.metadata)
+        except Exception as exc:
+            try:
+                self.integration_manager.rollback_workspace(context.metadata)
+            except Exception as cleanup_exc:
+                raise IntegrationError(f"{exc}; cleanup failed: {cleanup_exc}") from exc
+            context.metadata.commit.status = "pending"
+            context.metadata.commit.sha = None
+            context.metadata.commit.review_sha = None
+            raise
 
     def _reset_implementation_context(self, metadata) -> None:
         metadata.implementation.last_result = None

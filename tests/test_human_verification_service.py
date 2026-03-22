@@ -339,6 +339,23 @@ def test_human_verification_reject_requires_note_or_line_comment(configured_path
         service.reject(completed.metadata.task_id, by="human", note="")
 
 
+def test_human_verification_reject_allows_conflict_without_extra_feedback(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-reject-conflict-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    (repo_root / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+
+    service.start(completed.metadata.task_id, by="human")
+    moved = service.reject(completed.metadata.task_id, by="human", note="")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.TODOS
+
+
 def test_human_verification_approval_is_blocked_when_review_note_exists(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-approval-blocked-by-note-task")
@@ -478,7 +495,7 @@ def test_human_verification_start_cleans_up_review_branch_on_apply_failure(confi
     service.integration_manager.apply_workspace = original_apply
 
 
-def test_human_verification_start_returns_to_todos_on_integration_conflict(configured_paths):
+def test_human_verification_start_keeps_task_in_human_verifying_on_integration_conflict(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-start-conflict-task")
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -489,20 +506,19 @@ def test_human_verification_start_returns_to_todos_on_integration_conflict(confi
 
     moved = service.start(completed.metadata.task_id, by="human")
 
-    assert moved.state == TaskState.TODOS
+    assert moved.state == TaskState.HUMAN_VERIFYING
     refreshed = scanner.find_task(completed.metadata.task_id)
-    assert refreshed.state == TaskState.TODOS
+    assert refreshed.state == TaskState.HUMAN_VERIFYING
     assert any(error.code == "integration-conflict" for error in refreshed.metadata.errors)
     assert refreshed.metadata.commit.status == "pending"
     assert refreshed.metadata.commit.sha is None
-    assert refreshed.metadata.implementation.workspace is None
-    assert refreshed.metadata.implementation.branch is None
-    assert refreshed.metadata.implementation.last_result is None
-    assert refreshed.metadata.implementation.resolved_model is None
-    assert refreshed.metadata.implementation.session_id is None
+    assert refreshed.metadata.commit.review_sha is None
+    assert refreshed.metadata.integration.applied is False
+    assert refreshed.metadata.implementation.workspace == str(original_workspace)
+    assert refreshed.metadata.implementation.branch == completed.metadata.implementation.branch
     assert refreshed.metadata.retry_gate.reason is None
     assert refreshed.metadata.retry_gate.not_before is None
-    assert not original_workspace.exists()
+    assert original_workspace.exists()
     current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == "main"
     branches = subprocess.run(["git", "-C", str(repo_root), "branch", "--list", f"review/{completed.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
@@ -514,56 +530,56 @@ def test_human_verification_start_returns_to_todos_on_integration_conflict(confi
     assert "Verdict: CONFLICT" in artifact.read_text()
 
 
-def test_human_verification_conflict_forces_next_implementation_cycle_to_start_from_latest_base(tmp_path):
-    target_repo = tmp_path / "target-repo"
-    target_repo.mkdir()
-    init_git_repo(target_repo)
-    (target_repo / "app.txt").write_text("base\n")
-    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "add app file"], check=True, capture_output=True, text=True)
+def test_human_verification_retry_apply_succeeds_after_conflict_clears(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-retry-apply-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    workspace_path = Path(completed.metadata.implementation.workspace or "")
 
-    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
-    config.bootstrap()
-    create_request_task(config, "verify-start-conflict-rerun-task", target_repo_root=target_repo)
-    scanner, service, completed = _task_ready_for_human_verification(
-        config,
-        workspace_side_effect=lambda cwd: (cwd / "stale-only.txt").write_text("stale\n"),
-    )
+    (repo_root / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
 
-    (target_repo / "app.txt").write_text("upstream change\n")
-    subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+    conflicted = service.start(completed.metadata.task_id, by="human")
+    assert conflicted.state == TaskState.HUMAN_VERIFYING
 
-    moved = service.start(completed.metadata.task_id, by="human")
+    subprocess.run(["git", "-C", str(repo_root), "reset", "--hard", "HEAD~1"], check=True, capture_output=True, text=True)
 
-    assert moved.state == TaskState.TODOS
+    retried = service.retry_apply(completed.metadata.task_id, by="human")
 
-    metadata_store = scanner.metadata_store
-    locks = service.locks
-    transitions = service.transitions
+    assert retried.state == TaskState.HUMAN_VERIFYING
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.applied is True
+    assert refreshed.metadata.commit.status == "review-committed"
+    assert refreshed.metadata.commit.review_sha is not None
+    assert refreshed.metadata.commit.sha == refreshed.metadata.commit.review_sha
+    assert refreshed.metadata.implementation.workspace == str(workspace_path)
+    assert (repo_root / "app.txt").read_text() == "review me\n"
 
-    def modify_workspace(cwd: Path):
-        assert (cwd / "app.txt").read_text() == "upstream change\n"
-        assert (cwd / "stale-only.txt").exists() is False
-        (cwd / "app.txt").write_text("fresh implementation\n")
 
-    implementer = ImplementerWorker(
-        config,
-        scanner,
-        metadata_store,
-        locks,
-        transitions,
-        EventBus(),
-        adapter=FakeAdapter(["## Summary\nimplemented again"], side_effect=modify_workspace, side_effect_output_formats={"json"}),
-        workspace_manager=WorkspaceManager(config),
-    )
+def test_human_verification_retry_apply_requires_pending_conflict(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-retry-guard-task")
+    _, service, completed = _task_ready_for_human_verification(config)
+    started = service.start(completed.metadata.task_id, by="human")
 
-    assert asyncio.run(implementer.run_once()) is True
-    updated = scanner.find_task(completed.metadata.task_id)
-    assert updated.state == TaskState.WAITING_REVIEWS
-    assert updated.metadata.cycle == 2
-    assert (updated.task_dir / "WORK-002.md").exists()
-    assert Path(updated.metadata.implementation.workspace or "", "app.txt").read_text() == "fresh implementation\n"
+    with pytest.raises(TransitionError, match="verification apply has already succeeded"):
+        service.retry_apply(started.metadata.task_id, by="human")
+
+
+def test_human_verification_approve_is_blocked_until_apply_retry_succeeds(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-approve-blocked-task")
+    _, service, completed = _task_ready_for_human_verification(config)
+
+    (repo_root / "app.txt").write_text("upstream change\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
+
+    service.start(completed.metadata.task_id, by="human")
+
+    with pytest.raises(TransitionError, match="approval is blocked until verification apply succeeds"):
+        service.approve(completed.metadata.task_id, by="human")
 
 
 def test_human_verification_start_rolls_back_when_post_apply_step_fails(configured_paths):
