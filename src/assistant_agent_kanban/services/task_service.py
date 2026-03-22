@@ -367,7 +367,7 @@ class TaskService:
                 if require_available:
                     raise
                 return None
-        if metadata.state == TaskState.HUMAN_VERIFYING:
+        if metadata.state == TaskState.HUMAN_VERIFYING and metadata.integration.applied:
             patch_text = self._target_repo_diff_against_base(metadata, ref=None)
             if patch_text is not None:
                 return patch_text

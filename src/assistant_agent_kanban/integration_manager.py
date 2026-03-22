@@ -46,8 +46,8 @@ class IntegrationManager:
         if diff.returncode != 0:
             raise IntegrationError(diff.stderr.strip() or "failed to generate patch")
         patch_path.write_text(diff.stdout)
+        metadata.integration.patch_path = str(patch_path)
         if not diff.stdout.strip():
-            metadata.integration.patch_path = str(patch_path)
             metadata.integration.applied = False
             metadata.integration.applied_at = None
             raise IntegrationError("workspace has no changes to apply")
@@ -74,7 +74,6 @@ class IntegrationManager:
             self._cleanup_review_branch(target_repo_root, metadata)
             self._reset_transient_integration_state(metadata)
             raise IntegrationConflictError(apply_result.stderr.strip() or "failed to apply patch")
-        metadata.integration.patch_path = str(patch_path)
         metadata.integration.applied = True
         metadata.integration.applied_at = utc_now()
         return patch_path
