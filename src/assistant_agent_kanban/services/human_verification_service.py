@@ -156,8 +156,12 @@ class HumanVerificationService:
                 raise TransitionError("request changes is only available after adding a review note or line comment")
             if note.strip():
                 context.metadata.human_verification.note_markdown = note.strip()
+            recapture_error: str | None = None
             if context.metadata.integration.applied:
-                self._capture_review_branch_to_workspace(context.metadata)
+                try:
+                    self._capture_review_branch_to_workspace(context.metadata)
+                except IntegrationError as exc:
+                    recapture_error = str(exc)
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="REQUEST_CHANGES")
             self.integration_manager.rollback_workspace(context.metadata)
             context.metadata.commit.status = "pending"
@@ -165,6 +169,8 @@ class HumanVerificationService:
             context.metadata.commit.review_sha = None
             summary = self._human_review_summary(context.metadata)
             context.metadata.errors.append(TaskErrorInfo(code="human-verification-rejected", message=summary or "human verification requested changes"))
+            if recapture_error:
+                context.metadata.errors.append(TaskErrorInfo(code="human-verification-recapture-failed", message=recapture_error))
             self.metadata_store.save(context.task_dir, context.metadata)
             return self.transitions.move(context, TaskState.TODOS, by=by, note=summary or "human verification requested changes")
 

@@ -356,6 +356,31 @@ def test_human_verification_reject_allows_conflict_without_extra_feedback(config
     assert refreshed.state == TaskState.TODOS
 
 
+def test_human_verification_reject_falls_back_when_review_recaputure_fails(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-reject-recapture-failure-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    original_capture = service._capture_review_branch_to_workspace
+
+    def fail_capture(metadata):
+        raise IntegrationError("failed to apply reviewed code back into workspace")
+
+    service._capture_review_branch_to_workspace = fail_capture
+    try:
+        moved = service.reject(completed.metadata.task_id, by="human", note="Need another pass")
+    finally:
+        service._capture_review_branch_to_workspace = original_capture
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.TODOS
+    assert any(error.code == "human-verification-recapture-failed" for error in refreshed.metadata.errors)
+    current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == "main"
+
+
 def test_human_verification_approval_is_blocked_when_review_note_exists(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-approval-blocked-by-note-task")

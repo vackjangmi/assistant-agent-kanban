@@ -15,6 +15,7 @@ from assistant_agent_kanban.api.ui import TEMPLATE_PATH
 from assistant_agent_kanban import config as config_module
 from assistant_agent_kanban.config import PROJECT_ROOT, load_config
 from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.exceptions import IntegrationError
 from assistant_agent_kanban.events import EventBus
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
@@ -506,6 +507,38 @@ def test_api_allows_reject_after_verification_conflict_without_extra_feedback(co
     assert reject.status_code == 200
     assert reject.json()["state"] == TaskState.TODOS.value
     assert scanner.find_task(completed.metadata.task_id).state == TaskState.TODOS
+
+
+def test_api_allows_reject_when_review_recapture_fails(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-reject-recapture-failure-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-reject-recapture-failure-task")
+
+    runtime = app.state.runtime
+    original_capture = runtime.verification_service._capture_review_branch_to_workspace
+
+    def fail_capture(metadata):
+        raise IntegrationError("failed to apply reviewed code back into workspace")
+
+    runtime.verification_service._capture_review_branch_to_workspace = fail_capture
+    try:
+        with TestClient(app) as client:
+            start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+            assert start.status_code == 200
+            reject = client.post(
+                f"/api/tasks/{completed.metadata.task_id}/reject-verification",
+                json={"note": "Need another pass"},
+            )
+    finally:
+        runtime.verification_service._capture_review_branch_to_workspace = original_capture
+
+    assert reject.status_code == 200
+    assert reject.json()["state"] == TaskState.TODOS.value
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.TODOS
+    assert any(error.code == "human-verification-recapture-failed" for error in refreshed.metadata.errors)
 
 
 def test_api_supports_human_verification_approve(configured_paths):
