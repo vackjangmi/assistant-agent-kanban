@@ -18,7 +18,7 @@ DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
 AssistantBackend = Literal["opencode", "codex"]
-AssistantRole = Literal["planner", "implementer", "reviewer", "commit"]
+AssistantRole = Literal["planner", "plan_approval", "implementer", "reviewer", "commit"]
 SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode", "codex": "Codex CLI"}
 
 
@@ -39,6 +39,9 @@ class OpenCodeConfig(BaseModel):
     planner_agent: str = "fs-kanban-planner"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    plan_approval_agent: str = "fs-kanban-plan-approval"
+    plan_approval_model: str | None = None
+    plan_approval_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     implementer_agent: str = "fs-kanban-implementer"
     implementer_model: str | None = None
     implementer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
@@ -55,6 +58,8 @@ class CodexConfig(BaseModel):
     binary: str = "codex"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    plan_approval_model: str | None = None
+    plan_approval_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     implementer_model: str | None = None
     implementer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     reviewer_model: str | None = None
@@ -181,7 +186,7 @@ class AppConfig(BaseModel):
     def role_agent(self, role: AssistantRole) -> str:
         if self.active_backend() == "opencode":
             return getattr(self.opencode, f"{role}_agent")
-        return f"fs-kanban-{role}"
+        return f"fs-kanban-{role.replace('_', '-')}"
 
     def role_model(self, role: AssistantRole) -> str | None:
         return getattr(self.backend_config(), f"{role}_model")
@@ -203,6 +208,7 @@ class AppConfig(BaseModel):
             backend=self.active_backend(),
             captured_by=captured_by,
             planner_model=self.role_model("planner"),
+            plan_approval_model=self.role_model("plan_approval"),
             implementer_model=self.role_model("implementer"),
             reviewer_model=self.role_model("reviewer"),
             commit_model=self.role_model("commit"),
@@ -214,6 +220,7 @@ class AppConfig(BaseModel):
         pinned = self.model_copy(deep=True)
         pinned.runtime.coding_assistant = runtime_pin.backend
         pinned.set_role_model("planner", runtime_pin.planner_model)
+        pinned.set_role_model("plan_approval", runtime_pin.plan_approval_model)
         pinned.set_role_model("implementer", runtime_pin.implementer_model)
         pinned.set_role_model("reviewer", runtime_pin.reviewer_model)
         pinned.set_role_model("commit", runtime_pin.commit_model)

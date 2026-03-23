@@ -26,6 +26,7 @@ def ensure_runtime_agents(config: AppConfig) -> list[Path]:
     seen: set[str] = set()
     for agent_name in (
         config.opencode.planner_agent,
+        config.opencode.plan_approval_agent,
         config.opencode.implementer_agent,
         config.opencode.reviewer_agent,
         config.opencode.commit_agent,
@@ -54,6 +55,8 @@ def _resolved_kanban_root(config: AppConfig) -> Path:
 def _model_for_agent(config: AppConfig, agent_name: str) -> str | None:
     if agent_name == config.opencode.planner_agent:
         return config.opencode.planner_model
+    if agent_name == config.opencode.plan_approval_agent:
+        return config.opencode.plan_approval_model
     if agent_name == config.opencode.implementer_agent:
         return config.opencode.implementer_model
     if agent_name == config.opencode.reviewer_agent:

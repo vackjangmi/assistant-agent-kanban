@@ -48,6 +48,7 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
                 "kanban_root: ./base-kanban",
                 "opencode:",
                 "  planner_model: planner-base",
+                "  plan_approval_model: plan-approval-base",
                 "repo_discovery:",
                 "  max_depth: 2",
             ]
@@ -58,6 +59,7 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
             [
                 "opencode:",
                 "  planner_model: planner-local",
+                "  plan_approval_model: plan-approval-local",
                 "runtime:",
                 "  auto_dispatch: false",
                 "  language: ko",
@@ -71,6 +73,7 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
 
     assert config.kanban_root == (base_path.parent / "base-kanban").resolve()
     assert config.opencode.planner_model == "planner-local"
+    assert config.opencode.plan_approval_model == "plan-approval-local"
     assert config.repo_discovery.max_depth == 2
     assert config.runtime.auto_dispatch is False
     assert config.runtime.language == "KO"
