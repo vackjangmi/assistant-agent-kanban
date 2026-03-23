@@ -319,6 +319,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
         config.kanban_root,
         config.archive_runs_dir,
         metadata_store=metadata_store,
+        transitions=transitions,
         locks=locks,
     )
     retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)

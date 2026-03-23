@@ -220,6 +220,8 @@ def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
     updated_task = scanner.find_task(waiting.metadata.task_id)
     assert updated_task.state == TaskState.TODOS
     assert (updated_task.task_dir / "PLAN.md").read_text() == "edited plan\n"
+    assert (updated_task.task_dir / "PLAN-HUMAN-APPROVAL.md").exists()
+    assert (updated_task.task_dir / "PLAN-HUMAN-APPROVAL.json").exists()
 
 
 def test_api_rejects_empty_plan_md_edit_in_waiting_check_plans(configured_paths):

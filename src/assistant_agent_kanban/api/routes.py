@@ -452,7 +452,7 @@ def build_router() -> APIRouter:
     async def update_task_markdown_artifact(task_id: str, filename: str, payload: UpdateMarkdownPayload, request: Request):
         runtime = request.app.state.runtime
         try:
-            runtime.task_service.update_markdown_artifact(task_id, filename, payload.content)
+            runtime.task_service.update_markdown_artifact(task_id, filename, payload.content, by="human")
         except (TaskNotFoundError, TransitionError) as exc:
             status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
@@ -564,8 +564,8 @@ def build_router() -> APIRouter:
     async def approve_plan(task_id: str, request: Request):
         runtime = request.app.state.runtime
         try:
-            moved = runtime.plan_approval.transitions.manual_move(task_id, TaskState.TODOS, by="human")
-        except TransitionError as exc:
+            moved = runtime.task_service.approve_plan(task_id, by="human")
+        except (TransitionError, TaskNotFoundError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return moved.metadata

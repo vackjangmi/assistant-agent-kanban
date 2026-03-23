@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from datetime import datetime, timezone
+import json
 import mimetypes
 from pathlib import Path
 import re
 import subprocess
+from typing import Literal, cast
 
 from ..enums import STATE_ORDER, TaskState
 from ..exceptions import TaskNotFoundError, TransitionError
+from ..locks import TaskLockManager
 from ..log_parser import render_assistant_log
 from ..markdown_attachments import attachments_dir_for_task, normalize_markdown_attachments, store_attachment
 from ..models import (
@@ -21,6 +24,7 @@ from ..models import (
     HumanLineComment,
     HumanLineCommentsArtifact,
     HumanReviewState,
+    PlanEditEvent,
     StageTimingSegment,
     StageTimingSummary,
     TaskDetail,
@@ -30,9 +34,13 @@ from ..models import (
     TaskMetadata,
     TaskStageTiming,
     reset_plan_approval_tracking,
+    utc_now,
 )
 from ..scanner import TERMINAL_STATES, KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
+from ..transitions import TransitionManager
+from .plan_approval_learning import PlanApprovalLearningService, classify_plan_change, load_plan_baseline_text, plan_text_hash
+from ..retry_policy import clear_retry_gate
 
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
@@ -64,14 +72,17 @@ class TaskService:
         archive_runs_root: Path | None = None,
         *,
         metadata_store=None,
-        locks=None,
+        transitions: TransitionManager | None = None,
+        locks: TaskLockManager | None = None,
     ) -> None:
         self.scanner = scanner
         self.runs_root = runs_root
         self.kanban_root = kanban_root
         self.archive_runs_root = archive_runs_root or (runs_root.parent / "archive-runs")
         self.metadata_store = metadata_store
+        self.transitions = transitions
         self.locks = locks
+        self.plan_approval_learning = PlanApprovalLearningService(scanner)
 
     def get_task(self, task_id: str, *, include_changed_files: bool = True) -> TaskDetail:
         task = self._find_task(task_id)
@@ -152,20 +163,104 @@ class TaskService:
         path = self._validate_readable_markdown_artifact(task.task_dir, filename)
         return path.read_text()
 
-    def update_markdown_artifact(self, task_id: str, filename: str, content: str) -> None:
+    def update_markdown_artifact(self, task_id: str, filename: str, content: str, *, by: str = "human") -> None:
         task = self._find_task(task_id)
         if task.state != "waiting-check-plans":
             raise TransitionError("markdown editing is only allowed in waiting-check-plans")
         path = self._validate_writable_markdown_artifact(task.task_dir, filename)
         if not content.strip():
             raise TransitionError("PLAN.md cannot be empty")
+        previous_content = path.read_text() if path.exists() else ""
         normalized = normalize_markdown_attachments(task.task_dir, content)
         path.write_text(normalized.rstrip() + "\n")
+        current_content = path.read_text()
+        baseline_text = load_plan_baseline_text(task.task_dir)
+        change_classification = cast(
+            Literal["none", "trivial", "substantive", "unknown"],
+            classify_plan_change(
+                baseline_text=baseline_text or previous_content or current_content,
+                current_text=current_content,
+            ),
+        )
+        task.metadata.plan.edit_events.append(
+            PlanEditEvent(
+                edited_at=utc_now(),
+                edited_by=by,
+                from_revision=task.metadata.plan.revision,
+                to_revision=task.metadata.plan.revision + 1,
+                before_hash=plan_text_hash(previous_content) if previous_content.strip() else None,
+                after_hash=plan_text_hash(current_content),
+                change_classification=change_classification,
+            )
+        )
+        task.metadata.plan.edit_events = task.metadata.plan.edit_events[-20:]
         task.metadata.plan.revision += 1
         task.metadata.plan.approved = False
         reset_plan_approval_tracking(task.metadata.plan_approval)
         task.metadata.plan_approval.auto_progress_at = None
         self.scanner.metadata_store.save(task.task_dir, task.metadata)
+
+    def approve_plan(self, task_id: str, *, by: str = "human"):
+        task = self._find_task(task_id)
+        if task.state != TaskState.WAITING_CHECK_PLANS:
+            raise TransitionError(f"manual transition not allowed: {task.state.value} -> {TaskState.TODOS.value}")
+        if self.transitions is None or self.locks is None:
+            raise TransitionError("manual plan approval requires lock manager")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-todos"):
+            approval_record = self.plan_approval_learning.build_human_approval_record(task, approved_by=by)
+            approval_markdown_path = task.task_dir / "PLAN-HUMAN-APPROVAL.md"
+            approval_json_path = task.task_dir / "PLAN-HUMAN-APPROVAL.json"
+            approval_record.artifact_path = approval_markdown_path.name
+            approval_markdown_path.write_text(self._render_human_plan_approval_markdown(task, approval_record))
+            approval_json_path.write_text(json.dumps(approval_record.model_dump(mode="json"), indent=2) + "\n")
+            task.metadata.plan_approval.human_approvals.append(approval_record)
+            task.metadata.plan_approval.human_approvals = task.metadata.plan_approval.human_approvals[-10:]
+            task.metadata.plan.approved = True
+            reset_plan_approval_tracking(task.metadata.plan_approval)
+            task.metadata.plan_approval.auto_progress_at = None
+            task.metadata.plan_approval.resolved_by = by
+            task.metadata.plan_approval.resolved_at = utc_now()
+            clear_retry_gate(task.metadata)
+            self.scanner.metadata_store.save(task.task_dir, task.metadata)
+            moved = self.transitions.move(task, target=TaskState.TODOS, by=by, note="manual approval")
+            moved.metadata.plan_approval.human_approvals[-1].outcome_state = moved.state
+            moved.metadata.plan_approval.human_approvals[-1].strong_positive = self.plan_approval_learning.is_strong_positive(
+                moved,
+                moved.metadata.plan_approval.human_approvals[-1],
+            )
+            (moved.task_dir / "PLAN-HUMAN-APPROVAL.md").write_text(
+                self._render_human_plan_approval_markdown(moved, moved.metadata.plan_approval.human_approvals[-1])
+            )
+            (moved.task_dir / "PLAN-HUMAN-APPROVAL.json").write_text(
+                json.dumps(moved.metadata.plan_approval.human_approvals[-1].model_dump(mode="json"), indent=2) + "\n"
+            )
+            self.scanner.metadata_store.save(moved.task_dir, moved.metadata)
+            return moved
+
+    def _render_human_plan_approval_markdown(self, task, approval_record) -> str:
+        signals = ", ".join(approval_record.ai_risk_signals) if approval_record.ai_risk_signals else "none"
+        return "\n".join(
+            [
+                "# Human Plan Approval",
+                "",
+                f"- Approved by: {approval_record.approved_by}",
+                f"- Approved at: {approval_record.approved_at.isoformat()}",
+                f"- Plan revision: {approval_record.plan_revision}",
+                f"- Change classification: {approval_record.change_classification}",
+                f"- Strong positive: {'yes' if approval_record.strong_positive else 'no'}",
+                f"- Prior AI disposition: {approval_record.ai_disposition or 'unknown'}",
+                f"- Prior AI confidence: {approval_record.ai_confidence or 'unknown'}",
+                f"- Prior AI risk signals: {signals}",
+                "",
+                approval_record.ai_rationale or "No AI rationale recorded.",
+                "",
+                "## Request",
+                (task.task_dir / task.metadata.request.path).read_text().rstrip(),
+                "",
+                "## Plan",
+                (task.task_dir / "PLAN.md").read_text().rstrip(),
+            ]
+        ) + "\n"
 
     def save_attachment(self, task_id: str, artifact_filename: str, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
         task = self._find_task(task_id)
