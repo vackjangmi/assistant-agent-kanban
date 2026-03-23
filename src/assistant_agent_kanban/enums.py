@@ -6,6 +6,7 @@ from enum import StrEnum
 class TaskState(StrEnum):
     REQUESTS = "requests"
     PLANNING = "planning"
+    PLAN_APPROVING = "plan-approving"
     WAITING_CHECK_PLANS = "waiting-check-plans"
     TODOS = "todos"
     IMPLEMENTING = "implementing"
@@ -19,6 +20,7 @@ class TaskState(StrEnum):
 STATE_ORDER = [
     TaskState.REQUESTS,
     TaskState.PLANNING,
+    TaskState.PLAN_APPROVING,
     TaskState.WAITING_CHECK_PLANS,
     TaskState.TODOS,
     TaskState.IMPLEMENTING,
@@ -31,7 +33,8 @@ STATE_ORDER = [
 
 ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.REQUESTS: {TaskState.PLANNING},
-    TaskState.PLANNING: {TaskState.WAITING_CHECK_PLANS},
+    TaskState.PLANNING: {TaskState.PLAN_APPROVING, TaskState.WAITING_CHECK_PLANS},
+    TaskState.PLAN_APPROVING: {TaskState.WAITING_CHECK_PLANS, TaskState.TODOS},
     TaskState.WAITING_CHECK_PLANS: {TaskState.TODOS},
     TaskState.TODOS: {TaskState.IMPLEMENTING},
     TaskState.IMPLEMENTING: {TaskState.TODOS, TaskState.WAITING_REVIEWS},
@@ -51,6 +54,7 @@ MANUAL_TRANSITIONS = {
 
 ACTIVE_STATES = {
     TaskState.PLANNING,
+    TaskState.PLAN_APPROVING,
     TaskState.IMPLEMENTING,
     TaskState.REVIEWING,
     TaskState.HUMAN_VERIFYING,

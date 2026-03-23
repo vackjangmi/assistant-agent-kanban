@@ -13,6 +13,7 @@ from .transitions import TransitionManager
 
 RECOVERY_TARGETS = {
     TaskState.PLANNING: TaskState.REQUESTS,
+    TaskState.PLAN_APPROVING: TaskState.WAITING_CHECK_PLANS,
     TaskState.IMPLEMENTING: TaskState.TODOS,
     TaskState.REVIEWING: TaskState.WAITING_REVIEWS,
 }

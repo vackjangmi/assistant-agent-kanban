@@ -65,5 +65,8 @@ class TransitionManager:
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id=f"manual-{target.value}"):
             if target == TaskState.TODOS:
                 context.metadata.plan.approved = True
+                context.metadata.plan_approval.auto_progress_at = None
+                context.metadata.plan_approval.resolved_by = by
+                context.metadata.plan_approval.resolved_at = utc_now()
             clear_retry_gate(context.metadata)
             return self.move(context, target=target, by=by, note="manual approval")

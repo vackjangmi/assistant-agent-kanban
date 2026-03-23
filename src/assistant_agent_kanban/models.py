@@ -42,6 +42,22 @@ class PlanInfo(BaseModel):
     session_tokens: int = 0
 
 
+class PlanApprovalInfo(BaseModel):
+    disposition: Literal["auto_approve", "review_required", "review_recommended"] | None = None
+    confidence: Literal["high", "medium", "low"] | None = None
+    risk_signals: list[str] = Field(default_factory=list)
+    rationale: str = ""
+    source_plan_revision: int = 0
+    auto_progress_at: datetime | None = None
+    resolved_by: str | None = None
+    resolved_at: datetime | None = None
+    path: str | None = None
+    resolved_model: str | None = None
+    session_id: str | None = None
+    last_run_tokens: int = 0
+    session_tokens: int = 0
+
+
 class ImplementationInfo(BaseModel):
     iteration: int = 0
     workspace: str | None = None
@@ -109,6 +125,7 @@ class TaskRuntimePin(BaseModel):
     captured_at: datetime = Field(default_factory=utc_now)
     captured_by: str
     planner_model: str | None = None
+    plan_approval_model: str | None = None
     implementer_model: str | None = None
     reviewer_model: str | None = None
     commit_model: str | None = None
@@ -130,6 +147,7 @@ class TaskMetadata(BaseModel):
     completed_group_override: str | None = None
     runtime_pin: TaskRuntimePin | None = None
     plan: PlanInfo = Field(default_factory=PlanInfo)
+    plan_approval: PlanApprovalInfo = Field(default_factory=PlanApprovalInfo)
     cycle: int = 0
     implementation: ImplementationInfo = Field(default_factory=ImplementationInfo)
     review: ReviewInfo = Field(default_factory=ReviewInfo)
