@@ -40,6 +40,36 @@ class PlanInfo(BaseModel):
     session_id: str | None = None
     last_run_tokens: int = 0
     session_tokens: int = 0
+    edit_events: list["PlanEditEvent"] = Field(default_factory=list)
+
+
+class PlanEditEvent(BaseModel):
+    edited_at: datetime = Field(default_factory=utc_now)
+    edited_by: str = "human"
+    from_revision: int = 0
+    to_revision: int = 0
+    before_hash: str | None = None
+    after_hash: str | None = None
+    change_classification: Literal["none", "trivial", "substantive", "unknown"] = "unknown"
+
+
+class PlanHumanApprovalRecord(BaseModel):
+    approved_at: datetime = Field(default_factory=utc_now)
+    approved_by: str = "human"
+    plan_revision: int = 0
+    generated_plan_hash: str | None = None
+    current_plan_hash: str | None = None
+    change_classification: Literal["none", "trivial", "substantive", "unknown"] = "unknown"
+    ai_disposition: Literal["auto_approve", "review_required", "review_recommended"] | None = None
+    ai_confidence: Literal["high", "medium", "low"] | None = None
+    ai_risk_signals: list[str] = Field(default_factory=list)
+    ai_rationale: str = ""
+    ai_resolved_at: datetime | None = None
+    source_plan_revision: int = 0
+    file_map_entry_count: int = 0
+    outcome_state: TaskState | None = None
+    strong_positive: bool = False
+    artifact_path: str | None = None
 
 
 class PlanApprovalInfo(BaseModel):
@@ -62,6 +92,7 @@ class PlanApprovalInfo(BaseModel):
     last_retry_reason: str | None = None
     escalation_reason: str | None = None
     attempts: list[dict[str, Any]] = Field(default_factory=list)
+    human_approvals: list[PlanHumanApprovalRecord] = Field(default_factory=list)
 
 
 def reset_plan_approval_tracking(plan_approval: PlanApprovalInfo, *, max_attempts: int | None = None) -> None:
