@@ -195,3 +195,39 @@ def test_plan_edit_resets_plan_approval_retry_tracking(configured_paths):
     assert updated.metadata.plan_approval.last_retry_reason is None
     assert updated.metadata.plan_approval.escalation_reason is None
     assert updated.metadata.plan_approval.attempts == []
+
+
+def test_plan_approval_prompt_includes_historical_examples_for_strong_positives(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "historical-approval-task", body="Historical request body")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root, transitions=transitions, locks=locks)
+    historical = scanner.scan()[0]
+    planning = transitions.move(historical, TaskState.PLANNING, by="planner")
+    plan_text = "# Plan\n\n## Summary\nHistorical summary.\n\n## Scope\n- Keep this.\n"
+    (planning.task_dir / "PLAN.md").write_text(plan_text)
+    (planning.task_dir / "PLAN.json").write_text(json.dumps({"assistant_text": plan_text}) + "\n")
+    planning.metadata.plan_approval.disposition = "review_recommended"
+    planning.metadata.plan_approval.confidence = "medium"
+    planning.metadata.plan_approval.risk_signals = ["multi_file_scope"]
+    planning.metadata.plan_approval.rationale = "Human approved this without changing the plan."
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = task_service.approve_plan(waiting.metadata.task_id, by="human")
+    transitions.recover_move(todos, TaskState.DONE, by="human")
+
+    create_request_task(config, "current-approval-task", body="Current request body")
+    current = next(task for task in scanner.scan() if task.metadata.title == "current-approval-task")
+    current_planning = transitions.move(current, TaskState.PLANNING, by="planner")
+    (current_planning.task_dir / "PLAN.md").write_text(plan_text)
+    metadata_store.save(current_planning.task_dir, current_planning.metadata)
+    approving = transitions.move(current_planning, TaskState.PLAN_APPROVING, by="planner")
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter())
+
+    prompt = worker._build_prompt(approving)
+
+    assert "Historical Human Approvals (Strong Positives)" in prompt
+    assert "historical-approval-task" in prompt

@@ -11,6 +11,7 @@ from ..assistant_adapter import AssistantAdapter
 from ..enums import TaskState
 from ..models import RunResult, TaskContext, reset_plan_approval_tracking, utc_now
 from ..retry_policy import can_auto_dispatch, clear_retry_gate
+from ..services.plan_approval_learning import PlanApprovalLearningService
 from .base import WorkerBase
 
 
@@ -31,6 +32,7 @@ class PlanApprovalWorker(WorkerBase):
     def __init__(self, *args, adapter: AssistantAdapter, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.adapter = adapter
+        self.learning = PlanApprovalLearningService(self.scanner)
 
     def candidate_tasks(self):
         now = utc_now()
@@ -150,6 +152,7 @@ class PlanApprovalWorker(WorkerBase):
     def _build_prompt(self, task: TaskContext) -> str:
         plan_text = (task.task_dir / "PLAN.md").read_text().rstrip()
         request_text = (task.task_dir / "REQUEST.md").read_text().rstrip()
+        historical_examples = self.learning.format_historical_examples(task)
         return "\n".join(
             [
                 "You are the fs-kanban plan approval worker.",
@@ -162,6 +165,7 @@ class PlanApprovalWorker(WorkerBase):
                 "Use risk_signals approval_run_failed or approval_output_invalid only for transient approval execution issues.",
                 "risk_signals must be a JSON array of short snake_case strings.",
                 "rationale must be concise and concrete.",
+                *( ["", historical_examples] if historical_examples else []),
                 "",
                 "# Request",
                 request_text,
