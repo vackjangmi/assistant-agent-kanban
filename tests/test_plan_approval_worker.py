@@ -10,6 +10,7 @@ from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.models import utc_now
 from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.transitions import TransitionManager
 from assistant_agent_kanban.workers.plan_approval import PlanApprovalWorker
 
@@ -45,10 +46,11 @@ def test_plan_approval_worker_auto_approves_low_risk_plan(configured_paths):
     assert updated.metadata.plan_approval.disposition == "auto_approve"
     assert updated.metadata.plan_approval.confidence == "high"
     assert updated.metadata.plan_approval.resolved_model == "openai/gpt-5.4"
+    assert updated.metadata.plan_approval.attempt_count == 1
     assert (updated.task_dir / "PLAN-APPROVAL.md").exists()
 
 
-def test_plan_approval_worker_sends_invalid_output_to_human_review(configured_paths):
+def test_plan_approval_worker_retries_invalid_output_once_before_approval(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-approval-fallback")
     metadata_store = MetadataStore()
@@ -61,7 +63,45 @@ def test_plan_approval_worker_sends_invalid_output_to_human_review(configured_pa
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
-    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(["not json"]))
+    worker = PlanApprovalWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(
+            [
+                "not json",
+                json.dumps({"disposition": "auto_approve", "confidence": "high", "risk_signals": [], "rationale": "Recovered on retry."}),
+            ]
+        ),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.plan.approved is True
+    assert updated.metadata.plan_approval.disposition == "auto_approve"
+    assert updated.metadata.plan_approval.attempt_count == 2
+    assert updated.metadata.plan_approval.attempts[0]["risk_signals"] == ["approval_output_invalid"]
+
+
+def test_plan_approval_worker_escalates_after_retry_cap_is_exhausted(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-cap")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nunclear plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(["not json", "not json"]))
 
     assert asyncio.run(worker.run_once()) is True
 
@@ -69,7 +109,33 @@ def test_plan_approval_worker_sends_invalid_output_to_human_review(configured_pa
     assert updated.state == TaskState.WAITING_CHECK_PLANS
     assert updated.metadata.plan.approved is False
     assert updated.metadata.plan_approval.disposition == "review_required"
-    assert "approval_output_invalid" in updated.metadata.plan_approval.risk_signals
+    assert updated.metadata.plan_approval.attempt_count == 2
+    assert updated.metadata.plan_approval.escalation_reason == "approval_retry_exhausted"
+
+
+def test_plan_approval_worker_does_not_retry_substantive_review_required(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-substantive")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\napi touching plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    adapter = FakeAdapter([json.dumps({"disposition": "review_required", "confidence": "medium", "risk_signals": ["api_contract_change"], "rationale": "API changes need human review."})])
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.WAITING_CHECK_PLANS
+    assert updated.metadata.plan_approval.attempt_count == 1
+    assert updated.metadata.plan_approval.escalation_reason == "review_required"
+    assert len(adapter.run_calls) == 1
 
 
 def test_plan_approval_worker_auto_progresses_recommended_review_after_deadline(configured_paths):
@@ -97,3 +163,35 @@ def test_plan_approval_worker_auto_progresses_recommended_review_after_deadline(
     assert updated.state == TaskState.TODOS
     assert updated.metadata.plan.approved is True
     assert updated.metadata.plan_approval.auto_progress_at is None
+
+
+def test_plan_edit_resets_plan_approval_retry_tracking(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-edit-reset")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nfirst draft\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    waiting.metadata.plan_approval.attempt_count = 2
+    waiting.metadata.plan_approval.last_attempt_plan_revision = 1
+    waiting.metadata.plan_approval.last_retry_reason = "approval_output_invalid"
+    waiting.metadata.plan_approval.escalation_reason = "approval_retry_exhausted"
+    waiting.metadata.plan_approval.attempts = [{"attempt": 1}, {"attempt": 2}]
+    metadata_store.save(waiting.task_dir, waiting.metadata)
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+
+    task_service.update_markdown_artifact(waiting.metadata.task_id, "PLAN.md", "## Summary\nupdated by human\n")
+
+    updated = scanner.find_task(waiting.metadata.task_id)
+    assert updated.metadata.plan.revision == 2
+    assert updated.metadata.plan_approval.attempt_count == 0
+    assert updated.metadata.plan_approval.last_attempt_plan_revision == 0
+    assert updated.metadata.plan_approval.last_retry_reason is None
+    assert updated.metadata.plan_approval.escalation_reason is None
+    assert updated.metadata.plan_approval.attempts == []
