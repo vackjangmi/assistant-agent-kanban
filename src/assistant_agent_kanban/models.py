@@ -56,6 +56,31 @@ class PlanApprovalInfo(BaseModel):
     session_id: str | None = None
     last_run_tokens: int = 0
     session_tokens: int = 0
+    attempt_count: int = 0
+    max_attempts: int = 2
+    last_attempt_plan_revision: int = 0
+    last_retry_reason: str | None = None
+    escalation_reason: str | None = None
+    attempts: list[dict[str, Any]] = Field(default_factory=list)
+
+
+def reset_plan_approval_tracking(plan_approval: PlanApprovalInfo, *, max_attempts: int | None = None) -> None:
+    plan_approval.disposition = None
+    plan_approval.confidence = None
+    plan_approval.risk_signals = []
+    plan_approval.rationale = ""
+    plan_approval.source_plan_revision = 0
+    plan_approval.auto_progress_at = None
+    plan_approval.resolved_by = None
+    plan_approval.resolved_at = None
+    plan_approval.path = None
+    plan_approval.attempt_count = 0
+    if max_attempts is not None:
+        plan_approval.max_attempts = max_attempts
+    plan_approval.last_attempt_plan_revision = 0
+    plan_approval.last_retry_reason = None
+    plan_approval.escalation_reason = None
+    plan_approval.attempts = []
 
 
 class ImplementationInfo(BaseModel):
