@@ -29,6 +29,7 @@ from ..models import (
     TaskLogs,
     TaskMetadata,
     TaskStageTiming,
+    reset_plan_approval_tracking,
 )
 from ..scanner import TERMINAL_STATES, KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
@@ -162,6 +163,7 @@ class TaskService:
         path.write_text(normalized.rstrip() + "\n")
         task.metadata.plan.revision += 1
         task.metadata.plan.approved = False
+        reset_plan_approval_tracking(task.metadata.plan_approval)
         task.metadata.plan_approval.auto_progress_at = None
         self.scanner.metadata_store.save(task.task_dir, task.metadata)
 

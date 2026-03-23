@@ -27,6 +27,12 @@ def test_planner_worker_generates_plan(configured_paths):
     create_request_task(config, "planner-task")
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    task.metadata.plan_approval.attempt_count = 2
+    task.metadata.plan_approval.last_attempt_plan_revision = 1
+    task.metadata.plan_approval.last_retry_reason = "approval_output_invalid"
+    task.metadata.plan_approval.attempts = [{"attempt": 1}, {"attempt": 2}]
+    metadata_store.save(task.task_dir, task.metadata)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"), resolved_models=["openai/gpt-5.4", "openai/gpt-5.4"], session_ids=["ses_plan_bootstrap", "ses_plan_bootstrap", "ses_plan_bootstrap"], total_tokens=[20, 0, 21])
@@ -54,6 +60,9 @@ def test_planner_worker_generates_plan(configured_paths):
     assert task.metadata.plan.resolved_model == "openai/gpt-5.4"
     assert task.metadata.plan.session_id == "ses_plan_bootstrap"
     assert task.metadata.plan.last_run_tokens == 21
+    assert task.metadata.plan_approval.attempt_count == 0
+    assert task.metadata.plan_approval.last_retry_reason is None
+    assert task.metadata.plan_approval.attempts == []
     assert len(adapter.run_calls) == 3
     assert adapter.run_calls[0]["output_format"] == "json"
     assert adapter.run_calls[1]["output_format"] == "default"

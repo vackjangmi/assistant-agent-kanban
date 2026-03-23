@@ -8,7 +8,7 @@ from ..config import PROJECT_ROOT
 from ..enums import TaskState
 from ..exceptions import AdapterRunError
 from ..language import generation_language_name
-from ..models import RunResult
+from ..models import RunResult, reset_plan_approval_tracking
 from ..request_parser import has_required_request_fields
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from .base import WorkerBase
@@ -107,6 +107,7 @@ class PlanningWorker(WorkerBase):
                     raise AdapterRunError("planner did not return a markdown artifact")
                 clear_retry_gate(planning.metadata)
                 planning.metadata.plan.revision += 1
+                reset_plan_approval_tracking(planning.metadata.plan_approval)
                 plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", result)
                 planning.metadata.plan.path = plan_path
                 self.metadata_store.save(planning.task_dir, planning.metadata)
@@ -204,6 +205,7 @@ class PlanningWorker(WorkerBase):
 
             clear_retry_gate(planning.metadata)
             planning.metadata.plan.revision += 1
+            reset_plan_approval_tracking(planning.metadata.plan_approval)
             finalized_result = RunResult(
                 ok=finalize_result.ok,
                 returncode=finalize_result.returncode,

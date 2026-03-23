@@ -9,7 +9,7 @@ from .enums import ALLOWED_TRANSITIONS, MANUAL_TRANSITIONS, TaskState
 from .exceptions import TransitionError
 from .locks import TaskLockManager
 from .metadata_store import MetadataStore
-from .models import HistoryEntry, TaskContext, utc_now
+from .models import HistoryEntry, TaskContext, reset_plan_approval_tracking, utc_now
 from .retry_policy import clear_retry_gate
 from .scanner import KanbanScanner
 
@@ -65,6 +65,7 @@ class TransitionManager:
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id=f"manual-{target.value}"):
             if target == TaskState.TODOS:
                 context.metadata.plan.approved = True
+                reset_plan_approval_tracking(context.metadata.plan_approval)
                 context.metadata.plan_approval.auto_progress_at = None
                 context.metadata.plan_approval.resolved_by = by
                 context.metadata.plan_approval.resolved_at = utc_now()
