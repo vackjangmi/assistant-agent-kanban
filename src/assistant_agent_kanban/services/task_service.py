@@ -38,6 +38,7 @@ HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+
 ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
 AI_ACTIVE_STATES = {
     TaskState.PLANNING,
+    TaskState.PLAN_APPROVING,
     TaskState.IMPLEMENTING,
     TaskState.REVIEWING,
 }
@@ -159,6 +160,10 @@ class TaskService:
             raise TransitionError("PLAN.md cannot be empty")
         normalized = normalize_markdown_attachments(task.task_dir, content)
         path.write_text(normalized.rstrip() + "\n")
+        task.metadata.plan.revision += 1
+        task.metadata.plan.approved = False
+        task.metadata.plan_approval.auto_progress_at = None
+        self.scanner.metadata_store.save(task.task_dir, task.metadata)
 
     def save_attachment(self, task_id: str, artifact_filename: str, upload_name: str, content_type: str | None, data: bytes) -> dict[str, str]:
         task = self._find_task(task_id)
