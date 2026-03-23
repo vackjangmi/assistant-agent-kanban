@@ -15,6 +15,7 @@ from .request_parser import parse_request_markdown, resolve_repo_root
 
 AGENT_ACTIVE_STATES = {
     TaskState.PLANNING,
+    TaskState.PLAN_APPROVING,
     TaskState.IMPLEMENTING,
     TaskState.REVIEWING,
 }
@@ -253,6 +254,8 @@ class KanbanScanner:
     def _active_model(self, metadata: TaskMetadata, state: TaskState) -> str | None:
         if state == TaskState.PLANNING:
             return metadata.plan.resolved_model
+        if state == TaskState.PLAN_APPROVING:
+            return metadata.plan_approval.resolved_model
         if state == TaskState.IMPLEMENTING:
             return metadata.implementation.resolved_model
         if state == TaskState.REVIEWING:

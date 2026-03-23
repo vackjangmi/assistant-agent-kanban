@@ -110,7 +110,8 @@ class PlanningWorker(WorkerBase):
                 plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", result)
                 planning.metadata.plan.path = plan_path
                 self.metadata_store.save(planning.task_dir, planning.metadata)
-                done = self.transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by=self.worker_name)
+                planning.metadata.plan.approved = False
+                done = self.transitions.move(planning, TaskState.PLAN_APPROVING, by=self.worker_name)
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
 
@@ -218,7 +219,8 @@ class PlanningWorker(WorkerBase):
             plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", finalized_result)
             planning.metadata.plan.path = plan_path
             self.metadata_store.save(planning.task_dir, planning.metadata)
-            done = self.transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by=self.worker_name)
+            planning.metadata.plan.approved = False
+            done = self.transitions.move(planning, TaskState.PLAN_APPROVING, by=self.worker_name)
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
 
