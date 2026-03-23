@@ -1,0 +1,99 @@
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import timedelta
+
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.models import utc_now
+from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.workers.plan_approval import PlanApprovalWorker
+
+from .conftest import FakeAdapter, create_request_task
+
+
+def test_plan_approval_worker_auto_approves_low_risk_plan(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-auto")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    adapter = FakeAdapter(
+        [json.dumps({"disposition": "auto_approve", "confidence": "high", "risk_signals": [], "rationale": "Small file-scoped change."})],
+        resolved_models=["openai/gpt-5.4"],
+        session_ids=["ses_plan_gate"],
+        total_tokens=[33],
+    )
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.plan.approved is True
+    assert updated.metadata.plan_approval.disposition == "auto_approve"
+    assert updated.metadata.plan_approval.confidence == "high"
+    assert updated.metadata.plan_approval.resolved_model == "openai/gpt-5.4"
+    assert (updated.task_dir / "PLAN-APPROVAL.md").exists()
+
+
+def test_plan_approval_worker_sends_invalid_output_to_human_review(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-fallback")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nunclear plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(["not json"]))
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.WAITING_CHECK_PLANS
+    assert updated.metadata.plan.approved is False
+    assert updated.metadata.plan_approval.disposition == "review_required"
+    assert "approval_output_invalid" in updated.metadata.plan_approval.risk_signals
+
+
+def test_plan_approval_worker_auto_progresses_recommended_review_after_deadline(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-recommended")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nmedium scope plan\n")
+    planning.metadata.plan.revision = 2
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    waiting.metadata.plan_approval.disposition = "review_recommended"
+    waiting.metadata.plan_approval.source_plan_revision = 2
+    waiting.metadata.plan_approval.auto_progress_at = utc_now() - timedelta(minutes=1)
+    metadata_store.save(waiting.task_dir, waiting.metadata)
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter())
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(waiting.metadata.task_id)
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.plan.approved is True
+    assert updated.metadata.plan_approval.auto_progress_at is None

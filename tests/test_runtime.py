@@ -98,6 +98,7 @@ def test_runtime_supervisor_schedules_per_role_parallelism_without_duplicate_tas
     supervisor = RuntimeSupervisor(
         config,
         planner_worker,
+        IdleWorker(),
         implementer_worker,
         reviewer_worker,
         object(),
@@ -170,6 +171,7 @@ def test_runtime_supervisor_force_delete_cancels_task_and_deletes(configured_pat
         IdleWorkerWithAdapter(adapter),
         IdleWorkerWithAdapter(adapter),
         IdleWorkerWithAdapter(adapter),
+        IdleWorkerWithAdapter(adapter),
         SimpleNamespace(adapter=adapter),
         KanbanScanner(config, MetadataStore()),
         DummyBoardService(),
@@ -207,6 +209,7 @@ def test_runtime_supervisor_restarts_dispatch_loop_after_failure(configured_path
     config.runtime.poll_interval_seconds = 0.01
     supervisor = RuntimeSupervisor(
         config,
+        IdleWorker(),
         IdleWorker(),
         IdleWorker(),
         IdleWorker(),
@@ -256,6 +259,7 @@ def test_runtime_supervisor_restarts_watch_loop_after_failure(configured_paths):
         IdleWorker(),
         IdleWorker(),
         IdleWorker(),
+        IdleWorker(),
         object(),
         KanbanScanner(config, MetadataStore()),
         DummyBoardService(),
@@ -300,6 +304,7 @@ def test_runtime_supervisor_ignores_runtime_only_watch_changes(configured_paths)
         IdleWorker(),
         IdleWorker(),
         IdleWorker(),
+        IdleWorker(),
         object(),
         KanbanScanner(config, MetadataStore()),
         DummyBoardService(),
@@ -319,6 +324,7 @@ def test_runtime_supervisor_rescans_when_non_runtime_path_changes(configured_pat
     config, _, _ = configured_paths
     supervisor = RuntimeSupervisor(
         config,
+        IdleWorker(),
         IdleWorker(),
         IdleWorker(),
         IdleWorker(),

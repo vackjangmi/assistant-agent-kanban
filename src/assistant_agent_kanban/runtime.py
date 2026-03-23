@@ -22,6 +22,7 @@ from .transitions import TransitionManager
 from .assistant_adapter import AssistantAdapter, AssistantModelRegistry
 from .workers.committer import CommitWorker
 from .workers.implementer import ImplementerWorker
+from .workers.plan_approval import PlanApprovalWorker
 from .workers.planner import PlanningWorker
 from .workers.reviewer import ReviewerWorker
 from watchfiles import awatch
@@ -55,6 +56,7 @@ class RuntimeSupervisor:
         self,
         config: AppConfig,
         planner: DispatchWorker,
+        plan_approval: DispatchWorker,
         implementer: DispatchWorker,
         reviewer: DispatchWorker,
         committer: Any,
@@ -70,6 +72,7 @@ class RuntimeSupervisor:
     ) -> None:
         self.config = config
         self.planner = planner
+        self.plan_approval = plan_approval
         self.implementer = implementer
         self.reviewer = reviewer
         self.committer = committer
@@ -87,6 +90,7 @@ class RuntimeSupervisor:
         self._background_tasks: list[asyncio.Task[None]] = []
         self._role_tasks: dict[str, set[asyncio.Task[None]]] = {
             "planner": set(),
+            "plan_approval": set(),
             "implementer": set(),
             "reviewer": set(),
         }
@@ -213,6 +217,7 @@ class RuntimeSupervisor:
     def _worker_specs(self) -> Iterable[tuple[str, DispatchWorker, int]]:
         return (
             ("planner", self.planner, self.config.runtime.planner_agent_count),
+            ("plan_approval", self.plan_approval, 1),
             ("implementer", self.implementer, self.config.runtime.implementer_agent_count),
             ("reviewer", self.reviewer, self.config.runtime.reviewer_agent_count),
         )
@@ -233,6 +238,8 @@ class RuntimeSupervisor:
         for adapter in (
             getattr(self.planner, "adapter", None),
             *getattr(self.planner, "adapter_registry", {}).values(),
+            getattr(self.plan_approval, "adapter", None),
+            *getattr(self.plan_approval, "adapter_registry", {}).values(),
             getattr(self.implementer, "adapter", None),
             *getattr(self.implementer, "adapter_registry", {}).values(),
             getattr(self.reviewer, "adapter", None),
@@ -299,6 +306,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     commit_manager = CommitManager()
     registry = dict(adapter_registry or {})
     planner = PlanningWorker(config, scanner, metadata_store, locks, transitions, events, adapter=planner_adapter, adapter_registry=registry)
+    plan_approval = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, events, adapter=planner_adapter, adapter_registry=registry)
     implementer = ImplementerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=implementer_adapter, workspace_manager=workspace_manager, adapter_registry=registry)
     reviewer = ReviewerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=reviewer_adapter, integration_manager=integration_manager, adapter_registry=registry)
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
@@ -319,6 +327,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     runtime = RuntimeSupervisor(
         config,
         planner,
+        plan_approval,
         implementer,
         reviewer,
         committer,
