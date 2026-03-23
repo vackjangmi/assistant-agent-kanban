@@ -1435,7 +1435,7 @@
               </div>
             </div>
             <div class="settings-grid">
-              <div class="settings-card">
+          <div class="settings-card">
             <strong id="settings-planner-title">Planner model</strong>
             <span id="settings-planner-description">Planning runs.</span>
             <div class="settings-role-inline">
@@ -1453,6 +1453,21 @@
               </div>
             </div>
             <small id="settings-planner-note">Model, token budget, and parallel agents.</small>
+          </div>
+          <div class="settings-card">
+            <strong id="settings-plan-approval-title">Plan approval model</strong>
+            <span id="settings-plan-approval-description">Selective plan gate decisions.</span>
+            <div class="settings-role-inline">
+              <div class="settings-field">
+                <label id="settings-plan-approval-model-label" for="plan_approval_model">Model</label>
+                <input id="plan_approval_model" name="plan_approval_model" list="assistant-model-options" placeholder="inherit default model">
+              </div>
+              <div class="settings-field settings-field-compact">
+                <label id="settings-plan-approval-token-label" for="plan_approval_session_token_budget">Token</label>
+                <div class="settings-input-with-suffix"><input id="plan_approval_session_token_budget" name="plan_approval_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+              </div>
+            </div>
+            <small id="settings-plan-approval-note">Model and token budget for auto-approve decisions.</small>
           </div>
           <div class="settings-card">
             <strong id="settings-implementer-title">Implementer model</strong>
@@ -1758,6 +1773,8 @@
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const plannerAgentCountInput = document.getElementById('planner_agent_count');
+    const planApprovalModelInput = document.getElementById('plan_approval_model');
+    const planApprovalSessionTokenBudgetInput = document.getElementById('plan_approval_session_token_budget');
     const implementerModelInput = document.getElementById('implementer_model');
     const implementerSessionTokenBudgetInput = document.getElementById('implementer_session_token_budget');
     const implementerAgentCountInput = document.getElementById('implementer_agent_count');
@@ -1778,7 +1795,7 @@
     const initialRuntimeLanguage = __INITIAL_RUNTIME_LANGUAGE__;
     const initialRuntimeTheme = __INITIAL_RUNTIME_THEME__;
     const boardPhaseStates = {
-      plan: ['requests', 'planning', 'waiting-check-plans'],
+      plan: ['requests', 'planning', 'plan-approving', 'waiting-check-plans'],
       implementation: ['todos', 'implementing', 'waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
       final: ['done'],
     };
@@ -1790,6 +1807,7 @@
       { phase: 'implementation', states: ['human-verifying'] },
       { phase: 'implementation', states: ['completed-reviews'] },
       { phase: 'plan', states: ['waiting-check-plans'] },
+      { phase: 'plan', states: ['plan-approving'] },
       { phase: 'implementation', states: ['todos', 'implementing', 'waiting-reviews', 'reviewing'] },
       { phase: 'plan', states: ['requests', 'planning'] },
       { phase: 'final', states: ['done'] },
@@ -2894,6 +2912,8 @@
         planner_model: plannerModelInput.value || '',
         planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
         planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
+        plan_approval_model: planApprovalModelInput.value || '',
+        plan_approval_session_token_budget: readNumericSettingInput(planApprovalSessionTokenBudgetInput, 250),
         implementer_model: implementerModelInput.value || '',
         implementer_session_token_budget: readNumericSettingInput(implementerSessionTokenBudgetInput, 250),
         implementer_agent_count: readNumericSettingInput(implementerAgentCountInput, 1),
@@ -2918,6 +2938,8 @@
       plannerModelInput.value = state.planner_model || '';
       syncNumericSettingInput(plannerSessionTokenBudgetInput, state.planner_session_token_budget, 250);
       syncNumericSettingInput(plannerAgentCountInput, state.planner_agent_count, 1);
+      planApprovalModelInput.value = state.plan_approval_model || '';
+      syncNumericSettingInput(planApprovalSessionTokenBudgetInput, state.plan_approval_session_token_budget, 250);
       implementerModelInput.value = state.implementer_model || '';
       syncNumericSettingInput(implementerSessionTokenBudgetInput, state.implementer_session_token_budget, 250);
       syncNumericSettingInput(implementerAgentCountInput, state.implementer_agent_count, 1);
@@ -3014,7 +3036,7 @@
         state: stateChanged ? snapshot.state : activeMetadata.state,
         updated_at: updatedAtChanged ? snapshot.updated_at : activeMetadata.updated_at,
       };
-      const nextMarkdownFiles = snapshot.state === 'waiting-check-plans' && !activeTaskDetail.markdown_files.includes('PLAN.md')
+      const nextMarkdownFiles = ['plan-approving', 'waiting-check-plans'].includes(snapshot.state) && !activeTaskDetail.markdown_files.includes('PLAN.md')
         ? ['PLAN.md', ...activeTaskDetail.markdown_files]
         : activeTaskDetail.markdown_files;
       activeTaskDetail = {
@@ -3382,6 +3404,7 @@
         ? {
             requests: '요구사항',
             planning: '계획 작성중',
+            'plan-approving': '계획 자동 승인 판단중',
             'waiting-check-plans': '계획 승인 대기',
             todos: '구현 대기',
             implementing: '구현중',
@@ -3394,6 +3417,7 @@
         : {
             requests: 'Requirements',
             planning: 'Planning',
+            'plan-approving': 'Plan gate decision',
             'waiting-check-plans': 'Plan approval',
             todos: 'Ready to implement',
             implementing: 'Implementing',
@@ -3410,6 +3434,7 @@
       const palette = {
         requests: '#7b6b53',
         planning: '#7c4f2c',
+        'plan-approving': '#8e5f2d',
         'waiting-check-plans': '#9a6c2f',
         todos: '#4f6877',
         implementing: '#217349',
@@ -3662,6 +3687,8 @@
         plannerModelInput.value = data.planner_model || '';
         syncNumericSettingInput(plannerSessionTokenBudgetInput, data.planner_session_token_budget, 250);
         syncNumericSettingInput(plannerAgentCountInput, data.planner_agent_count, 1);
+        planApprovalModelInput.value = data.plan_approval_model || '';
+        syncNumericSettingInput(planApprovalSessionTokenBudgetInput, data.plan_approval_session_token_budget, 250);
         implementerModelInput.value = data.implementer_model || '';
         syncNumericSettingInput(implementerSessionTokenBudgetInput, data.implementer_session_token_budget, 250);
         syncNumericSettingInput(implementerAgentCountInput, data.implementer_agent_count, 1);
@@ -3706,6 +3733,8 @@
             planner_model: plannerModelInput.value,
             planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
             planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
+            plan_approval_model: planApprovalModelInput.value,
+            plan_approval_session_token_budget: readNumericSettingInput(planApprovalSessionTokenBudgetInput, 250),
             implementer_model: implementerModelInput.value,
             implementer_session_token_budget: readNumericSettingInput(implementerSessionTokenBudgetInput, 250),
             implementer_agent_count: readNumericSettingInput(implementerAgentCountInput, 1),
@@ -3730,6 +3759,8 @@
         plannerModelInput.value = data.planner_model || '';
         syncNumericSettingInput(plannerSessionTokenBudgetInput, data.planner_session_token_budget, 250);
         syncNumericSettingInput(plannerAgentCountInput, data.planner_agent_count, 1);
+        planApprovalModelInput.value = data.plan_approval_model || '';
+        syncNumericSettingInput(planApprovalSessionTokenBudgetInput, data.plan_approval_session_token_budget, 250);
         implementerModelInput.value = data.implementer_model || '';
         syncNumericSettingInput(implementerSessionTokenBudgetInput, data.implementer_session_token_budget, 250);
         syncNumericSettingInput(implementerAgentCountInput, data.implementer_agent_count, 1);
@@ -4074,7 +4105,7 @@
       approveHumanReviewShell.hidden = state !== 'human-verifying';
       deleteTaskButton.hidden = !snapshot;
       deleteTaskButton.disabled = !snapshot;
-      if (state === 'waiting-check-plans') activeArtifactName = 'PLAN.md';
+      if (state === 'waiting-check-plans' || state === 'plan-approving') activeArtifactName = 'PLAN.md';
       setTaskTab(nextTab, { load: false });
       return nextTab;
     }
@@ -5066,7 +5097,7 @@
       return `${base}${summary.is_current ? translateTask('currentSuffix') : ''}`;
     }
 
-    const singleVisitStageLabels = new Set(['requests', 'planning', 'waiting-check-plans', 'done']);
+    const singleVisitStageLabels = new Set(['requests', 'planning', 'plan-approving', 'waiting-check-plans', 'done']);
 
     function formatStageVisitLabel(segment) {
       const baseLabel = stateLabel(segment.state);
@@ -5081,7 +5112,7 @@
     }
 
     const stageTimingRows = [
-      ['requests', 'planning', 'waiting-check-plans'],
+      ['requests', 'planning', 'plan-approving', 'waiting-check-plans'],
       ['todos', 'implementing', 'waiting-reviews'],
       ['reviewing', 'completed-reviews', 'human-verifying'],
     ];
@@ -5341,7 +5372,7 @@
     function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {
       const currentHumanReviewNote = activeTaskDetail?.human_review?.note_path || metadata?.human_verification?.note_path || null;
       if (metadata?.state === 'human-verifying' && currentHumanReviewNote && files.includes(currentHumanReviewNote)) return currentHumanReviewNote;
-      if (['waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')) return 'PLAN.md';
+      if (['plan-approving', 'waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')) return 'PLAN.md';
       return files[0] || null;
     }
 

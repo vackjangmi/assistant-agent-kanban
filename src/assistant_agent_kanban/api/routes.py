@@ -93,6 +93,8 @@ class ModelSettingsPayload(BaseModel):
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
     planner_agent_count: int | None = Field(default=None, ge=1)
+    plan_approval_model: str | None = None
+    plan_approval_session_token_budget: int | None = Field(default=None, ge=1)
     implementer_model: str | None = None
     implementer_session_token_budget: int | None = Field(default=None, ge=1)
     implementer_agent_count: int | None = Field(default=None, ge=1)
@@ -194,6 +196,8 @@ def _settings_response(runtime, snapshot, *, config_path: str | None = None, sav
         "planner_model": active_config.role_model("planner"),
         "planner_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("planner")),
         "planner_agent_count": runtime.config.runtime.planner_agent_count,
+        "plan_approval_model": active_config.role_model("plan_approval"),
+        "plan_approval_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("plan_approval")),
         "implementer_model": active_config.role_model("implementer"),
         "implementer_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("implementer")),
         "implementer_agent_count": runtime.config.runtime.implementer_agent_count,
@@ -266,6 +270,7 @@ def _validate_model_selection(model_name: str | None, *, field_name: str, availa
 def _reconfigure_runtime_adapters(runtime) -> None:
     planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = build_role_adapters(runtime.config, adapter_registry=runtime.adapter_registry)
     runtime.planner.adapter = planner_adapter
+    runtime.plan_approval.adapter = planner_adapter
     runtime.implementer.adapter = implementer_adapter
     runtime.reviewer.adapter = reviewer_adapter
     runtime.committer.adapter = commit_adapter
@@ -331,6 +336,10 @@ def build_router() -> APIRouter:
             next_config.set_role_session_token_budget("planner", _normalize_session_token_budget(payload.planner_session_token_budget))
         if "planner_agent_count" in fields_set:
             next_config.runtime.planner_agent_count = _normalize_agent_count(payload.planner_agent_count)
+        if "plan_approval_model" in fields_set:
+            next_config.set_role_model("plan_approval", _normalize_model_override(payload.plan_approval_model))
+        if "plan_approval_session_token_budget" in fields_set:
+            next_config.set_role_session_token_budget("plan_approval", _normalize_session_token_budget(payload.plan_approval_session_token_budget))
         if "implementer_model" in fields_set:
             next_config.set_role_model("implementer", _normalize_model_override(payload.implementer_model))
         if "implementer_session_token_budget" in fields_set:
@@ -354,6 +363,7 @@ def build_router() -> APIRouter:
         validation_snapshot = await _resolve_settings_snapshot(runtime, refresh=True, assistant=next_config.active_backend())
         available_models = set(validation_snapshot.models)
         _validate_model_selection(next_config.role_model("planner"), field_name="planner_model", available_models=available_models)
+        _validate_model_selection(next_config.role_model("plan_approval"), field_name="plan_approval_model", available_models=available_models)
         _validate_model_selection(next_config.role_model("implementer"), field_name="implementer_model", available_models=available_models)
         _validate_model_selection(next_config.role_model("reviewer"), field_name="reviewer_model", available_models=available_models)
         _validate_model_selection(next_config.role_model("commit"), field_name="commit_model", available_models=available_models)
@@ -554,7 +564,7 @@ def build_router() -> APIRouter:
     async def approve_plan(task_id: str, request: Request):
         runtime = request.app.state.runtime
         try:
-            moved = runtime.planner.transitions.manual_move(task_id, TaskState.TODOS, by="human")
+            moved = runtime.plan_approval.transitions.manual_move(task_id, TaskState.TODOS, by="human")
         except TransitionError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()

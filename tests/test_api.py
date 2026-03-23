@@ -1547,7 +1547,7 @@ def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
     assert response.status_code == 200
     payload = response.json()
     stage_timing = payload["stage_timing"]
-    assert len(stage_timing["summaries"]) == 10
+    assert len(stage_timing["summaries"]) == 11
     assert len(stage_timing["segments"]) == 4
     assert stage_timing["total_duration_ms"] >= 720000
     assert stage_timing["ai_work_duration_ms"] == 180000
@@ -2060,7 +2060,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const requestTranslations = {" in response.text
     assert "const humanReviewTranslations = {" in response.text
     assert "applyRequestTranslations();" in response.text
-    assert "['waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')" in response.text
+    assert "['plan-approving', 'waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')" in response.text
     assert "task-human-review-panel" in response.text
     assert "save-human-review-note" in response.text
     assert "request-changes-button" in response.text
@@ -2209,7 +2209,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function formatStageSegmentEnd(segment)" in response.text
     assert "translateTask('completedLabel')" in response.text
     assert "const stageTimingRows = [" in response.text
-    assert "['requests', 'planning', 'waiting-check-plans']" in response.text
+    assert "['requests', 'planning', 'plan-approving', 'waiting-check-plans']" in response.text
     assert "['todos', 'implementing', 'waiting-reviews']" in response.text
     assert "['reviewing', 'completed-reviews', 'human-verifying']" in response.text
     assert "const summaryMap = new Map(summaries.map((summary) => [summary.state, summary]));" in response.text
