@@ -257,6 +257,34 @@ def test_board_snapshot_includes_final_branch_for_done_tasks(configured_paths):
     assert done_item.final_branch == "feature/demo-finish"
 
 
+def test_board_snapshot_prefers_completed_group_override_for_done_grouping(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "done-group-override-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(scanner.find_task(waiting.metadata.task_id), TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    human_verifying = transitions.move(completed, TaskState.HUMAN_VERIFYING, by="human")
+    transitions.move(scanner.find_task(human_verifying.metadata.task_id), TaskState.DONE, by="human")
+
+    done_context = scanner.find_task(human_verifying.metadata.task_id)
+    done_context.metadata.completed_group_override = "release/v2"
+    metadata_store.save(done_context.task_dir, done_context.metadata)
+
+    snapshot = scanner.board_snapshot()
+    done_item = next(item for column in snapshot.columns if column.state == TaskState.DONE for item in column.items)
+
+    assert done_item.base_branch == config.base_branch
+    assert done_item.completed_group == "release/v2"
+
+
 def test_board_snapshot_keeps_human_verifying_out_of_agent_active(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "human-verifying-task")

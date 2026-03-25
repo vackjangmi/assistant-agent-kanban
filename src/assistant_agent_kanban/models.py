@@ -127,6 +127,7 @@ class TaskMetadata(BaseModel):
     request: RequestInfo = Field(default_factory=RequestInfo)
     human_verification: HumanVerificationInfo = Field(default_factory=HumanVerificationInfo)
     target: TargetRepoInfo = Field(default_factory=TargetRepoInfo)
+    completed_group_override: str | None = None
     runtime_pin: TaskRuntimePin | None = None
     plan: PlanInfo = Field(default_factory=PlanInfo)
     cycle: int = 0
@@ -156,6 +157,7 @@ class TaskSnapshot(BaseModel):
     target_repo_root: str = "."
     target_repo_label: str = "."
     base_branch: str = "main"
+    completed_group: str = "main"
     final_branch: str | None = None
     total_duration_ms: int = 0
     current_state_duration_ms: int = 0

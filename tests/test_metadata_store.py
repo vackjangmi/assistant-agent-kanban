@@ -25,4 +25,5 @@ def test_metadata_store_bootstrap_and_load_round_trip(tmp_path):
     assert loaded.slug == "login-refactor"
     assert loaded.cycle == 0
     assert loaded.target.base_branch == "main"
+    assert loaded.completed_group_override is None
     assert (task_dir / "metadata.json").exists()

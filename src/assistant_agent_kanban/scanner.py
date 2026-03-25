@@ -148,31 +148,41 @@ class KanbanScanner:
         columns: list[BoardColumn] = []
         for state in STATE_ORDER:
             items = [
-                TaskSnapshot(
-                    task_id=item.metadata.task_id,
-                    title=item.metadata.title,
-                    state=state,
-                    path=str(item.task_dir),
-                    updated_at=item.metadata.updated_at,
-                    state_entered_at=self._state_entered_at(item.metadata, state),
-                    iteration=item.metadata.cycle,
-                    has_error=bool(item.metadata.errors),
-                    active_model=self._active_model(item.metadata, state),
-                    agent_status=derive_agent_status(item.metadata, state),
-                    agent_owner=item.metadata.lease.owner,
-                    agent_heartbeat_at=item.metadata.lease.heartbeat_at,
-                    target_repo_root=item.metadata.target.repo_root,
-                    target_repo_label=target_repo_label(item.metadata.target.repo_root),
-                    base_branch=item.metadata.target.base_branch,
-                    final_branch=item.metadata.integration.final_branch,
-                    total_duration_ms=total_task_duration_ms(item.metadata, state),
-                    current_state_duration_ms=current_state_duration_ms(item.metadata, state),
-                )
+                self._task_snapshot(item, state)
                 for item in tasks
                 if item.state == state
             ]
             columns.append(BoardColumn(state=state, items=items))
         return BoardSnapshot(columns=columns)
+
+    def _task_snapshot(self, item: TaskContext, state: TaskState) -> TaskSnapshot:
+        base_branch = item.metadata.target.base_branch
+        completed_group = base_branch
+        if state == TaskState.DONE:
+            override = (item.metadata.completed_group_override or "").strip()
+            if override:
+                completed_group = override
+        return TaskSnapshot(
+            task_id=item.metadata.task_id,
+            title=item.metadata.title,
+            state=state,
+            path=str(item.task_dir),
+            updated_at=item.metadata.updated_at,
+            state_entered_at=self._state_entered_at(item.metadata, state),
+            iteration=item.metadata.cycle,
+            has_error=bool(item.metadata.errors),
+            active_model=self._active_model(item.metadata, state),
+            agent_status=derive_agent_status(item.metadata, state),
+            agent_owner=item.metadata.lease.owner,
+            agent_heartbeat_at=item.metadata.lease.heartbeat_at,
+            target_repo_root=item.metadata.target.repo_root,
+            target_repo_label=target_repo_label(item.metadata.target.repo_root),
+            base_branch=base_branch,
+            completed_group=completed_group,
+            final_branch=item.metadata.integration.final_branch,
+            total_duration_ms=total_task_duration_ms(item.metadata, state),
+            current_state_duration_ms=current_state_duration_ms(item.metadata, state),
+        )
 
     def find_task(self, task_id: str) -> TaskContext:
         for task in self.scan():
