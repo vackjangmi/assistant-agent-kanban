@@ -125,12 +125,16 @@ class RetrospectiveService:
             task
             for task in self.scanner.scan()
             if str(task.state) == "done"
-            and task.metadata.target.base_branch == normalized_branch
+            and self._done_task_group_branch(task) == normalized_branch
             and resolve_safe_target_repo_root(Path(task.metadata.target.repo_root)) == resolved_repo_root
         ]
         if not tasks:
             raise TransitionError("retrospective requires at least one done task for the selected project and branch")
         return resolved_repo_root, sorted(tasks, key=lambda item: item.metadata.task_id)
+
+    def _done_task_group_branch(self, task: TaskContext) -> str:
+        override = (task.metadata.completed_group_override or "").strip()
+        return override or task.metadata.target.base_branch
 
     def _load_existing_record(self, target_repo_root: Path, base_branch: str, comparison_branch: str | None, group: list[TaskContext]) -> RetrospectiveRecord | None:
         canonical = self._load_canonical_record(target_repo_root, base_branch, comparison_branch)

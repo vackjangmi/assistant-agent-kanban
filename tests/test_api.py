@@ -628,7 +628,47 @@ def test_api_creates_and_reads_retrospective(configured_paths):
         assert inspect_existing.status_code == 200
         assert inspect_existing.json()["exists"] is True
         assert inspect_existing.json()["created"] is False
-        assert "API retrospective" in inspect_existing.json()["content"]
+    assert "API retrospective" in inspect_existing.json()["content"]
+
+
+def test_api_allows_setting_and_clearing_completed_group_override_for_done_tasks(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "done-group-override-api-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "done-group-override-api-task")
+
+    with TestClient(app) as client:
+        client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification", json={"completion_mode": "target-branch"})
+        assert approve.status_code == 200
+        assert approve.json()["state"] == TaskState.DONE.value
+
+        set_group = client.put(f"/api/tasks/{completed.metadata.task_id}/completed-group", json={"group": "release/v3"})
+        assert set_group.status_code == 200
+        assert set_group.json()["completed_group_override"] == "release/v3"
+
+        cleared = client.put(f"/api/tasks/{completed.metadata.task_id}/completed-group", json={"group": None})
+        assert cleared.status_code == 200
+        assert cleared.json()["completed_group_override"] is None
+
+    done = scanner.find_task(completed.metadata.task_id)
+    assert done.state == TaskState.DONE
+    assert done.metadata.completed_group_override is None
+
+
+def test_api_rejects_completed_group_override_updates_before_done(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "done-group-override-guard-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "done-group-override-guard-task")
+
+    with TestClient(app) as client:
+        response = client.put(f"/api/tasks/{completed.metadata.task_id}/completed-group", json={"group": "release/v9"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "completed group override can only be updated for done tasks"
 
 
 def test_api_returns_todos_when_human_verification_rebase_fails(configured_paths):
@@ -2155,7 +2195,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function toggleFinalBranchGroup(branchLabel)" in response.text
     assert "const branchLabel = event.target.closest('.target-branch-label');" in response.text
     assert "toggleFinalBranchGroup(branchLabel);" in response.text
-    assert "const branch = item.base_branch || 'unknown';" in response.text
+    assert "const branch = item.completed_group || item.base_branch || 'unknown';" in response.text
+    assert "completedGroupTitle" in response.text
+    assert "saveCompletedGroupOverride(nextGroup)" in response.text
     assert "title=\"${escapeHtml(projectPath)}\"" in response.text
     assert "/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}" in response.text
     assert ".stage-timing-grid { display: grid; gap: 10px; }" in response.text

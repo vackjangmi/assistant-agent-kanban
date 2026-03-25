@@ -91,6 +91,20 @@ def test_retrospective_service_inspects_existing_group_artifact(configured_paths
     assert inspected.commit_sha == created.commit_sha
 
 
+def test_retrospective_service_groups_done_tasks_by_completed_group_override(configured_paths):
+    config, repo_root, _ = configured_paths
+    adapter = FakeAdapter(["# Retrospective\n\n## Summary\nOverride group\n"])
+    done, service = _done_task_for_retrospective(config, "retro-group-override-task", commit_adapter=adapter)
+    metadata_store = MetadataStore()
+    done.metadata.completed_group_override = "release/2026"
+    metadata_store.save(done.task_dir, done.metadata)
+
+    record = service.inspect(str(repo_root), "release/2026")
+
+    assert record.exists is False
+    assert done.metadata.task_id in record.task_ids
+
+
 def test_retrospective_service_creates_new_branch_when_requested(configured_paths):
     config, repo_root, _ = configured_paths
     adapter = FakeAdapter(["# Retrospective\n\n## Summary\nBranch retro\n"])

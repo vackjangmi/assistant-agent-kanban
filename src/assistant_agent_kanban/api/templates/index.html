@@ -2334,6 +2334,19 @@
         markdownFiles: 'Markdown files',
         jsonFiles: 'JSON files',
         latestError: 'Latest error',
+        completedGroupTitle: 'Completed grouping',
+        completedGroupDescription: 'Base branch stays as the default, but done tasks can be reassigned to another completed-task group later.',
+        completedGroupInputLabel: 'Override group',
+        completedGroupInputPlaceholder: 'Leave empty to keep the base branch group',
+        completedGroupCurrentLabel: 'Current group',
+        completedGroupDefaultLabel: 'Default base',
+        completedGroupSave: 'Save group',
+        completedGroupClear: 'Clear override',
+        completedGroupSaving: 'Saving completed-task group...',
+        completedGroupSavedOverride: 'Completed-task group updated to {group}.',
+        completedGroupSavedDefault: 'Completed-task group reset to the default base branch ({group}).',
+        completedGroupSaveFailed: 'Failed to save the completed-task group.',
+        completedGroupBlockedStale: 'Refresh task details before changing the completed-task group.',
         noMarkdownFiles: 'No markdown files',
         noJsonFiles: 'No JSON files',
         noRecordedErrors: 'No recorded errors.',
@@ -2496,6 +2509,19 @@
         retrospectiveNoContent: '불러온 회고가 없습니다.',
         finalBranchNotCreated: '아직 생성되지 않음',
         latestError: '최근 오류',
+        completedGroupTitle: '완료 그룹',
+        completedGroupDescription: '기준 브랜치를 기본 그룹으로 유지하면서, 완료된 작업은 나중에 다른 완료 그룹으로 옮길 수 있습니다.',
+        completedGroupInputLabel: '그룹 오버라이드',
+        completedGroupInputPlaceholder: '비워두면 기준 브랜치 그룹을 유지합니다.',
+        completedGroupCurrentLabel: '현재 그룹',
+        completedGroupDefaultLabel: '기본 기준 브랜치',
+        completedGroupSave: '그룹 저장',
+        completedGroupClear: '오버라이드 초기화',
+        completedGroupSaving: '완료 그룹을 저장하는 중...',
+        completedGroupSavedOverride: '완료 그룹을 {group}(으)로 변경했습니다.',
+        completedGroupSavedDefault: '완료 그룹을 기본 기준 브랜치({group})로 되돌렸습니다.',
+        completedGroupSaveFailed: '완료 그룹을 저장하지 못했습니다.',
+        completedGroupBlockedStale: '완료 그룹을 바꾸기 전에 작업 상세를 새로고침하세요.',
         noRecordedErrors: '기록된 오류가 없습니다.',
         taskSubtitleFormat: '{taskId} · {state}',
         taskSubtitleWithFinalBranch: '{taskId} · {state} · {branch}',
@@ -3202,7 +3228,7 @@
     function groupFinalItemsByTargetBranch(items) {
       const grouped = new Map();
       sortBoardItemsByUpdatedAt(items).forEach((item) => {
-        const branch = item.base_branch || 'unknown';
+        const branch = item.completed_group || item.base_branch || 'unknown';
         if (!grouped.has(branch)) grouped.set(branch, []);
         grouped.get(branch).push(item);
       });
@@ -5181,6 +5207,83 @@
       return [...errors].reverse().find((item) => item && item.code !== 'human-verification-rejected') || null;
     }
 
+    function effectiveCompletedGroup(metadata) {
+      const override = (metadata?.completed_group_override || '').trim();
+      return override || metadata?.target?.base_branch || '';
+    }
+
+    function renderCompletedGroupSection(detail) {
+      const metadata = detail?.metadata;
+      if (metadata?.state !== 'done') return '';
+      const override = metadata.completed_group_override || '';
+      const baseBranch = metadata.target?.base_branch || '';
+      const currentGroup = effectiveCompletedGroup(metadata) || 'unknown';
+      return `
+        <div class="task-section">
+          <h3>${escapeHtml(translateTask('completedGroupTitle'))}</h3>
+          <div class="settings-card">
+            <div class="settings-copy">
+              <strong>${escapeHtml(translateTask('completedGroupTitle'))}</strong>
+              <p>${escapeHtml(translateTask('completedGroupDescription'))}</p>
+            </div>
+            <div class="field">
+              <label for="completed-group-input">${escapeHtml(translateTask('completedGroupInputLabel'))}</label>
+              <input id="completed-group-input" type="text" value="${escapeHtml(override)}" placeholder="${escapeHtml(translateTask('completedGroupInputPlaceholder'))}" ${taskDetailStale ? 'disabled' : ''}>
+            </div>
+            <div class="card-tag-row">
+              <span class="card-tag card-tag-branch">${escapeHtml(translateTask('completedGroupCurrentLabel'))}: <span class="card-tag-value">${escapeHtml(currentGroup)}</span></span>
+              <span class="card-tag card-tag-branch">${escapeHtml(translateTask('completedGroupDefaultLabel'))}: <span class="card-tag-value">${escapeHtml(baseBranch || 'unknown')}</span></span>
+            </div>
+            <div class="header-actions">
+              <button type="button" data-action="save-completed-group" ${taskDetailStale ? 'disabled' : ''}>${escapeHtml(translateTask('completedGroupSave'))}</button>
+              <button type="button" data-action="clear-completed-group" class="ghost-button" ${taskDetailStale || !override.trim() ? 'disabled' : ''}>${escapeHtml(translateTask('completedGroupClear'))}</button>
+            </div>
+            <div id="completed-group-status" class="muted"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function completedGroupInput() {
+      return document.getElementById('completed-group-input');
+    }
+
+    function updateCompletedGroupControls() {
+      const metadata = activeTaskDetail?.metadata;
+      const input = completedGroupInput();
+      const saveButton = taskOverview.querySelector('[data-action="save-completed-group"]');
+      const clearButton = taskOverview.querySelector('[data-action="clear-completed-group"]');
+      const status = document.getElementById('completed-group-status');
+      if (!metadata || metadata.state !== 'done' || !input || !saveButton || !clearButton || !status) return;
+      const savedOverride = (metadata.completed_group_override || '').trim();
+      const inputValue = (input.value || '').trim();
+      saveButton.disabled = taskDetailStale || inputValue === savedOverride;
+      clearButton.disabled = taskDetailStale || !savedOverride;
+      status.textContent = taskDetailStale ? translateTask('completedGroupBlockedStale') : '';
+    }
+
+    async function saveCompletedGroupOverride(nextGroup) {
+      if (!activeTaskId || activeTaskDetail?.metadata?.state !== 'done') return;
+      const status = document.getElementById('completed-group-status');
+      if (status) status.textContent = translateTask('completedGroupSaving');
+      const response = await fetch(`/api/tasks/${activeTaskId}/completed-group`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: nextGroup }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateTask('completedGroupSaveFailed'));
+      await loadTaskDetails(activeTaskId);
+      const refreshedGroup = effectiveCompletedGroup(activeTaskDetail?.metadata) || 'unknown';
+      const refreshedStatus = document.getElementById('completed-group-status');
+      if (refreshedStatus) {
+        refreshedStatus.textContent = nextGroup
+          ? translateTask('completedGroupSavedOverride', { group: refreshedGroup })
+          : translateTask('completedGroupSavedDefault', { group: refreshedGroup });
+      }
+      updateCompletedGroupControls();
+    }
+
     function renderTaskOverview(detail) {
       const metadata = detail.metadata;
       activeTaskDetail = detail;
@@ -5219,6 +5322,7 @@
           <h3>${escapeHtml(translateTask('latestError'))}</h3>
           <div class="muted">${latestError ? escapeHtml(latestError.message) : escapeHtml(translateTask('noRecordedErrors'))}</div>
         </div>
+        ${renderCompletedGroupSection(detail)}
       `;
       document.getElementById('task-modal-title').textContent = metadata.title;
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags({
@@ -5231,6 +5335,7 @@
         stage_timing: detail.stage_timing,
         history: metadata.history || [],
       });
+      updateCompletedGroupControls();
     }
 
     function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {
@@ -6091,6 +6196,31 @@
     approvalChoiceNewBranchButton.addEventListener('click', () => { approveVerification('new-branch'); });
     taskMarkdownFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
     taskArtifactSubtabs.addEventListener('click', (event) => { const button = event.target.closest('[data-artifact-file]'); if (!button || !activeTaskDetail) return; const file = button.dataset.artifactFile; if (!file) return; planEditMode = false; loadMarkdownArtifact(activeTaskId, file); });
+    taskOverview.addEventListener('input', (event) => {
+      if (event.target.id === 'completed-group-input') updateCompletedGroupControls();
+    });
+    taskOverview.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-action]');
+      if (!button) return;
+      const action = button.dataset.action;
+      if (action === 'save-completed-group') {
+        const nextGroup = (completedGroupInput()?.value || '').trim() || null;
+        saveCompletedGroupOverride(nextGroup).catch((error) => {
+          taskModalError.hidden = false;
+          taskModalError.textContent = error.message;
+          updateCompletedGroupControls();
+        });
+      }
+      if (action === 'clear-completed-group') {
+        const input = completedGroupInput();
+        if (input) input.value = '';
+        saveCompletedGroupOverride(null).catch((error) => {
+          taskModalError.hidden = false;
+          taskModalError.textContent = error.message;
+          updateCompletedGroupControls();
+        });
+      }
+    });
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
