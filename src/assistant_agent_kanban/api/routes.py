@@ -32,6 +32,10 @@ from ..request_creator import (
 )
 
 
+class CompletedGroupOverridePayload(BaseModel):
+    group: str | None = None
+
+
 class CreateRequestPayload(BaseModel):
     title: str
     goal: str
@@ -619,6 +623,22 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return moved.metadata
+
+    @router.put("/api/tasks/{task_id}/completed-group")
+    async def update_completed_group_override(task_id: str, payload: CompletedGroupOverridePayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            updated = await asyncio.to_thread(
+                runtime.task_service.update_completed_group_override,
+                task_id,
+                by="human",
+                group=payload.group,
+            )
+        except (TransitionError, TaskNotFoundError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return updated.metadata
 
     @router.post("/api/retrospectives/inspect")
     async def inspect_retrospective(payload: RetrospectivePayload, request: Request):

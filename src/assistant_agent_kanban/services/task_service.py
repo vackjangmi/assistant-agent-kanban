@@ -24,6 +24,7 @@ from ..models import (
     StageTimingSegment,
     StageTimingSummary,
     TaskDetail,
+    TaskContext,
     TaskLogEntry,
     TaskLogs,
     TaskMetadata,
@@ -53,11 +54,22 @@ PatchFileState = dict[str, str | int | bool | list[ChangedFileHunk] | None]
 
 
 class TaskService:
-    def __init__(self, scanner: KanbanScanner, runs_root: Path, kanban_root: Path, archive_runs_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        scanner: KanbanScanner,
+        runs_root: Path,
+        kanban_root: Path,
+        archive_runs_root: Path | None = None,
+        *,
+        metadata_store=None,
+        locks=None,
+    ) -> None:
         self.scanner = scanner
         self.runs_root = runs_root
         self.kanban_root = kanban_root
         self.archive_runs_root = archive_runs_root or (runs_root.parent / "archive-runs")
+        self.metadata_store = metadata_store
+        self.locks = locks
 
     def get_task(self, task_id: str, *, include_changed_files: bool = True) -> TaskDetail:
         task = self._find_task(task_id)
@@ -157,6 +169,20 @@ class TaskService:
         task = self._find_task(task_id)
         path = self._validate_readable_attachment(task.task_dir, filename)
         return path, mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+    def update_completed_group_override(self, task_id: str, *, by: str, group: str | None) -> TaskContext:
+        task = self._find_task(task_id)
+        if task.state != TaskState.DONE:
+            raise TransitionError("completed group override can only be updated for done tasks")
+        normalized = (group or "").strip() or None
+        if normalized is not None and len(normalized) > 200:
+            raise TransitionError("completed group override is too long")
+        if self.metadata_store is None or self.locks is None:
+            raise TransitionError("completed group override updates require a configured runtime")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-completed-group"):
+            task.metadata.completed_group_override = normalized
+            self.metadata_store.save(task.task_dir, task.metadata)
+            return task
 
     def _find_task(self, task_id: str):
         try:

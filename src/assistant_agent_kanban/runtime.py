@@ -305,7 +305,14 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     board_service = BoardService(scanner)
     verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter, adapter_registry=registry)
     deletion_service = TaskDeletionService(config, scanner, locks, integration_manager)
-    task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir)
+    task_service = TaskService(
+        scanner,
+        config.runs_dir,
+        config.kanban_root,
+        config.archive_runs_dir,
+        metadata_store=metadata_store,
+        locks=locks,
+    )
     retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = AssistantModelRegistry(adapter=planner_adapter, config=config)
