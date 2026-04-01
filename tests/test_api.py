@@ -224,6 +224,28 @@ def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
     assert (updated_task.task_dir / "PLAN-HUMAN-APPROVAL.json").exists()
 
 
+def test_api_creates_request_with_plan_auto_approve_flag(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "auto-approved plan request",
+                "goal": "Create a request that auto-approves plans.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "plan_auto_approve": True,
+            },
+        )
+
+    assert response.status_code == 200
+    task = KanbanScanner(config).scan()[0]
+    assert task.metadata.request.plan_auto_approve is True
+    assert "plan_auto_approve: true" in (task.task_dir / "REQUEST.md").read_text()
+
+
 def test_api_rejects_empty_plan_md_edit_in_waiting_check_plans(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-empty-edit-task")

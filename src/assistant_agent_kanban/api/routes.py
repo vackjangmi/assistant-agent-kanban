@@ -41,6 +41,7 @@ class CreateRequestPayload(BaseModel):
     goal: str
     request_upload_token: str | None = None
     background: str | None = None
+    plan_auto_approve: bool = False
     scope: str | None = None
     out_of_scope: str | None = None
     constraints: str | None = None
@@ -545,6 +546,7 @@ def build_router() -> APIRouter:
                     title=payload.title.strip(),
                     goal=payload.goal.strip(),
                     background=payload.background.strip() if payload.background else None,
+                    plan_auto_approve=payload.plan_auto_approve,
                     scope=split_lines(payload.scope) or default_scope,
                     out_of_scope=split_lines(payload.out_of_scope) or default_out_of_scope,
                     constraints=split_lines(payload.constraints),

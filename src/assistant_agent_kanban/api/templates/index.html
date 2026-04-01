@@ -1291,6 +1291,11 @@
                 <datalist id="base-branch-options"></datalist>
                 <div class="error-text" data-error-for="base_branch"></div>
               </div>
+              <div class="field compact span-full">
+                <label id="request-plan-auto-approve-label" for="plan_auto_approve">Plan auto approval</label>
+                <span id="request-plan-auto-approve-description">Skip manual plan approval and automatically move to TODO after plan generation.</span>
+                <input id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true">
+              </div>
               <div class="field span-full">
                 <label id="request-background-label" for="background">Background / Why</label>
                 <span id="request-background-description">Context that helps the planner understand motivation and history.</span>
@@ -2087,6 +2092,8 @@
         baseBranchLoadedMany: 'Loaded {count} branch suggestions.{currentNote}',
         currentBranchNote: ' Current branch: {branch}.',
         baseBranchLoadFailed: 'Failed to load branch suggestions. You can still type a base branch manually.',
+        planAutoApproveLabel: 'Plan auto approval',
+        planAutoApproveDescription: 'Skip manual plan approval and automatically move to TODO after plan generation.',
         scopeLabel: 'Scope',
         scopeDescription: 'Starts with repo defaults; edit each line as needed.',
         outOfScopeLabel: 'Out of scope',
@@ -2133,6 +2140,8 @@
         baseBranchLoadedMany: '브랜치 추천 {count}개를 불러왔습니다.{currentNote}',
         currentBranchNote: ' 현재 브랜치: {branch}.',
         baseBranchLoadFailed: '브랜치 추천을 불러오지 못했습니다. 기준 브랜치를 직접 입력할 수 있습니다.',
+        planAutoApproveLabel: '계획 자동 승인',
+        planAutoApproveDescription: '플랜 생성 후 사람 승인 없이 자동으로 TODO로 이동합니다.',
         scopeLabel: '범위',
         scopeDescription: '저장소 기본값으로 시작하며 줄별로 수정할 수 있습니다.',
         outOfScopeLabel: '범위 외',
@@ -2857,6 +2866,8 @@
       setRequestText('request-target-repo-label', 'targetRepoLabel');
       setRequestText('request-target-repo-description', 'targetRepoDescription');
       setRequestText('request-base-branch-label', 'baseBranchLabel');
+      setRequestText('request-plan-auto-approve-label', 'planAutoApproveLabel');
+      setRequestText('request-plan-auto-approve-description', 'planAutoApproveDescription');
       setRequestText('request-scope-label', 'scopeLabel');
       setRequestText('request-scope-description', 'scopeDescription');
       setRequestText('request-out-of-scope-label', 'outOfScopeLabel');
@@ -6086,6 +6097,7 @@
       syncRequestGoalField();
       if (!validateForm()) return;
       const payload = Object.fromEntries(new FormData(requestForm).entries());
+      payload.plan_auto_approve = document.getElementById('plan_auto_approve').checked;
       payload.request_upload_token = requestUploadToken;
       submitButton.disabled = true;
       submitButton.textContent = translateRequest('creating');
