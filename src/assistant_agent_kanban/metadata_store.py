@@ -39,6 +39,7 @@ class MetadataStore:
         target_repo_root: str,
         base_branch: str,
         request_language: str | None = None,
+        request_plan_auto_approve: bool = False,
     ) -> TaskMetadata:
         created = utc_now()
         metadata = TaskMetadata(
@@ -48,7 +49,7 @@ class MetadataStore:
             state=state,
             created_at=created,
             updated_at=created,
-            request=RequestInfo(language=request_language),
+            request=RequestInfo(language=request_language, plan_auto_approve=request_plan_auto_approve),
             target=TargetRepoInfo(repo_root=target_repo_root, base_branch=base_branch),
             integration=IntegrationInfo(base_branch=base_branch),
             history=[HistoryEntry(state=state, entered_at=created, by="human")],

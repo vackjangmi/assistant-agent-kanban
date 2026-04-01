@@ -163,6 +163,7 @@ class CommitInfo(BaseModel):
 class RequestInfo(BaseModel):
     path: str = "REQUEST.md"
     language: str | None = None
+    plan_auto_approve: bool = False
 
 
 class HumanVerificationInfo(BaseModel):
