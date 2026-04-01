@@ -115,6 +115,9 @@ class KanbanScanner:
                         if metadata.target.base_branch != parsed_base_branch:
                             metadata.target.base_branch = parsed_base_branch
                             should_save = True
+                        if metadata.request.plan_auto_approve != parsed.plan_auto_approve:
+                            metadata.request.plan_auto_approve = parsed.plan_auto_approve
+                            should_save = True
                     if not metadata.request.language:
                         metadata.request.language = parsed.language
                         should_save = True
@@ -222,6 +225,7 @@ class KanbanScanner:
         target_repo_root = str(self.config.repo_root.expanduser().resolve())
         base_branch = self.config.base_branch
         request_language = None
+        request_plan_auto_approve = False
         if request_path.exists():
             parsed = parse_request_markdown(request_path.read_text())
             if parsed.title:
@@ -230,6 +234,7 @@ class KanbanScanner:
             if parsed.base_branch:
                 base_branch = parsed.base_branch
             request_language = parsed.language
+            request_plan_auto_approve = parsed.plan_auto_approve
         task_id = task_dir.name if TASK_KEY_PATTERN.fullmatch(task_dir.name) else self.sequence.next_id(existing_ids)
         slug = slugify(title)
         final_task_dir = self._ensure_task_dir_name(task_dir, task_id)
@@ -242,6 +247,7 @@ class KanbanScanner:
             target_repo_root=target_repo_root,
             base_branch=base_branch,
             request_language=request_language,
+            request_plan_auto_approve=request_plan_auto_approve,
         )
         return metadata, final_task_dir
 

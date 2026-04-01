@@ -154,6 +154,7 @@ def create_request_task(
     base_branch: str | None = None,
     language: str | None = None,
     body: str | None = None,
+    plan_auto_approve: bool = False,
 ) -> Path:
     task_dir = config.state_dir(TaskState.REQUESTS) / name
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -165,6 +166,7 @@ def create_request_task(
                 "---",
                 f"title: {name}",
                 *([f"language: {language}"] if language else []),
+                f"plan_auto_approve: {'true' if plan_auto_approve else 'false'}",
                 "target:",
                 f"  repo_root: {repo_root}",
                 f"  base_branch: {branch}",
