@@ -14,6 +14,7 @@ class ParsedRequest(BaseModel):
     target_repo_root: str | None = None
     base_branch: str | None = None
     language: str = "en"
+    plan_auto_approve: bool = False
 
 
 REQUIRED_REQUEST_FIELDS = ("title", "goal", "target.repo_root", "target.base_branch")
@@ -34,6 +35,7 @@ def parse_request_markdown(content: str) -> ParsedRequest:
     base_branch = None
     raw_language = metadata.get("language") if isinstance(metadata, dict) else None
     language = normalize_language(raw_language if isinstance(raw_language, str) else None)
+    raw_plan_auto_approve = metadata.get("plan_auto_approve") if isinstance(metadata, dict) else None
     if isinstance(target, dict):
         if isinstance(target.get("repo_root"), str):
             target_repo_root = target["repo_root"]
@@ -45,7 +47,16 @@ def parse_request_markdown(content: str) -> ParsedRequest:
         target_repo_root=target_repo_root,
         base_branch=base_branch,
         language=language or detect_primary_language(content),
+        plan_auto_approve=_coerce_bool(raw_plan_auto_approve),
     )
+
+
+def _coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().casefold() in {"1", "true", "yes", "on"}
+    return False
 
 
 def resolve_repo_root(raw_path: str | None, fallback: Path) -> Path:

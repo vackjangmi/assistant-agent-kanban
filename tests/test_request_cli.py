@@ -39,6 +39,7 @@ def test_request_cli_creates_request_with_target_repo(tmp_path, capsys):
     assert f"repo_root: {target_repo.resolve()}" in content
     assert "base_branch: develop" in content
     assert "language: en" in content
+    assert "plan_auto_approve: false" in content
     assert "## Goal" in content
     assert "Do the thing." in content
 

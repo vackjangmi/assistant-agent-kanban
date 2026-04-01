@@ -29,6 +29,7 @@ class RequestTemplateData(BaseModel):
     title: str
     goal: str | None = None
     background: str | None = None
+    plan_auto_approve: bool = False
     scope: list[str] = Field(default_factory=list)
     out_of_scope: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
@@ -105,6 +106,7 @@ def create_request(
             "---",
             f"title: {title}",
             f"language: {request_language}",
+            f"plan_auto_approve: {'true' if normalized_template.plan_auto_approve else 'false'}",
             "target:",
             f"  repo_root: {resolved_repo}",
             f"  base_branch: {base_branch or config.base_branch}",
