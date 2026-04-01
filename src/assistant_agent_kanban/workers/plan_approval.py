@@ -49,6 +49,8 @@ class PlanApprovalWorker(WorkerBase):
         return await self.run_task(tasks[0])
 
     async def run_task(self, task: TaskContext) -> bool:
+        if self._should_auto_approve_by_request(task):
+            return await self._auto_approve_by_request(task)
         if task.state == TaskState.WAITING_CHECK_PLANS:
             return await self._auto_progress_recommended(task)
 
@@ -130,6 +132,8 @@ class PlanApprovalWorker(WorkerBase):
             return True
         if task.state != TaskState.WAITING_CHECK_PLANS:
             return False
+        if self._should_auto_approve_by_request(task):
+            return True
         auto_progress_at = task.metadata.plan_approval.auto_progress_at
         if task.metadata.plan_approval.disposition != "review_recommended" or auto_progress_at is None:
             return False
@@ -174,6 +178,49 @@ class PlanApprovalWorker(WorkerBase):
                 plan_text,
             ]
         )
+
+    def _should_auto_approve_by_request(self, task: TaskContext) -> bool:
+        if not task.metadata.request.plan_auto_approve:
+            return False
+        if task.state == TaskState.PLAN_APPROVING:
+            return True
+        return (
+            task.state == TaskState.WAITING_CHECK_PLANS
+            and task.metadata.plan_approval.disposition is None
+            and not task.metadata.plan_approval.human_approvals
+        )
+
+    async def _auto_approve_by_request(self, task: TaskContext) -> bool:
+        run_id = self.make_run_id()
+        with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
+            if not self._should_auto_approve_by_request(task):
+                return False
+            decision = PlanApprovalDecision(
+                disposition="auto_approve",
+                confidence="high",
+                risk_signals=["request_plan_auto_approve"],
+                rationale="The request explicitly opted into automatic plan approval.",
+            )
+            finalized_result = RunResult(
+                ok=True,
+                returncode=0,
+                assistant_text=self._decision_markdown(decision),
+                stdout="",
+                stderr="",
+                raw_events_path=None,
+                command=[],
+                resolved_model=None,
+                session_id=None,
+                total_tokens=0,
+            )
+            approval_path, json_path = self.write_result_artifacts(task.task_dir, "PLAN-APPROVAL", finalized_result)
+            self._write_decision_json(task.task_dir / json_path, decision)
+            self._apply_decision(task, decision, approval_path)
+            self.metadata_store.save(task.task_dir, task.metadata)
+            clear_retry_gate(task.metadata)
+            done = self.transitions.move(task, TaskState.TODOS, by=self.worker_name, note="plan auto-approved by request")
+        await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+        return True
 
     def _parse_decision(self, result: RunResult) -> PlanApprovalDecision:
         fallback_message = result.stderr.strip() or result.assistant_text.strip() or "plan approval failed"

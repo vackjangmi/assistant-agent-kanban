@@ -50,6 +50,83 @@ def test_plan_approval_worker_auto_approves_low_risk_plan(configured_paths):
     assert (updated.task_dir / "PLAN-APPROVAL.md").exists()
 
 
+def test_plan_approval_worker_auto_approves_when_request_opted_in(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "request-auto-approve", plan_auto_approve=True)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    adapter = FakeAdapter([json.dumps({"disposition": "review_required", "confidence": "low", "risk_signals": ["should_not_run"], "rationale": "should not be used"})])
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.plan.approved is True
+    assert updated.metadata.plan_approval.disposition == "auto_approve"
+    assert updated.metadata.plan_approval.risk_signals == ["request_plan_auto_approve"]
+    assert len(adapter.run_calls) == 0
+
+
+def test_plan_approval_worker_auto_approves_recovered_waiting_check_plans_request(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "recovered-request-auto-approve", plan_auto_approve=True)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall recovered plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="recovery")
+    adapter = FakeAdapter([json.dumps({"disposition": "review_required", "confidence": "low", "risk_signals": ["should_not_run"], "rationale": "should not be used"})])
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_task(waiting)) is True
+
+    updated = scanner.find_task(waiting.metadata.task_id)
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.plan.approved is True
+    assert updated.metadata.plan_approval.disposition == "auto_approve"
+    assert updated.metadata.plan_approval.risk_signals == ["request_plan_auto_approve"]
+    assert len(adapter.run_calls) == 0
+
+
+def test_plan_approval_worker_run_once_picks_recovered_waiting_check_plans_request(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "recovered-request-run-once", plan_auto_approve=True)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall recovered plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="recovery")
+    adapter = FakeAdapter([json.dumps({"disposition": "review_required", "confidence": "low", "risk_signals": ["should_not_run"], "rationale": "should not be used"})])
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.plan.approved is True
+    assert updated.metadata.plan_approval.disposition == "auto_approve"
+    assert len(adapter.run_calls) == 0
+
+
 def test_plan_approval_worker_retries_invalid_output_once_before_approval(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-approval-fallback")
