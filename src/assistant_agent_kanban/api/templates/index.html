@@ -186,6 +186,7 @@
     }
     body[data-theme="dark"] .field input,
     body[data-theme="dark"] .field textarea,
+    body[data-theme="dark"] .field-checkbox-row,
     body[data-theme="dark"] .settings-toolbar-field select,
     body[data-theme="dark"] .settings-card input,
     body[data-theme="dark"] .settings-card select,
@@ -970,6 +971,10 @@
     .field input, .field textarea { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
     .field textarea { min-height: 96px; resize: vertical; }
     .field.compact textarea { min-height: 72px; }
+    .field-checkbox { gap: 0; }
+    .field-checkbox-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.98); }
+    .field-checkbox-row input[type="checkbox"] { width: auto; margin: 3px 0 0; padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
+    .field-checkbox-copy { display: grid; gap: 6px; }
     .error-text { min-height: 1.1em; color: var(--danger); font-size: 0.9rem; }
     .form-error { margin-bottom: 12px; padding: 10px 12px; border: 1px solid rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
     .form-error[hidden] { display: none; }
@@ -1291,10 +1296,14 @@
                 <datalist id="base-branch-options"></datalist>
                 <div class="error-text" data-error-for="base_branch"></div>
               </div>
-              <div class="field compact span-full">
-                <label id="request-plan-auto-approve-label" for="plan_auto_approve">Plan auto approval</label>
-                <span id="request-plan-auto-approve-description">Skip manual plan approval and automatically move to TODO after plan generation.</span>
-                <input id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true">
+              <div class="field compact span-full field-checkbox">
+                <div class="field-checkbox-row">
+                  <input id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true">
+                  <div class="field-checkbox-copy">
+                    <label id="request-plan-auto-approve-label" for="plan_auto_approve">Plan auto approval</label>
+                    <span id="request-plan-auto-approve-description">Skip manual plan approval and automatically move to TODO after plan generation.</span>
+                  </div>
+                </div>
               </div>
               <div class="field span-full">
                 <label id="request-background-label" for="background">Background / Why</label>

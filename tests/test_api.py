@@ -1989,6 +1989,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request-basics-heading" in response.text
     assert "request-repo-heading" in response.text
     assert 'class="field span-full"' in response.text
+    assert 'class="field compact span-full field-checkbox"' in response.text
+    assert 'class="field-checkbox-row"' in response.text
+    assert 'id="plan_auto_approve"' in response.text
+    assert 'for="plan_auto_approve"' in response.text
+    assert '.field-checkbox-row input[type="checkbox"] { width: auto;' in response.text
     assert "task-modal" in response.text
     assert "retrospective-modal" in response.text
     assert "task-modal-panel" in response.text
