@@ -270,6 +270,7 @@
     }
     body[data-theme="dark"] .task-tabs,
     body[data-theme="dark"] #task-panel-diff,
+    body[data-theme="dark"] #task-panel-reviewer-qa,
     body[data-theme="dark"] #task-panel-review-note,
     body[data-theme="dark"] .diff-layout,
     body[data-theme="dark"] .diff-stage,
@@ -279,11 +280,13 @@
     body[data-theme="dark"] .approval-choice-grid {
       gap: 14px;
     }
+    body[data-theme="dark"] #task-panel-reviewer-qa,
     body[data-theme="dark"] #task-panel-review-note,
     body[data-theme="dark"] #task-human-review-panel,
     body[data-theme="dark"] .human-review-editor-shell {
       background: transparent;
     }
+    body[data-theme="dark"] #task-panel-reviewer-qa .human-review-box,
     body[data-theme="dark"] #task-panel-review-note .human-review-box,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell {
       background: linear-gradient(180deg, rgba(24, 35, 45, 0.98), rgba(17, 25, 33, 0.97)) !important;
@@ -323,6 +326,7 @@
       background: transparent;
       box-shadow: none;
     }
+    body[data-theme="dark"] #task-panel-reviewer-qa .human-review-footer,
     body[data-theme="dark"] #task-panel-review-note .human-review-footer {
       background: transparent !important;
     }
@@ -368,6 +372,7 @@
     body[data-theme="dark"] .approval-choice-status {
       background: linear-gradient(180deg, rgba(27, 39, 49, 0.98), rgba(20, 29, 38, 0.96));
     }
+    body[data-theme="dark"] #task-panel-reviewer-qa .editor-toolbar,
     body[data-theme="dark"] #task-panel-review-note .editor-toolbar,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell-copy {
       padding: 0;
@@ -377,14 +382,17 @@
       background: transparent;
       box-shadow: none;
     }
+    body[data-theme="dark"] #task-panel-reviewer-qa .editor-toolbar strong,
     body[data-theme="dark"] #task-panel-review-note .editor-toolbar strong,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell-copy strong {
       color: #f3f7fa;
     }
+    body[data-theme="dark"] #task-panel-reviewer-qa .editor-toolbar .muted,
     body[data-theme="dark"] #task-panel-review-note .editor-toolbar .muted,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell-copy .muted {
       color: #b8c7d3;
     }
+    body[data-theme="dark"] #task-panel-reviewer-qa .editor-toolbar button,
     body[data-theme="dark"] #task-panel-review-note .editor-toolbar button {
       color: #eef4f8 !important;
     }
@@ -1114,6 +1122,18 @@
     .request-goal-editor-shell .editor-textarea { min-height: 320px; height: 320px; }
     .request-goal-editor-shell .editor-textarea { resize: vertical; }
     .human-review-footer { display: grid; gap: 8px; }
+    .reviewer-qa-log { min-height: 0; height: 100%; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; display: grid; align-content: start; gap: 10px; }
+    .reviewer-qa-empty { margin: 0; color: var(--muted); }
+    .reviewer-qa-entry { display: grid; gap: 6px; justify-items: start; }
+    .reviewer-qa-entry[data-role="question"] { justify-items: end; }
+    .reviewer-qa-role { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+    .reviewer-qa-bubble { max-width: min(100%, 720px); padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; line-height: 1.5; }
+    .reviewer-qa-entry[data-role="question"] .reviewer-qa-bubble { background: var(--accent-soft); border-color: rgba(124,79,44,0.2); }
+    .reviewer-qa-entry[data-role="answer"] .reviewer-qa-bubble { background: rgba(255,255,255,0.94); }
+    .reviewer-qa-entry[data-role="transcript"] .reviewer-qa-bubble { max-width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.94rem; }
+    .reviewer-qa-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+    #task-reviewer-qa-input.reviewer-qa-input { min-height: 120px; max-height: 120px; height: 120px; resize: none; }
+    .reviewer-qa-send { min-height: 120px; height: 120px; align-self: end; }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -1241,7 +1261,7 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .stage-timing-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .stage-timing-total { justify-items: start; min-width: 0; } .stage-timing-breakdown { justify-content: flex-start; gap: 6px 10px; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .stage-timing-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .stage-timing-total { justify-items: start; min-width: 0; } .stage-timing-breakdown { justify-content: flex-start; gap: 6px 10px; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .reviewer-qa-composer { grid-template-columns: 1fr; } .reviewer-qa-send { width: 100%; min-height: 44px; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -1591,6 +1611,7 @@
         <button type="button" id="task-tab-logs" hidden>Logs</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
+        <button type="button" id="task-tab-reviewer-qa" hidden>Reviewer Q&amp;A</button>
         <button type="button" id="task-tab-review-note" hidden>Review note</button>
       </div>
       <section id="task-panel-overview" class="task-panel">
@@ -1635,25 +1656,27 @@
           </div>
         </div>
       </section>
-      <section id="task-panel-review-note" class="task-panel" hidden>
-        <div id="task-reviewer-qa-panel" class="human-review-panel" hidden>
+      <section id="task-panel-reviewer-qa" class="task-panel" hidden>
+        <div id="task-reviewer-qa-panel" class="human-review-panel">
           <div class="human-review-box">
             <div class="editor-toolbar">
               <div>
                 <strong id="task-reviewer-qa-title">Reviewer Q&amp;A</strong>
                 <div id="task-reviewer-qa-status" class="muted">Ask the reviewer follow-up questions. OpenCode reviewer runs use Thinking Mode when available, and the runtime log is saved as reviewer-qa.jsonl.</div>
               </div>
-              <div>
-                <button type="button" id="ask-reviewer-question">Ask reviewer</button>
-              </div>
             </div>
-            <pre id="task-reviewer-qa-transcript" class="log-viewer">No reviewer Q&amp;A recorded yet.</pre>
+            <div id="task-reviewer-qa-transcript" class="reviewer-qa-log" role="log" aria-live="polite" aria-relevant="additions text"><p class="reviewer-qa-empty">No reviewer Q&amp;A recorded yet.</p></div>
             <div class="human-review-footer">
-              <textarea id="task-reviewer-qa-input" class="editor-textarea" spellcheck="true" placeholder="Ask a follow-up question for the reviewer..."></textarea>
+              <div class="reviewer-qa-composer">
+                <textarea id="task-reviewer-qa-input" class="editor-textarea reviewer-qa-input" spellcheck="true" placeholder="Ask a follow-up question for the reviewer..."></textarea>
+                <button type="button" id="ask-reviewer-question" class="reviewer-qa-send">Send</button>
+              </div>
             </div>
           </div>
         </div>
-        <div id="task-human-review-panel" class="human-review-panel" hidden>
+      </section>
+      <section id="task-panel-review-note" class="task-panel" hidden>
+        <div id="task-human-review-panel" class="human-review-panel">
           <div class="human-review-box">
             <div class="editor-toolbar">
               <div>
@@ -1884,11 +1907,13 @@
     const taskTabOverview = document.getElementById('task-tab-overview');
     const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
+    const taskTabReviewerQa = document.getElementById('task-tab-reviewer-qa');
     const taskTabReviewNote = document.getElementById('task-tab-review-note');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
+    const taskPanelReviewerQa = document.getElementById('task-panel-reviewer-qa');
     const taskPanelReviewNote = document.getElementById('task-panel-review-note');
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const startVerificationButton = document.getElementById('start-verification');
@@ -1970,6 +1995,13 @@
     let runningTimerHandle = null;
     let activeTaskRequestToken = 0;
     let activeTaskRefreshTimer = null;
+    let reviewerQaRefreshInterval = null;
+    let reviewerQaTranscriptPinnedToBottom = true;
+    let reviewerQaPendingQuestion = '';
+    let reviewerQaPendingAnswer = '';
+    let reviewerQaQuestionInFlight = false;
+    let reviewerQaDraftBackup = '';
+    let reviewerQaLastRenderedSignature = '';
     let activeRetrospectiveTargetRepoRoot = '';
     let activeRetrospectiveBaseBranch = '';
     let activeRetrospectiveComparisonBranch = '';
@@ -2370,6 +2402,8 @@
         tabTimeline: 'Timeline',
         tabViewer: 'Work log',
         tabChangedFiles: 'Changed files',
+        tabReviewerQa: 'Reviewer Q&A',
+        reviewerQaSend: 'Send',
         runtimeLogs: 'Runtime logs',
         noLogSelected: 'No log selected',
         selectRuntimeLog: 'Select a runtime log to view.',
@@ -2559,6 +2593,8 @@
         tabTimeline: '타임라인',
         tabViewer: '작업 내역',
         tabChangedFiles: '변경 파일',
+        tabReviewerQa: '리뷰어 Q&A',
+        reviewerQaSend: '전송',
         runtimeLogs: '런타임 로그',
         noLogSelected: '선택된 로그 없음',
         selectRuntimeLog: '볼 런타임 로그를 선택하세요.',
@@ -2825,6 +2861,8 @@
       taskTabLogs.textContent = translateTask('tabLogs');
       taskTabEditor.textContent = translateTask('tabViewer');
       taskTabChangedFiles.textContent = translateTask('tabChangedFiles');
+      taskTabReviewerQa.textContent = translateTask('tabReviewerQa');
+      askReviewerQuestionButton.textContent = translateTask('reviewerQaSend');
       taskLogModeBadge.textContent = translateTask('runtimeLogs');
       document.getElementById('task-human-review-note-title').textContent = translateTask('reviewNoteTitle');
       document.querySelector('#task-changed-file-summary strong').textContent = translateTask('changedFilesHeading');
@@ -3631,6 +3669,106 @@
       }
     }
 
+    function clearReviewerQaRefreshInterval() {
+      if (reviewerQaRefreshInterval) {
+        clearInterval(reviewerQaRefreshInterval);
+        reviewerQaRefreshInterval = null;
+      }
+    }
+
+    function updateReviewerQaTranscriptPinnedToBottom() {
+      const threshold = 24;
+      reviewerQaTranscriptPinnedToBottom = (taskReviewerQaTranscript.scrollHeight - taskReviewerQaTranscript.scrollTop - taskReviewerQaTranscript.clientHeight) <= threshold;
+    }
+
+    function captureReviewerQaScrollState() {
+      const maxScrollTop = Math.max(0, taskReviewerQaTranscript.scrollHeight - taskReviewerQaTranscript.clientHeight);
+      return {
+        pinnedToBottom: reviewerQaTranscriptPinnedToBottom,
+        offsetFromBottom: maxScrollTop - taskReviewerQaTranscript.scrollTop,
+      };
+    }
+
+    function restoreReviewerQaScrollState(state) {
+      if (!state || state.pinnedToBottom) {
+        scrollReviewerQaTranscriptToBottom();
+        return;
+      }
+      const maxScrollTop = Math.max(0, taskReviewerQaTranscript.scrollHeight - taskReviewerQaTranscript.clientHeight);
+      taskReviewerQaTranscript.scrollTop = Math.max(0, maxScrollTop - state.offsetFromBottom);
+      updateReviewerQaTranscriptPinnedToBottom();
+    }
+
+    function scrollReviewerQaTranscriptToBottom() {
+      taskReviewerQaTranscript.scrollTop = taskReviewerQaTranscript.scrollHeight;
+      reviewerQaTranscriptPinnedToBottom = true;
+    }
+
+    function updateReviewerQaLiveRefresh() {
+      clearReviewerQaRefreshInterval();
+      const reviewerQaVisible = !taskModal.hidden && Boolean(activeTaskId) && activeTaskTab === 'reviewer-qa' && !taskTabReviewerQa.hidden;
+      if (!reviewerQaVisible) return;
+      reviewerQaRefreshInterval = window.setInterval(() => {
+        if (taskModal.hidden || !activeTaskId || activeTaskTab !== 'reviewer-qa' || taskTabReviewerQa.hidden) {
+          clearReviewerQaRefreshInterval();
+          return;
+        }
+        if (taskDetailStale || reviewerQaQuestionInFlight) return;
+        loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false }).catch((error) => {
+          taskModalError.hidden = false;
+          taskModalError.textContent = error.message;
+        });
+      }, 1800);
+    }
+
+    function parseReviewerQaTranscript(source) {
+      const normalized = (source || '').replace(/\r\n?/g, '\n').trim();
+      if (!normalized) return [];
+      const lines = normalized.split('\n');
+      const entries = [];
+      let currentEntry = null;
+      for (const line of lines) {
+        const headingMatch = /^##\s+(Question|Answer)\b.*$/i.exec(line.trim());
+        if (headingMatch) {
+          if (currentEntry) entries.push(currentEntry);
+          currentEntry = { role: headingMatch[1].toLowerCase() === 'question' ? 'question' : 'answer', lines: [] };
+          continue;
+        }
+        if (!currentEntry) {
+          if (/^#\s+Reviewer Q&A\s*$/i.test(line.trim())) continue;
+          currentEntry = { role: 'transcript', lines: [] };
+        }
+        currentEntry.lines.push(line);
+      }
+      if (currentEntry) entries.push(currentEntry);
+      return entries
+        .map((entry) => ({ ...entry, text: entry.lines.join('\n').trim() }))
+        .filter((entry) => entry.text);
+    }
+
+    function buildReviewerQaEntries() {
+      const entries = parseReviewerQaTranscript(reviewerQaSourceMarkdown);
+      if (reviewerQaPendingQuestion) entries.push({ role: 'question', text: reviewerQaPendingQuestion, pending: reviewerQaQuestionInFlight });
+      if (reviewerQaPendingAnswer || reviewerQaQuestionInFlight) {
+        entries.push({
+          role: 'answer',
+          text: reviewerQaPendingAnswer || 'Reviewer is answering…',
+          pending: reviewerQaQuestionInFlight,
+        });
+      }
+      return entries;
+    }
+
+    function renderReviewerQaTranscript(entries) {
+      if (!entries.length) {
+        return '<p class="reviewer-qa-empty">No reviewer Q&amp;A recorded yet.</p>';
+      }
+      return entries.map((entry) => {
+        const label = entry.role === 'question' ? 'You' : (entry.role === 'answer' ? 'Reviewer' : 'Transcript');
+        return `<article class="reviewer-qa-entry" data-role="${escapeHtml(entry.role)}"${entry.pending ? ' data-pending="true"' : ''}><span class="reviewer-qa-role">${escapeHtml(label)}${entry.pending ? ' · live' : ''}</span><div class="reviewer-qa-bubble">${escapeHtml(entry.text)}</div></article>`;
+      }).join('');
+    }
+
     function setTaskDetailStale(isStale, message = '') {
       taskDetailStale = isStale;
       if (isStale && message) {
@@ -3980,13 +4118,20 @@
       if (!isOpen) {
         setApprovalChoiceModalOpen(false, { force: true });
         clearTaskRefreshTimer();
+        clearReviewerQaRefreshInterval();
         activeTaskRequestToken += 1;
         activeTaskLogRequestToken += 1;
         taskDetailStale = false;
         activeTaskLogs = null;
         activeLogName = null;
         activeInlineCommentAnchor = null;
+        reviewerQaPendingQuestion = '';
+        reviewerQaPendingAnswer = '';
+        reviewerQaQuestionInFlight = false;
+        reviewerQaDraftBackup = '';
+        reviewerQaLastRenderedSignature = '';
       }
+      updateReviewerQaLiveRefresh();
       syncBodyModalState();
     }
 
@@ -4243,25 +4388,31 @@
       taskTabOverview.classList.toggle('active', tab === 'overview');
       taskTabLogs.classList.toggle('active', tab === 'logs');
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
+      taskTabReviewerQa.classList.toggle('active', tab === 'reviewer-qa');
       taskTabReviewNote.classList.toggle('active', tab === 'review-note');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskPanelOverview.hidden = tab !== 'overview';
       taskPanelLogs.hidden = tab !== 'logs';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
+      taskPanelReviewerQa.hidden = tab !== 'reviewer-qa';
       taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
       if (tab === 'review-note') requestAnimationFrame(() => syncHumanReviewEditorHeight());
       if (tab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') schedulePlanEditorHeightSync();
+      if (tab === 'reviewer-qa') requestAnimationFrame(() => scrollReviewerQaTranscriptToBottom());
+      updateReviewerQaLiveRefresh();
       if (!load) return;
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
+      if (tab === 'reviewer-qa' && activeTaskId) loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false });
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
     }
 
     function taskChromeState(state = '') {
       return {
         changedFilesVisible: state === 'human-verifying' || state === 'done',
-        reviewNoteVisible: state === 'completed-reviews' || state === 'human-verifying',
+        reviewerQaVisible: state === 'completed-reviews' || state === 'human-verifying',
+        reviewNoteVisible: state === 'human-verifying',
         viewerVisible: true,
         defaultTab: state === 'waiting-check-plans' ? 'editor' : (state === 'human-verifying' ? 'changed-files' : 'overview'),
       };
@@ -4274,6 +4425,7 @@
       document.getElementById('task-modal-title').textContent = snapshot?.title || translateTask('modalTitle');
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags(snapshot);
       taskTabChangedFiles.hidden = !chrome.changedFilesVisible;
+      taskTabReviewerQa.hidden = !chrome.reviewerQaVisible;
       taskTabReviewNote.hidden = !chrome.reviewNoteVisible;
       taskTabEditor.hidden = !chrome.viewerVisible;
       togglePlanEditButton.hidden = state !== 'waiting-check-plans';
@@ -5213,9 +5365,16 @@
       taskHumanReviewApprovalStatus.dataset.tone = approvalReason ? 'warning' : 'neutral';
     }
 
-    function setReviewerQaTranscript(value) {
+    function setReviewerQaTranscript(value, { preserveScroll = true } = {}) {
       reviewerQaSourceMarkdown = value || '';
-      taskReviewerQaTranscript.textContent = reviewerQaSourceMarkdown || 'No reviewer Q&A recorded yet.';
+      const entries = buildReviewerQaEntries();
+      const nextMarkup = renderReviewerQaTranscript(entries);
+      const nextSignature = JSON.stringify({ source: reviewerQaSourceMarkdown, pendingQuestion: reviewerQaPendingQuestion, pendingAnswer: reviewerQaPendingAnswer, inFlight: reviewerQaQuestionInFlight });
+      if (reviewerQaLastRenderedSignature === nextSignature && taskReviewerQaTranscript.innerHTML === nextMarkup) return;
+      const scrollState = preserveScroll ? captureReviewerQaScrollState() : { pinnedToBottom: true, offsetFromBottom: 0 };
+      reviewerQaLastRenderedSignature = nextSignature;
+      taskReviewerQaTranscript.innerHTML = nextMarkup;
+      requestAnimationFrame(() => restoreReviewerQaScrollState(scrollState));
     }
 
     function updateReviewerQaPanel() {
@@ -5223,9 +5382,15 @@
       const canAskReviewer = state === 'completed-reviews' || state === 'human-verifying';
       taskReviewerQaPanel.hidden = !canAskReviewer;
       if (!canAskReviewer) return;
-      askReviewerQuestionButton.disabled = taskDetailStale || !(taskReviewerQaInput.value || '').trim();
+      askReviewerQuestionButton.disabled = taskDetailStale || reviewerQaQuestionInFlight || !(taskReviewerQaInput.value || '').trim();
       if (taskDetailStale) {
         taskReviewerQaStatus.textContent = 'Refresh task details before asking another reviewer question.';
+        return;
+      }
+      if (reviewerQaQuestionInFlight) {
+        taskReviewerQaStatus.textContent = reviewerQaPendingAnswer
+          ? 'Reviewer is responding live. The transcript will finalize automatically when the run completes.'
+          : 'Reviewer is responding…';
         return;
       }
       taskReviewerQaStatus.textContent = reviewerQaSourceMarkdown
@@ -5236,10 +5401,18 @@
     async function askReviewerQuestion() {
       if (!activeTaskId || taskDetailStale) return;
       const question = (taskReviewerQaInput.value || '').trim();
+      let reviewerQaRequestCommitted = false;
       if (!question) {
         updateReviewerQaPanel();
         return;
       }
+      reviewerQaDraftBackup = question;
+      reviewerQaPendingQuestion = question;
+      reviewerQaPendingAnswer = '';
+      reviewerQaQuestionInFlight = true;
+      taskReviewerQaInput.value = '';
+      reviewerQaTranscriptPinnedToBottom = true;
+      setReviewerQaTranscript(reviewerQaSourceMarkdown, { preserveScroll: false });
       taskReviewerQaStatus.textContent = 'Asking reviewer…';
       askReviewerQuestionButton.disabled = true;
       try {
@@ -5250,18 +5423,33 @@
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || 'Failed to ask reviewer question.');
-        taskReviewerQaInput.value = '';
+        reviewerQaRequestCommitted = true;
         taskModalError.hidden = true;
+        reviewerQaPendingAnswer = payload.answer || reviewerQaPendingAnswer;
+        reviewerQaTranscriptPinnedToBottom = true;
+        setReviewerQaTranscript(reviewerQaSourceMarkdown, { preserveScroll: false });
+        reviewerQaPendingQuestion = '';
+        reviewerQaPendingAnswer = '';
+        reviewerQaQuestionInFlight = false;
+        reviewerQaDraftBackup = '';
         await loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false });
         await loadTaskLogs(activeTaskId, { preserveSelection: false });
         taskReviewerQaStatus.textContent = payload.log_name
           ? `Reviewer answered. Thinking output is available in ${payload.log_name}.`
           : 'Reviewer answered.';
       } catch (error) {
+        if (!reviewerQaRequestCommitted) taskReviewerQaInput.value = reviewerQaDraftBackup;
+        reviewerQaPendingQuestion = '';
+        reviewerQaPendingAnswer = '';
+        reviewerQaQuestionInFlight = false;
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
         taskReviewerQaStatus.textContent = error.message;
       } finally {
+        reviewerQaDraftBackup = '';
+        if (!reviewerQaRequestCommitted) {
+          setReviewerQaTranscript(activeTaskDetail?.human_review?.reviewer_qa_markdown || reviewerQaSourceMarkdown, { preserveScroll: true });
+        }
         updateReviewerQaPanel();
       }
     }
@@ -5561,16 +5749,19 @@
       setTaskDetailStale(false);
       const latestError = latestVisibleError(metadata.errors);
       const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
-      const reviewNoteVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
+      const reviewerQaVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
+      const reviewNoteVisible = metadata.state === 'human-verifying';
       const viewerVisible = detail.markdown_files.length > 0;
       const logsVisible = detail.log_files.length > 0 || ['planning', 'implementing', 'reviewing'].includes(metadata.state);
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
       taskTabLogs.hidden = !logsVisible;
       taskTabChangedFiles.hidden = !changedFilesVisible;
+      taskTabReviewerQa.hidden = !reviewerQaVisible;
       taskTabReviewNote.hidden = !reviewNoteVisible;
       taskTabEditor.hidden = !viewerVisible;
       if (!logsVisible && taskTabLogs.classList.contains('active')) setTaskTab(viewerVisible ? 'editor' : 'overview');
       if (!changedFilesVisible && taskTabChangedFiles.classList.contains('active')) setTaskTab('overview');
+      if (!reviewerQaVisible && taskTabReviewerQa.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!reviewNoteVisible && taskTabReviewNote.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
       if (planEditable && activeArtifactName !== 'PLAN.md') activeArtifactName = 'PLAN.md';
@@ -5582,7 +5773,7 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
-      setReviewerQaTranscript(detail.human_review?.reviewer_qa_markdown || '');
+      setReviewerQaTranscript(detail.human_review?.reviewer_qa_markdown || '', { preserveScroll: true });
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
       updateReviewerQaPanel();
       activeChangedFileDetail = null;
@@ -5845,6 +6036,17 @@
       return true;
     }
 
+    function appendReviewerQaWorkerLogPayload(payload) {
+      if (!payload || payload.log_name !== 'reviewer-qa.jsonl') return false;
+      if (!reviewerQaQuestionInFlight && !reviewerQaPendingQuestion) return false;
+      const nextAnswer = (payload.rendered_content || payload.rendered_delta || '').trim();
+      if (!nextAnswer) return true;
+      reviewerQaPendingAnswer = nextAnswer;
+      setReviewerQaTranscript(reviewerQaSourceMarkdown, { preserveScroll: true });
+      updateReviewerQaPanel();
+      return true;
+    }
+
     function appendWorkerLogFilePayload(payload) {
       if (!payload || !activeTaskLogs || !payload.log_name) return false;
       const entries = Array.isArray(activeTaskLogs.entries) ? activeTaskLogs.entries : [];
@@ -5915,7 +6117,13 @@
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder(translateTask('selectChangedTabToInspect'));
         setHumanReviewEditorContent('');
-        setReviewerQaTranscript('');
+        reviewerQaTranscriptPinnedToBottom = true;
+        reviewerQaPendingQuestion = '';
+        reviewerQaPendingAnswer = '';
+        reviewerQaQuestionInFlight = false;
+        reviewerQaDraftBackup = '';
+        reviewerQaLastRenderedSignature = '';
+        setReviewerQaTranscript('', { preserveScroll: false });
         taskReviewerQaInput.value = '';
         taskMarkdownFiles.innerHTML = '';
         taskArtifactName.textContent = translateTask('noDocumentSelected');
@@ -6438,6 +6646,7 @@
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
+    taskTabReviewerQa.addEventListener('click', () => setTaskTab('reviewer-qa'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     taskLogFiles.addEventListener('click', (event) => {
@@ -6448,6 +6657,7 @@
       scrollTaskLogViewerToBottom();
     });
     taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);
+    taskReviewerQaTranscript.addEventListener('scroll', updateReviewerQaTranscriptPinnedToBottom);
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
     taskDiffShell.addEventListener('click', (event) => {
       const lineCommentButton = event.target.closest('[data-line-comment-action]');
@@ -6548,6 +6758,7 @@
       if (taskModal.hidden) return;
       const payload = JSON.parse(event.data);
       if (activeTaskId !== payload.task_id) return;
+      if (activeTaskTab === 'reviewer-qa' && appendReviewerQaWorkerLogPayload(payload)) return;
       if (activeTaskTab === 'logs') {
         if (appendWorkerLogPayload(payload)) return;
         loadTaskLogs(activeTaskId).catch((error) => {

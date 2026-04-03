@@ -2247,14 +2247,30 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "applyRequestTranslations();" in response.text
     assert "['plan-approving', 'waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')" in response.text
     assert "task-human-review-panel" in response.text
+    assert "task-reviewer-qa-panel" in response.text
+    assert 'class="reviewer-qa-log"' in response.text
+    assert 'class="reviewer-qa-composer"' in response.text
+    assert 'class="editor-textarea reviewer-qa-input"' in response.text
+    assert 'class="reviewer-qa-send"' in response.text
+    assert "function appendReviewerQaWorkerLogPayload(payload)" in response.text
+    assert "let reviewerQaQuestionInFlight = false;" in response.text
+    assert "Reviewer is answering…" in response.text
     assert "save-human-review-note" in response.text
     assert "request-changes-button" in response.text
     assert "approve-human-review-button" in response.text
     assert "/api/tasks/${activeTaskId}/human-review-note" in response.text
+    assert "/api/tasks/${activeTaskId}/reviewer-qa" in response.text
     assert "/api/retrospectives/inspect" in response.text
     assert "/api/retrospectives/create" in response.text
+    assert 'id="task-tab-reviewer-qa"' in response.text
+    assert 'id="task-panel-reviewer-qa"' in response.text
     assert 'id="task-tab-review-note"' in response.text
     assert 'id="task-panel-review-note"' in response.text
+    assert "reviewerQaVisible: state === 'completed-reviews' || state === 'human-verifying'" in response.text
+    assert "reviewNoteVisible: state === 'human-verifying'" in response.text
+    assert "function parseReviewerQaTranscript(source)" in response.text
+    assert "function updateReviewerQaLiveRefresh()" in response.text
+    assert "if (activeTaskTab === 'reviewer-qa' && appendReviewerQaWorkerLogPayload(payload)) return;" in response.text
     assert 'class="diff-grid"' in response.text
     assert 'class="diff-row"' in response.text
     assert 'class="diff-cell ${line.kind}"' in response.text
@@ -2483,7 +2499,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "source.addEventListener('worker_log_file', (event) => {" in response.text
     assert "loadTaskLogs(activeTaskId).catch((error) => {" in response.text
     assert "maybeStartLogPolling" not in response.text
-    assert "setInterval(() => {" not in response.text
+    assert "reviewerQaRefreshInterval = window.setInterval(() => {" in response.text
     assert "let activeTaskRequestToken = 0;" in response.text
     assert "let activeArtifactRequestToken = 0;" in response.text
     assert "function scheduleActiveTaskRefresh(options = {})" in response.text
