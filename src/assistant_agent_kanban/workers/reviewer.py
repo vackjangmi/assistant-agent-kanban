@@ -12,6 +12,7 @@ from ..exceptions import TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..language import generation_language_code, generation_language_name
 from ..models import RunResult, TaskErrorInfo
+from ..models import reset_review_loop_tracking
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from .base import WorkerBase
 
@@ -27,6 +28,7 @@ class ReviewFinalizeArtifact(TypedDict):
 
 class ReviewerWorker(WorkerBase):
     worker_name = "reviewer"
+    review_loop_escalation_threshold = 3
 
     def __init__(self, *args, adapter: AssistantAdapter, integration_manager: IntegrationManager, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -158,10 +160,24 @@ class ReviewerWorker(WorkerBase):
                 (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 if verdict != "PASS":
+                    plan_revision = reviewing.metadata.plan.revision
+                    if reviewing.metadata.review.rework_loop_plan_revision != plan_revision:
+                        reviewing.metadata.review.rework_loop_plan_revision = plan_revision
+                        reviewing.metadata.review.consecutive_rework_loops = 0
+                    reviewing.metadata.review.consecutive_rework_loops += 1
+                    if reviewing.metadata.review.consecutive_rework_loops >= self.review_loop_escalation_threshold:
+                        reviewing.metadata.review.human_rework_required = True
+                        reviewing.metadata.review.human_rework_reason = (
+                            f"human review required after {reviewing.metadata.review.consecutive_rework_loops} consecutive review rework loops"
+                        )
                     apply_retry_gate(reviewing.metadata, reason="review-needs-changes")
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                    done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review needs changes")
+                    note = "review needs changes"
+                    if reviewing.metadata.review.human_rework_required:
+                        note = "review loop capped: human review required"
+                    done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
                 else:
+                    reset_review_loop_tracking(reviewing.metadata.review)
                     clear_retry_gate(reviewing.metadata)
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                     done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
@@ -284,10 +300,24 @@ class ReviewerWorker(WorkerBase):
             (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
             self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
             if verdict != "PASS":
+                plan_revision = reviewing.metadata.plan.revision
+                if reviewing.metadata.review.rework_loop_plan_revision != plan_revision:
+                    reviewing.metadata.review.rework_loop_plan_revision = plan_revision
+                    reviewing.metadata.review.consecutive_rework_loops = 0
+                reviewing.metadata.review.consecutive_rework_loops += 1
+                if reviewing.metadata.review.consecutive_rework_loops >= self.review_loop_escalation_threshold:
+                    reviewing.metadata.review.human_rework_required = True
+                    reviewing.metadata.review.human_rework_reason = (
+                        f"human review required after {reviewing.metadata.review.consecutive_rework_loops} consecutive review rework loops"
+                    )
                 apply_retry_gate(reviewing.metadata, reason="review-needs-changes")
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review needs changes")
+                note = "review needs changes"
+                if reviewing.metadata.review.human_rework_required:
+                    note = "review loop capped: human review required"
+                done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
             else:
+                reset_review_loop_tracking(reviewing.metadata.review)
                 clear_retry_gate(reviewing.metadata)
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
@@ -387,7 +417,15 @@ class ReviewerWorker(WorkerBase):
         language = generation_language_code(metadata.request.language)
         implementation_iteration = metadata.cycle
         strings = REVIEWER_TEXT[language]
-        sections = [f"# {strings['plan']}", "", (task_dir / "PLAN.md").read_text().rstrip()]
+        sections = [
+            f"# {strings['original_request']}",
+            "",
+            (task_dir / "REQUEST.md").read_text().rstrip(),
+            "",
+            f"# {strings['plan']}",
+            "",
+            (task_dir / "PLAN.md").read_text().rstrip(),
+        ]
 
         work_files = sorted(task_dir.glob("WORK-*.md"))
         if work_files:
@@ -395,14 +433,18 @@ class ReviewerWorker(WorkerBase):
             for work_file in work_files:
                 sections.extend(["", f"## {work_file.name}", "", work_file.read_text().rstrip()])
 
-        review_files = sorted(task_dir.glob("REVIEW-*.md"))
-        if review_files:
-            sections.extend(["", f"# {strings['previous_reviews']}"])
-            for review_file in review_files:
-                sections.extend(["", f"## {review_file.name}", "", review_file.read_text().rstrip()])
-
         human_verify_files = sorted(task_dir.glob("HUMAN-VERIFY-*.md"))
         if human_verify_files:
+            sections.extend(
+                [
+                    "",
+                    f"# {strings['primary_human_rework_goal']}",
+                    "",
+                    strings['primary_human_rework_goal_instruction'],
+                    "",
+                    human_verify_files[-1].read_text().rstrip(),
+                ]
+            )
             sections.extend(["", f"# {strings['human_verification_history']}"])
             for verify_file in human_verify_files:
                 sections.extend(["", f"## {verify_file.name}", "", verify_file.read_text().rstrip()])
@@ -412,6 +454,12 @@ class ReviewerWorker(WorkerBase):
             sections.extend(["", f"# {strings['reviewer_qa_history']}"])
             for qa_file in reviewer_qa_files:
                 sections.extend(["", f"## {qa_file.name}", "", qa_file.read_text().rstrip()])
+
+        review_files = sorted(task_dir.glob("REVIEW-*.md"))
+        if review_files:
+            sections.extend(["", f"# {strings['previous_reviews']}"])
+            for review_file in review_files:
+                sections.extend(["", f"## {review_file.name}", "", review_file.read_text().rstrip()])
 
         current_work = task_dir / f"WORK-{implementation_iteration:03d}.md"
         if current_work.exists():
@@ -548,30 +596,38 @@ class ReviewerWorker(WorkerBase):
 
 REVIEWER_TEXT = {
     "en": {
+        "original_request": "Original Request",
         "plan": "Plan",
         "work_history": "Work History",
+        "primary_human_rework_goal": "Primary Human Rework Goal",
+        "primary_human_rework_goal_instruction": "Treat the latest human verification request as the highest-priority outcome for this review cycle, but only as a current-cycle refinement inside the bounds of the original request, the approved plan, and the repository invariants. If it conflicts with prior AI review guidance, judge the work against the human request first and only keep older review findings when they still matter after that request is satisfied.",
         "previous_reviews": "Previous AI Reviews",
         "human_verification_history": "Human Verification History",
         "reviewer_qa_history": "Reviewer Q&A History",
         "current_work_artifact": "Current Work Artifact",
         "review_instructions": "Review Instructions",
         "instructions": [
-            "- Check the full work history, previous AI reviews, human verification history, and reviewer Q&A history before deciding.",
+            "- Judge against the original request and approved plan first, then the latest human verification request and reviewer Q&A as the current-cycle delta, and only then older AI review history if it still applies.",
+            "- Treat the latest human verification request as the authoritative goal for this cycle, but not in ways that break the original request, the approved plan, or repository invariants.",
             "- Do not repeat earlier findings unless they still apply; explain why they remain unresolved.",
             "- Use `Verdict: NEEDS_CHANGES` only when implementation changes are still required.",
             "- If the work is acceptable with only minor notes, prefer `Verdict: PASS` and list the notes under follow-ups.",
         ],
     },
     "ko": {
+        "original_request": "원래 요청",
         "plan": "계획",
         "work_history": "작업 이력",
+        "primary_human_rework_goal": "최우선 인간 재요청 목표",
+        "primary_human_rework_goal_instruction": "최신 사람 검증 요청을 이번 리뷰 사이클의 최우선 결과 기준으로 취급하되, 그것은 원래 요청과 승인된 계획, 저장소 불변 조건 안에서 이루어지는 현재 사이클의 수정이어야 합니다. 이전 AI 리뷰 지침과 충돌하면 먼저 사람 요청을 기준으로 판단하고, 그 요청을 충족한 뒤에도 여전히 중요한 항목만 이전 리뷰 지적으로 유지하세요.",
         "previous_reviews": "이전 AI 리뷰",
         "human_verification_history": "사람 검증 이력",
         "reviewer_qa_history": "리뷰어 질의응답 이력",
         "current_work_artifact": "현재 작업 산출물",
         "review_instructions": "리뷰 지침",
         "instructions": [
-            "- 판단하기 전에 전체 작업 이력, 이전 AI 리뷰, 사람 검증 이력, 리뷰어 질의응답 이력을 모두 확인하세요.",
+            "- 판단하기 전에 먼저 원래 요청과 승인된 계획을 기준으로 보고, 그 다음 최신 사람 검증 요청과 리뷰어 질의응답을 이번 사이클의 변경분으로 확인한 뒤, 마지막으로 이전 AI 리뷰 이력이 아직 유효한지 보세요.",
+            "- 최신 사람 검증 요청이 예전 리뷰 지침과 충돌하면 이번 사이클에서는 사람 요청을 우선 기준으로 삼되, 원래 요청과 승인된 계획, 저장소 불변 조건을 깨지는 마세요.",
             "- 예전 지적을 그대로 반복하지 말고, 아직 유효하다면 왜 해결되지 않았는지 설명하세요.",
             "- 실제 구현 수정이 더 필요할 때만 `Verdict: NEEDS_CHANGES`를 사용하세요.",
             "- 사소한 후속 메모만 남는 수준이면 `Verdict: PASS`를 우선하고 후속 항목 아래에 정리하세요.",
