@@ -132,6 +132,11 @@ class ReviewInfo(BaseModel):
     session_id: str | None = None
     last_run_tokens: int = 0
     session_tokens: int = 0
+    qa_path: str | None = None
+    qa_resolved_model: str | None = None
+    qa_session_id: str | None = None
+    qa_last_run_tokens: int = 0
+    qa_session_tokens: int = 0
 
 
 class RetryGateInfo(BaseModel):
@@ -392,6 +397,8 @@ class HumanReviewState(BaseModel):
     note_path: str | None = None
     comments_path: str | None = None
     note_markdown: str = ""
+    reviewer_qa_path: str | None = None
+    reviewer_qa_markdown: str = ""
     total_comment_count: int = 0
     unresolved_comment_count: int = 0
     historical_comment_count: int = 0

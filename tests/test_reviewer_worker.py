@@ -4,9 +4,12 @@ import asyncio
 import json
 from typing import cast
 
+import pytest
+
 from assistant_agent_kanban.config import AppConfig
 from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.exceptions import TransitionError
 from assistant_agent_kanban.integration_manager import IntegrationManager
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
@@ -239,8 +242,10 @@ def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths
     first_task = scanner.scan()[0]
     (first_task.task_dir / "REVIEW-001.md").write_text("Verdict: NEEDS_CHANGES\n- prior issue\n")
     (first_task.task_dir / "HUMAN-VERIFY-001.md").write_text("Please re-check replay flow.\n")
+    (first_task.task_dir / "REVIEWER-QA-001.md").write_text("# Reviewer Q&A\n\n## Question 1\nWhy was this left?\n\n## Answer 1\nBecause the diff is intentional.\n")
     (first_task.task_dir / "WORK-000.md").write_text("older work\n")
     first_task.metadata.review.session_id = "ses_rev_1"
+    first_task.metadata.review.qa_path = "REVIEWER-QA-001.md"
     first_task.metadata.cycle = 1
     first_task.metadata.implementation.iteration = 1
     first_task.metadata.review.iteration = 1
@@ -270,7 +275,85 @@ def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths
     assert "REVIEW-001.md" in prompt
     assert "# Human Verification History" in prompt
     assert "HUMAN-VERIFY-001.md" in prompt
+    assert "# Reviewer Q&A History" in prompt
+    assert "REVIEWER-QA-001.md" in prompt
     assert "Do not repeat earlier findings unless they still apply" in prompt
+
+
+def test_reviewer_human_qa_writes_artifact_and_uses_thinking_mode(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "reviewer-qa-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    waiting_reviews = scanner.scan()[0]
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    metadata_store.save(completed.task_dir, completed.metadata)
+
+    adapter = FakeAdapter(
+        ["The current implementation is acceptable, but the naming can still be refined."],
+        session_ids=["ses_review_qa"],
+        total_tokens=[21],
+    )
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    result = worker.answer_human_question(completed.metadata.task_id, by="human", question="Should we rename the public label as well?")
+    updated = scanner.find_task(completed.metadata.task_id)
+    artifact_path = updated.task_dir / "REVIEWER-QA-001.md"
+
+    assert result["qa_path"] == "REVIEWER-QA-001.md"
+    assert result["session_id"] == "ses_review_qa"
+    assert adapter.run_calls[0]["show_thinking"] is True
+    assert updated.metadata.review.qa_path == "REVIEWER-QA-001.md"
+    assert updated.metadata.review.qa_session_id == "ses_review_qa"
+    assert updated.metadata.review.qa_last_run_tokens == 21
+    assert artifact_path.exists()
+    assert "## Question 1" in artifact_path.read_text()
+    assert "Should we rename the public label as well?" in artifact_path.read_text()
+    assert "The current implementation is acceptable" in artifact_path.read_text()
+
+
+def test_reviewer_human_qa_requires_workspace(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "reviewer-qa-no-workspace-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    metadata_store.save(completed.task_dir, completed.metadata)
+
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["unused"]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    with pytest.raises(TransitionError, match="requires an active implementation workspace"):
+        worker.answer_human_question(completed.metadata.task_id, by="human", question="Can you explain the issue?")
 
 
 def test_reviewer_worker_rolls_over_session_after_budget_is_exceeded(configured_paths):

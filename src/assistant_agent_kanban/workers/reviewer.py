@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timezone, datetime
 from pathlib import Path
 from typing import Literal, TypedDict, cast
 
 from ..assistant_adapter import AssistantAdapter
 from ..enums import TaskState
+from ..exceptions import TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..language import generation_language_code, generation_language_name
 from ..models import RunResult, TaskErrorInfo
@@ -108,6 +110,7 @@ class ReviewerWorker(WorkerBase):
                     session_id=session_id,
                     cancel_key=reviewing.metadata.task_id,
                     on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, log_name),
+                    show_thinking=True,
                 )
                 reviewing.metadata.review.resolved_model = result.resolved_model
                 reviewing.metadata.review.session_id = result.session_id
@@ -175,6 +178,7 @@ class ReviewerWorker(WorkerBase):
                 config=run_config,
                 session_id=session_id,
                 cancel_key=reviewing.metadata.task_id,
+                show_thinking=True,
             )
             reviewing.metadata.review.resolved_model = handshake_result.resolved_model
             reviewing.metadata.review.session_id = handshake_result.session_id
@@ -208,6 +212,7 @@ class ReviewerWorker(WorkerBase):
                 session_id=active_session_id,
                 cancel_key=reviewing.metadata.task_id,
                 on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, log_name),
+                show_thinking=True,
             )
             if not live_result.ok:
                 reviewing.metadata.errors.append(
@@ -229,6 +234,7 @@ class ReviewerWorker(WorkerBase):
                 config=run_config,
                 session_id=live_result.session_id or active_session_id,
                 cancel_key=reviewing.metadata.task_id,
+                show_thinking=True,
             )
             reviewing.metadata.review.resolved_model = finalize_result.resolved_model or live_result.resolved_model or handshake_result.resolved_model
             reviewing.metadata.review.session_id = finalize_result.session_id or live_result.session_id or active_session_id
@@ -288,6 +294,82 @@ class ReviewerWorker(WorkerBase):
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
 
+    def answer_human_question(self, task_id: str, *, by: str, question: str) -> dict[str, str | int | None]:
+        try:
+            task = self.scanner.find_task(task_id)
+        except FileNotFoundError as exc:
+            raise TaskNotFoundError(task_id) from exc
+        if task.state not in {TaskState.COMPLETED_REVIEWS, TaskState.HUMAN_VERIFYING}:
+            raise TransitionError("reviewer Q&A is only available from completed-reviews or human-verifying")
+        normalized_question = question.strip()
+        if not normalized_question:
+            raise TransitionError("reviewer question cannot be empty")
+
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-reviewer-qa"):
+            expected_qa_path = f"REVIEWER-QA-{task.metadata.cycle:03d}.md"
+            if task.metadata.review.qa_path != expected_qa_path:
+                task.metadata.review.qa_path = expected_qa_path
+                task.metadata.review.qa_session_id = None
+                task.metadata.review.qa_last_run_tokens = 0
+                task.metadata.review.qa_session_tokens = 0
+                task.metadata.review.qa_resolved_model = None
+            cwd = self._reviewer_qa_cwd(task.metadata)
+            log_path = self.task_log_dir(task.metadata.task_id) / "reviewer-qa.jsonl"
+            run_config = self.resolve_task_run_config(task.task_dir, task.metadata)
+            adapter = self.resolve_task_adapter(task.task_dir, task.metadata)
+            session_id = self.reuse_session_id(
+                session_id=task.metadata.review.qa_session_id,
+                session_tokens=task.metadata.review.qa_session_tokens,
+                budget=run_config.role_session_token_budget("reviewer"),
+            )
+            prior_session_tokens = task.metadata.review.qa_session_tokens if session_id else 0
+            prompt = self._build_reviewer_qa_prompt(task.task_dir, task.metadata, normalized_question)
+            result = adapter.run(
+                agent=run_config.role_agent("reviewer"),
+                prompt=prompt,
+                cwd=cwd,
+                run_log_path=log_path,
+                config=run_config,
+                session_id=session_id,
+                cancel_key=task.metadata.task_id,
+                show_thinking=True,
+            )
+            task.metadata.review.qa_resolved_model = result.resolved_model
+            task.metadata.review.qa_session_id = result.session_id
+            task.metadata.review.qa_last_run_tokens = result.total_tokens
+            task.metadata.review.qa_session_tokens = self.next_session_token_total(
+                reused_session_id=session_id,
+                returned_session_id=result.session_id,
+                prior_session_tokens=prior_session_tokens,
+                run_tokens=result.total_tokens,
+            )
+            answer = result.assistant_text.strip()
+            if not result.ok or not answer:
+                task.metadata.errors.append(
+                    TaskErrorInfo(code="reviewer-qa-failed", message=result.stderr.strip() or "reviewer Q&A failed")
+                )
+                self.metadata_store.save(task.task_dir, task.metadata)
+                raise TransitionError(result.stderr.strip() or "reviewer Q&A failed")
+            self._append_reviewer_qa_artifact(
+                task.task_dir,
+                task.metadata,
+                question=normalized_question,
+                answer=answer,
+                asked_by=by,
+            )
+            qa_path = task.metadata.review.qa_path
+            self.metadata_store.save(task.task_dir, task.metadata)
+            return {
+                "task_id": task.metadata.task_id,
+                "question": normalized_question,
+                "answer": answer,
+                "qa_path": qa_path,
+                "resolved_model": task.metadata.review.qa_resolved_model,
+                "session_id": task.metadata.review.qa_session_id,
+                "total_tokens": task.metadata.review.qa_last_run_tokens,
+                "log_name": log_path.name,
+            }
+
     def _build_reviewer_source(self, task_dir: Path, metadata) -> str:
         language = generation_language_code(metadata.request.language)
         implementation_iteration = metadata.cycle
@@ -312,6 +394,12 @@ class ReviewerWorker(WorkerBase):
             for verify_file in human_verify_files:
                 sections.extend(["", f"## {verify_file.name}", "", verify_file.read_text().rstrip()])
 
+        reviewer_qa_files = sorted(task_dir.glob("REVIEWER-QA-*.md"))
+        if reviewer_qa_files:
+            sections.extend(["", f"# {strings['reviewer_qa_history']}"])
+            for qa_file in reviewer_qa_files:
+                sections.extend(["", f"## {qa_file.name}", "", qa_file.read_text().rstrip()])
+
         current_work = task_dir / f"WORK-{implementation_iteration:03d}.md"
         if current_work.exists():
             sections.extend(["", f"# {strings['current_work_artifact']}", "", current_work.read_text().rstrip()])
@@ -325,6 +413,72 @@ class ReviewerWorker(WorkerBase):
             ]
         )
         return "\n".join(section for section in sections if section is not None)
+
+    def _build_reviewer_qa_prompt(self, task_dir: Path, metadata, question: str) -> str:
+        source = self._build_reviewer_source(task_dir, metadata)
+        instructions = "\n".join(
+            [
+                source,
+                "",
+                "# Human Review Q&A",
+                "Answer the human's question directly in markdown.",
+                "Use the existing reviewed result and prior task artifacts as the source of truth.",
+                "Do not produce the final review artifact JSON.",
+                "Do not request file edits or change task state yourself.",
+                "If the question reveals a real gap, explain it clearly so the human can send the task back for rework.",
+                "",
+                "## Human Question",
+                question,
+            ]
+        )
+        return self.build_prompt(instructions, metadata, phase="reviewer")
+
+    def _ensure_reviewer_qa_path(self, metadata) -> str:
+        expected_path = f"REVIEWER-QA-{metadata.cycle:03d}.md"
+        if metadata.review.qa_path != expected_path:
+            metadata.review.qa_path = expected_path
+        return expected_path
+
+    def _append_reviewer_qa_artifact(self, task_dir: Path, metadata, *, question: str, answer: str, asked_by: str) -> None:
+        qa_path = task_dir / self._ensure_reviewer_qa_path(metadata)
+        existing = qa_path.read_text().rstrip() if qa_path.exists() else ""
+        exchange_count = existing.count("## Question") + 1
+        now = datetime.now(timezone.utc).isoformat()
+        sections: list[str] = []
+        if existing:
+            sections.extend([existing, ""])
+        else:
+            sections.extend([
+                "# Reviewer Q&A",
+                "",
+                f"- Cycle: {metadata.cycle:03d}",
+                "",
+            ])
+        sections.extend(
+            [
+                f"## Question {exchange_count}",
+                f"- Asked by: {asked_by}",
+                f"- Asked at: {now}",
+                "",
+                question,
+                "",
+                f"## Answer {exchange_count}",
+                f"- Model: {metadata.review.qa_resolved_model or metadata.review.resolved_model or 'unknown'}",
+                f"- Answered at: {now}",
+                "",
+                answer,
+                "",
+            ]
+        )
+        qa_path.write_text("\n".join(sections).rstrip() + "\n")
+
+    def _reviewer_qa_cwd(self, metadata) -> Path:
+        workspace_repo = metadata.implementation.workspace
+        if workspace_repo:
+            workspace_path = Path(workspace_repo).expanduser().resolve()
+            if workspace_path.exists():
+                return workspace_path
+        raise TransitionError("reviewer Q&A requires an active implementation workspace")
 
     def _build_handshake_prompt(self, metadata) -> str:
         requested_language = generation_language_name(metadata.request.language)
@@ -385,10 +539,11 @@ REVIEWER_TEXT = {
         "work_history": "Work History",
         "previous_reviews": "Previous AI Reviews",
         "human_verification_history": "Human Verification History",
+        "reviewer_qa_history": "Reviewer Q&A History",
         "current_work_artifact": "Current Work Artifact",
         "review_instructions": "Review Instructions",
         "instructions": [
-            "- Check the full work history, previous AI reviews, and human verification history before deciding.",
+            "- Check the full work history, previous AI reviews, human verification history, and reviewer Q&A history before deciding.",
             "- Do not repeat earlier findings unless they still apply; explain why they remain unresolved.",
             "- Use `Verdict: NEEDS_CHANGES` only when implementation changes are still required.",
             "- If the work is acceptable with only minor notes, prefer `Verdict: PASS` and list the notes under follow-ups.",
@@ -399,10 +554,11 @@ REVIEWER_TEXT = {
         "work_history": "작업 이력",
         "previous_reviews": "이전 AI 리뷰",
         "human_verification_history": "사람 검증 이력",
+        "reviewer_qa_history": "리뷰어 질의응답 이력",
         "current_work_artifact": "현재 작업 산출물",
         "review_instructions": "리뷰 지침",
         "instructions": [
-            "- 판단하기 전에 전체 작업 이력, 이전 AI 리뷰, 사람 검증 이력을 모두 확인하세요.",
+            "- 판단하기 전에 전체 작업 이력, 이전 AI 리뷰, 사람 검증 이력, 리뷰어 질의응답 이력을 모두 확인하세요.",
             "- 예전 지적을 그대로 반복하지 말고, 아직 유효하다면 왜 해결되지 않았는지 설명하세요.",
             "- 실제 구현 수정이 더 필요할 때만 `Verdict: NEEDS_CHANGES`를 사용하세요.",
             "- 사소한 후속 메모만 남는 수준이면 `Verdict: PASS`를 우선하고 후속 항목 아래에 정리하세요.",
