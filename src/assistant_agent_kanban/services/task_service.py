@@ -34,6 +34,7 @@ from ..models import (
     TaskMetadata,
     TaskStageTiming,
     reset_plan_approval_tracking,
+    reset_review_loop_tracking,
     utc_now,
 )
 from ..scanner import TERMINAL_STATES, KanbanScanner, derive_agent_status
@@ -236,6 +237,20 @@ class TaskService:
             )
             self.scanner.metadata_store.save(moved.task_dir, moved.metadata)
             return moved
+
+    def resume_review_loop(self, task_id: str, *, by: str = "human"):
+        task = self._find_task(task_id)
+        if task.state != TaskState.TODOS:
+            raise TransitionError("review loop resume is only allowed in todos")
+        if not task.metadata.review.human_rework_required:
+            raise TransitionError("review loop resume is only allowed when human review is required")
+        if self.locks is None:
+            raise TransitionError("review loop resume requires lock manager")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-review-loop-resume"):
+            reset_review_loop_tracking(task.metadata.review)
+            clear_retry_gate(task.metadata)
+            self.scanner.metadata_store.save(task.task_dir, task.metadata)
+            return self.scanner.find_task(task.metadata.task_id)
 
     def _render_human_plan_approval_markdown(self, task, approval_record) -> str:
         signals = ", ".join(approval_record.ai_risk_signals) if approval_record.ai_risk_signals else "none"

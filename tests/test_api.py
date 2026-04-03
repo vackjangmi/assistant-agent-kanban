@@ -253,6 +253,39 @@ def test_api_creates_request_with_plan_auto_approve_flag(configured_paths):
     assert "plan_auto_approve: true" in (task.task_dir / "REQUEST.md").read_text()
 
 
+def test_api_resumes_human_blocked_review_loop(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "resume-review-loop-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-review-loop-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    blocked = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    blocked.metadata.review.consecutive_rework_loops = 3
+    blocked.metadata.review.rework_loop_plan_revision = blocked.metadata.plan.revision
+    blocked.metadata.review.human_rework_required = True
+    blocked.metadata.review.human_rework_reason = "human review required after 3 consecutive review rework loops"
+    metadata_store.save(blocked.task_dir, blocked.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{blocked.metadata.task_id}/resume-review-loop")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["review"]["consecutive_rework_loops"] == 0
+        assert payload["review"]["human_rework_required"] is False
+
+        detail = client.get(f"/api/tasks/{blocked.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["metadata"]["review"]["human_rework_required"] is False
+
+
 def test_api_rejects_empty_plan_md_edit_in_waiting_check_plans(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-empty-edit-task")
