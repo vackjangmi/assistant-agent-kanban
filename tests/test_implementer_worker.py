@@ -247,6 +247,41 @@ def test_implementer_worker_rolls_over_session_after_budget_is_exceeded(configur
     assert second_pass.metadata.implementation.session_tokens == 30
 
 
+def test_implementer_source_includes_latest_reviewer_qa(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implementer-reviewer-qa-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    (planning.task_dir / "REVIEW-001.md").write_text("Verdict: NEEDS_CHANGES\n\n- tighten the copy\n")
+    (planning.task_dir / "REVIEWER-QA-001.md").write_text("# Reviewer Q&A\n\n## Question 1\nCan the label stay?\n\n## Answer 1\nYes, but the helper text should change.\n")
+    (planning.task_dir / "HUMAN-VERIFY-001.md").write_text("Please revisit the helper text.\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["implemented"]),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    prompt_source = worker._build_implementer_source(planning.task_dir)
+
+    assert "# Latest AI Review" in prompt_source
+    assert "# Latest Reviewer Q&A" in prompt_source
+    assert "Can the label stay?" in prompt_source
+    assert "Yes, but the helper text should change." in prompt_source
+    assert "# Latest Human Verification" in prompt_source
+
+
 def test_implementer_worker_uses_single_json_run_when_live_logs_disabled(configured_paths):
     config, _, _ = configured_paths
     config.opencode.worker_live_logs_enabled = False

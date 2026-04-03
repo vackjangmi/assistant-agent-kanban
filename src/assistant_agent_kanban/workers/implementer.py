@@ -355,6 +355,9 @@ class ImplementerWorker(WorkerBase):
         latest_review = sorted(task_dir.glob("REVIEW-*.md"))
         if latest_review:
             sections.extend(["", "# Latest AI Review", "", latest_review[-1].read_text().rstrip()])
+        latest_reviewer_qa = sorted(task_dir.glob("REVIEWER-QA-*.md"))
+        if latest_reviewer_qa:
+            sections.extend(["", "# Latest Reviewer Q&A", "", latest_reviewer_qa[-1].read_text().rstrip()])
         latest_human_verify = sorted(task_dir.glob("HUMAN-VERIFY-*.md"))
         if latest_human_verify:
             sections.extend(["", "# Latest Human Verification", "", latest_human_verify[-1].read_text().rstrip()])

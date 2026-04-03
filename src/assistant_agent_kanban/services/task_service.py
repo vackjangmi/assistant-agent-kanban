@@ -44,7 +44,7 @@ from ..retry_policy import clear_retry_gate
 
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
-ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
+ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|REVIEWER-QA|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
 AI_ACTIVE_STATES = {
     TaskState.PLANNING,
     TaskState.PLAN_APPROVING,
@@ -393,10 +393,19 @@ class TaskService:
         metadata = task.metadata
         comments = self._load_current_cycle_line_comments(task, metadata)
         all_comments = self._load_all_line_comments(task, metadata)
+        reviewer_qa_files = sorted(task.task_dir.glob("REVIEWER-QA-*.md"))
+        reviewer_qa_path = reviewer_qa_files[-1].name if reviewer_qa_files else metadata.review.qa_path
+        reviewer_qa_markdown = ""
+        if reviewer_qa_path:
+            reviewer_qa_file = task.task_dir / reviewer_qa_path
+            if reviewer_qa_file.exists():
+                reviewer_qa_markdown = reviewer_qa_file.read_text().rstrip()
         return HumanReviewState(
             note_path=metadata.human_verification.note_path,
             comments_path=metadata.human_verification.comments_path,
             note_markdown=metadata.human_verification.note_markdown,
+            reviewer_qa_path=reviewer_qa_path,
+            reviewer_qa_markdown=reviewer_qa_markdown,
             total_comment_count=len(comments),
             unresolved_comment_count=sum(1 for comment in comments if not comment.resolved),
             historical_comment_count=max(0, len(all_comments) - len(comments)),
@@ -411,7 +420,7 @@ class TaskService:
         if match:
             kind = match.group(1)
             cycle = int(match.group("cycle"))
-            kind_order = {"WORK": 0, "REVIEW": 1, "HUMAN-VERIFY": 2}[kind]
+            kind_order = {"WORK": 0, "REVIEW": 1, "REVIEWER-QA": 2, "HUMAN-VERIFY": 3}[kind]
             return (2, cycle, kind_order, filename)
         if filename == "COMMIT.md":
             return (4, 0, 0, filename)
