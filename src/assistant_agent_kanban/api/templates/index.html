@@ -1636,6 +1636,23 @@
         </div>
       </section>
       <section id="task-panel-review-note" class="task-panel" hidden>
+        <div id="task-reviewer-qa-panel" class="human-review-panel" hidden>
+          <div class="human-review-box">
+            <div class="editor-toolbar">
+              <div>
+                <strong id="task-reviewer-qa-title">Reviewer Q&amp;A</strong>
+                <div id="task-reviewer-qa-status" class="muted">Ask the reviewer follow-up questions. OpenCode reviewer runs use Thinking Mode when available, and the runtime log is saved as reviewer-qa.jsonl.</div>
+              </div>
+              <div>
+                <button type="button" id="ask-reviewer-question">Ask reviewer</button>
+              </div>
+            </div>
+            <pre id="task-reviewer-qa-transcript" class="log-viewer">No reviewer Q&amp;A recorded yet.</pre>
+            <div class="human-review-footer">
+              <textarea id="task-reviewer-qa-input" class="editor-textarea" spellcheck="true" placeholder="Ask a follow-up question for the reviewer..."></textarea>
+            </div>
+          </div>
+        </div>
         <div id="task-human-review-panel" class="human-review-panel" hidden>
           <div class="human-review-box">
             <div class="editor-toolbar">
@@ -1882,6 +1899,11 @@
     const taskDiffShell = document.getElementById('task-diff-shell');
     const taskDiffDesktop = document.getElementById('task-diff-desktop');
     const taskDiffMobile = document.getElementById('task-diff-mobile');
+    const taskReviewerQaPanel = document.getElementById('task-reviewer-qa-panel');
+    const taskReviewerQaStatus = document.getElementById('task-reviewer-qa-status');
+    const taskReviewerQaTranscript = document.getElementById('task-reviewer-qa-transcript');
+    const taskReviewerQaInput = document.getElementById('task-reviewer-qa-input');
+    const askReviewerQuestionButton = document.getElementById('ask-reviewer-question');
     const taskHumanReviewPanel = document.getElementById('task-human-review-panel');
     const taskHumanReviewEditorHost = document.getElementById('task-human-review-editor-host');
     const taskHumanReviewEditorFallback = document.getElementById('task-human-review-editor-fallback');
@@ -1962,6 +1984,7 @@
     let requestUploadToken = '';
     let humanReviewEditor = null;
     let humanReviewSourceMarkdown = '';
+    let reviewerQaSourceMarkdown = '';
     let markdownViewer = null;
     let activeInlineCommentAnchor = null;
     let deletingCommentId = null;
@@ -4238,7 +4261,7 @@
     function taskChromeState(state = '') {
       return {
         changedFilesVisible: state === 'human-verifying' || state === 'done',
-        reviewNoteVisible: state === 'human-verifying',
+        reviewNoteVisible: state === 'completed-reviews' || state === 'human-verifying',
         viewerVisible: true,
         defaultTab: state === 'waiting-check-plans' ? 'editor' : (state === 'human-verifying' ? 'changed-files' : 'overview'),
       };
@@ -5190,6 +5213,59 @@
       taskHumanReviewApprovalStatus.dataset.tone = approvalReason ? 'warning' : 'neutral';
     }
 
+    function setReviewerQaTranscript(value) {
+      reviewerQaSourceMarkdown = value || '';
+      taskReviewerQaTranscript.textContent = reviewerQaSourceMarkdown || 'No reviewer Q&A recorded yet.';
+    }
+
+    function updateReviewerQaPanel() {
+      const state = activeTaskDetail?.metadata?.state;
+      const canAskReviewer = state === 'completed-reviews' || state === 'human-verifying';
+      taskReviewerQaPanel.hidden = !canAskReviewer;
+      if (!canAskReviewer) return;
+      askReviewerQuestionButton.disabled = taskDetailStale || !(taskReviewerQaInput.value || '').trim();
+      if (taskDetailStale) {
+        taskReviewerQaStatus.textContent = 'Refresh task details before asking another reviewer question.';
+        return;
+      }
+      taskReviewerQaStatus.textContent = reviewerQaSourceMarkdown
+        ? 'Saved in the current reviewer Q&A artifact. Check the Logs tab for reviewer-qa.jsonl when you want the Thinking output.'
+        : 'Ask the reviewer follow-up questions. OpenCode reviewer runs use Thinking Mode when available, and the runtime log is saved as reviewer-qa.jsonl.';
+    }
+
+    async function askReviewerQuestion() {
+      if (!activeTaskId || taskDetailStale) return;
+      const question = (taskReviewerQaInput.value || '').trim();
+      if (!question) {
+        updateReviewerQaPanel();
+        return;
+      }
+      taskReviewerQaStatus.textContent = 'Asking reviewer…';
+      askReviewerQuestionButton.disabled = true;
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/reviewer-qa`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to ask reviewer question.');
+        taskReviewerQaInput.value = '';
+        taskModalError.hidden = true;
+        await loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false });
+        await loadTaskLogs(activeTaskId, { preserveSelection: false });
+        taskReviewerQaStatus.textContent = payload.log_name
+          ? `Reviewer answered. Thinking output is available in ${payload.log_name}.`
+          : 'Reviewer answered.';
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskReviewerQaStatus.textContent = error.message;
+      } finally {
+        updateReviewerQaPanel();
+      }
+    }
+
     function setArtifactMode(editing) {
       taskModeBadge.textContent = editing ? translateTask('editMode') : translateTask('viewerMode');
       taskViewerHost.hidden = editing;
@@ -5485,7 +5561,7 @@
       setTaskDetailStale(false);
       const latestError = latestVisibleError(metadata.errors);
       const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
-      const reviewNoteVisible = metadata.state === 'human-verifying';
+      const reviewNoteVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const viewerVisible = detail.markdown_files.length > 0;
       const logsVisible = detail.log_files.length > 0 || ['planning', 'implementing', 'reviewing'].includes(metadata.state);
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
@@ -5506,7 +5582,9 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
+      setReviewerQaTranscript(detail.human_review?.reviewer_qa_markdown || '');
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
+      updateReviewerQaPanel();
       activeChangedFileDetail = null;
       renderChangedFileButtons(detail.changed_files);
       renderDiffPlaceholder(detail.changed_files.length ? translateTask('selectChangedFile') : translateTask('changedFilesPatchAvailable'));
@@ -5546,7 +5624,11 @@
 
     function parseArtifactCycle(file) {
       const match = /^(WORK|REVIEW|HUMAN-VERIFY)-([0-9]{3})\.md$/.exec(file);
-      if (!match) return null;
+      if (!match) {
+        const reviewerQaMatch = /^(REVIEWER-QA)-([0-9]{3})\.md$/.exec(file);
+        if (!reviewerQaMatch) return null;
+        return { kind: reviewerQaMatch[1], cycle: reviewerQaMatch[2] };
+      }
       return { kind: match[1], cycle: match[2] };
     }
 
@@ -5833,6 +5915,8 @@
         taskChangedFiles.innerHTML = '';
         renderDiffPlaceholder(translateTask('selectChangedTabToInspect'));
         setHumanReviewEditorContent('');
+        setReviewerQaTranscript('');
+        taskReviewerQaInput.value = '';
         taskMarkdownFiles.innerHTML = '';
         taskArtifactName.textContent = translateTask('noDocumentSelected');
         setPlanEditorContent('');
@@ -6392,6 +6476,8 @@
       if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') schedulePlanEditorHeightSync();
     });
     saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
+    askReviewerQuestionButton.addEventListener('click', () => askReviewerQuestion().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateReviewerQaPanel(); }));
+    taskReviewerQaInput.addEventListener('input', () => updateReviewerQaPanel());
     requestChangesButton.addEventListener('click', rejectVerification);
     approveHumanReviewButton.addEventListener('click', openApprovalChoiceModal);
     approvalChoiceTargetButton.addEventListener('click', () => { approveVerification('target-branch'); });

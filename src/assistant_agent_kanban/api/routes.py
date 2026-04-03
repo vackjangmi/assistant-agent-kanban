@@ -68,6 +68,10 @@ class HumanReviewNotePayload(BaseModel):
     content: str = ""
 
 
+class ReviewerQuestionPayload(BaseModel):
+    question: str = ""
+
+
 class RetrospectivePayload(BaseModel):
     target_repo_root: str
     base_branch: str
@@ -681,6 +685,17 @@ def build_router() -> APIRouter:
             "task_id": context.metadata.task_id,
             "content": context.metadata.human_verification.note_markdown,
         }
+
+    @router.post("/api/tasks/{task_id}/reviewer-qa")
+    async def ask_reviewer_question(task_id: str, payload: ReviewerQuestionPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            result = await asyncio.to_thread(runtime.reviewer.answer_human_question, task_id, by="human", question=payload.question)
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return result
 
     @router.post("/api/tasks/{task_id}/reject-verification")
     async def reject_verification(task_id: str, payload: HumanVerificationPayload, request: Request):

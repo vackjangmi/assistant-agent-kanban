@@ -827,6 +827,54 @@ def test_api_saves_human_review_note(configured_paths):
         assert detail.json()["human_review"]["note_markdown"] == "## Note\nPlease keep the animation timing."
 
 
+def test_api_runs_reviewer_qa_and_exposes_saved_transcript(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.runtime.role_backends.reviewer = "codex"
+    create_request_task(config, "reviewer-qa-api-task")
+    reviewer_adapter = FakeAdapter(["## Answer\n\nThe current naming is acceptable, but the helper copy should still be updated."], session_ids=["ses_reviewer_qa"], total_tokens=[17])
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), reviewer_adapter, adapter_registry={"codex": reviewer_adapter})
+    _, completed = _task_ready_for_completed_reviews(config, "reviewer-qa-api-task")
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/reviewer-qa",
+            json={"question": "Can we keep the existing label?"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["qa_path"] == "REVIEWER-QA-001.md"
+        assert payload["session_id"] == "ses_reviewer_qa"
+        assert "helper copy should still be updated" in payload["answer"]
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["human_review"]["reviewer_qa_path"] == "REVIEWER-QA-001.md"
+        assert "Can we keep the existing label?" in detail.json()["human_review"]["reviewer_qa_markdown"]
+
+    task = KanbanScanner(config).find_task(completed.metadata.task_id)
+    assert (task.task_dir / "REVIEWER-QA-001.md").exists()
+    assert reviewer_adapter.run_calls[0]["show_thinking"] is True
+
+
+def test_api_prefers_existing_reviewer_qa_artifact_over_stale_metadata_path(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "reviewer-qa-stale-path-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "reviewer-qa-stale-path-task")
+    task = scanner.find_task(completed.metadata.task_id)
+    (task.task_dir / "REVIEWER-QA-001.md").write_text("# Reviewer Q&A\n\n## Question 1\nWhat changed?\n\n## Answer 1\nThe helper copy changed.\n")
+    task.metadata.review.qa_path = "REVIEWER-QA-002.md"
+    scanner.metadata_store.save(task.task_dir, task.metadata)
+
+    with TestClient(app) as client:
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["human_review"]["reviewer_qa_path"] == "REVIEWER-QA-001.md"
+        assert "The helper copy changed." in detail.json()["human_review"]["reviewer_qa_markdown"]
+
+
 def test_api_uploads_human_review_note_attachments(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
