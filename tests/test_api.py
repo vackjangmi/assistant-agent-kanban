@@ -30,6 +30,13 @@ from assistant_agent_kanban.models import utc_now
 from .conftest import FakeAdapter, create_request_task
 
 
+def _settings_adapter_registry(opencode_adapter=None, codex_adapter=None):
+    return {
+        "opencode": opencode_adapter or FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]]),
+        "codex": codex_adapter or FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]]),
+    }
+
+
 def _task_ready_for_completed_reviews(config, task_name: str):
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
@@ -1223,6 +1230,9 @@ def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):
         assert len(task_dir.name) == 7
         assert "## 목표" in request_markdown
         assert "## 승인 기준" in request_markdown
+        assert "추가된 코드의 모든 케이스의 테스트 코드와 테스트 커버리지 100%를 달성해야 한다." in request_markdown
+        assert "작업한 내용 외 전체 테스트 suite 가 수행에 성공해야 한다." in request_markdown
+        assert "Users can still sign in" in request_markdown
         assert f"repo_root: {target_repo.resolve()}" in request_markdown
         assert "base_branch: develop" in request_markdown
         assert "language: ko" in request_markdown
@@ -1249,11 +1259,15 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert response.status_code == 200
     task_dir = _locate_task_dir(config, Path(response.json()["task_path"]).name)
     request_markdown = (task_dir / "REQUEST.md").read_text()
+    assert "plan_auto_approve: true" in request_markdown
     assert "## Scope" in request_markdown
     assert f"Limit code changes to `{target_repo}`." in request_markdown
     assert "## Out of Scope" in request_markdown
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
     assert "Do not modify files under `records/kanban-docs` unless the request explicitly asks for it." in request_markdown
+    assert "## Acceptance Criteria" in request_markdown
+    assert "Add tests for every case introduced by the new code and achieve 100% test coverage." in request_markdown
+    assert "The full test suite must pass, not just the tests related to the changed code." in request_markdown
 
 
 def test_api_extracts_embedded_request_goal_images_to_attachments(configured_paths, tmp_path):
@@ -1378,7 +1392,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(omo_root))
     planner_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
-    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter)
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         get_response = client.get("/api/settings/models")
@@ -1386,6 +1401,20 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["language"] == "EN"
         assert get_response.json()["theme"] == "light"
         assert get_response.json()["coding_assistant"] == "opencode"
+        assert get_response.json()["role_backends"] == {
+            "planner": None,
+            "plan_approval": None,
+            "implementer": None,
+            "reviewer": None,
+            "commit": None,
+        }
+        assert get_response.json()["effective_role_backends"] == {
+            "planner": "opencode",
+            "plan_approval": "opencode",
+            "implementer": "opencode",
+            "reviewer": "opencode",
+            "commit": "opencode",
+        }
         assert get_response.json()["worker_live_logs_enabled"] is True
         assert get_response.json()["available_assistants"] == [
             {"value": "opencode", "label": "OpenCode"},
@@ -1403,6 +1432,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["repo_discovery_max_depth"] == config.repo_discovery.max_depth
         assert get_response.json()["config_path"] == str(local_config_path.resolve())
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
+        assert get_response.json()["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
+        assert "gpt-5.4" in get_response.json()["available_models_by_backend"]["codex"]
         assert get_response.json()["discovery_status"] == "ready"
         assert get_response.json()["discovery_error"] is None
         assert get_response.json()["delegated_model_status"] == "ready"
@@ -1419,11 +1450,15 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             json={
                 "language": "KO",
                 "coding_assistant": "opencode",
+                "role_backends": {
+                    "implementer": "codex",
+                    "commit": "codex",
+                },
                 "worker_live_logs_enabled": False,
                 "planner_model": "gpt-5",
                 "planner_session_token_budget": 210,
                 "planner_agent_count": 2,
-                "implementer_model": " o3-mini ",
+                "implementer_model": " gpt-5.4 ",
                 "implementer_session_token_budget": 230,
                 "implementer_agent_count": 3,
                 "reviewer_model": "",
@@ -1441,11 +1476,25 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["saved"] is True
     assert payload["language"] == "KO"
     assert payload["coding_assistant"] == "opencode"
+    assert payload["role_backends"] == {
+        "planner": None,
+        "plan_approval": None,
+        "implementer": "codex",
+        "reviewer": None,
+        "commit": "codex",
+    }
+    assert payload["effective_role_backends"] == {
+        "planner": "opencode",
+        "plan_approval": "opencode",
+        "implementer": "codex",
+        "reviewer": "opencode",
+        "commit": "codex",
+    }
     assert payload["worker_live_logs_enabled"] is False
     assert payload["planner_model"] == "gpt-5"
     assert payload["planner_session_token_budget"] == 210
     assert payload["planner_agent_count"] == 2
-    assert payload["implementer_model"] == "o3-mini"
+    assert payload["implementer_model"] == "gpt-5.4"
     assert payload["implementer_session_token_budget"] == 230
     assert payload["implementer_agent_count"] == 3
     assert payload["reviewer_model"] is None
@@ -1458,19 +1507,23 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.opencode.planner_model == "gpt-5"
     assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
+    assert app.state.runtime.config.runtime.role_backends.implementer == "codex"
+    assert app.state.runtime.config.runtime.role_backends.commit == "codex"
     assert app.state.runtime.config.opencode.worker_live_logs_enabled is False
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.runtime.planner_agent_count == 2
-    assert app.state.runtime.config.opencode.implementer_model == "o3-mini"
-    assert app.state.runtime.config.opencode.implementer_session_token_budget == 230000
+    assert app.state.runtime.config.codex.implementer_model == "gpt-5.4"
+    assert app.state.runtime.config.codex.implementer_session_token_budget == 230000
     assert app.state.runtime.config.runtime.implementer_agent_count == 3
     assert app.state.runtime.config.opencode.reviewer_model is None
     assert app.state.runtime.config.opencode.reviewer_session_token_budget == 190000
     assert app.state.runtime.config.runtime.reviewer_agent_count == 4
     assert app.state.runtime.config.repo_discovery.root == "../"
     assert app.state.runtime.config.repo_discovery.max_depth == 4
-    assert load_config(config_path).opencode.commit_model == "gpt-5"
-    assert load_config(config_path).opencode.commit_session_token_budget == 250000
+    assert load_config(config_path).codex.commit_model == "gpt-5"
+    assert load_config(config_path).codex.commit_session_token_budget == 250000
+    assert load_config(config_path).runtime.role_backends.implementer == "codex"
+    assert load_config(config_path).runtime.role_backends.commit == "codex"
     assert load_config(config_path).repo_discovery.root == "../"
     assert load_config(config_path).repo_discovery.max_depth == 4
 
@@ -1496,7 +1549,8 @@ def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_p
     (planning.task_dir / "PLAN.md").write_text("plan\n")
     metadata_store.save(planning.task_dir, planning.metadata)
     board_snapshot = scanner.board_snapshot()
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         detail = client.get(f"/api/tasks/{planning.metadata.task_id}")
@@ -1529,7 +1583,8 @@ def test_api_task_detail_marks_active_state_without_lease_as_waiting(configured_
     implementing = transitions.move(scanner.find_task(waiting.metadata.task_id), TaskState.IMPLEMENTING, by="implementer")
     implementing.metadata.lease.heartbeat_at = utc_now()
     metadata_store.save(implementing.task_dir, implementing.metadata)
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         detail = client.get(f"/api/tasks/{implementing.metadata.task_id}")
@@ -1563,7 +1618,8 @@ def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
     ]
     metadata_store.save(staged_task.task_dir, staged_task.metadata)
 
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         response = client.get(f"/api/tasks/{staged_task.metadata.task_id}")
@@ -1659,7 +1715,8 @@ def test_api_preserves_repo_discovery_root_when_put_payload_omits_it(configured_
     config.runtime.language = "KO"
     config.runtime.theme = "dark"
     config.runtime.coding_assistant = "opencode"
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         response = client.put(
@@ -1784,7 +1841,9 @@ def test_api_accepts_codex_runtime_coding_assistant(configured_paths):
 
 def test_api_rejects_unknown_opencode_model_on_save(configured_paths):
     config, _, _ = configured_paths
-    app = create_app(config, FakeAdapter(["plan"], discovery_responses=[["openai/gpt-5.4"]]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    planner_adapter = FakeAdapter(["plan"], discovery_responses=[["openai/gpt-5.4"]])
+    adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter)
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         response = client.put(
@@ -1808,7 +1867,8 @@ def test_api_rejects_unknown_opencode_model_on_save(configured_paths):
 
 def test_api_rejects_unknown_codex_model_on_save(configured_paths):
     config, _, _ = configured_paths
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         response = client.put(
@@ -1833,7 +1893,8 @@ def test_api_rejects_unknown_codex_model_on_save(configured_paths):
 def test_api_refresh_can_preview_codex_models_without_switching_runtime(configured_paths):
     config, _, _ = configured_paths
     planner_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
-    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter)
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         response = client.get("/api/settings/models?refresh=true&assistant=codex")
@@ -1846,11 +1907,44 @@ def test_api_refresh_can_preview_codex_models_without_switching_runtime(configur
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
 
 
+def test_api_rejects_unavailable_role_backend_on_save(configured_paths):
+    config, _, _ = configured_paths
+
+    class UnavailableCodexAdapter(FakeAdapter):
+        def availability_error(self, *, config, backend):
+            return "binary not found on PATH: codex"
+
+    planner_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
+    adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter, codex_adapter=UnavailableCodexAdapter(["codex"]))
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "opencode",
+                "role_backends": {"implementer": "codex"},
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "settings.backend_unavailable",
+        "field": "role_backends.implementer",
+        "message": "binary not found on PATH: codex",
+    }
+
+
 def test_api_settings_without_assistant_query_returns_persisted_backend(configured_paths):
     config, _, _ = configured_paths
     config.runtime.coding_assistant = "codex"
     config.codex.planner_model = "gpt-5.4"
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         response = client.get("/api/settings/models")
@@ -1863,7 +1957,8 @@ def test_api_settings_without_assistant_query_returns_persisted_backend(configur
 
 def test_api_save_materializes_runtime_agents_immediately(configured_paths):
     config, _, _ = configured_paths
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
     runtime_agents_dir = config.kanban_root / "_runtime" / "opencode-config" / "opencode" / "agents"
     planner_agent_path = runtime_agents_dir / f"{config.opencode.planner_agent}.md"
     implementer_agent_path = runtime_agents_dir / f"{config.opencode.implementer_agent}.md"
@@ -1922,7 +2017,8 @@ def test_api_refreshes_model_discovery_and_keeps_cached_options_on_failure(confi
         ["plan"],
         discovery_responses=[["gpt-5", "claude-3.7-sonnet"], RuntimeError("opencode models failed")],
     )
-    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter)
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         initial = client.get("/api/settings/models")
@@ -1993,6 +2089,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'class="field-checkbox-row"' in response.text
     assert 'id="plan_auto_approve"' in response.text
     assert 'for="plan_auto_approve"' in response.text
+    assert 'id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true" checked' in response.text
     assert '.field-checkbox-row input[type="checkbox"] { width: auto;' in response.text
     assert "task-modal" in response.text
     assert "retrospective-modal" in response.text
@@ -2019,6 +2116,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Debug log" not in response.text
     assert "Agent activity" in response.text
     assert "task-activity-shell" in response.text
+    assert "planner_backend" in response.text
+    assert "plan_approval_backend" in response.text
+    assert "implementer_backend" in response.text
+    assert "reviewer_backend" in response.text
+    assert "commit_backend" in response.text
     assert "planner_model" in response.text
     assert "runtime_language" in response.text
     assert "runtime_theme" in response.text
@@ -2052,7 +2154,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".settings-toolbar-field { display: inline-grid; grid-template-columns: auto auto; gap: 8px; align-items: center; justify-content: start; }" in response.text
     assert 'id="settings-live-logs-field"' in response.text
     assert 'class="settings-role-inline"' in response.text
-    assert 'class="settings-role-inline settings-role-inline-commit"' in response.text
+    assert 'class="settings-role-inline settings-role-inline-no-agents"' in response.text
     assert "Agent" in response.text
     assert 'id="close-settings"' not in response.text
     assert 'id="settings-config-path"' not in response.text
@@ -2069,7 +2171,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
     assert "readNumericSettingInput" in response.text
-    assert "assistant-model-options" in response.text
+    assert "planner-model-options" in response.text
+    assert "plan-approval-model-options" in response.text
+    assert "implementer-model-options" in response.text
+    assert "reviewer-model-options" in response.text
+    assert "commit-model-options" in response.text
+    assert "const previousRoleSelections = Object.fromEntries(roleSettingConfigs.map(({ role, backendInput }) => [role, backendInput.value || 'default']));" in response.text
+    assert "backendInput.value = roleOptions.some((item) => item.value === nextValue) ? nextValue : 'default';" in response.text
     assert "Refresh models" in response.text
     assert "Save settings" in response.text
     assert "window.location.reload();" in response.text
@@ -2125,6 +2233,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "activeBoardPhase = 'plan';" in response.text
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
+    assert "function buildAcceptanceCriteriaDefaults()" in response.text
+    assert "추가된 코드의 모든 케이스의 테스트 코드와 테스트 커버리지 100%를 달성해야 한다." in response.text
+    assert "작업한 내용 외 전체 테스트 suite 가 수행에 성공해야 한다." in response.text
     assert "assistant-agent-kanban.last-target-repo" in response.text
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text

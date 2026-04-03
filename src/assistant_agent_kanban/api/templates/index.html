@@ -1009,8 +1009,8 @@
     @media (max-width: 960px) {
       .settings-toolbar-actions { justify-content: flex-start; margin-left: 0; }
     }
-    .settings-role-inline { display: grid; grid-template-columns: 64px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
-    .settings-role-inline-commit { grid-template-columns: minmax(0, 1fr) 110px; }
+    .settings-role-inline { display: grid; grid-template-columns: 64px 132px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
+    .settings-role-inline-no-agents { grid-template-columns: 132px minmax(0, 1fr) 110px; }
     .settings-field-compact input { text-align: center; }
     .settings-field { display: grid; gap: 5px; }
     .settings-field label { font-size: 0.83rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
@@ -1298,7 +1298,7 @@
               </div>
               <div class="field compact span-full field-checkbox">
                 <div class="field-checkbox-row">
-                  <input id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true">
+                  <input id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true" checked>
                   <div class="field-checkbox-copy">
                     <label id="request-plan-auto-approve-label" for="plan_auto_approve">Plan auto approval</label>
                     <span id="request-plan-auto-approve-description">Skip manual plan approval and automatically move to TODO after plan generation.</span>
@@ -1425,12 +1425,12 @@
           <section class="settings-section">
             <div class="settings-section-head">
               <strong id="settings-agents-heading">Runtime roles</strong>
-              <span id="settings-agents-description">Models, token budgets, and parallel slots.</span>
+              <span id="settings-agents-description">Assistants, models, token budgets, and parallel slots.</span>
             </div>
             <div class="settings-toolbar">
               <div class="settings-toolbar-cluster">
                 <div class="settings-toolbar-field">
-                  <label id="settings-coding-assistant-label" for="runtime_coding_assistant">Assistant</label>
+                  <label id="settings-coding-assistant-label" for="runtime_coding_assistant">Default assistant</label>
                   <select id="runtime_coding_assistant" name="coding_assistant">
                     <option value="opencode">OpenCode</option>
                     <option value="codex">Codex CLI</option>
@@ -1450,7 +1450,7 @@
             </div>
             <div class="settings-grid">
           <div class="settings-card">
-            <strong id="settings-planner-title">Planner model</strong>
+            <strong id="settings-planner-title">Planner runtime</strong>
             <span id="settings-planner-description">Planning runs.</span>
             <div class="settings-role-inline">
               <div class="settings-field settings-field-compact">
@@ -1458,33 +1458,41 @@
                 <input id="planner_agent_count" name="planner_agent_count" type="number" min="1" step="1" placeholder="1">
               </div>
               <div class="settings-field">
+                <label id="settings-planner-assistant-label" for="planner_backend">Assistant</label>
+                <select id="planner_backend" name="planner_backend"></select>
+              </div>
+              <div class="settings-field">
                 <label id="settings-planner-model-label" for="planner_model">Model</label>
-                <input id="planner_model" name="planner_model" list="assistant-model-options" placeholder="inherit default model">
+                <input id="planner_model" name="planner_model" list="planner-model-options" placeholder="inherit assistant default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-planner-token-label" for="planner_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="planner_session_token_budget" name="planner_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
             </div>
-            <small id="settings-planner-note">Model, token budget, and parallel agents.</small>
+            <small id="settings-planner-note">Assistant override, model, token budget, and parallel agents.</small>
           </div>
           <div class="settings-card">
-            <strong id="settings-plan-approval-title">Plan approval model</strong>
+            <strong id="settings-plan-approval-title">Plan approval runtime</strong>
             <span id="settings-plan-approval-description">Selective plan gate decisions.</span>
-            <div class="settings-role-inline">
+            <div class="settings-role-inline settings-role-inline-no-agents">
+              <div class="settings-field">
+                <label id="settings-plan-approval-assistant-label" for="plan_approval_backend">Assistant</label>
+                <select id="plan_approval_backend" name="plan_approval_backend"></select>
+              </div>
               <div class="settings-field">
                 <label id="settings-plan-approval-model-label" for="plan_approval_model">Model</label>
-                <input id="plan_approval_model" name="plan_approval_model" list="assistant-model-options" placeholder="inherit default model">
+                <input id="plan_approval_model" name="plan_approval_model" list="plan-approval-model-options" placeholder="inherit assistant default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-plan-approval-token-label" for="plan_approval_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="plan_approval_session_token_budget" name="plan_approval_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
             </div>
-            <small id="settings-plan-approval-note">Model and token budget for auto-approve decisions.</small>
+            <small id="settings-plan-approval-note">Assistant override, model, and token budget for auto-approve decisions.</small>
           </div>
           <div class="settings-card">
-            <strong id="settings-implementer-title">Implementer model</strong>
+            <strong id="settings-implementer-title">Implementer runtime</strong>
             <span id="settings-implementer-description">Workspace coding runs.</span>
             <div class="settings-role-inline">
               <div class="settings-field settings-field-compact">
@@ -1492,18 +1500,22 @@
                 <input id="implementer_agent_count" name="implementer_agent_count" type="number" min="1" step="1" placeholder="1">
               </div>
               <div class="settings-field">
+                <label id="settings-implementer-assistant-label" for="implementer_backend">Assistant</label>
+                <select id="implementer_backend" name="implementer_backend"></select>
+              </div>
+              <div class="settings-field">
                 <label id="settings-implementer-model-label" for="implementer_model">Model</label>
-                <input id="implementer_model" name="implementer_model" list="assistant-model-options" placeholder="inherit default model">
+                <input id="implementer_model" name="implementer_model" list="implementer-model-options" placeholder="inherit assistant default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-implementer-token-label" for="implementer_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="implementer_session_token_budget" name="implementer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
             </div>
-            <small id="settings-implementer-note">Model, token budget, and parallel agents.</small>
+            <small id="settings-implementer-note">Assistant override, model, token budget, and parallel agents.</small>
           </div>
           <div class="settings-card">
-            <strong id="settings-reviewer-title">Reviewer model</strong>
+            <strong id="settings-reviewer-title">Reviewer runtime</strong>
             <span id="settings-reviewer-description">Review runs.</span>
             <div class="settings-role-inline">
               <div class="settings-field settings-field-compact">
@@ -1511,35 +1523,47 @@
                 <input id="reviewer_agent_count" name="reviewer_agent_count" type="number" min="1" step="1" placeholder="1">
               </div>
               <div class="settings-field">
+                <label id="settings-reviewer-assistant-label" for="reviewer_backend">Assistant</label>
+                <select id="reviewer_backend" name="reviewer_backend"></select>
+              </div>
+              <div class="settings-field">
                 <label id="settings-reviewer-model-label" for="reviewer_model">Model</label>
-                <input id="reviewer_model" name="reviewer_model" list="assistant-model-options" placeholder="inherit default model">
+                <input id="reviewer_model" name="reviewer_model" list="reviewer-model-options" placeholder="inherit assistant default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-reviewer-token-label" for="reviewer_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="reviewer_session_token_budget" name="reviewer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
             </div>
-            <small id="settings-reviewer-note">Model, token budget, and parallel agents.</small>
+            <small id="settings-reviewer-note">Assistant override, model, token budget, and parallel agents.</small>
           </div>
           <div class="settings-card">
-            <strong id="settings-commit-title">Commit model</strong>
+            <strong id="settings-commit-title">Commit runtime</strong>
             <span id="settings-commit-description">Commit message generation.</span>
-            <div class="settings-role-inline settings-role-inline-commit">
+            <div class="settings-role-inline settings-role-inline-no-agents">
+              <div class="settings-field">
+                <label id="settings-commit-assistant-label" for="commit_backend">Assistant</label>
+                <select id="commit_backend" name="commit_backend"></select>
+              </div>
               <div class="settings-field">
                 <label id="settings-commit-model-label" for="commit_model">Model</label>
-                <input id="commit_model" name="commit_model" list="assistant-model-options" placeholder="inherit default model">
+                <input id="commit_model" name="commit_model" list="commit-model-options" placeholder="inherit assistant default model">
               </div>
               <div class="settings-field settings-field-compact">
                 <label id="settings-commit-token-label" for="commit_session_token_budget">Token</label>
                 <div class="settings-input-with-suffix"><input id="commit_session_token_budget" name="commit_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
               </div>
             </div>
-            <small id="settings-commit-note">Model and token budget.</small>
+            <small id="settings-commit-note">Assistant override, model, and token budget.</small>
           </div>
             </div>
           </section>
         </div>
-        <datalist id="assistant-model-options"></datalist>
+        <datalist id="planner-model-options"></datalist>
+        <datalist id="plan-approval-model-options"></datalist>
+        <datalist id="implementer-model-options"></datalist>
+        <datalist id="reviewer-model-options"></datalist>
+        <datalist id="commit-model-options"></datalist>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
       </form>
     </div>
@@ -1784,25 +1808,35 @@
     const runtimeThemeInput = document.getElementById('runtime_theme');
     const runtimeCodingAssistantInput = document.getElementById('runtime_coding_assistant');
     const workerLiveLogsModeInput = document.getElementById('worker_live_logs_enabled');
+    const plannerBackendInput = document.getElementById('planner_backend');
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const plannerAgentCountInput = document.getElementById('planner_agent_count');
+    const planApprovalBackendInput = document.getElementById('plan_approval_backend');
     const planApprovalModelInput = document.getElementById('plan_approval_model');
     const planApprovalSessionTokenBudgetInput = document.getElementById('plan_approval_session_token_budget');
+    const implementerBackendInput = document.getElementById('implementer_backend');
     const implementerModelInput = document.getElementById('implementer_model');
     const implementerSessionTokenBudgetInput = document.getElementById('implementer_session_token_budget');
     const implementerAgentCountInput = document.getElementById('implementer_agent_count');
+    const reviewerBackendInput = document.getElementById('reviewer_backend');
     const reviewerModelInput = document.getElementById('reviewer_model');
     const reviewerSessionTokenBudgetInput = document.getElementById('reviewer_session_token_budget');
     const reviewerAgentCountInput = document.getElementById('reviewer_agent_count');
+    const commitBackendInput = document.getElementById('commit_backend');
     const commitModelInput = document.getElementById('commit_model');
     const commitSessionTokenBudgetInput = document.getElementById('commit_session_token_budget');
-    const modelOptions = document.getElementById('assistant-model-options');
+    const plannerModelOptions = document.getElementById('planner-model-options');
+    const planApprovalModelOptions = document.getElementById('plan-approval-model-options');
+    const implementerModelOptions = document.getElementById('implementer-model-options');
+    const reviewerModelOptions = document.getElementById('reviewer-model-options');
+    const commitModelOptions = document.getElementById('commit-model-options');
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
     const settingsStatus = document.getElementById('settings-status');
     const refreshModelOptionsButton = document.getElementById('refresh-model-options');
     const scopeField = document.getElementById('scope');
     const outOfScopeField = document.getElementById('out_of_scope');
+    const acceptanceCriteriaField = document.getElementById('acceptance_criteria');
     const defaultTargetRepo = __DEFAULT_TARGET_REPO__;
     const defaultBaseBranch = __DEFAULT_BASE_BRANCH__;
     const targetRepoDocsRoot = __TARGET_REPO_DOCS_ROOT__;
@@ -1898,6 +1932,7 @@
     const approvePlanButton = document.getElementById('approve-plan');
     let lastAutoScope = '';
     let lastAutoOutOfScope = '';
+    let lastAutoAcceptanceCriteria = '';
     let lastAutoBaseBranch = '';
     let activeTaskId = null;
     let activeTaskTab = 'overview';
@@ -1939,6 +1974,14 @@
     let boardPhaseManuallySelected = false;
     let approvalSubmissionInFlight = false;
 
+    const roleSettingConfigs = [
+      { role: 'planner', backendInput: plannerBackendInput, modelInput: plannerModelInput, modelOptions: plannerModelOptions },
+      { role: 'plan_approval', backendInput: planApprovalBackendInput, modelInput: planApprovalModelInput, modelOptions: planApprovalModelOptions },
+      { role: 'implementer', backendInput: implementerBackendInput, modelInput: implementerModelInput, modelOptions: implementerModelOptions },
+      { role: 'reviewer', backendInput: reviewerBackendInput, modelInput: reviewerModelInput, modelOptions: reviewerModelOptions },
+      { role: 'commit', backendInput: commitBackendInput, modelInput: commitModelInput, modelOptions: commitModelOptions },
+    ];
+
     const settingsTranslations = {
       EN: {
         openSettings: 'Settings',
@@ -1952,8 +1995,10 @@
         basicsHeading: 'Basics',
         basicsDescription: 'Language, theme, and repository defaults.',
         agentsHeading: 'Runtime roles',
-        agentsDescription: 'Models, token budgets, and parallel slots.',
-        codingAssistantLabel: 'Assistant',
+        agentsDescription: 'Assistants, models, token budgets, and parallel slots.',
+        codingAssistantLabel: 'Default assistant',
+        roleAssistantLabel: 'Assistant',
+        defaultAssistantOption: 'Default assistant',
         liveLogsDefault: 'DEFAULT LOG',
         liveLogsThinking: 'THINK LOG',
         languageTitle: 'Language',
@@ -1972,21 +2017,24 @@
         repoDepthTitle: 'Repo discovery depth',
         repoDepthDescription: 'How deep discovery scans.',
         repoDepthNote: 'Increase only for nested repos.',
-        plannerTitle: 'Planner model',
+        plannerTitle: 'Planner runtime',
         plannerDescription: 'Planning runs.',
-        implementerTitle: 'Implementer model',
+        planApprovalTitle: 'Plan approval runtime',
+        planApprovalDescription: 'Selective plan gate decisions.',
+        implementerTitle: 'Implementer runtime',
         implementerDescription: 'Workspace coding runs.',
-        reviewerTitle: 'Reviewer model',
+        reviewerTitle: 'Reviewer runtime',
         reviewerDescription: 'Review runs.',
-        commitTitle: 'Commit model',
+        commitTitle: 'Commit runtime',
         commitDescription: 'Commit message generation.',
         modelLabel: 'Model',
         tokenLabel: 'Token',
         agentsLabel: 'Agent',
-        plannerNote: 'Model, token budget, and parallel agents.',
-        implementerNote: 'Model, token budget, and parallel agents.',
-        reviewerNote: 'Model, token budget, and parallel agents.',
-        commitNote: 'Model and token budget.',
+        plannerNote: 'Assistant override, model, token budget, and parallel agents.',
+        planApprovalNote: 'Assistant override, model, and token budget for auto-approve decisions.',
+        implementerNote: 'Assistant override, model, token budget, and parallel agents.',
+        reviewerNote: 'Assistant override, model, token budget, and parallel agents.',
+        commitNote: 'Assistant override, model, and token budget.',
         cancel: 'Close',
         saveSettings: 'Save',
         statusIdle: 'Current values load when you open this panel.',
@@ -2000,6 +2048,7 @@
         statusDiscoveryEmpty: 'OpenCode responded, but no model options were returned. Manual entry still works.',
         statusSaved: 'Saved settings.',
         errorModelNotDiscovered: '{field} must be one of the discovered models.',
+        errorBackendUnavailable: '{field} is unavailable: {message}',
         summaryAvailableOne: '{count} model loaded · {refreshedAt}',
         summaryAvailableMany: '{count} loaded · {refreshedAt}',
         summaryEmpty: 'No cached models yet.',
@@ -2017,8 +2066,10 @@
         basicsHeading: '기본값',
         basicsDescription: '언어, 테마, 저장소 기본 설정입니다.',
         agentsHeading: '런타임 역할',
-        agentsDescription: '모델, 토큰 예산, 병렬 수를 정합니다.',
-        codingAssistantLabel: '어시스턴트',
+        agentsDescription: '어시스턴트, 모델, 토큰 예산, 병렬 수를 정합니다.',
+        codingAssistantLabel: '기본 어시스턴트',
+        roleAssistantLabel: '어시스턴트',
+        defaultAssistantOption: '기본값 사용',
         liveLogsDefault: 'DEFAULT LOG',
         liveLogsThinking: 'THINK LOG',
         languageTitle: '언어',
@@ -2037,21 +2088,24 @@
         repoDepthTitle: '저장소 탐색 깊이',
         repoDepthDescription: '탐색 깊이를 정합니다.',
         repoDepthNote: '중첩 저장소가 필요할 때만 늘리세요.',
-        plannerTitle: 'Planner 모델',
+        plannerTitle: 'Planner 런타임',
         plannerDescription: '계획 실행용입니다.',
-        implementerTitle: 'Implementer 모델',
+        planApprovalTitle: '플랜 승인 런타임',
+        planApprovalDescription: '선별적인 플랜 게이트 판단용입니다.',
+        implementerTitle: 'Implementer 런타임',
         implementerDescription: '코드 수정 실행용입니다.',
-        reviewerTitle: 'Reviewer 모델',
+        reviewerTitle: 'Reviewer 런타임',
         reviewerDescription: '리뷰 실행용입니다.',
-        commitTitle: 'Commit 모델',
+        commitTitle: 'Commit 런타임',
         commitDescription: '커밋 메시지 생성용입니다.',
         modelLabel: '모델',
         tokenLabel: 'Token',
         agentsLabel: '에이전트',
-        plannerNote: '모델, 토큰 예산, 병렬 수.',
-        implementerNote: '모델, 토큰 예산, 병렬 수.',
-        reviewerNote: '모델, 토큰 예산, 병렬 수.',
-        commitNote: '모델과 토큰 예산.',
+        plannerNote: '어시스턴트 오버라이드, 모델, 토큰 예산, 병렬 수.',
+        planApprovalNote: '어시스턴트 오버라이드, 모델, 토큰 예산.',
+        implementerNote: '어시스턴트 오버라이드, 모델, 토큰 예산, 병렬 수.',
+        reviewerNote: '어시스턴트 오버라이드, 모델, 토큰 예산, 병렬 수.',
+        commitNote: '어시스턴트 오버라이드, 모델, 토큰 예산.',
         cancel: '닫기',
         saveSettings: '저장',
         statusIdle: '패널을 열면 현재 값을 불러옵니다.',
@@ -2065,6 +2119,7 @@
         statusDiscoveryEmpty: 'OpenCode는 응답했지만 모델 옵션을 돌려주지 않았습니다. 직접 입력은 계속 사용할 수 있습니다.',
         statusSaved: '설정을 저장했습니다.',
         errorModelNotDiscovered: '{field} 모델은 발견된 모델 목록 중 하나여야 합니다.',
+        errorBackendUnavailable: '{field} 를 사용할 수 없습니다: {message}',
         summaryAvailableOne: '{count}개 로드됨 · {refreshedAt}',
         summaryAvailableMany: '{count}개 로드됨 · {refreshedAt}',
         summaryEmpty: '캐시된 모델이 없습니다.',
@@ -2689,6 +2744,9 @@
       if (detail.code === 'settings.model_not_discovered') {
         return translateSettings('errorModelNotDiscovered', { field: detail.field || 'model' });
       }
+      if (detail.code === 'settings.backend_unavailable') {
+        return translateSettings('errorBackendUnavailable', { field: detail.field || 'assistant', message: detail.message || 'not installed' });
+      }
       return translateSettings('settingsSaveFailed');
     }
 
@@ -2825,13 +2883,17 @@
       setSettingsHtml('settings-repo-depth-note', 'repoDepthNote');
       setSettingsText('settings-planner-title', 'plannerTitle');
       setSettingsText('settings-planner-description', 'plannerDescription');
+      setSettingsText('settings-plan-approval-title', 'planApprovalTitle');
+      setSettingsText('settings-plan-approval-description', 'planApprovalDescription');
       setSettingsText('settings-implementer-title', 'implementerTitle');
       setSettingsText('settings-implementer-description', 'implementerDescription');
       setSettingsText('settings-reviewer-title', 'reviewerTitle');
       setSettingsText('settings-reviewer-description', 'reviewerDescription');
       setSettingsText('settings-commit-title', 'commitTitle');
       setSettingsText('settings-commit-description', 'commitDescription');
-      ['planner', 'implementer', 'reviewer', 'commit'].forEach((prefix) => {
+      ['planner', 'plan-approval', 'implementer', 'reviewer', 'commit'].forEach((prefix) => {
+        const assistantLabel = document.getElementById(`settings-${prefix}-assistant-label`);
+        if (assistantLabel) assistantLabel.textContent = translateSettings('roleAssistantLabel');
         const modelLabel = document.getElementById(`settings-${prefix}-model-label`);
         if (modelLabel) modelLabel.textContent = translateSettings('modelLabel');
         const tokenLabel = document.getElementById(`settings-${prefix}-token-label`);
@@ -2841,9 +2903,11 @@
       setSettingsText('settings-implementer-agents-label', 'agentsLabel');
       setSettingsText('settings-reviewer-agents-label', 'agentsLabel');
       setSettingsHtml('settings-planner-note', 'plannerNote');
+      setSettingsHtml('settings-plan-approval-note', 'planApprovalNote');
       setSettingsHtml('settings-implementer-note', 'implementerNote');
       setSettingsHtml('settings-reviewer-note', 'reviewerNote');
       setSettingsHtml('settings-commit-note', 'commitNote');
+      renderAssistantOptions(lastSettingsPayload?.available_assistants || null, runtimeCodingAssistantInput.value || 'opencode');
       cancelSettingsButton.textContent = translateSettings('cancel');
       saveSettingsButton.textContent = translateSettings('saveSettings');
       if (lastSettingsPayload) {
@@ -2906,10 +2970,44 @@
         { value: 'opencode', label: 'OpenCode' },
         { value: 'codex', label: 'Codex CLI' },
       ];
+      const previousRoleSelections = Object.fromEntries(roleSettingConfigs.map(({ role, backendInput }) => [role, backendInput.value || 'default']));
       runtimeCodingAssistantInput.innerHTML = items
         .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
         .join('');
       runtimeCodingAssistantInput.value = items.some((item) => item.value === selectedValue) ? selectedValue : items[0].value;
+      const roleOptions = [
+        { value: 'default', label: translateSettings('defaultAssistantOption') },
+        ...items,
+      ];
+      roleSettingConfigs.forEach(({ backendInput }) => {
+        backendInput.innerHTML = roleOptions
+          .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
+          .join('');
+      });
+      roleSettingConfigs.forEach(({ role, backendInput }) => {
+        const nextValue = previousRoleSelections[role] || 'default';
+        backendInput.value = roleOptions.some((item) => item.value === nextValue) ? nextValue : 'default';
+      });
+    }
+
+    function effectiveRoleBackend(role) {
+      const config = roleSettingConfigs.find((item) => item.role === role);
+      if (!config) return runtimeCodingAssistantInput.value || 'opencode';
+      const selected = config.backendInput.value || 'default';
+      return selected === 'default' ? (runtimeCodingAssistantInput.value || 'opencode') : selected;
+    }
+
+    function renderRoleModelOptions(role) {
+      const config = roleSettingConfigs.find((item) => item.role === role);
+      if (!config) return;
+      const backend = effectiveRoleBackend(role);
+      const modelsByBackend = lastSettingsPayload?.available_models_by_backend || {};
+      const items = Array.isArray(modelsByBackend[backend]) ? modelsByBackend[backend] : [];
+      config.modelOptions.innerHTML = items.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+    }
+
+    function renderAllRoleModelOptions() {
+      roleSettingConfigs.forEach(({ role }) => renderRoleModelOptions(role));
     }
 
     function updateWorkerLiveLogsControlVisibility() {
@@ -2926,6 +3024,13 @@
         language: runtimeLanguageInput.value || 'EN',
         theme: runtimeThemeInput.value || 'light',
         coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
+        role_backends: {
+          planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
+          plan_approval: planApprovalBackendInput.value === 'default' ? null : planApprovalBackendInput.value,
+          implementer: implementerBackendInput.value === 'default' ? null : implementerBackendInput.value,
+          reviewer: reviewerBackendInput.value === 'default' ? null : reviewerBackendInput.value,
+          commit: commitBackendInput.value === 'default' ? null : commitBackendInput.value,
+        },
         worker_live_logs_enabled: workerLiveLogsModeInput.value === 'true',
         repo_discovery_root: repoDiscoveryRootInput.value || '../',
         repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
@@ -2951,6 +3056,11 @@
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions(lastSettingsPayload?.available_assistants || null, state.coding_assistant || 'opencode');
+      plannerBackendInput.value = state.role_backends?.planner || 'default';
+      planApprovalBackendInput.value = state.role_backends?.plan_approval || 'default';
+      implementerBackendInput.value = state.role_backends?.implementer || 'default';
+      reviewerBackendInput.value = state.role_backends?.reviewer || 'default';
+      commitBackendInput.value = state.role_backends?.commit || 'default';
       updateWorkerLiveLogsControlVisibility();
       workerLiveLogsModeInput.value = state.worker_live_logs_enabled ? 'true' : 'false';
       repoDiscoveryRootInput.value = state.repo_discovery_root || '../';
@@ -2968,7 +3078,7 @@
       syncNumericSettingInput(reviewerAgentCountInput, state.reviewer_agent_count, 1);
       commitModelInput.value = state.commit_model || '';
       syncNumericSettingInput(commitSessionTokenBudgetInput, state.commit_session_token_budget, 250);
-      renderModelOptions(lastSettingsPayload?.available_models || []);
+      renderAllRoleModelOptions();
       applyRuntimeSettingsTranslations();
       applyRequestTranslations();
       applyHumanReviewTranslations();
@@ -3654,12 +3764,15 @@
       return Number.isFinite(currentValue) && currentValue > 0 ? currentValue : fallback;
     }
 
-    function renderModelOptions(items) {
-      modelOptions.innerHTML = items.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
-    }
-
     function updateModelDiscoverySummary(data) {
       lastSettingsPayload = data;
+      const activeBackend = runtimeCodingAssistantInput.value || data.coding_assistant || 'opencode';
+      const availability = data.backend_availability_by_backend?.[activeBackend];
+      if (availability && availability.available === false) {
+        settingsDiscoverySummary.textContent = translateSettings('summaryEmpty');
+        setSettingsStatus(translateSettings('errorBackendUnavailable', { field: activeBackend, message: availability.error || 'not installed' }), 'error');
+        return;
+      }
       const count = data.available_models.length;
       if (count) {
         const refreshedAt = data.discovered_at ? new Date(data.discovered_at).toLocaleString() : translateSettings('justNow');
@@ -3699,6 +3812,11 @@
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        plannerBackendInput.value = data.role_backends?.planner || 'default';
+        planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
+        implementerBackendInput.value = data.role_backends?.implementer || 'default';
+        reviewerBackendInput.value = data.role_backends?.reviewer || 'default';
+        commitBackendInput.value = data.role_backends?.commit || 'default';
         updateWorkerLiveLogsControlVisibility();
         workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
         applyRuntimeSettingsTranslations();
@@ -3717,7 +3835,7 @@
         syncNumericSettingInput(reviewerAgentCountInput, data.reviewer_agent_count, 1);
         commitModelInput.value = data.commit_model || '';
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
-        renderModelOptions(data.available_models || []);
+        renderAllRoleModelOptions();
         await loadTargetRepoOptions();
         updateModelDiscoverySummary(data);
         lastLoadedSettingsState = captureSettingsState();
@@ -3747,6 +3865,13 @@
             language: runtimeLanguageInput.value || 'EN',
             theme: runtimeThemeInput.value || 'light',
             coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
+            role_backends: {
+              planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
+              plan_approval: planApprovalBackendInput.value === 'default' ? null : planApprovalBackendInput.value,
+              implementer: implementerBackendInput.value === 'default' ? null : implementerBackendInput.value,
+              reviewer: reviewerBackendInput.value === 'default' ? null : reviewerBackendInput.value,
+              commit: commitBackendInput.value === 'default' ? null : commitBackendInput.value,
+            },
             worker_live_logs_enabled: workerLiveLogsModeInput.value === 'true',
             repo_discovery_root: repoDiscoveryRootInput.value,
             repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
@@ -3771,6 +3896,11 @@
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        plannerBackendInput.value = data.role_backends?.planner || 'default';
+        planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
+        implementerBackendInput.value = data.role_backends?.implementer || 'default';
+        reviewerBackendInput.value = data.role_backends?.reviewer || 'default';
+        commitBackendInput.value = data.role_backends?.commit || 'default';
         updateWorkerLiveLogsControlVisibility();
         workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
         applyRuntimeSettingsTranslations();
@@ -3789,6 +3919,7 @@
         syncNumericSettingInput(reviewerAgentCountInput, data.reviewer_agent_count, 1);
         commitModelInput.value = data.commit_model || '';
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
+        renderAllRoleModelOptions();
         await loadTargetRepoOptions();
         setSettingsStatus(translateSettings('statusSaved'), 'success');
         lastLoadedSettingsState = captureSettingsState();
@@ -4026,6 +4157,12 @@
       return lines.join('\n');
     }
 
+    function buildAcceptanceCriteriaDefaults() {
+      return currentUiLanguage() === 'KO'
+        ? ['추가된 코드의 모든 케이스의 테스트 코드와 테스트 커버리지 100%를 달성해야 한다.', '작업한 내용 외 전체 테스트 suite 가 수행에 성공해야 한다.'].join('\n')
+        : ['Add tests for every case introduced by the new code and achieve 100% test coverage.', 'The full test suite must pass, not just the tests related to the changed code.'].join('\n');
+    }
+
     function canReplaceAutofill(field, nextValue, lastValue) {
       return !field.value.trim() || field.dataset.autofilled === 'true' || field.value === lastValue || field.value === nextValue;
     }
@@ -4035,6 +4172,7 @@
       if (!repoPath) return;
       const nextScope = buildScopeDefaults(repoPath);
       const nextOutOfScope = buildOutOfScopeDefaults(repoPath);
+      const nextAcceptanceCriteria = buildAcceptanceCriteriaDefaults();
       if (canReplaceAutofill(scopeField, nextScope, lastAutoScope)) {
         scopeField.value = nextScope;
         scopeField.dataset.autofilled = 'true';
@@ -4043,8 +4181,13 @@
         outOfScopeField.value = nextOutOfScope;
         outOfScopeField.dataset.autofilled = 'true';
       }
+      if (canReplaceAutofill(acceptanceCriteriaField, nextAcceptanceCriteria, lastAutoAcceptanceCriteria)) {
+        acceptanceCriteriaField.value = nextAcceptanceCriteria;
+        acceptanceCriteriaField.dataset.autofilled = 'true';
+      }
       lastAutoScope = nextScope;
       lastAutoOutOfScope = nextOutOfScope;
+      lastAutoAcceptanceCriteria = nextAcceptanceCriteria;
     }
 
     function resetFormState() {
@@ -4063,6 +4206,7 @@
       updateBaseBranchHelp(translateRequest('baseBranchHelp'));
       scopeField.dataset.autofilled = 'true';
       outOfScopeField.dataset.autofilled = 'true';
+      acceptanceCriteriaField.dataset.autofilled = 'true';
       applyTargetRepoAutofill(currentTargetRepoOptions());
       applyRepoDefaults();
     }
@@ -6164,7 +6308,13 @@
     runtimeCodingAssistantInput.addEventListener('input', handleAssistantModeVisibilityChange);
     runtimeCodingAssistantInput.addEventListener('change', () => {
       handleAssistantModeVisibilityChange();
+      renderAllRoleModelOptions();
       loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error'));
+    });
+    roleSettingConfigs.forEach(({ backendInput, role }) => {
+      backendInput.addEventListener('change', () => {
+        renderRoleModelOptions(role);
+      });
     });
     board.addEventListener('click', (event) => {
       const retrospectiveButton = event.target.closest('.target-branch-retrospective');

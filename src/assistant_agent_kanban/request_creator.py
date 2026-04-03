@@ -29,12 +29,24 @@ class RequestTemplateData(BaseModel):
     title: str
     goal: str | None = None
     background: str | None = None
-    plan_auto_approve: bool = False
+    plan_auto_approve: bool = True
     scope: list[str] = Field(default_factory=list)
     out_of_scope: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
+
+
+def build_default_acceptance_criteria(*, language_code: str) -> list[str]:
+    if language_code == "ko":
+        return [
+            "추가된 코드의 모든 케이스의 테스트 코드와 테스트 커버리지 100%를 달성해야 한다.",
+            "작업한 내용 외 전체 테스트 suite 가 수행에 성공해야 한다.",
+        ]
+    return [
+        "Add tests for every case introduced by the new code and achieve 100% test coverage.",
+        "The full test suite must pass, not just the tests related to the changed code.",
+    ]
 
 
 def build_default_scope_sections(target_repo_root: str | Path, *, managed_docs_root: str = "docs/kanban-agent") -> tuple[list[str], list[str]]:
@@ -261,6 +273,7 @@ def _clear_request_uploads(config: AppConfig, upload_token: str | None) -> None:
 
 def _render_request_sections(template: RequestTemplateData, *, language_code: str) -> list[str]:
     lines = [""]
+    acceptance_criteria = _merge_acceptance_criteria(template.acceptance_criteria, language_code=language_code)
     if template.goal and template.goal.strip():
         lines.extend([f"## {_section_title('goal', language_code)}", template.goal.strip(), ""])
     if template.background and template.background.strip():
@@ -269,7 +282,7 @@ def _render_request_sections(template: RequestTemplateData, *, language_code: st
     lines.extend(_render_list_section(_section_title('out_of_scope', language_code), template.out_of_scope))
     lines.extend(_render_list_section(_section_title('constraints', language_code), template.constraints))
     lines.extend(_render_list_section(_section_title('references', language_code), template.references))
-    lines.extend(_render_list_section(_section_title('acceptance_criteria', language_code), template.acceptance_criteria))
+    lines.extend(_render_list_section(_section_title('acceptance_criteria', language_code), acceptance_criteria))
     return lines
 
 
@@ -304,6 +317,22 @@ def _section_title(key: str, language_code: str) -> str:
         },
     }
     return localized.get(language_code, localized["en"])[key]
+
+
+def _merge_acceptance_criteria(items: list[str], *, language_code: str) -> list[str]:
+    defaults = build_default_acceptance_criteria(language_code=language_code)
+    merged: list[str] = []
+    seen: set[str] = set()
+    for item in [*defaults, *items]:
+        normalized = item.strip()
+        if not normalized:
+            continue
+        key = normalized.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(normalized)
+    return merged
 
 
 def _generate_task_key(kanban_root: Path) -> str:

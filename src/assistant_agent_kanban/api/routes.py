@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import asyncio
 from collections.abc import Mapping
+from typing import cast
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from typing import Literal
@@ -10,10 +11,10 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import FileResponse
 
-from ..assistant_factory import build_role_adapters
+from ..assistant_factory import build_adapter, build_role_adapters
 from ..agent_materializer import ensure_runtime_agents
-from ..assistant_adapter import AssistantModelRegistry
-from ..config import DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, normalize_runtime_assistant
+from ..assistant_adapter import AssistantBackendStatusSnapshot, AssistantModelRegistry
+from ..config import ASSISTANT_ROLES, DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, AssistantBackend, normalize_runtime_assistant
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..language import normalize_runtime_language
@@ -41,7 +42,7 @@ class CreateRequestPayload(BaseModel):
     goal: str
     request_upload_token: str | None = None
     background: str | None = None
-    plan_auto_approve: bool = False
+    plan_auto_approve: bool = True
     scope: str | None = None
     out_of_scope: str | None = None
     constraints: str | None = None
@@ -87,9 +88,27 @@ class CreateLineCommentPayload(BaseModel):
 
 
 class ModelSettingsPayload(BaseModel):
+    class RoleBackendsPayload(BaseModel):
+        planner: str | None = None
+        plan_approval: str | None = None
+        implementer: str | None = None
+        reviewer: str | None = None
+        commit: str | None = None
+
+        @field_validator("planner", "plan_approval", "implementer", "reviewer", "commit", mode="before")
+        @classmethod
+        def normalize_role_backend(cls, value: str | None) -> str | None:
+            if value is None:
+                return None
+            normalized = normalize_runtime_assistant(value)
+            if normalized is None:
+                raise ValueError("role assistant must be OpenCode or Codex CLI")
+            return normalized
+
     language: str | None = None
     theme: Literal["light", "dark"] | None = None
     coding_assistant: str | None = None
+    role_backends: RoleBackendsPayload | None = None
     worker_live_logs_enabled: bool | None = None
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
@@ -184,15 +203,17 @@ def _apply_config_update(target, updated) -> None:
     target.loaded_local_from = updated.loaded_local_from
 
 
-def _settings_response(runtime, snapshot, *, config_path: str | None = None, saved: bool = False) -> Mapping[str, object]:
-    active_backend = snapshot.backend
-    active_config = runtime.config if runtime.config.active_backend() == active_backend else runtime.config.model_copy(deep=True)
-    active_config.runtime.coding_assistant = active_backend
+def _settings_response(runtime, snapshots_by_backend, *, view_config=None, config_path: str | None = None, saved: bool = False) -> Mapping[str, object]:
+    active_config = view_config or runtime.config
+    active_backend = active_config.active_backend()
+    snapshot = snapshots_by_backend[active_backend]
     omo_snapshot = read_omo_delegation_snapshot() if active_backend == "opencode" else None
     response = {
         "language": runtime.config.runtime.language,
         "theme": runtime.config.runtime.theme,
         "coding_assistant": active_backend,
+        "role_backends": {role: getattr(runtime.config.runtime.role_backends, role) for role in ASSISTANT_ROLES},
+        "effective_role_backends": {role: active_config.backend_for_role(role) for role in ASSISTANT_ROLES},
         "worker_live_logs_enabled": runtime.config.opencode.worker_live_logs_enabled,
         "planner_model": active_config.role_model("planner"),
         "planner_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("planner")),
@@ -214,6 +235,18 @@ def _settings_response(runtime, snapshot, *, config_path: str | None = None, sav
             {"value": value, "label": label}
             for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
         ],
+        "available_models_by_backend": {
+            backend: backend_snapshot.models
+            for backend, backend_snapshot in snapshots_by_backend.items()
+        },
+        "backend_availability_by_backend": {
+            backend: {
+                "available": backend_status.available,
+                "error": backend_status.error,
+                "checked_at": backend_status.checked_at,
+            }
+            for backend, backend_status in _resolve_availability_map(runtime, snapshots_by_backend).items()
+        },
         "available_models": snapshot.models,
         "discovery_status": snapshot.status,
         "discovered_at": snapshot.discovered_at,
@@ -268,30 +301,66 @@ def _validate_model_selection(model_name: str | None, *, field_name: str, availa
     )
 
 
+def _validate_backend_available(status: AssistantBackendStatusSnapshot, *, field_name: str) -> None:
+    if status.available:
+        return
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "settings.backend_unavailable",
+            "field": field_name,
+            "message": status.error or f"{status.backend} is unavailable",
+        },
+    )
+
+
+def _resolve_availability_map(runtime, snapshots_by_backend) -> dict[str, AssistantBackendStatusSnapshot]:
+    availability = getattr(runtime, "backend_availability", None)
+    if isinstance(availability, dict):
+        return availability
+    return {
+        backend: runtime.model_registry.availability(backend)
+        for backend in snapshots_by_backend
+    }
+
+
 def _reconfigure_runtime_adapters(runtime) -> None:
     planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter = build_role_adapters(runtime.config, adapter_registry=runtime.adapter_registry)
+    plan_approval_adapter = runtime.adapter_registry.get(runtime.config.backend_for_role("plan_approval"), planner_adapter)
     runtime.planner.adapter = planner_adapter
-    runtime.plan_approval.adapter = planner_adapter
+    runtime.plan_approval.adapter = plan_approval_adapter
     runtime.implementer.adapter = implementer_adapter
     runtime.reviewer.adapter = reviewer_adapter
     runtime.committer.adapter = commit_adapter
     runtime.verification_service.branch_summary_adapter = branch_summary_adapter
     runtime.retrospective_service.adapter = commit_adapter
-    runtime.model_registry.adapter = planner_adapter
-    runtime.model_registry.config = runtime.config
     runtime._task_adapters = [adapter for adapter in runtime._collect_task_adapters() if adapter is not None]
 
 
 async def _resolve_settings_snapshot(runtime, *, refresh: bool, assistant: str | None):
     requested_assistant = _normalize_runtime_coding_assistant(assistant) if assistant is not None else runtime.config.active_backend()
     if requested_assistant == runtime.config.active_backend():
-        snapshot = await asyncio.to_thread(runtime.model_registry.get, refresh=refresh)
+        snapshot = await asyncio.to_thread(runtime.model_registry.get, requested_assistant, refresh=refresh)
         return snapshot
     preview_config = runtime.config.model_copy(deep=True)
     preview_config.runtime.coding_assistant = requested_assistant
-    preview_adapter, _, _, _, _ = build_role_adapters(preview_config, adapter_registry=runtime.adapter_registry)
+    preview_backend = cast(AssistantBackend, requested_assistant)
+    preview_adapter = runtime.adapter_registry.get(preview_backend) or build_adapter(preview_backend)
     preview_registry = AssistantModelRegistry(adapter=preview_adapter, config=preview_config)
     return await asyncio.to_thread(preview_registry.get, refresh=refresh)
+
+
+async def _resolve_settings_snapshots(runtime, *, refresh: bool, assistant: str | None):
+    view_config = runtime.config.model_copy(deep=True)
+    if assistant is not None:
+        view_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(assistant)
+    snapshots_by_backend = {}
+    availability_by_backend = {}
+    for backend in SUPPORTED_RUNTIME_ASSISTANTS:
+        availability_by_backend[backend] = await asyncio.to_thread(runtime.model_registry.availability, backend, refresh=refresh)
+        snapshots_by_backend[backend] = await _resolve_settings_snapshot(runtime, refresh=refresh, assistant=backend)
+    runtime.backend_availability = availability_by_backend
+    return view_config, snapshots_by_backend
 
 
 def _uses_builtin_runtime_adapter(runtime) -> bool:
@@ -314,14 +383,15 @@ def build_router() -> APIRouter:
     @router.get("/api/settings/models")
     async def get_model_settings(request: Request, refresh: bool = False, assistant: str | None = None) -> Mapping[str, object]:
         runtime = request.app.state.runtime
-        snapshot = await _resolve_settings_snapshot(runtime, refresh=refresh, assistant=assistant)
-        return _settings_response(runtime, snapshot)
+        view_config, snapshots_by_backend = await _resolve_settings_snapshots(runtime, refresh=refresh, assistant=assistant)
+        return _settings_response(runtime, snapshots_by_backend, view_config=view_config)
 
     @router.put("/api/settings/models")
     async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> Mapping[str, object]:
         runtime = request.app.state.runtime
         next_config = runtime.config.model_copy(deep=True)
         previous_backend = runtime.config.active_backend()
+        previous_role_backends = runtime.config.role_backend_overrides()
         fields_set = payload.model_fields_set
         if "language" in fields_set:
             next_config.runtime.language = _normalize_runtime_language(payload.language)
@@ -329,6 +399,9 @@ def build_router() -> APIRouter:
             next_config.runtime.theme = payload.theme
         if "coding_assistant" in fields_set:
             next_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(payload.coding_assistant)
+        if "role_backends" in fields_set and payload.role_backends is not None:
+            for role in payload.role_backends.model_fields_set:
+                next_config.set_role_backend(role, getattr(payload.role_backends, role))
         if "worker_live_logs_enabled" in fields_set and payload.worker_live_logs_enabled is not None:
             next_config.opencode.worker_live_logs_enabled = payload.worker_live_logs_enabled
         if "planner_model" in fields_set:
@@ -361,20 +434,23 @@ def build_router() -> APIRouter:
             next_config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
         if payload.repo_discovery_max_depth is not None:
             next_config.repo_discovery.max_depth = payload.repo_discovery_max_depth
-        validation_snapshot = await _resolve_settings_snapshot(runtime, refresh=True, assistant=next_config.active_backend())
-        available_models = set(validation_snapshot.models)
-        _validate_model_selection(next_config.role_model("planner"), field_name="planner_model", available_models=available_models)
-        _validate_model_selection(next_config.role_model("plan_approval"), field_name="plan_approval_model", available_models=available_models)
-        _validate_model_selection(next_config.role_model("implementer"), field_name="implementer_model", available_models=available_models)
-        _validate_model_selection(next_config.role_model("reviewer"), field_name="reviewer_model", available_models=available_models)
-        _validate_model_selection(next_config.role_model("commit"), field_name="commit_model", available_models=available_models)
+        _view_config, validation_snapshots = await _resolve_settings_snapshots(runtime, refresh=True, assistant=next_config.active_backend())
+        availability_map = _resolve_availability_map(runtime, validation_snapshots)
+        _validate_backend_available(availability_map[next_config.active_backend()], field_name="coding_assistant")
+        for role in ASSISTANT_ROLES:
+            backend = next_config.backend_for_role(role)
+            field_name = f"role_backends.{role}"
+            if getattr(next_config.runtime.role_backends, role) is not None:
+                _validate_backend_available(availability_map[backend], field_name=field_name)
+            available_models = set(validation_snapshots[next_config.backend_for_role(role)].models)
+            _validate_model_selection(next_config.role_model(role), field_name=f"{role}_model", available_models=available_models)
         config_path = next_config.persist()
         _apply_config_update(runtime.config, next_config)
-        if previous_backend != runtime.config.active_backend() or _uses_builtin_runtime_adapter(runtime):
+        if previous_backend != runtime.config.active_backend() or previous_role_backends != runtime.config.role_backend_overrides() or _uses_builtin_runtime_adapter(runtime):
             _reconfigure_runtime_adapters(runtime)
         ensure_runtime_agents(runtime.config)
-        snapshot = await asyncio.to_thread(runtime.model_registry.refresh, refresh_cli=False)
-        return _settings_response(runtime, snapshot, config_path=str(config_path), saved=True)
+        refreshed_config, snapshots_by_backend = await _resolve_settings_snapshots(runtime, refresh=False, assistant=None)
+        return _settings_response(runtime, snapshots_by_backend, view_config=refreshed_config, config_path=str(config_path), saved=True)
 
     @router.get("/api/tasks/{task_id}")
     async def task_detail(task_id: str, request: Request, include_changed_files: bool = False):
