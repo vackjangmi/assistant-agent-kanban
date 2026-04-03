@@ -4384,6 +4384,7 @@
     }
 
     function setTaskTab(tab, { load = true } = {}) {
+      const previousTab = activeTaskTab;
       activeTaskTab = tab;
       taskTabOverview.classList.toggle('active', tab === 'overview');
       taskTabLogs.classList.toggle('active', tab === 'logs');
@@ -4399,7 +4400,9 @@
       taskPanelEditor.hidden = tab !== 'editor';
       if (tab === 'review-note') requestAnimationFrame(() => syncHumanReviewEditorHeight());
       if (tab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') schedulePlanEditorHeightSync();
-      if (tab === 'reviewer-qa') requestAnimationFrame(() => scrollReviewerQaTranscriptToBottom());
+      if (tab === 'reviewer-qa' && previousTab !== 'reviewer-qa') {
+        requestAnimationFrame(() => scrollReviewerQaTranscriptToBottom());
+      }
       updateReviewerQaLiveRefresh();
       if (!load) return;
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);

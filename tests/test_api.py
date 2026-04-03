@@ -2271,6 +2271,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function parseReviewerQaTranscript(source)" in response.text
     assert "function updateReviewerQaLiveRefresh()" in response.text
     assert "if (activeTaskTab === 'reviewer-qa' && appendReviewerQaWorkerLogPayload(payload)) return;" in response.text
+    assert "const previousTab = activeTaskTab;" in response.text
+    assert "if (tab === 'reviewer-qa' && previousTab !== 'reviewer-qa')" in response.text
     assert 'class="diff-grid"' in response.text
     assert 'class="diff-row"' in response.text
     assert 'class="diff-cell ${line.kind}"' in response.text
