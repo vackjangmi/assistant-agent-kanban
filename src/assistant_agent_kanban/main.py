@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
         base_branch = args.base_branch or _detect_current_branch(target_repo) or config.base_branch
         task_dir = create_request(
             config,
-            template=RequestTemplateData(title=args.title, goal=args.body),
+            template=RequestTemplateData(title=args.title, goal=args.body, plan_auto_approve=False),
             target_repo_root=target_repo,
             base_branch=base_branch,
         )
