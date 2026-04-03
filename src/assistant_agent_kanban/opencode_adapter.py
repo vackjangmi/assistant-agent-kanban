@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable
 
 from .agent_materializer import ensure_runtime_agent, runtime_config_home
-from .assistant_adapter import AssistantAdapter
+from .assistant_adapter import AssistantAdapter, _resolve_binary_error
 from .config import AppConfig
 from .exceptions import AdapterRunError
 from .log_parser import render_opencode_event_line
@@ -46,6 +46,9 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
             message = (result.stderr or result.stdout).strip() or "opencode model discovery failed"
             raise AdapterRunError(message)
         return _parse_discovered_models(result.stdout)
+
+    def availability_error(self, *, config: AppConfig, backend) -> str | None:
+        return _resolve_binary_error(config.opencode.binary)
 
     def run(
         self,

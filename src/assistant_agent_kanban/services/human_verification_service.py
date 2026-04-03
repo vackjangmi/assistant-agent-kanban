@@ -23,7 +23,7 @@ from ..models import HumanLineComment, HumanLineCommentAnchor, HumanLineComments
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
-from ..config import AppConfig
+from ..config import AppConfig, AssistantBackend
 
 
 class HumanVerificationService:
@@ -37,7 +37,7 @@ class HumanVerificationService:
         integration_manager: IntegrationManager,
         commit_manager: CommitManager,
         branch_summary_adapter: AssistantAdapter | None = None,
-        adapter_registry: Mapping[str, AssistantAdapter] | None = None,
+        adapter_registry: Mapping[str | AssistantBackend, AssistantAdapter] | None = None,
     ) -> None:
         self.scanner = scanner
         self.config = config
@@ -393,8 +393,11 @@ class HumanVerificationService:
     def _generate_branch_summary(self, context: TaskContext) -> str:
         fallback = self.commit_manager.sanitize_branch_summary(None, fallback_title=context.metadata.title)
         run_config = self.config.with_runtime_pin(context.metadata.runtime_pin)
-        adapter = self.adapter_registry.get(run_config.active_backend(), self.branch_summary_adapter)
+        adapter = self.branch_summary_adapter
         if adapter is None:
+            return fallback
+        availability_error = adapter.availability_error(config=run_config, backend=run_config.backend_for_role("planner"))
+        if availability_error is not None:
             return fallback
         prompt = "\n".join(
             [

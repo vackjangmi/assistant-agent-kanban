@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Callable, cast
 
-from .assistant_adapter import AssistantAdapter
+from .assistant_adapter import AssistantAdapter, _resolve_binary_error
 from .config import AppConfig, AssistantRole
 from .exceptions import AdapterRunError
 from .models import RunResult
@@ -35,6 +35,9 @@ class SubprocessCodexAdapter(AssistantAdapter):
 
     def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:
         return list(CODEX_KNOWN_MODELS)
+
+    def availability_error(self, *, config: AppConfig, backend) -> str | None:
+        return _resolve_binary_error(config.codex.binary)
 
     def run(
         self,

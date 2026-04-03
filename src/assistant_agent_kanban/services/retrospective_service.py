@@ -182,6 +182,10 @@ class RetrospectiveService:
         adapter = self.adapter
         if adapter is None:
             raise CommitError("retrospective generation is unavailable because no commit adapter is configured")
+        backend = self.config.backend_for_role("commit")
+        availability_error = adapter.availability_error(config=self.config, backend=backend)
+        if availability_error is not None:
+            raise CommitError(f"{backend} backend is unavailable: {availability_error}")
         prompt = self._build_prompt(group, target_repo_root, comparison_branch)
         run_log_path = self.config.runs_dir / primary.metadata.task_id / f"retrospective-{self._retrospective_key(primary.metadata.target.base_branch, comparison_branch)}.jsonl"
         try:
