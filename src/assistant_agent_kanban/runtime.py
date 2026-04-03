@@ -4,9 +4,9 @@ import asyncio
 from collections.abc import Iterable
 import logging
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
-from .config import AppConfig
+from .config import AppConfig, AssistantBackend
 from .events import EventBus
 from .locks import TaskLockManager
 from .metadata_store import MetadataStore
@@ -19,7 +19,7 @@ from .services.retrospective_service import RetrospectiveService
 from .services.task_deletion_service import TaskDeletionService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
-from .assistant_adapter import AssistantAdapter, AssistantModelRegistry
+from .assistant_adapter import AssistantAdapter, AssistantBackendManager, build_backend_manager
 from .workers.committer import CommitWorker
 from .workers.implementer import ImplementerWorker
 from .workers.plan_approval import PlanApprovalWorker
@@ -46,9 +46,7 @@ class RecoveryProvider(Protocol):
 
 
 class ModelRegistryProvider(Protocol):
-    adapter: Any
-
-    def get(self, *, refresh: bool = False) -> Any: ...
+    def warm(self) -> None: ...
 
 
 class RuntimeSupervisor:
@@ -85,7 +83,7 @@ class RuntimeSupervisor:
         self.recovery = recovery
         self.events = events
         self.model_registry = model_registry
-        self.adapter_registry: dict[str, AssistantAdapter] = {}
+        self.adapter_registry: dict[AssistantBackend, AssistantAdapter] = {}
         self._stop_event = asyncio.Event()
         self._background_tasks: list[asyncio.Task[None]] = []
         self._role_tasks: dict[str, set[asyncio.Task[None]]] = {
@@ -100,10 +98,9 @@ class RuntimeSupervisor:
     async def start(self) -> None:
         self._stop_event.clear()
         await self.startup_recovery()
-        if getattr(self.model_registry.adapter, "supports_model_discovery", False):
-            self._background_tasks.append(
-                asyncio.create_task(self.warm_model_registry(), name="fs-kanban-model-discovery")
-            )
+        self._background_tasks.append(
+            asyncio.create_task(self.warm_model_registry(), name="fs-kanban-model-discovery")
+        )
         if self.config.runtime.auto_dispatch:
             self._background_tasks = [
                 *self._background_tasks,
@@ -181,7 +178,7 @@ class RuntimeSupervisor:
         await self.rescan_and_publish()
 
     async def warm_model_registry(self) -> None:
-        await asyncio.to_thread(self.model_registry.get)
+        await asyncio.to_thread(self.model_registry.warm)
 
     async def dispatch_forever(self) -> None:
         while not self._stop_event.is_set():
@@ -291,7 +288,15 @@ def board_to_event(board):
     return WorkerEvent(event="board_snapshot", payload=board.model_dump(mode="json"))
 
 
-def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter=None, branch_summary_adapter=None, adapter_registry=None):
+def build_runtime(
+    config: AppConfig,
+    planner_adapter: AssistantAdapter,
+    implementer_adapter: AssistantAdapter,
+    reviewer_adapter: AssistantAdapter,
+    commit_adapter: AssistantAdapter | None = None,
+    branch_summary_adapter: AssistantAdapter | None = None,
+    adapter_registry: dict[AssistantBackend, AssistantAdapter] | None = None,
+):
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
@@ -304,14 +309,24 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     workspace_manager = WorkspaceManager(config)
     integration_manager = IntegrationManager(config)
     commit_manager = CommitManager()
-    registry = dict(adapter_registry or {})
+    from .assistant_factory import build_adapter_registry
+
+    registry = build_adapter_registry()
+    registry.update(dict(adapter_registry or {}))
+    registry[config.backend_for_role("planner")] = planner_adapter
+    registry.setdefault(config.backend_for_role("plan_approval"), planner_adapter)
+    registry.setdefault(config.backend_for_role("implementer"), implementer_adapter)
+    registry.setdefault(config.backend_for_role("reviewer"), reviewer_adapter)
+    if commit_adapter is not None:
+        registry.setdefault(config.backend_for_role("commit"), commit_adapter)
+    plan_approval_adapter: AssistantAdapter = registry.get(config.backend_for_role("plan_approval"), planner_adapter)
     planner = PlanningWorker(config, scanner, metadata_store, locks, transitions, events, adapter=planner_adapter, adapter_registry=registry)
-    plan_approval = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, events, adapter=planner_adapter, adapter_registry=registry)
+    plan_approval = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, events, adapter=plan_approval_adapter, adapter_registry=registry)
     implementer = ImplementerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=implementer_adapter, workspace_manager=workspace_manager, adapter_registry=registry)
     reviewer = ReviewerWorker(config, scanner, metadata_store, locks, transitions, events, adapter=reviewer_adapter, integration_manager=integration_manager, adapter_registry=registry)
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
-    verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter, adapter_registry=registry)
+    verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter, adapter_registry=cast(dict[str | AssistantBackend, AssistantAdapter], registry))
     deletion_service = TaskDeletionService(config, scanner, locks, integration_manager)
     task_service = TaskService(
         scanner,
@@ -324,7 +339,7 @@ def build_runtime(config: AppConfig, planner_adapter, implementer_adapter, revie
     )
     retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)
     recovery = RecoveryService(config, scanner, transitions, locks)
-    model_registry = AssistantModelRegistry(adapter=planner_adapter, config=config)
+    model_registry = build_backend_manager(config=config, adapter_registry=registry)
     runtime = RuntimeSupervisor(
         config,
         planner,

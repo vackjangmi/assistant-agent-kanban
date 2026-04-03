@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
-from .config import AppConfig, PROJECT_ROOT
+from .config import ASSISTANT_ROLES, AppConfig, AssistantRole, PROJECT_ROOT
 
 
 def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
-    if config.active_backend() != "opencode":
+    role = _role_for_agent_name(config, agent_name)
+    if role is None or config.backend_for_role(role) != "opencode":
         return None
     source = PROJECT_ROOT / ".opencode" / "agents" / f"{agent_name}.md"
     if not source.exists():
@@ -20,17 +22,12 @@ def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
 
 
 def ensure_runtime_agents(config: AppConfig) -> list[Path]:
-    if config.active_backend() != "opencode":
-        return []
     materialized: list[Path] = []
     seen: set[str] = set()
-    for agent_name in (
-        config.opencode.planner_agent,
-        config.opencode.plan_approval_agent,
-        config.opencode.implementer_agent,
-        config.opencode.reviewer_agent,
-        config.opencode.commit_agent,
-    ):
+    for role in ASSISTANT_ROLES:
+        if config.backend_for_role(role) != "opencode":
+            continue
+        agent_name = config.role_agent(role)
         if agent_name in seen:
             continue
         seen.add(agent_name)
@@ -53,16 +50,16 @@ def _resolved_kanban_root(config: AppConfig) -> Path:
 
 
 def _model_for_agent(config: AppConfig, agent_name: str) -> str | None:
-    if agent_name == config.opencode.planner_agent:
-        return config.opencode.planner_model
-    if agent_name == config.opencode.plan_approval_agent:
-        return config.opencode.plan_approval_model
-    if agent_name == config.opencode.implementer_agent:
-        return config.opencode.implementer_model
-    if agent_name == config.opencode.reviewer_agent:
-        return config.opencode.reviewer_model
-    if agent_name == config.opencode.commit_agent:
-        return config.opencode.commit_model
+    role = _role_for_agent_name(config, agent_name)
+    if role is not None:
+        return config.role_model(role)
+    return None
+
+
+def _role_for_agent_name(config: AppConfig, agent_name: str) -> AssistantRole | None:
+    for role in ASSISTANT_ROLES:
+        if getattr(config.opencode, f"{role}_agent") == agent_name:
+            return cast(AssistantRole, role)
     return None
 
 

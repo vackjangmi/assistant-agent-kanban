@@ -137,6 +137,33 @@ def test_load_config_accepts_codex_runtime_backend(tmp_path):
     assert config.codex.planner_model == "gpt-5.4"
 
 
+def test_load_config_accepts_role_backend_overrides(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "runtime:",
+                "  coding_assistant: opencode",
+                "  role_backends:",
+                "    implementer: codex",
+                "    reviewer: codex",
+                "codex:",
+                "  implementer_model: gpt-5.4",
+                "  reviewer_model: gpt-5.3-codex",
+            ]
+        )
+    )
+
+    config = load_config(config_path)
+
+    assert config.runtime.coding_assistant == "opencode"
+    assert config.backend_for_role("planner") == "opencode"
+    assert config.backend_for_role("implementer") == "codex"
+    assert config.backend_for_role("reviewer") == "codex"
+    assert config.role_model("implementer") == "gpt-5.4"
+    assert config.role_model("reviewer") == "gpt-5.3-codex"
+
+
 def test_resolve_target_repo_docs_root_uses_configured_relative_path(tmp_path):
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo", target_repo_docs_root="docs/task-artifacts")
     target_repo = tmp_path / "target-repo"

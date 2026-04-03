@@ -5,10 +5,11 @@ import json
 import subprocess
 import uuid
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, cast
 
-from ..config import AppConfig
+from ..config import AppConfig, AssistantBackend, AssistantRole
 from ..events import EventBus
+from ..exceptions import AdapterRunError
 from ..language import generation_language_name
 from ..locks import TaskLockManager
 from ..log_parser import render_assistant_log
@@ -30,7 +31,7 @@ class WorkerBase:
         locks: TaskLockManager,
         transitions: TransitionManager,
         event_bus: EventBus,
-        adapter_registry: Mapping[str, AssistantAdapter] | None = None,
+        adapter_registry: Mapping[str | AssistantBackend, AssistantAdapter] | None = None,
     ) -> None:
         self.config = config
         self.scanner = scanner
@@ -42,6 +43,11 @@ class WorkerBase:
 
     def make_run_id(self) -> str:
         return f"{self.worker_name}-{uuid.uuid4()}"
+
+    def assistant_role(self) -> AssistantRole:
+        if self.worker_name == "committer":
+            return "commit"
+        return cast(AssistantRole, self.worker_name)
 
     async def emit(self, event: str, task_id: str, **payload: object) -> None:
         await self.event_bus.publish(WorkerEvent(event=event, task_id=task_id, payload=dict(payload)))
@@ -191,15 +197,19 @@ class WorkerBase:
         self.ensure_task_runtime_pin(task_dir, metadata)
         return self.config.with_runtime_pin(metadata.runtime_pin)
 
-    def resolve_task_adapter(self, task_dir: Path, metadata: TaskMetadata) -> AssistantAdapter:
+    def resolve_task_adapter(self, task_dir: Path, metadata: TaskMetadata, *, role: AssistantRole | None = None) -> AssistantAdapter:
         run_config = self.resolve_task_run_config(task_dir, metadata)
-        backend = run_config.active_backend()
+        resolved_role = role or self.assistant_role()
+        backend = run_config.backend_for_role(resolved_role)
         adapter = self.adapter_registry.get(backend)
         if adapter is None:
             adapter = getattr(self, "adapter", None)
         if adapter is None:
             raise RuntimeError(f"no adapter registered for backend: {backend}")
+        availability_error = adapter.availability_error(config=run_config, backend=backend)
+        if availability_error is not None:
+            raise AdapterRunError(f"{backend} backend is unavailable for {resolved_role}: {availability_error}")
         return adapter
 
-    def worker_live_logs_enabled(self, run_config: AppConfig) -> bool:
-        return run_config.active_backend() == "opencode" and run_config.opencode.worker_live_logs_enabled
+    def worker_live_logs_enabled(self, run_config: AppConfig, *, role: AssistantRole | None = None) -> bool:
+        return run_config.backend_for_role(role or self.assistant_role()) == "opencode" and run_config.opencode.worker_live_logs_enabled

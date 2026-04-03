@@ -23,5 +23,9 @@ def build_adapter_registry() -> dict[AssistantBackend, AssistantAdapter]:
 
 def build_role_adapters(config: AppConfig, *, adapter_registry: dict[AssistantBackend, AssistantAdapter] | None = None):
     registry = adapter_registry or build_adapter_registry()
-    adapter = registry[config.runtime.coding_assistant]
-    return adapter, adapter, adapter, adapter, adapter
+    planner_adapter = registry[config.backend_for_role("planner")]
+    implementer_adapter = registry[config.backend_for_role("implementer")]
+    reviewer_adapter = registry[config.backend_for_role("reviewer")]
+    commit_adapter = registry[config.backend_for_role("commit")]
+    branch_summary_adapter = registry[config.backend_for_role("planner")]
+    return planner_adapter, implementer_adapter, reviewer_adapter, commit_adapter, branch_summary_adapter

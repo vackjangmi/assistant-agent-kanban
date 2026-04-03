@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .enums import STATE_ORDER, TaskState
 from .language import normalize_runtime_language
-from .models import TaskRuntimePin
+from .models import TaskRuntimePin, TaskRuntimeRoleBackends
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +19,7 @@ DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
 AssistantBackend = Literal["opencode", "codex"]
 AssistantRole = Literal["planner", "plan_approval", "implementer", "reviewer", "commit"]
+ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
 SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode", "codex": "Codex CLI"}
 
 
@@ -83,11 +84,19 @@ class LocksConfig(BaseModel):
 
 
 class RuntimeConfig(BaseModel):
+    class RoleBackends(BaseModel):
+        planner: AssistantBackend | None = None
+        plan_approval: AssistantBackend | None = None
+        implementer: AssistantBackend | None = None
+        reviewer: AssistantBackend | None = None
+        commit: AssistantBackend | None = None
+
     poll_interval_seconds: float = 0.2
     auto_dispatch: bool = True
     language: Literal["EN", "KO"] = "EN"
     theme: Literal["light", "dark"] = "light"
     coding_assistant: AssistantBackend = "opencode"
+    role_backends: RoleBackends = Field(default_factory=RoleBackends)
     planner_agent_count: int = Field(default=1, ge=1)
     implementer_agent_count: int = Field(default=1, ge=1)
     reviewer_agent_count: int = Field(default=1, ge=1)
@@ -180,33 +189,45 @@ class AppConfig(BaseModel):
     def active_backend(self) -> AssistantBackend:
         return self.runtime.coding_assistant
 
-    def backend_config(self):
-        return self.opencode if self.active_backend() == "opencode" else self.codex
+    def backend_for_role(self, role: AssistantRole) -> AssistantBackend:
+        override = getattr(self.runtime.role_backends, role)
+        return override or self.active_backend()
+
+    def role_backend_overrides(self) -> dict[AssistantRole, AssistantBackend | None]:
+        return {role: getattr(self.runtime.role_backends, role) for role in ASSISTANT_ROLES}
+
+    def set_role_backend(self, role: AssistantRole, value: AssistantBackend | None) -> None:
+        setattr(self.runtime.role_backends, role, value)
+
+    def backend_config(self, *, backend: AssistantBackend | None = None, role: AssistantRole | None = None):
+        resolved_backend = backend or (self.backend_for_role(role) if role is not None else self.active_backend())
+        return self.opencode if resolved_backend == "opencode" else self.codex
 
     def role_agent(self, role: AssistantRole) -> str:
-        if self.active_backend() == "opencode":
+        if self.backend_for_role(role) == "opencode":
             return getattr(self.opencode, f"{role}_agent")
         return f"fs-kanban-{role.replace('_', '-')}"
 
     def role_model(self, role: AssistantRole) -> str | None:
-        return getattr(self.backend_config(), f"{role}_model")
+        return getattr(self.backend_config(role=role), f"{role}_model")
 
     def set_role_model(self, role: AssistantRole, value: str | None) -> None:
-        setattr(self.backend_config(), f"{role}_model", value)
+        setattr(self.backend_config(role=role), f"{role}_model", value)
 
     def role_session_token_budget(self, role: AssistantRole) -> int:
-        return getattr(self.backend_config(), f"{role}_session_token_budget")
+        return getattr(self.backend_config(role=role), f"{role}_session_token_budget")
 
     def set_role_session_token_budget(self, role: AssistantRole, value: int) -> None:
-        setattr(self.backend_config(), f"{role}_session_token_budget", value)
+        setattr(self.backend_config(role=role), f"{role}_session_token_budget", value)
 
-    def backend_timeout_seconds(self) -> int:
-        return int(self.backend_config().timeout_seconds)
+    def backend_timeout_seconds(self, *, role: AssistantRole | None = None) -> int:
+        return int(self.backend_config(role=role).timeout_seconds)
 
     def capture_runtime_pin(self, *, captured_by: str) -> TaskRuntimePin:
         return TaskRuntimePin(
             backend=self.active_backend(),
             captured_by=captured_by,
+            role_backends=TaskRuntimeRoleBackends(**self.role_backend_overrides()),
             planner_model=self.role_model("planner"),
             plan_approval_model=self.role_model("plan_approval"),
             implementer_model=self.role_model("implementer"),
@@ -219,6 +240,8 @@ class AppConfig(BaseModel):
             return self.model_copy(deep=True)
         pinned = self.model_copy(deep=True)
         pinned.runtime.coding_assistant = runtime_pin.backend
+        for role in ASSISTANT_ROLES:
+            pinned.set_role_backend(role, getattr(runtime_pin.role_backends, role))
         pinned.set_role_model("planner", runtime_pin.planner_model)
         pinned.set_role_model("plan_approval", runtime_pin.plan_approval_model)
         pinned.set_role_model("implementer", runtime_pin.implementer_model)
