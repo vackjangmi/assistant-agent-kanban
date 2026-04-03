@@ -294,7 +294,18 @@ class ReviewerWorker(WorkerBase):
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
 
-    def answer_human_question(self, task_id: str, *, by: str, question: str) -> dict[str, str | int | None]:
+    async def answer_human_question_async(self, task_id: str, *, by: str, question: str) -> dict[str, str | int | None]:
+        loop = asyncio.get_running_loop()
+        return await asyncio.to_thread(self.answer_human_question, task_id, by=by, question=question, event_loop=loop)
+
+    def answer_human_question(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        question: str,
+        event_loop: asyncio.AbstractEventLoop | None = None,
+    ) -> dict[str, str | int | None]:
         try:
             task = self.scanner.find_task(task_id)
         except FileNotFoundError as exc:
@@ -324,6 +335,7 @@ class ReviewerWorker(WorkerBase):
             )
             prior_session_tokens = task.metadata.review.qa_session_tokens if session_id else 0
             prompt = self._build_reviewer_qa_prompt(task.task_dir, task.metadata, normalized_question)
+            on_log_line = self.make_log_callback(event_loop, task.metadata.task_id, log_path.name) if event_loop is not None else None
             result = adapter.run(
                 agent=run_config.role_agent("reviewer"),
                 prompt=prompt,
@@ -332,6 +344,7 @@ class ReviewerWorker(WorkerBase):
                 config=run_config,
                 session_id=session_id,
                 cancel_key=task.metadata.task_id,
+                on_log_line=on_log_line,
                 show_thinking=True,
             )
             task.metadata.review.qa_resolved_model = result.resolved_model

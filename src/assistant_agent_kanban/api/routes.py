@@ -690,7 +690,7 @@ def build_router() -> APIRouter:
     async def ask_reviewer_question(task_id: str, payload: ReviewerQuestionPayload, request: Request):
         runtime = request.app.state.runtime
         try:
-            result = await asyncio.to_thread(runtime.reviewer.answer_human_question, task_id, by="human", question=payload.question)
+            result = await runtime.reviewer.answer_human_question_async(task_id, by="human", question=payload.question)
         except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
             status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc

@@ -13,6 +13,7 @@ from assistant_agent_kanban.exceptions import TransitionError
 from assistant_agent_kanban.integration_manager import IntegrationManager
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.models import WorkerEvent
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.transitions import TransitionManager
 from assistant_agent_kanban.workspace_manager import WorkspaceManager
@@ -319,6 +320,48 @@ def test_reviewer_human_qa_writes_artifact_and_uses_thinking_mode(configured_pat
     assert "## Question 1" in artifact_path.read_text()
     assert "Should we rename the public label as well?" in artifact_path.read_text()
     assert "The current implementation is acceptable" in artifact_path.read_text()
+
+
+def test_reviewer_human_qa_async_emits_worker_log_events(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "reviewer-qa-live-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    waiting_reviews = scanner.scan()[0]
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    metadata_store.save(completed.task_dir, completed.metadata)
+
+    event_bus = EventBus()
+    adapter = FakeAdapter(["Live reviewer answer"], session_ids=["ses_review_qa_live"], total_tokens=[9])
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        event_bus,
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    async def scenario() -> None:
+        events: list[WorkerEvent] = []
+
+        async def collect_one_event() -> None:
+            async for event in event_bus.subscribe():
+                events.append(event)
+                break
+
+        collector = asyncio.create_task(collect_one_event())
+        await worker.answer_human_question_async(completed.metadata.task_id, by="human", question="Is the copy okay?")
+        await asyncio.wait_for(collector, timeout=1)
+
+        assert any(getattr(event, "event", None) == "worker_log" for event in events)
+        worker_log_event = next(event for event in events if getattr(event, "event", None) == "worker_log")
+        assert worker_log_event.payload["log_name"] == "reviewer-qa.jsonl"
+        assert "Live reviewer answer" in (worker_log_event.payload["rendered_content"] or "")
+
+    asyncio.run(scenario())
 
 
 def test_reviewer_human_qa_requires_workspace(configured_paths):
