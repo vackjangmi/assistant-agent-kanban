@@ -132,11 +132,22 @@ class ReviewInfo(BaseModel):
     session_id: str | None = None
     last_run_tokens: int = 0
     session_tokens: int = 0
+    consecutive_rework_loops: int = 0
+    rework_loop_plan_revision: int = 0
+    human_rework_required: bool = False
+    human_rework_reason: str | None = None
     qa_path: str | None = None
     qa_resolved_model: str | None = None
     qa_session_id: str | None = None
     qa_last_run_tokens: int = 0
     qa_session_tokens: int = 0
+
+
+def reset_review_loop_tracking(review: ReviewInfo) -> None:
+    review.consecutive_rework_loops = 0
+    review.rework_loop_plan_revision = 0
+    review.human_rework_required = False
+    review.human_rework_reason = None
 
 
 class RetryGateInfo(BaseModel):

@@ -9,7 +9,7 @@ from .enums import ALLOWED_TRANSITIONS, MANUAL_TRANSITIONS, TaskState
 from .exceptions import TransitionError
 from .locks import TaskLockManager
 from .metadata_store import MetadataStore
-from .models import HistoryEntry, TaskContext, reset_plan_approval_tracking, utc_now
+from .models import HistoryEntry, TaskContext, reset_plan_approval_tracking, reset_review_loop_tracking, utc_now
 from .retry_policy import clear_retry_gate
 from .scanner import KanbanScanner
 
@@ -69,5 +69,6 @@ class TransitionManager:
                 context.metadata.plan_approval.auto_progress_at = None
                 context.metadata.plan_approval.resolved_by = by
                 context.metadata.plan_approval.resolved_at = utc_now()
+                reset_review_loop_tracking(context.metadata.review)
             clear_retry_gate(context.metadata)
             return self.move(context, target=target, by=by, note="manual approval")

@@ -20,6 +20,8 @@ IMMEDIATE_GATE_REASONS = {
 
 
 def can_auto_dispatch(metadata: TaskMetadata) -> bool:
+    if metadata.review.human_rework_required:
+        return False
     not_before = metadata.retry_gate.not_before
     if not_before is None:
         return True
