@@ -1311,8 +1311,8 @@ def test_api_creates_request_from_dashboard_form(configured_paths, tmp_path):
         assert len(task_dir.name) == 7
         assert "## 목표" in request_markdown
         assert "## 승인 기준" in request_markdown
-        assert "추가된 코드의 모든 케이스의 테스트 코드와 테스트 커버리지 100%를 달성해야 한다." in request_markdown
-        assert "작업한 내용 외 전체 테스트 suite 가 수행에 성공해야 한다." in request_markdown
+        assert "이 요청으로 추가하거나 변경한 코드의 모든 케이스를 테스트해야 하며, 그 변경 범위의 테스트 커버리지는 100%여야 한다." in request_markdown
+        assert "저장소 전체 커버리지 100%를 요구하는 뜻은 아니며, 전체 테스트 suite 는 작업 범위와 별개로 수행에 성공해야 한다." in request_markdown
         assert "Users can still sign in" in request_markdown
         assert f"repo_root: {target_repo.resolve()}" in request_markdown
         assert "base_branch: develop" in request_markdown
@@ -1347,8 +1347,8 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
     assert "Do not modify files under `records/kanban-docs` unless the request explicitly asks for it." in request_markdown
     assert "## Acceptance Criteria" in request_markdown
-    assert "Add tests for every case introduced by the new code and achieve 100% test coverage." in request_markdown
-    assert "The full test suite must pass, not just the tests related to the changed code." in request_markdown
+    assert "Add tests for every case introduced by the code added or changed for this request, and keep test coverage for that changed scope at 100%." in request_markdown
+    assert "This does not require 100% coverage across the entire repository; the full test suite must still pass separately from the changed-scope coverage target." in request_markdown
 
 
 def test_api_extracts_embedded_request_goal_images_to_attachments(configured_paths, tmp_path):
@@ -2333,8 +2333,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
     assert "function buildAcceptanceCriteriaDefaults()" in response.text
-    assert "추가된 코드의 모든 케이스의 테스트 코드와 테스트 커버리지 100%를 달성해야 한다." in response.text
-    assert "작업한 내용 외 전체 테스트 suite 가 수행에 성공해야 한다." in response.text
+    assert "이 요청으로 추가하거나 변경한 코드의 모든 케이스를 테스트해야 하며, 그 변경 범위의 테스트 커버리지는 100%여야 한다." in response.text
+    assert "저장소 전체 커버리지 100%를 요구하는 뜻은 아니며, 전체 테스트 suite 는 작업 범위와 별개로 수행에 성공해야 한다." in response.text
     assert "assistant-agent-kanban.last-target-repo" in response.text
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text

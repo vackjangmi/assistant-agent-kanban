@@ -40,12 +40,12 @@ class RequestTemplateData(BaseModel):
 def build_default_acceptance_criteria(*, language_code: str) -> list[str]:
     if language_code == "ko":
         return [
-            "추가된 코드의 모든 케이스의 테스트 코드와 테스트 커버리지 100%를 달성해야 한다.",
-            "작업한 내용 외 전체 테스트 suite 가 수행에 성공해야 한다.",
+            "이 요청으로 추가하거나 변경한 코드의 모든 케이스를 테스트해야 하며, 그 변경 범위의 테스트 커버리지는 100%여야 한다.",
+            "저장소 전체 커버리지 100%를 요구하는 뜻은 아니며, 전체 테스트 suite 는 작업 범위와 별개로 수행에 성공해야 한다.",
         ]
     return [
-        "Add tests for every case introduced by the new code and achieve 100% test coverage.",
-        "The full test suite must pass, not just the tests related to the changed code.",
+        "Add tests for every case introduced by the code added or changed for this request, and keep test coverage for that changed scope at 100%.",
+        "This does not require 100% coverage across the entire repository; the full test suite must still pass separately from the changed-scope coverage target.",
     ]
 
 

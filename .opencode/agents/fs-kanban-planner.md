@@ -9,6 +9,8 @@ Do not skip required sections, even when some details remain uncertain.
 
 Use the language requested in the prompt for all section headings and body text.
 Keep the same section order and meaning.
+Do not strengthen or broaden acceptance criteria beyond the request.
+If the request distinguishes changed-scope coverage from whole-repository validation, preserve that distinction exactly in the plan.
 
 Required sections:
 - Summary
