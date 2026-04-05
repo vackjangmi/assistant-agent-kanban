@@ -39,7 +39,13 @@ class ReviewerWorker(WorkerBase):
         self.integration_manager = integration_manager
 
     def candidate_tasks(self):
-        return [task for task in self.scanner.scan() if task.state == TaskState.WAITING_REVIEWS and can_auto_dispatch(task.metadata)]
+        return [
+            task
+            for task in self.scanner.scan()
+            if task.state == TaskState.WAITING_REVIEWS
+            and can_auto_dispatch(task.metadata)
+            and not ((task.metadata.retry_gate.reason or "").startswith("review-"))
+        ]
 
     async def run_once(self) -> bool:
         tasks = self.candidate_tasks()
@@ -94,14 +100,14 @@ class ReviewerWorker(WorkerBase):
             await self.emit("task_moved", reviewing.metadata.task_id, state=reviewing.state.value)
             await self.announce_log_file(reviewing.metadata.task_id, log_name)
             loop = asyncio.get_running_loop()
+            run_config = self._resolve_reviewer_run_config(reviewing.task_dir, reviewing.metadata)
+            adapter = self._resolve_reviewer_adapter(run_config)
             session_id = self.reuse_session_id(
                 session_id=reviewing.metadata.review.session_id,
                 session_tokens=reviewing.metadata.review.session_tokens,
-                budget=self.resolve_task_run_config(reviewing.task_dir, reviewing.metadata).role_session_token_budget("reviewer"),
+                budget=run_config.role_session_token_budget("reviewer"),
             )
             prior_session_tokens = reviewing.metadata.review.session_tokens if session_id else 0
-            run_config = self.resolve_task_run_config(reviewing.task_dir, reviewing.metadata)
-            adapter = self.resolve_task_adapter(reviewing.task_dir, reviewing.metadata)
 
             if not self.worker_live_logs_enabled(run_config):
                 self.append_log_marker(log_path=log_path, phase="run", cycle=cycle)
@@ -133,7 +139,7 @@ class ReviewerWorker(WorkerBase):
                     )
                     apply_retry_gate(reviewing.metadata, reason="review-finalize-failed")
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                    done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review finalize failed")
+                    done = self.transitions.move(reviewing, TaskState.WAITING_REVIEWS, by=self.worker_name, note="review finalize failed")
                     await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                     return True
                 reviewing.metadata.implementation.iteration = reviewing.metadata.cycle
@@ -260,7 +266,7 @@ class ReviewerWorker(WorkerBase):
                 )
                 apply_retry_gate(reviewing.metadata, reason="review-finalize-failed")
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review finalize failed")
+                done = self.transitions.move(reviewing, TaskState.WAITING_REVIEWS, by=self.worker_name, note="review finalize failed")
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
 
@@ -583,6 +589,29 @@ class ReviewerWorker(WorkerBase):
             return "unspecified-needs-changes"
         normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
         return normalized or "unspecified-needs-changes"
+
+    def _resolve_reviewer_run_config(self, task_dir: Path, metadata):
+        run_config = self.resolve_task_run_config(task_dir, metadata)
+        if metadata.review.resume_mode is not None:
+            metadata.review.resume_mode = None
+        backend_override = metadata.review.resume_backend_override
+        model_override = metadata.review.resume_model_override
+        if backend_override is None and model_override is None:
+            self.metadata_store.save(task_dir, metadata)
+            return run_config
+        overridden = run_config.model_copy(deep=True)
+        if backend_override is not None:
+            overridden.set_role_backend("reviewer", backend_override)
+        overridden.set_role_model("reviewer", model_override)
+        metadata.review.resume_backend_override = None
+        metadata.review.resume_model_override = None
+        self.metadata_store.save(task_dir, metadata)
+        return overridden
+
+    def _resolve_reviewer_adapter(self, run_config) -> AssistantAdapter:
+        backend = run_config.backend_for_role("reviewer")
+        adapter = self.adapter_registry.get(backend)
+        return adapter or self.adapter
 
     def _handle_needs_changes(self, metadata, *, primary_blocker: str) -> str:
         review = metadata.review

@@ -795,9 +795,110 @@ def test_reviewer_finalize_failure_returns_to_waiting_reviews(configured_paths):
 
     assert asyncio.run(worker.run_once()) is True
     updated = scanner.scan()[0]
-    assert updated.state == TaskState.TODOS
+    assert updated.state == TaskState.WAITING_REVIEWS
     assert any(error.code == "review-finalize-failed" for error in updated.metadata.errors)
     assert updated.metadata.review.last_verdict is None
+    assert updated.metadata.retry_gate.reason == "review-finalize-failed"
+    assert updated.metadata.retry_gate.not_before is not None
+    assert worker.candidate_tasks() == []
+
+
+def test_reviewer_worker_uses_current_settings_override_when_requested(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.coding_assistant = "gemini"
+    config.gemini.reviewer_model = "gemini-2.5-pro"
+    create_request_task(config, "review-current-settings-override-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    task.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(task.task_dir, task.metadata)
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    implementing.metadata.implementation.workspace = str(repo_root)
+    (repo_root / "app.txt").write_text("review me\n")
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+
+    config.runtime.coding_assistant = "codex"
+    config.runtime.role_backends.reviewer = "codex"
+    config.codex.reviewer_model = "gpt-5.4"
+    waiting_reviews.metadata.review.resume_mode = "current-settings"
+    waiting_reviews.metadata.review.resume_backend_override = "codex"
+    waiting_reviews.metadata.review.resume_model_override = "gpt-5.4"
+    metadata_store.save(waiting_reviews.task_dir, waiting_reviews.metadata)
+
+    gemini_adapter = FakeAdapter(reviewer_cycle_responses(verdict="PASS"), resolved_models=["gemini-2.5-pro", "gemini-2.5-pro"])
+    codex_adapter = FakeAdapter([reviewer_cycle_responses(verdict="PASS")[-1]], resolved_models=["gpt-5.4"])
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=codex_adapter,
+        integration_manager=IntegrationManager(config),
+        adapter_registry={"gemini": gemini_adapter, "codex": codex_adapter},
+    )
+
+    current = scanner.scan()[0]
+    assert current.state == TaskState.WAITING_REVIEWS
+    assert asyncio.run(worker.run_task(current)) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.COMPLETED_REVIEWS
+    assert len(codex_adapter.run_calls) == 1
+    assert len(gemini_adapter.run_calls) == 0
+    assert updated.metadata.review.resolved_model == "gpt-5.4"
+    assert updated.metadata.review.resume_mode is None
+    assert updated.metadata.review.resume_backend_override is None
+    assert updated.metadata.review.resume_model_override is None
+
+
+def test_reviewer_worker_consumes_pinned_resume_mode_once(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "review-pinned-resume-once-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    planning.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    implementing.metadata.implementation.workspace = str(repo_root)
+    (repo_root / "app.txt").write_text("review me\n")
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    waiting_reviews.metadata.review.resume_mode = "pinned"
+    metadata_store.save(waiting_reviews.task_dir, waiting_reviews.metadata)
+
+    adapter = FakeAdapter([reviewer_cycle_responses(verdict="PASS")[-1]], resolved_models=["gemini-2.5-pro"])
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    current = scanner.scan()[0]
+    assert asyncio.run(worker.run_task(current)) is True
+    updated = scanner.scan()[0]
+    assert updated.metadata.review.resume_mode is None
 
 
 def test_reviewer_worker_announces_log_file(configured_paths):
