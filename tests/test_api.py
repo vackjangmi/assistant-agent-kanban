@@ -2566,6 +2566,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert 'id="retry-verification-apply"' in response.text
     assert 'id="resume-review-loop"' in response.text
+    assert "function stripOuterMarkdownFence(value)" in response.text
+    assert "const normalizedValue = activeArtifactName === 'PLAN.md' ? stripOuterMarkdownFence(value || '') : (value || '');" in response.text
     assert "const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;" in response.text
     assert "...(snapshotMetadata.review || {})," in response.text
     assert "function retryVerificationApply()" in response.text

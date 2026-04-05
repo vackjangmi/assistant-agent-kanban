@@ -4903,7 +4903,8 @@
     }
 
     function ensureMarkdownViewer(value) {
-      const renderedValue = activeTaskId ? rewriteAttachmentPaths(value || '', activeTaskId) : (value || '');
+      const normalizedValue = activeArtifactName === 'PLAN.md' ? stripOuterMarkdownFence(value || '') : (value || '');
+      const renderedValue = activeTaskId ? rewriteAttachmentPaths(normalizedValue, activeTaskId) : normalizedValue;
       if (window.toastui && window.toastui.Editor && window.toastui.Editor.factory) {
         taskViewerHost.innerHTML = '';
         markdownViewer = window.toastui.Editor.factory({
@@ -4915,6 +4916,17 @@
       }
       taskViewerHost.innerHTML = `<pre class="log-viewer">${escapeHtml(renderedValue)}</pre>`;
       return null;
+    }
+
+    function stripOuterMarkdownFence(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed.startsWith('```')) return value || '';
+      const lines = trimmed.split(/\r?\n/);
+      if (lines.length < 3) return value || '';
+      const opening = (lines[0] || '').trim().toLowerCase();
+      if (!['```', '```markdown', '```md'].includes(opening)) return value || '';
+      if ((lines[lines.length - 1] || '').trim() !== '```') return value || '';
+      return lines.slice(1, -1).join('\n').trim();
     }
 
     function resetArtifactViewerScroll() {
