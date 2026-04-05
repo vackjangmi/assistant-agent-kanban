@@ -23,6 +23,7 @@ class AssistantAdapter:
         cwd: Path,
         run_log_path: Path,
         config: AppConfig,
+        include_directories: list[Path] | None = None,
         session_id: str | None = None,
         cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
@@ -248,7 +249,11 @@ def build_backend_manager(*, config: AppConfig, adapter_registry: dict[Assistant
 
 
 def _backend_binary(config: AppConfig, backend: AssistantBackend) -> str:
-    return config.opencode.binary if backend == "opencode" else config.codex.binary
+    if backend == "opencode":
+        return config.opencode.binary
+    if backend == "codex":
+        return config.codex.binary
+    return config.gemini.binary
 
 
 def _resolve_binary_error(binary: str) -> str | None:
