@@ -88,6 +88,10 @@ def planner_cycle_responses(greeting: str = "hello", live: str = "live planning"
     return [greeting, live, artifact]
 
 
+def fenced_markdown(value: str, *, info: str = "markdown") -> str:
+    return f"```{info}\n{value}\n```"
+
+
 def test_planner_worker_generates_plan(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "planner-task")
@@ -142,6 +146,31 @@ def test_planner_worker_generates_plan(configured_paths):
     assert "## Planner Context Docs" in str(adapter.run_calls[1]["prompt"])
 
 
+def test_planner_worker_strips_outer_markdown_fence_before_persisting_plan(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-fenced-plan-task", language="ko")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    artifact = fenced_markdown(valid_plan_artifact("plan", language="ko"))
+    adapter = FakeAdapter(
+        planner_cycle_responses(artifact=artifact),
+        session_ids=["ses_fenced", "ses_fenced", "ses_fenced"],
+        total_tokens=[10, 0, 11],
+    )
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    task = scanner.scan()[0]
+    persisted_markdown = (task.task_dir / "PLAN.md").read_text().strip()
+    persisted_json = json.loads((task.task_dir / "PLAN.json").read_text())
+    expected = valid_plan_artifact("plan", language="ko")
+    assert persisted_markdown == expected
+    assert persisted_json["assistant_text"] == expected
+
+
 def test_planner_worker_pins_runtime_backend_and_models(configured_paths):
     config, _, _ = configured_paths
     config.runtime.coding_assistant = "codex"
@@ -174,6 +203,52 @@ def test_planner_worker_pins_runtime_backend_and_models(configured_paths):
     assert task.metadata.runtime_pin.planner_model == "gpt-5.4"
     assert task.metadata.runtime_pin.plan_approval_model == "gpt-5.4"
     assert task.metadata.runtime_pin.implementer_model == "gpt-5.3-codex"
+
+
+def test_gemini_planner_forces_multi_phase_path(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "gemini"
+    config.gemini.planner_model = "gemini-2.5-flash"
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "planner-gemini-multiphase-task", language="ko")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(
+        planner_cycle_responses(artifact=valid_plan_artifact("plan", language="ko")),
+        session_ids=["ses_gemini", "ses_gemini", "ses_gemini"],
+        total_tokens=[10, 0, 11],
+    )
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    task = scanner.scan()[0]
+    assert task.state == TaskState.PLAN_APPROVING
+    assert len(adapter.run_calls) == 3
+    assert adapter.run_calls[0]["output_format"] == "json"
+    assert adapter.run_calls[1]["output_format"] == "default"
+    assert adapter.run_calls[2]["output_format"] == "json"
+    assert "# Finalize Plan Artifact" in str(adapter.run_calls[2]["prompt"])
+
+
+def test_non_gemini_planner_stays_single_shot_when_live_logs_disabled(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "codex"
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "planner-codex-single-shot-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter([valid_plan_artifact("plan")], resolved_models=["gpt-5.4"])
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    assert len(adapter.run_calls) == 1
+    assert adapter.run_calls[0]["output_format"] == "json"
 
 
 def test_planner_worker_reuses_session_under_budget_and_tracks_tokens(configured_paths):
@@ -354,7 +429,7 @@ def test_planner_worker_does_not_advance_on_failed_adapter(configured_paths):
         asyncio.run(worker.run_once())
 
     planning_task = scanner.scan()[0]
-    assert planning_task.state == TaskState.PLANNING
+    assert planning_task.state == TaskState.REQUESTS
     assert not (planning_task.task_dir / "PLAN.md").exists()
     assert not (planning_task.task_dir / "PLAN.json").exists()
     assert planning_task.metadata.errors[-1].code == "planner-run-failed"
@@ -381,7 +456,7 @@ def test_planner_worker_does_not_write_tool_only_json_as_plan(configured_paths):
         asyncio.run(worker.run_once())
 
     planning_task = scanner.scan()[0]
-    assert planning_task.state == TaskState.PLANNING
+    assert planning_task.state == TaskState.REQUESTS
     assert not (planning_task.task_dir / "PLAN.md").exists()
     assert not (planning_task.task_dir / "PLAN.json").exists()
     assert planning_task.metadata.errors[-1].code == "planner-empty-artifact"
@@ -409,10 +484,12 @@ def test_planner_worker_rejects_malformed_nonempty_plan_artifact(configured_path
         asyncio.run(worker.run_once())
 
     planning_task = scanner.scan()[0]
-    assert planning_task.state == TaskState.PLANNING
+    assert planning_task.state == TaskState.REQUESTS
     assert not (planning_task.task_dir / "PLAN.md").exists()
     assert not (planning_task.task_dir / "PLAN.json").exists()
     assert planning_task.metadata.errors[-1].code == "planner-invalid-artifact"
+    assert planning_task.metadata.retry_gate.reason == "planner-invalid-artifact"
+    assert planning_task.metadata.retry_gate.not_before is None
 
 
 def test_planner_worker_skips_retry_gated_requests(configured_paths):
@@ -434,6 +511,192 @@ def test_planner_worker_skips_retry_gated_requests(configured_paths):
 
     assert asyncio.run(worker.run_once()) is False
     assert adapter.responses == planner_cycle_responses(artifact=artifact)
+
+
+def test_planner_finalize_prompt_includes_exact_localized_heading_skeleton(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-heading-prompt-task", language="ko")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter([]))
+
+    task = scanner.scan()[0]
+    request_text = (task.task_dir / "REQUEST.md").read_text()
+    prompt = worker._finalize_prompt(request_text, task.metadata)
+
+    assert "Use the exact required headings below, in this exact order." in prompt
+    assert "## 요약" in prompt
+    assert "## 범위" in prompt
+    assert "## 범위 외" in prompt
+    assert "## 파일 맵" in prompt
+    assert "## 단계별 계획" in prompt
+    assert "## 검증 계획" in prompt
+    assert "## 승인 기준" in prompt
+    assert "## 리스크" in prompt
+    assert "## 열린 질문" in prompt
+
+
+def test_planner_worker_uses_repair_result_metadata_when_repair_succeeds(configured_paths):
+    class RepairingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(
+                responses=["hello", "live planning", "했습니다.", valid_plan_artifact("repaired plan")],
+                session_ids=["ses_plan", "ses_plan", "ses_plan", "ses_plan"],
+                total_tokens=[10, 0, 11, 12],
+            )
+            self.ok_values = [True, True, True, True]
+            self.returncodes = [0, 0, 0, 0]
+            self.stderrs = ["", "", "", ""]
+            self.raw_suffixes = ["handshake", "live", "finalize", "repair"]
+            self.commands = [["handshake"], ["live"], ["finalize"], ["repair"]]
+
+        def run(self, **kwargs):
+            result = super().run(**kwargs)
+            result.ok = self.ok_values.pop(0)
+            result.returncode = self.returncodes.pop(0)
+            result.stderr = self.stderrs.pop(0)
+            result.raw_events_path = self.raw_suffixes.pop(0)
+            result.command = self.commands.pop(0)
+            return result
+
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-repair-success-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = RepairingAdapter()
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    task = scanner.scan()[0]
+    plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
+    assert plan_json["assistant_text"].startswith("## Summary")
+    assert plan_json["total_tokens"] == 12
+    assert plan_json["raw_events_path"] == "repair"
+    assert plan_json["command"] == ["repair"]
+    assert task.metadata.plan.session_tokens == 33
+
+
+def test_planner_worker_counts_live_tokens_in_multi_phase_flow(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-live-token-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(
+        planner_cycle_responses(artifact=valid_plan_artifact("plan")),
+        session_ids=["ses_plan", "ses_plan", "ses_plan"],
+        total_tokens=[10, 7, 11],
+    )
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    task = scanner.scan()[0]
+    assert task.metadata.plan.session_tokens == 28
+
+
+def test_planner_invalid_artifact_cools_down_after_second_consecutive_failure(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-invalid-artifact-repeat-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["했습니다."], ok=True, returncode=0),
+    )
+
+    with pytest.raises(AdapterRunError, match="missing required section"):
+        asyncio.run(worker.run_once())
+    first_task = scanner.scan()[0]
+    assert first_task.state == TaskState.REQUESTS
+    assert first_task.metadata.retry_gate.reason == "planner-invalid-artifact"
+    assert first_task.metadata.retry_gate.consecutive_count == 1
+    assert first_task.metadata.retry_gate.not_before is None
+
+    with pytest.raises(AdapterRunError, match="missing required section"):
+        asyncio.run(worker.run_once())
+    second_task = scanner.scan()[0]
+    assert second_task.state == TaskState.REQUESTS
+    assert second_task.metadata.retry_gate.reason == "planner-invalid-artifact"
+    assert second_task.metadata.retry_gate.consecutive_count == 2
+    assert second_task.metadata.retry_gate.not_before is not None
+
+
+def test_planner_worker_marks_failed_finalize_as_run_failure(configured_paths):
+    class FinalizeFailureAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(responses=["hello", "live planning", "planner finalize failed"]) 
+            self.ok_values = [True, True, False]
+            self.returncodes = [0, 0, 1]
+            self.stderrs = ["", "", "planner finalize failed"]
+
+        def run(self, **kwargs):
+            result = super().run(**kwargs)
+            result.ok = self.ok_values.pop(0)
+            result.returncode = self.returncodes.pop(0)
+            result.stderr = self.stderrs.pop(0)
+            return result
+
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-finalize-failure-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FinalizeFailureAdapter())
+
+    with pytest.raises(AdapterRunError, match="planner finalize failed"):
+        asyncio.run(worker.run_once())
+
+    task = scanner.scan()[0]
+    assert task.state == TaskState.REQUESTS
+    assert task.metadata.errors[-1].code == "planner-run-failed"
+    assert task.metadata.retry_gate.reason == "planner-run-failed"
+
+
+def test_planner_worker_marks_failed_repair_as_run_failure(configured_paths):
+    class RepairFailureAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(responses=["hello", "live planning", "했습니다.", "repair failed"])
+            self.ok_values = [True, True, True, False]
+            self.returncodes = [0, 0, 0, 1]
+            self.stderrs = ["", "", "", "repair failed"]
+
+        def run(self, **kwargs):
+            result = super().run(**kwargs)
+            result.ok = self.ok_values.pop(0)
+            result.returncode = self.returncodes.pop(0)
+            result.stderr = self.stderrs.pop(0)
+            return result
+
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-repair-failure-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=RepairFailureAdapter())
+
+    with pytest.raises(AdapterRunError, match="repair failed"):
+        asyncio.run(worker.run_once())
+
+    task = scanner.scan()[0]
+    assert task.state == TaskState.REQUESTS
+    assert task.metadata.errors[-1].code == "planner-run-failed"
+    assert task.metadata.retry_gate.reason == "planner-run-failed"
 
 
 def test_planner_worker_skips_incomplete_requests_without_goal(configured_paths):

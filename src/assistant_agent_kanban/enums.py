@@ -33,7 +33,7 @@ STATE_ORDER = [
 
 ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.REQUESTS: {TaskState.PLANNING},
-    TaskState.PLANNING: {TaskState.PLAN_APPROVING, TaskState.WAITING_CHECK_PLANS},
+    TaskState.PLANNING: {TaskState.REQUESTS, TaskState.PLAN_APPROVING, TaskState.WAITING_CHECK_PLANS},
     TaskState.PLAN_APPROVING: {TaskState.WAITING_CHECK_PLANS, TaskState.TODOS},
     TaskState.WAITING_CHECK_PLANS: {TaskState.TODOS},
     TaskState.TODOS: {TaskState.IMPLEMENTING},
