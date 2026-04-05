@@ -1598,6 +1598,7 @@
         <div class="task-modal-actions">
           <button type="button" id="start-verification" class="accent-button" hidden>Start verification</button>
           <button type="button" id="retry-verification-apply" class="accent-button" hidden>Retry apply</button>
+          <button type="button" id="resume-review-loop" class="accent-button" hidden>Resume review loop</button>
           <button type="button" id="approve-plan" class="primary" hidden disabled>Approve plan</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
           <span id="approve-human-review-shell" class="header-action-shell" hidden><button type="button" id="approve-human-review-button" class="primary">Approve</button></span>
@@ -1918,6 +1919,7 @@
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const startVerificationButton = document.getElementById('start-verification');
     const retryVerificationApplyButton = document.getElementById('retry-verification-apply');
+    const resumeReviewLoopButton = document.getElementById('resume-review-loop');
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');
     const taskChangedFileSummary = document.getElementById('task-changed-file-summary');
@@ -2393,6 +2395,7 @@
         modalSubtitle: 'Inspect task metadata, current agent activity, and task artifacts.',
         startVerification: 'Start verification',
         retryVerificationApply: 'Retry apply',
+        resumeReviewLoop: 'Resume review loop',
         approvePlan: 'Approve plan',
         deleteTask: 'Delete task',
         close: 'Close',
@@ -2574,6 +2577,7 @@
         planApproved: 'Plan approved.',
         failedStartVerification: 'Failed to start verification.',
         failedRetryVerificationApply: 'Failed to retry verification apply.',
+        failedResumeReviewLoop: 'Failed to resume the review loop.',
         approvalBlockedRetryApply: 'Approval is blocked until verification apply succeeds.',
         failedRejectVerification: 'Failed to reject verification.',
         failedApproveVerification: 'Failed to approve verification.',
@@ -2584,6 +2588,7 @@
         modalSubtitle: '작업 메타데이터, 현재 에이전트 활동, 산출물을 확인합니다.',
         startVerification: '검증 시작',
         retryVerificationApply: '검증 재적용',
+        resumeReviewLoop: '리뷰 루프 재개',
         approvePlan: '플랜 승인',
         deleteTask: '작업 삭제',
         close: '닫기',
@@ -2748,6 +2753,7 @@
         planApproved: '플랜을 승인했습니다.',
         failedStartVerification: '검증 시작에 실패했습니다.',
         failedRetryVerificationApply: '검증 재적용에 실패했습니다.',
+        failedResumeReviewLoop: '리뷰 루프 재개에 실패했습니다.',
         approvalBlockedRetryApply: '검증 재적용이 성공하기 전에는 승인을 진행할 수 없습니다.',
         failedRejectVerification: '검증 반려에 실패했습니다.',
         failedApproveVerification: '검증 승인에 실패했습니다.',
@@ -2850,6 +2856,7 @@
       retrospectiveCompareHelp.textContent = translateTask('retrospectiveCompareHelp');
       startVerificationButton.textContent = translateTask('startVerification');
       retryVerificationApplyButton.textContent = translateTask('retryVerificationApply');
+      resumeReviewLoopButton.textContent = translateTask('resumeReviewLoop');
       approvePlanButton.textContent = translateTask('approvePlan');
       deleteTaskButton.textContent = translateTask('deleteTask');
       closeTaskModalButton.textContent = translateTask('close');
@@ -3219,11 +3226,17 @@
       const snapshot = boardTaskSnapshots.get(activeTaskId);
       if (!snapshot) return;
       const activeMetadata = activeTaskDetail.metadata || {};
+      const snapshotMetadata = snapshot.metadata || {};
       const stateChanged = snapshot.state !== activeMetadata.state;
       const updatedAtChanged = Boolean(snapshot.updated_at) && snapshot.updated_at !== activeMetadata.updated_at;
       if (!stateChanged && !updatedAtChanged) return;
       const nextMetadata = {
         ...activeMetadata,
+        ...snapshotMetadata,
+        review: {
+          ...(activeMetadata.review || {}),
+          ...(snapshotMetadata.review || {}),
+        },
         state: stateChanged ? snapshot.state : activeMetadata.state,
         updated_at: updatedAtChanged ? snapshot.updated_at : activeMetadata.updated_at,
       };
@@ -4423,6 +4436,7 @@
 
     function hydrateTaskModalChrome(snapshot = null, { preserveTab = false } = {}) {
       const state = snapshot?.state || '';
+      const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;
       const chrome = taskChromeState(state);
       const nextTab = preserveTab ? activeTaskTab : chrome.defaultTab;
       document.getElementById('task-modal-title').textContent = snapshot?.title || translateTask('modalTitle');
@@ -4441,6 +4455,8 @@
       startVerificationButton.disabled = state !== 'completed-reviews';
       retryVerificationApplyButton.hidden = state !== 'human-verifying';
       retryVerificationApplyButton.disabled = state !== 'human-verifying';
+      resumeReviewLoopButton.hidden = !canResumeReviewLoopFromSnapshot;
+      resumeReviewLoopButton.disabled = !canResumeReviewLoopFromSnapshot;
       requestChangesButton.hidden = state !== 'human-verifying';
       requestChangesShell.hidden = state !== 'human-verifying';
       approveHumanReviewButton.hidden = state !== 'human-verifying';
@@ -5499,10 +5515,14 @@
 
     function updateHumanVerificationState() {
       const state = activeTaskDetail?.metadata?.state;
+      const review = activeTaskDetail?.metadata?.review || {};
       const integrationApplied = Boolean(activeTaskDetail?.metadata?.integration?.applied);
+      const canResumeReviewLoop = state === 'todos' && review.human_rework_required === true;
       const canStart = state === 'completed-reviews';
       const canApproveOrReject = state === 'human-verifying';
       const canRetryApply = canApproveOrReject && !integrationApplied;
+      resumeReviewLoopButton.hidden = !canResumeReviewLoop;
+      resumeReviewLoopButton.disabled = !canResumeReviewLoop || taskDetailStale;
       startVerificationButton.hidden = !canStart;
       startVerificationButton.disabled = !canStart || taskDetailStale;
       retryVerificationApplyButton.hidden = !canRetryApply;
@@ -6442,6 +6462,23 @@
       }
     }
 
+    async function resumeReviewLoop() {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'todos' || activeTaskDetail.metadata.review?.human_rework_required !== true) return;
+      resumeReviewLoopButton.disabled = true;
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/resume-review-loop`, { method: 'POST' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedResumeReviewLoop'));
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+      } finally {
+        updateHumanVerificationState();
+      }
+    }
+
     async function rejectVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
       setApprovalChoiceModalOpen(false);
@@ -6727,6 +6764,7 @@
     approvePlanButton.addEventListener('click', approvePlan);
     startVerificationButton.addEventListener('click', startVerification);
     retryVerificationApplyButton.addEventListener('click', retryVerificationApply);
+    resumeReviewLoopButton.addEventListener('click', resumeReviewLoop);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
     targetRepoInput.addEventListener('input', () => { targetRepoInput.dataset.autofilled = 'false'; });

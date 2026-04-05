@@ -2556,10 +2556,16 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/retry-verification-apply" in response.text
+    assert "/api/tasks/${activeTaskId}/resume-review-loop" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert 'id="retry-verification-apply"' in response.text
+    assert 'id="resume-review-loop"' in response.text
+    assert "const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;" in response.text
+    assert "...(snapshotMetadata.review || {})," in response.text
     assert "function retryVerificationApply()" in response.text
+    assert "function resumeReviewLoop()" in response.text
+    assert "await loadTaskDetail(activeTaskId, true);" in response.text
     assert 'id="approval-choice-modal"' in response.text
     assert 'id="approval-choice-target-button"' in response.text
     assert 'id="approval-choice-new-branch-button"' in response.text
