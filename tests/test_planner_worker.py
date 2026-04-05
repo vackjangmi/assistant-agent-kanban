@@ -18,7 +18,73 @@ from assistant_agent_kanban.models import utc_now
 from .conftest import FakeAdapter, create_request_task
 
 
-def planner_cycle_responses(greeting: str = "hello", live: str = "live planning", artifact: str = "## Summary\nplan") -> list[str]:
+def valid_plan_artifact(summary: str = "plan", *, language: str = "en") -> str:
+    if language == "ko":
+        return "\n".join(
+            [
+                "## 요약",
+                summary,
+                "",
+                "## 범위",
+                "- 범위 항목",
+                "",
+                "## 범위 외",
+                "- 범위 외 항목",
+                "",
+                "## 파일 맵",
+                "- `lib/models.dart`: 점수 계산",
+                "",
+                "## 단계별 계획",
+                "1. 점수 규칙 수정",
+                "",
+                "## 검증 계획",
+                "- 관련 테스트 실행",
+                "",
+                "## 승인 기준",
+                "- 요청 요구사항 충족",
+                "",
+                "## 리스크",
+                "- 점수 회귀 가능성",
+                "",
+                "## 열린 질문",
+                "- 없음",
+            ]
+        )
+    return "\n".join(
+        [
+            "## Summary",
+            summary,
+            "",
+            "## Scope",
+            "- Scope item",
+            "",
+            "## Out of Scope",
+            "- Out of scope item",
+            "",
+            "## File Map",
+            "- `lib/models.dart`: scoring logic",
+            "",
+            "## Step-by-step Plan",
+            "1. Update scoring rules",
+            "",
+            "## Validation Plan",
+            "- Run targeted tests",
+            "",
+            "## Acceptance Criteria",
+            "- Request requirements are satisfied",
+            "",
+            "## Risks",
+            "- Possible scoring regressions",
+            "",
+            "## Open Questions",
+            "- None",
+        ]
+    )
+
+
+def planner_cycle_responses(greeting: str = "hello", live: str = "live planning", artifact: str | None = None) -> list[str]:
+    if artifact is None:
+        artifact = valid_plan_artifact("plan")
     return [greeting, live, artifact]
 
 
@@ -35,7 +101,8 @@ def test_planner_worker_generates_plan(configured_paths):
     metadata_store.save(task.task_dir, task.metadata)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"), resolved_models=["openai/gpt-5.4", "openai/gpt-5.4"], session_ids=["ses_plan_bootstrap", "ses_plan_bootstrap", "ses_plan_bootstrap"], total_tokens=[20, 0, 21])
+    artifact = valid_plan_artifact("plan")
+    adapter = FakeAdapter(planner_cycle_responses(artifact=artifact), resolved_models=["openai/gpt-5.4", "openai/gpt-5.4"], session_ids=["ses_plan_bootstrap", "ses_plan_bootstrap", "ses_plan_bootstrap"], total_tokens=[20, 0, 21])
     worker = PlanningWorker(
         config,
         scanner,
@@ -51,7 +118,7 @@ def test_planner_worker_generates_plan(configured_paths):
     assert task.state == TaskState.PLAN_APPROVING
     assert (task.task_dir / "PLAN.md").exists()
     plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
-    assert plan_json["assistant_text"] == "## Summary\nplan"
+    assert plan_json["assistant_text"] == artifact
     assert plan_json["resolved_model"] == "openai/gpt-5.4"
     assert plan_json["session_id"] == "ses_plan_bootstrap"
     assert plan_json["total_tokens"] == 21
@@ -88,7 +155,7 @@ def test_planner_worker_pins_runtime_backend_and_models(configured_paths):
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    codex_adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"), resolved_models=["gpt-5.4", "gpt-5.4"])
+    codex_adapter = FakeAdapter([valid_plan_artifact("plan")], resolved_models=["gpt-5.4"])
     worker = PlanningWorker(
         config,
         scanner,
@@ -121,7 +188,7 @@ def test_planner_worker_reuses_session_under_budget_and_tracks_tokens(configured
     metadata_store.save(task.task_dir, task.metadata)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"), session_ids=["ses_plan_1", "ses_plan_1", "ses_plan_1"], total_tokens=[2100, 0, 2100])
+    adapter = FakeAdapter(planner_cycle_responses(artifact=valid_plan_artifact("plan")), session_ids=["ses_plan_1", "ses_plan_1", "ses_plan_1"], total_tokens=[2100, 0, 2100])
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
@@ -141,14 +208,15 @@ def test_planner_worker_finalizes_plan_from_finalize_run(configured_paths):
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(live="live plan logs", artifact="## Summary\nfinalized plan"), resolved_models=["openai/gpt-5.4", "openai/gpt-5.4"], session_ids=["ses_hybrid", "ses_hybrid", "ses_hybrid"], total_tokens=[40, 0, 48])
+    finalized_artifact = valid_plan_artifact("finalized plan")
+    adapter = FakeAdapter(planner_cycle_responses(live="live plan logs", artifact=finalized_artifact), resolved_models=["openai/gpt-5.4", "openai/gpt-5.4"], session_ids=["ses_hybrid", "ses_hybrid", "ses_hybrid"], total_tokens=[40, 0, 48])
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
     task = scanner.scan()[0]
     plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
 
-    assert plan_json["assistant_text"] == "## Summary\nfinalized plan"
+    assert plan_json["assistant_text"] == finalized_artifact
     assert plan_json["session_id"] == "ses_hybrid"
     assert plan_json["total_tokens"] == 48
     assert (config.runs_dir / task.metadata.task_id / "planner.jsonl").exists()
@@ -161,15 +229,16 @@ def test_planner_worker_uses_finalize_artifact_instead_of_live_stdout(configured
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(live="Thinking: hidden\n## Summary\nnoisy stdout", artifact="## Summary\nclean plan"), session_ids=["ses_plan", "ses_plan", "ses_plan"], total_tokens=[10, 0, 10])
+    clean_artifact = valid_plan_artifact("clean plan")
+    adapter = FakeAdapter(planner_cycle_responses(live="Thinking: hidden\n## Summary\nnoisy stdout", artifact=clean_artifact), session_ids=["ses_plan", "ses_plan", "ses_plan"], total_tokens=[10, 0, 10])
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
 
     task = scanner.scan()[0]
-    assert (task.task_dir / "PLAN.md").read_text() == "## Summary\nclean plan\n"
+    assert (task.task_dir / "PLAN.md").read_text() == clean_artifact + "\n"
     plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
-    assert plan_json["assistant_text"] == "## Summary\nclean plan"
+    assert plan_json["assistant_text"] == clean_artifact
     assert "Thinking:" not in plan_json["assistant_text"]
 
 
@@ -180,7 +249,7 @@ def test_planner_worker_uses_handshake_and_finalize_prompts_around_live_prompt(c
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"))
+    adapter = FakeAdapter(planner_cycle_responses(artifact=valid_plan_artifact("plan")))
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
@@ -210,7 +279,7 @@ def test_planner_worker_rolls_over_session_after_budget_is_exceeded(configured_p
     metadata_store.save(task.task_dir, task.metadata)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"), session_ids=["ses_plan_2", "ses_plan_2", "ses_plan_2"], total_tokens=[1600, 0, 1600])
+    adapter = FakeAdapter(planner_cycle_responses(artifact=valid_plan_artifact("plan")), session_ids=["ses_plan_2", "ses_plan_2", "ses_plan_2"], total_tokens=[1600, 0, 1600])
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
@@ -229,7 +298,8 @@ def test_planner_worker_uses_single_json_run_when_live_logs_disabled(configured_
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(["## Summary\nsingle plan"], session_ids=["ses_single_plan"], total_tokens=[77])
+    artifact = valid_plan_artifact("single plan")
+    adapter = FakeAdapter([artifact], session_ids=["ses_single_plan"], total_tokens=[77])
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
@@ -238,7 +308,7 @@ def test_planner_worker_uses_single_json_run_when_live_logs_disabled(configured_
     assert len(adapter.run_calls) == 1
     assert adapter.run_calls[0]["output_format"] == "json"
     assert adapter.run_calls[0]["show_thinking"] is False
-    assert (task.task_dir / "PLAN.md").read_text() == "## Summary\nsingle plan\n"
+    assert (task.task_dir / "PLAN.md").read_text() == artifact + "\n"
     plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
     assert plan_json["session_id"] == "ses_single_plan"
     assert plan_json["total_tokens"] == 77
@@ -251,15 +321,16 @@ def test_planner_markdown_edits_do_not_modify_plan_json(configured_paths):
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(planner_cycle_responses(artifact="## Summary\noriginal plan")))
+    original_artifact = valid_plan_artifact("original plan")
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(planner_cycle_responses(artifact=original_artifact)))
 
     assert asyncio.run(worker.run_once()) is True
     task = scanner.scan()[0]
     plan_md = task.task_dir / "PLAN.md"
-    plan_md.write_text("## Summary\nmanual edit\n")
+    plan_md.write_text(valid_plan_artifact("manual edit") + "\n")
 
     plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
-    assert plan_json["assistant_text"] == "## Summary\noriginal plan"
+    assert plan_json["assistant_text"] == original_artifact
 
 
 def test_planner_worker_does_not_advance_on_failed_adapter(configured_paths):
@@ -316,6 +387,34 @@ def test_planner_worker_does_not_write_tool_only_json_as_plan(configured_paths):
     assert planning_task.metadata.errors[-1].code == "planner-empty-artifact"
 
 
+def test_planner_worker_rejects_malformed_nonempty_plan_artifact(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "planner-invalid-artifact-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["했습니다."], ok=True, returncode=0),
+    )
+
+    with pytest.raises(AdapterRunError, match="missing required section"):
+        asyncio.run(worker.run_once())
+
+    planning_task = scanner.scan()[0]
+    assert planning_task.state == TaskState.PLANNING
+    assert not (planning_task.task_dir / "PLAN.md").exists()
+    assert not (planning_task.task_dir / "PLAN.json").exists()
+    assert planning_task.metadata.errors[-1].code == "planner-invalid-artifact"
+
+
 def test_planner_worker_skips_retry_gated_requests(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "planner-gated-task")
@@ -329,11 +428,12 @@ def test_planner_worker_skips_retry_gated_requests(configured_paths):
     metadata_store.save(task_dir, metadata)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"))
+    artifact = valid_plan_artifact("plan")
+    adapter = FakeAdapter(planner_cycle_responses(artifact=artifact))
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is False
-    assert adapter.responses == planner_cycle_responses(artifact="## Summary\nplan")
+    assert adapter.responses == planner_cycle_responses(artifact=artifact)
 
 
 def test_planner_worker_skips_incomplete_requests_without_goal(configured_paths):
@@ -358,13 +458,14 @@ def test_planner_worker_skips_incomplete_requests_without_goal(configured_paths)
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan"))
+    artifact = valid_plan_artifact("plan")
+    adapter = FakeAdapter(planner_cycle_responses(artifact=artifact))
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is False
     pending_task = scanner.scan()[0]
     assert pending_task.state == TaskState.REQUESTS
-    assert adapter.responses == planner_cycle_responses(artifact="## Summary\nplan")
+    assert adapter.responses == planner_cycle_responses(artifact=artifact)
 
 
 def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeypatch):
@@ -374,7 +475,7 @@ def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeyp
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan")))
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter(planner_cycle_responses(artifact=valid_plan_artifact("plan"))))
     called = {"value": False}
 
     async def fake_to_thread(func, /, *args, **kwargs):
@@ -390,7 +491,7 @@ def test_planner_worker_offloads_adapter_run_to_thread(configured_paths, monkeyp
 def test_planner_worker_includes_request_language_in_prompt(configured_paths):
     class PromptCapturingAdapter(FakeAdapter):
         def __init__(self):
-            super().__init__(planner_cycle_responses(artifact="## Summary\nplan"))
+            super().__init__(planner_cycle_responses(artifact=valid_plan_artifact("plan", language="ko")))
             self.prompt = ""
 
         def run(self, **kwargs):
@@ -434,7 +535,7 @@ def test_planner_worker_includes_request_language_in_prompt(configured_paths):
 def test_planner_worker_runs_from_project_repo_for_runtime_artifacts(configured_paths):
     class CwdCapturingAdapter(FakeAdapter):
         def __init__(self):
-            super().__init__(planner_cycle_responses(artifact="## Summary\nplan"))
+            super().__init__(planner_cycle_responses(artifact=valid_plan_artifact("plan")))
             self.cwd = None
 
         def run(self, **kwargs):
@@ -459,7 +560,7 @@ def test_planner_worker_runs_from_project_repo_for_runtime_artifacts(configured_
 def test_planner_worker_uses_updated_request_metadata_after_request_completion(configured_paths, tmp_path):
     class CwdCapturingAdapter(FakeAdapter):
         def __init__(self):
-            super().__init__(planner_cycle_responses(artifact="## Summary\nplan"))
+            super().__init__(planner_cycle_responses(artifact=valid_plan_artifact("plan")))
             self.cwd = None
 
         def run(self, **kwargs):
@@ -518,7 +619,7 @@ def test_planner_worker_emits_realtime_worker_log_events(configured_paths):
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     event_bus = EventBus()
-    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan")))
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(planner_cycle_responses(artifact=valid_plan_artifact("plan"))))
 
     async def scenario():
         event_task = asyncio.create_task(receive_worker_log(event_bus))
@@ -549,7 +650,7 @@ def test_planner_worker_announces_log_file(configured_paths):
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     event_bus = EventBus()
-    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(planner_cycle_responses(artifact="## Summary\nplan")))
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(planner_cycle_responses(artifact=valid_plan_artifact("plan"))))
 
     async def scenario():
         event_task = asyncio.create_task(receive_worker_log_file(event_bus))
@@ -576,7 +677,8 @@ def test_planner_worker_emits_realtime_worker_log_events_when_live_logs_disabled
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     event_bus = EventBus()
-    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter(["## Summary\nplan"]))
+    default_artifact = valid_plan_artifact("plan")
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, event_bus, adapter=FakeAdapter([default_artifact]))
 
     async def scenario():
         event_task = asyncio.create_task(receive_worker_log(event_bus))
@@ -587,4 +689,4 @@ def test_planner_worker_emits_realtime_worker_log_events_when_live_logs_disabled
     event = asyncio.run(scenario())
     assert event is not None
     assert event.payload["log_name"] == "planner.jsonl"
-    assert event.payload["rendered_content"] == "## Summary\nplan"
+    assert event.payload["rendered_content"] == default_artifact

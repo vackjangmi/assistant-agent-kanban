@@ -7,7 +7,7 @@ from ..assistant_adapter import AssistantAdapter
 from ..config import PROJECT_ROOT
 from ..enums import TaskState
 from ..exceptions import AdapterRunError
-from ..language import generation_language_name
+from ..language import generation_language_code, generation_language_name
 from ..models import RunResult, reset_plan_approval_tracking
 from ..request_parser import has_required_request_fields
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
@@ -74,6 +74,7 @@ class PlanningWorker(WorkerBase):
                     cwd=planner_cwd,
                     run_log_path=log_path,
                     config=run_config,
+                    include_directories=self._gemini_include_directories(planning.metadata, planner_cwd),
                     session_id=session_id,
                     cancel_key=planning.metadata.task_id,
                     on_log_line=self.make_log_callback(loop, planning.metadata.task_id, log_name),
@@ -105,10 +106,15 @@ class PlanningWorker(WorkerBase):
                         message="planner did not return a markdown artifact",
                     )
                     raise AdapterRunError("planner did not return a markdown artifact")
+                plan_artifact = self._validated_plan_artifact(result.assistant_text, planning.task_dir, planning.metadata)
                 clear_retry_gate(planning.metadata)
                 planning.metadata.plan.revision += 1
                 reset_plan_approval_tracking(planning.metadata.plan_approval)
-                plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", result)
+                plan_path, _ = self.write_result_artifacts(
+                    planning.task_dir,
+                    "PLAN",
+                    result.model_copy(update={"assistant_text": plan_artifact}),
+                )
                 planning.metadata.plan.path = plan_path
                 self.metadata_store.save(planning.task_dir, planning.metadata)
                 planning.metadata.plan.approved = False
@@ -124,6 +130,7 @@ class PlanningWorker(WorkerBase):
                 cwd=planner_cwd,
                 run_log_path=log_path,
                 config=run_config,
+                include_directories=self._gemini_include_directories(planning.metadata, planner_cwd),
                 session_id=session_id,
                 cancel_key=planning.metadata.task_id,
             )
@@ -156,6 +163,7 @@ class PlanningWorker(WorkerBase):
                 cwd=planner_cwd,
                 run_log_path=log_path,
                 config=run_config,
+                include_directories=self._gemini_include_directories(planning.metadata, planner_cwd),
                 session_id=active_session_id,
                 cancel_key=planning.metadata.task_id,
                 on_log_line=self.make_log_callback(loop, planning.metadata.task_id, log_name),
@@ -181,6 +189,7 @@ class PlanningWorker(WorkerBase):
                 cwd=planner_cwd,
                 run_log_path=log_path,
                 config=run_config,
+                include_directories=self._gemini_include_directories(planning.metadata, planner_cwd),
                 session_id=live_result.session_id or active_session_id,
                 cancel_key=planning.metadata.task_id,
             )
@@ -203,13 +212,14 @@ class PlanningWorker(WorkerBase):
                 )
                 raise AdapterRunError("planner did not return a markdown artifact")
 
+            plan_artifact = self._validated_plan_artifact(finalize_result.assistant_text, planning.task_dir, planning.metadata)
             clear_retry_gate(planning.metadata)
             planning.metadata.plan.revision += 1
             reset_plan_approval_tracking(planning.metadata.plan_approval)
             finalized_result = RunResult(
                 ok=finalize_result.ok,
                 returncode=finalize_result.returncode,
-                assistant_text=finalize_result.assistant_text,
+                assistant_text=plan_artifact,
                 stdout=finalize_result.stdout,
                 stderr=finalize_result.stderr,
                 raw_events_path=finalize_result.raw_events_path,
@@ -231,6 +241,32 @@ class PlanningWorker(WorkerBase):
         if not request_path.exists():
             return False
         return has_required_request_fields(request_path.read_text())
+
+    def _gemini_include_directories(self, metadata, planner_cwd: Path) -> list[Path] | None:
+        if self.config.backend_for_role("planner") != "gemini":
+            return None
+        target_repo_root = Path(metadata.target.repo_root).expanduser().resolve()
+        if target_repo_root == planner_cwd:
+            return None
+        return [target_repo_root]
+
+    def _validated_plan_artifact(self, assistant_text: str, task_dir: Path, metadata) -> str:
+        artifact = assistant_text.strip()
+        cursor = 0
+        for heading in _expected_plan_headings(generation_language_code(metadata.request.language)):
+            marker = f"## {heading}"
+            position = artifact.find(marker, cursor)
+            if position < 0:
+                apply_retry_gate(metadata, reason="planner-invalid-artifact")
+                self.metadata_store.add_error(
+                    task_dir,
+                    metadata,
+                    code="planner-invalid-artifact",
+                    message=f"planner artifact missing required section: {marker}",
+                )
+                raise AdapterRunError(f"planner artifact missing required section: {marker}")
+            cursor = position + len(marker)
+        return artifact
 
     def _planner_source_text(self, request_text: str) -> str:
         context_blocks: list[str] = []
@@ -263,3 +299,29 @@ class PlanningWorker(WorkerBase):
             ]
         )
         return self.build_prompt(instructions, metadata, phase="planner")
+
+
+def _expected_plan_headings(language_code: str) -> tuple[str, ...]:
+    if language_code == "ko":
+        return (
+            "요약",
+            "범위",
+            "범위 외",
+            "파일 맵",
+            "단계별 계획",
+            "검증 계획",
+            "승인 기준",
+            "리스크",
+            "열린 질문",
+        )
+    return (
+        "Summary",
+        "Scope",
+        "Out of Scope",
+        "File Map",
+        "Step-by-step Plan",
+        "Validation Plan",
+        "Acceptance Criteria",
+        "Risks",
+        "Open Questions",
+    )
