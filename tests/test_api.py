@@ -1504,6 +1504,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["available_assistants"] == [
             {"value": "opencode", "label": "OpenCode"},
             {"value": "codex", "label": "Codex CLI"},
+            {"value": "gemini", "label": "Gemini CLI"},
         ]
         assert get_response.json()["planner_model"] is None
         assert get_response.json()["planner_session_token_budget"] == 250

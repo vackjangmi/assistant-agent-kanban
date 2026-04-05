@@ -106,7 +106,7 @@ class ModelSettingsPayload(BaseModel):
                 return None
             normalized = normalize_runtime_assistant(value)
             if normalized is None:
-                raise ValueError("role assistant must be OpenCode or Codex CLI")
+                raise ValueError("role assistant must be OpenCode, Codex CLI, or Gemini CLI")
             return normalized
 
     language: str | None = None
@@ -147,7 +147,7 @@ class ModelSettingsPayload(BaseModel):
             return None
         normalized = normalize_runtime_assistant(value)
         if normalized is None:
-            raise ValueError("coding assistant must be OpenCode or Codex CLI")
+            raise ValueError("coding assistant must be OpenCode, Codex CLI, or Gemini CLI")
         return normalized
 
 
@@ -189,7 +189,7 @@ def _normalize_runtime_language(value: str | None) -> str:
 def _normalize_runtime_coding_assistant(value: str | None) -> str:
     normalized = normalize_runtime_assistant(value)
     if normalized is None:
-        raise ValueError("coding assistant must be OpenCode or Codex CLI")
+            raise ValueError("coding assistant must be OpenCode, Codex CLI, or Gemini CLI")
     return normalized
 
 
@@ -199,6 +199,7 @@ def _apply_config_update(target, updated) -> None:
     target.base_branch = updated.base_branch
     target.opencode = updated.opencode
     target.codex = updated.codex
+    target.gemini = updated.gemini
     target.workspace = updated.workspace
     target.locks = updated.locks
     target.runtime = updated.runtime

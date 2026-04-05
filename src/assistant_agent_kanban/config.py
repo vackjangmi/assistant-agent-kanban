@@ -17,10 +17,10 @@ DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
-AssistantBackend = Literal["opencode", "codex"]
+AssistantBackend = Literal["opencode", "codex", "gemini"]
 AssistantRole = Literal["planner", "plan_approval", "implementer", "reviewer", "commit"]
 ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
-SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode", "codex": "Codex CLI"}
+SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode", "codex": "Codex CLI", "gemini": "Gemini CLI"}
 
 
 def normalize_runtime_assistant(value: str | None) -> str | None:
@@ -29,8 +29,8 @@ def normalize_runtime_assistant(value: str | None) -> str | None:
     normalized = value.strip().lower()
     if normalized in SUPPORTED_RUNTIME_ASSISTANTS:
         return normalized
-    if normalized == "opencode":
-        return "opencode"
+    if normalized in {"opencode", "gemini"}:
+        return normalized
     return None
 
 
@@ -57,6 +57,21 @@ class OpenCodeConfig(BaseModel):
 
 class CodexConfig(BaseModel):
     binary: str = "codex"
+    planner_model: str | None = None
+    planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    plan_approval_model: str | None = None
+    plan_approval_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    implementer_model: str | None = None
+    implementer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    reviewer_model: str | None = None
+    reviewer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    commit_model: str | None = None
+    commit_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    timeout_seconds: int = 1800
+
+
+class GeminiConfig(BaseModel):
+    binary: str = "gemini"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     plan_approval_model: str | None = None
@@ -114,7 +129,7 @@ class RuntimeConfig(BaseModel):
     def normalize_coding_assistant_setting(cls, value: str) -> str:
         normalized = normalize_runtime_assistant(value)
         if normalized is None:
-            raise ValueError("runtime coding assistant must be OpenCode or Codex CLI")
+            raise ValueError("runtime coding assistant must be OpenCode, Codex CLI, or Gemini CLI")
         return normalized
 
 
@@ -130,6 +145,7 @@ class AppConfig(BaseModel):
     target_repo_docs_root: str = DEFAULT_TARGET_REPO_DOCS_ROOT
     opencode: OpenCodeConfig = Field(default_factory=OpenCodeConfig)
     codex: CodexConfig = Field(default_factory=CodexConfig)
+    gemini: GeminiConfig = Field(default_factory=GeminiConfig)
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     locks: LocksConfig = Field(default_factory=LocksConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
@@ -201,7 +217,11 @@ class AppConfig(BaseModel):
 
     def backend_config(self, *, backend: AssistantBackend | None = None, role: AssistantRole | None = None):
         resolved_backend = backend or (self.backend_for_role(role) if role is not None else self.active_backend())
-        return self.opencode if resolved_backend == "opencode" else self.codex
+        if resolved_backend == "opencode":
+            return self.opencode
+        if resolved_backend == "codex":
+            return self.codex
+        return self.gemini
 
     def role_agent(self, role: AssistantRole) -> str:
         if self.backend_for_role(role) == "opencode":

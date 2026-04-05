@@ -200,15 +200,15 @@ class TargetRepoInfo(BaseModel):
 
 
 class TaskRuntimeRoleBackends(BaseModel):
-    planner: Literal["opencode", "codex"] | None = None
-    plan_approval: Literal["opencode", "codex"] | None = None
-    implementer: Literal["opencode", "codex"] | None = None
-    reviewer: Literal["opencode", "codex"] | None = None
-    commit: Literal["opencode", "codex"] | None = None
+    planner: Literal["opencode", "codex", "gemini"] | None = None
+    plan_approval: Literal["opencode", "codex", "gemini"] | None = None
+    implementer: Literal["opencode", "codex", "gemini"] | None = None
+    reviewer: Literal["opencode", "codex", "gemini"] | None = None
+    commit: Literal["opencode", "codex", "gemini"] | None = None
 
 
 class TaskRuntimePin(BaseModel):
-    backend: Literal["opencode", "codex"]
+    backend: Literal["opencode", "codex", "gemini"]
     captured_at: datetime = Field(default_factory=utc_now)
     captured_by: str
     role_backends: TaskRuntimeRoleBackends = Field(default_factory=TaskRuntimeRoleBackends)
