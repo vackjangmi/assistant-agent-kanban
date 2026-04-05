@@ -1599,6 +1599,7 @@
           <button type="button" id="start-verification" class="accent-button" hidden>Start verification</button>
           <button type="button" id="retry-verification-apply" class="accent-button" hidden>Retry apply</button>
           <button type="button" id="resume-implementer" class="accent-button" hidden>Resume implementer</button>
+          <button type="button" id="resume-reviewer" class="accent-button" hidden>Resume reviewer</button>
           <button type="button" id="resume-review-loop" class="accent-button" hidden>Resume review loop</button>
           <button type="button" id="approve-plan" class="primary" hidden disabled>Approve plan</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
@@ -1838,6 +1839,42 @@
       </div>
     </div>
   </section>
+  <section id="resume-reviewer-choice-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel approval-choice-panel" role="dialog" aria-modal="true" aria-labelledby="resume-reviewer-choice-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="resume-reviewer-choice-title">Resume reviewer</h2>
+          <p id="resume-reviewer-choice-description">Choose which reviewer runtime settings to use for this restart.</p>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="close-resume-reviewer-choice">Close</button>
+        </div>
+      </div>
+      <div class="approval-choice-shell">
+        <div class="approval-choice-copy">
+          <strong id="resume-reviewer-choice-copy-title">Reviewer restart mode</strong>
+          <p id="resume-reviewer-choice-copy-body">Reuse the failed pinned runtime or restart with the current configured reviewer settings.</p>
+        </div>
+        <div class="approval-choice-grid">
+          <section class="approval-choice-card">
+            <div>
+              <strong id="resume-reviewer-choice-pinned-title">Use failed pinned runtime</strong>
+            </div>
+            <p id="resume-reviewer-choice-pinned-description">Restart with the same pinned reviewer backend and model that failed last time.</p>
+            <button type="button" id="resume-reviewer-choice-pinned-button" class="accent-button">Use failed pinned runtime</button>
+          </section>
+          <section class="approval-choice-card">
+            <div>
+              <strong id="resume-reviewer-choice-current-title">Use current settings</strong>
+            </div>
+            <p id="resume-reviewer-choice-current-description">Restart with the reviewer backend and model currently configured in Settings.</p>
+            <button type="button" id="resume-reviewer-choice-current-button" class="primary">Use current settings</button>
+          </section>
+        </div>
+        <div id="resume-reviewer-choice-status" class="approval-choice-status" hidden></div>
+      </div>
+    </div>
+  </section>
   <main>
     <div class="board-phase-shell">
       <div id="board-phase-tabs" class="board-phase-tabs">
@@ -1859,6 +1896,7 @@
     const retrospectiveModal = document.getElementById('retrospective-modal');
     const approvalChoiceModal = document.getElementById('approval-choice-modal');
     const resumeImplementerChoiceModal = document.getElementById('resume-implementer-choice-modal');
+    const resumeReviewerChoiceModal = document.getElementById('resume-reviewer-choice-modal');
     const openComposerButton = document.getElementById('open-composer');
     const openSettingsButton = document.getElementById('open-settings');
     const refreshButton = document.getElementById('refresh');
@@ -1866,6 +1904,7 @@
     const closeRetrospectiveModalButton = document.getElementById('close-retrospective-modal');
     const closeApprovalChoiceButton = document.getElementById('close-approval-choice');
     const closeResumeImplementerChoiceButton = document.getElementById('close-resume-implementer-choice');
+    const closeResumeReviewerChoiceButton = document.getElementById('close-resume-reviewer-choice');
     const cancelComposerButton = document.getElementById('cancel-composer');
     const cancelSettingsButton = document.getElementById('cancel-settings');
     const requestForm = document.getElementById('request-form');
@@ -1962,6 +2001,10 @@
     const resumeImplementerChoicePinnedButton = document.getElementById('resume-implementer-choice-pinned-button');
     const resumeImplementerChoiceCurrentButton = document.getElementById('resume-implementer-choice-current-button');
     const resumeImplementerChoiceStatus = document.getElementById('resume-implementer-choice-status');
+    const resumeReviewerButton = document.getElementById('resume-reviewer');
+    const resumeReviewerChoicePinnedButton = document.getElementById('resume-reviewer-choice-pinned-button');
+    const resumeReviewerChoiceCurrentButton = document.getElementById('resume-reviewer-choice-current-button');
+    const resumeReviewerChoiceStatus = document.getElementById('resume-reviewer-choice-status');
     const resumeReviewLoopButton = document.getElementById('resume-review-loop');
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');
@@ -2068,12 +2111,14 @@
     let branchLookupTimer = null;
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
+    let cachedAssistantOptions = null;
     let boardTaskSnapshots = new Map();
     let lastLoadedSettingsState = null;
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
     let approvalSubmissionInFlight = false;
     let resumeImplementerSubmissionInFlight = false;
+    let resumeReviewerSubmissionInFlight = false;
 
     const roleSettingConfigs = [
       { role: 'planner', backendInput: plannerBackendInput, modelInput: plannerModelInput, modelOptions: plannerModelOptions },
@@ -2440,6 +2485,7 @@
         startVerification: 'Start verification',
         retryVerificationApply: 'Retry apply',
         resumeImplementer: 'Resume implementer',
+        resumeReviewer: 'Resume reviewer',
         resumeImplementerChoiceTitle: 'Resume implementer',
         resumeImplementerChoiceDescription: 'Choose which implementer runtime settings to use for this restart.',
         resumeImplementerChoiceCopyTitle: 'Implementer restart mode',
@@ -2453,6 +2499,19 @@
         resumeImplementerChoiceClose: 'Close',
         resumeImplementerSubmittingPinned: 'Resuming implementer with the failed pinned runtime...',
         resumeImplementerSubmittingCurrent: 'Resuming implementer with the current configured runtime...',
+        resumeReviewerChoiceTitle: 'Resume reviewer',
+        resumeReviewerChoiceDescription: 'Choose which reviewer runtime settings to use for this restart.',
+        resumeReviewerChoiceCopyTitle: 'Reviewer restart mode',
+        resumeReviewerChoiceCopyBody: 'Reuse the failed pinned runtime or restart with the current configured reviewer settings.',
+        resumeReviewerChoicePinnedTitle: 'Use failed pinned runtime',
+        resumeReviewerChoicePinnedDescription: 'Restart with the same pinned reviewer backend and model that failed last time.',
+        resumeReviewerChoicePinnedAction: 'Use failed pinned runtime',
+        resumeReviewerChoiceCurrentTitle: 'Use current settings',
+        resumeReviewerChoiceCurrentDescription: 'Restart with the reviewer backend and model currently configured in Settings.',
+        resumeReviewerChoiceCurrentAction: 'Use current settings',
+        resumeReviewerChoiceClose: 'Close',
+        resumeReviewerSubmittingPinned: 'Resuming reviewer with the failed pinned runtime...',
+        resumeReviewerSubmittingCurrent: 'Resuming reviewer with the current configured runtime...',
         resumeReviewLoop: 'Resume review loop',
         approvePlan: 'Approve plan',
         deleteTask: 'Delete task',
@@ -2636,6 +2695,7 @@
         failedStartVerification: 'Failed to start verification.',
         failedRetryVerificationApply: 'Failed to retry verification apply.',
         failedResumeImplementer: 'Failed to resume the implementer.',
+        failedResumeReviewer: 'Failed to resume the reviewer.',
         failedResumeReviewLoop: 'Failed to resume the review loop.',
         approvalBlockedRetryApply: 'Approval is blocked until verification apply succeeds.',
         failedRejectVerification: 'Failed to reject verification.',
@@ -2648,6 +2708,7 @@
         startVerification: '검증 시작',
         retryVerificationApply: '검증 재적용',
         resumeImplementer: '구현 재개',
+        resumeReviewer: '리뷰 재개',
         resumeImplementerChoiceTitle: '구현 재개',
         resumeImplementerChoiceDescription: '이번 재시작에 사용할 구현 런타임 설정을 선택하세요.',
         resumeImplementerChoiceCopyTitle: '구현 재시작 방식',
@@ -2661,6 +2722,19 @@
         resumeImplementerChoiceClose: '닫기',
         resumeImplementerSubmittingPinned: '실패한 pinned 런타임으로 구현을 다시 시작하는 중...',
         resumeImplementerSubmittingCurrent: '현재 설정된 런타임으로 구현을 다시 시작하는 중...',
+        resumeReviewerChoiceTitle: '리뷰 재개',
+        resumeReviewerChoiceDescription: '이번 재시작에 사용할 리뷰 런타임 설정을 선택하세요.',
+        resumeReviewerChoiceCopyTitle: '리뷰 재시작 방식',
+        resumeReviewerChoiceCopyBody: '직전에 실패한 pinned 런타임을 다시 쓰거나, 현재 Settings에 있는 리뷰 설정으로 다시 시작할 수 있습니다.',
+        resumeReviewerChoicePinnedTitle: '실패한 pinned 런타임 사용',
+        resumeReviewerChoicePinnedDescription: '직전 실패에서 사용한 pinned 리뷰 backend/model 조합으로 다시 시작합니다.',
+        resumeReviewerChoicePinnedAction: '실패한 pinned 런타임 사용',
+        resumeReviewerChoiceCurrentTitle: '현재 설정 사용',
+        resumeReviewerChoiceCurrentDescription: '현재 Settings에 저장된 리뷰 backend/model 설정으로 다시 시작합니다.',
+        resumeReviewerChoiceCurrentAction: '현재 설정 사용',
+        resumeReviewerChoiceClose: '닫기',
+        resumeReviewerSubmittingPinned: '실패한 pinned 런타임으로 리뷰를 다시 시작하는 중...',
+        resumeReviewerSubmittingCurrent: '현재 설정된 런타임으로 리뷰를 다시 시작하는 중...',
         resumeReviewLoop: '리뷰 루프 재개',
         approvePlan: '플랜 승인',
         deleteTask: '작업 삭제',
@@ -2827,6 +2901,7 @@
         failedStartVerification: '검증 시작에 실패했습니다.',
         failedRetryVerificationApply: '검증 재적용에 실패했습니다.',
         failedResumeImplementer: '구현 재개에 실패했습니다.',
+        failedResumeReviewer: '리뷰 재개에 실패했습니다.',
         failedResumeReviewLoop: '리뷰 루프 재개에 실패했습니다.',
         approvalBlockedRetryApply: '검증 재적용이 성공하기 전에는 승인을 진행할 수 없습니다.',
         failedRejectVerification: '검증 반려에 실패했습니다.',
@@ -2931,6 +3006,7 @@
       startVerificationButton.textContent = translateTask('startVerification');
       retryVerificationApplyButton.textContent = translateTask('retryVerificationApply');
       resumeImplementerButton.textContent = translateTask('resumeImplementer');
+      resumeReviewerButton.textContent = translateTask('resumeReviewer');
       document.getElementById('resume-implementer-choice-title').textContent = translateTask('resumeImplementerChoiceTitle');
       document.getElementById('resume-implementer-choice-description').textContent = translateTask('resumeImplementerChoiceDescription');
       document.getElementById('resume-implementer-choice-copy-title').textContent = translateTask('resumeImplementerChoiceCopyTitle');
@@ -2942,6 +3018,17 @@
       resumeImplementerChoicePinnedButton.textContent = translateTask('resumeImplementerChoicePinnedAction');
       resumeImplementerChoiceCurrentButton.textContent = translateTask('resumeImplementerChoiceCurrentAction');
       closeResumeImplementerChoiceButton.textContent = translateTask('resumeImplementerChoiceClose');
+      document.getElementById('resume-reviewer-choice-title').textContent = translateTask('resumeReviewerChoiceTitle');
+      document.getElementById('resume-reviewer-choice-description').textContent = translateTask('resumeReviewerChoiceDescription');
+      document.getElementById('resume-reviewer-choice-copy-title').textContent = translateTask('resumeReviewerChoiceCopyTitle');
+      document.getElementById('resume-reviewer-choice-copy-body').textContent = translateTask('resumeReviewerChoiceCopyBody');
+      document.getElementById('resume-reviewer-choice-pinned-title').textContent = translateTask('resumeReviewerChoicePinnedTitle');
+      document.getElementById('resume-reviewer-choice-pinned-description').textContent = translateTask('resumeReviewerChoicePinnedDescription');
+      document.getElementById('resume-reviewer-choice-current-title').textContent = translateTask('resumeReviewerChoiceCurrentTitle');
+      document.getElementById('resume-reviewer-choice-current-description').textContent = translateTask('resumeReviewerChoiceCurrentDescription');
+      resumeReviewerChoicePinnedButton.textContent = translateTask('resumeReviewerChoicePinnedAction');
+      resumeReviewerChoiceCurrentButton.textContent = translateTask('resumeReviewerChoiceCurrentAction');
+      closeResumeReviewerChoiceButton.textContent = translateTask('resumeReviewerChoiceClose');
       resumeReviewLoopButton.textContent = translateTask('resumeReviewLoop');
       approvePlanButton.textContent = translateTask('approvePlan');
       deleteTaskButton.textContent = translateTask('deleteTask');
@@ -3061,7 +3148,7 @@
       setSettingsHtml('settings-implementer-note', 'implementerNote');
       setSettingsHtml('settings-reviewer-note', 'reviewerNote');
       setSettingsHtml('settings-commit-note', 'commitNote');
-      renderAssistantOptions(lastSettingsPayload?.available_assistants || null, runtimeCodingAssistantInput.value || 'opencode');
+      renderAssistantOptions(cachedAssistantOptions, runtimeCodingAssistantInput.value || 'opencode');
       cancelSettingsButton.textContent = translateSettings('cancel');
       saveSettingsButton.textContent = translateSettings('saveSettings');
       if (lastSettingsPayload) {
@@ -3119,11 +3206,30 @@
       validateForm();
     }
 
-    function renderAssistantOptions(options, selectedValue = 'opencode') {
-      const items = Array.isArray(options) && options.length ? options : [
+    function resolveAssistantOptions(payload) {
+      const defaults = [
         { value: 'opencode', label: 'OpenCode' },
         { value: 'codex', label: 'Codex CLI' },
+        { value: 'gemini', label: 'Gemini CLI' },
       ];
+      const configured = Array.isArray(payload?.available_assistants) ? payload.available_assistants : [];
+      const availabilityByBackend = payload?.backend_availability_by_backend;
+      if (!availabilityByBackend || typeof availabilityByBackend !== 'object') {
+        return configured.length ? configured : defaults;
+      }
+      const labelByValue = new Map(defaults.map((item) => [item.value, item.label]));
+      configured.forEach((item) => {
+        if (!item || !item.value) return;
+        labelByValue.set(item.value, item.label || labelByValue.get(item.value) || item.value);
+      });
+      const available = Object.entries(availabilityByBackend)
+        .filter(([, status]) => status && status.available)
+        .map(([value]) => ({ value, label: labelByValue.get(value) || value }));
+      return available.length ? available : (configured.length ? configured : defaults);
+    }
+
+    function renderAssistantOptions(options, selectedValue = 'opencode') {
+      const items = Array.isArray(options) && options.length ? options : (cachedAssistantOptions || resolveAssistantOptions(lastSettingsPayload));
       const previousRoleSelections = Object.fromEntries(roleSettingConfigs.map(({ role, backendInput }) => [role, backendInput.value || 'default']));
       runtimeCodingAssistantInput.innerHTML = items
         .map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`)
@@ -3209,7 +3315,7 @@
       runtimeLanguageInput.value = state.language || initialRuntimeLanguage;
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
-      renderAssistantOptions(lastSettingsPayload?.available_assistants || null, state.coding_assistant || 'opencode');
+      renderAssistantOptions(cachedAssistantOptions, state.coding_assistant || 'opencode');
       plannerBackendInput.value = state.role_backends?.planner || 'default';
       planApprovalBackendInput.value = state.role_backends?.plan_approval || 'default';
       implementerBackendInput.value = state.role_backends?.implementer || 'default';
@@ -4026,6 +4132,7 @@
 
     function updateModelDiscoverySummary(data) {
       lastSettingsPayload = data;
+      cachedAssistantOptions = resolveAssistantOptions(data);
       const activeBackend = runtimeCodingAssistantInput.value || data.coding_assistant || 'opencode';
       const availability = data.backend_availability_by_backend?.[activeBackend];
       if (availability && availability.available === false) {
@@ -4071,7 +4178,8 @@
         runtimeLanguageInput.value = data.language || 'EN';
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
-        renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        cachedAssistantOptions = resolveAssistantOptions(data);
+        renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
         plannerBackendInput.value = data.role_backends?.planner || 'default';
         planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
         implementerBackendInput.value = data.role_backends?.implementer || 'default';
@@ -4107,7 +4215,7 @@
     async function openSettingsModal() {
       setSettingsModalOpen(true);
       try {
-        await loadModelSettings();
+        await loadModelSettings(true);
       } catch (error) {
         setSettingsStatus(error.message, 'error');
       }
@@ -4155,7 +4263,8 @@
         runtimeLanguageInput.value = data.language || 'EN';
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
-        renderAssistantOptions(data.available_assistants || [], data.coding_assistant || 'opencode');
+        cachedAssistantOptions = resolveAssistantOptions(data);
+        renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
         plannerBackendInput.value = data.role_backends?.planner || 'default';
         planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
         implementerBackendInput.value = data.role_backends?.implementer || 'default';
@@ -4217,6 +4326,7 @@
       if (!isOpen) {
         setApprovalChoiceModalOpen(false, { force: true });
         setResumeImplementerChoiceModalOpen(false, { force: true });
+        setResumeReviewerChoiceModalOpen(false, { force: true });
         clearTaskRefreshTimer();
         clearReviewerQaRefreshInterval();
         activeTaskRequestToken += 1;
@@ -4265,6 +4375,21 @@
       syncBodyModalState();
     }
 
+    function setResumeReviewerChoiceModalOpen(isOpen, { force = false } = {}) {
+      if (!isOpen && resumeReviewerSubmissionInFlight && !force) return;
+      resumeReviewerChoiceModal.hidden = !isOpen;
+      resumeReviewerChoiceModal.setAttribute('aria-hidden', String(!isOpen));
+      if (!isOpen) {
+        resumeReviewerChoiceStatus.hidden = true;
+        resumeReviewerChoiceStatus.textContent = '';
+        resumeReviewerChoiceStatus.dataset.tone = 'neutral';
+        resumeReviewerChoicePinnedButton.disabled = false;
+        resumeReviewerChoiceCurrentButton.disabled = false;
+        closeResumeReviewerChoiceButton.disabled = false;
+      }
+      syncBodyModalState();
+    }
+
     function setRetrospectiveModalOpen(isOpen) {
       retrospectiveModal.hidden = !isOpen;
       retrospectiveModal.setAttribute('aria-hidden', String(!isOpen));
@@ -4287,7 +4412,7 @@
     }
 
     function syncBodyModalState() {
-      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden);
     }
 
     function renderRetrospectiveMeta(record) {
@@ -4542,6 +4667,10 @@
         && typeof snapshot?.metadata?.retry_gate?.reason === 'string'
         && snapshot.metadata.retry_gate.reason.startsWith('implementation-')
         && Boolean(snapshot?.metadata?.retry_gate?.not_before);
+      const canResumeReviewerFromSnapshot = state === 'waiting-reviews'
+        && typeof snapshot?.metadata?.retry_gate?.reason === 'string'
+        && snapshot.metadata.retry_gate.reason.startsWith('review-')
+        && Boolean(snapshot?.metadata?.retry_gate?.not_before);
       const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;
       const chrome = taskChromeState(state);
       const nextTab = preserveTab ? activeTaskTab : chrome.defaultTab;
@@ -4563,9 +4692,12 @@
       retryVerificationApplyButton.disabled = state !== 'human-verifying';
       resumeImplementerButton.hidden = !canResumeImplementerFromSnapshot;
       resumeImplementerButton.disabled = !canResumeImplementerFromSnapshot;
+      resumeReviewerButton.hidden = !canResumeReviewerFromSnapshot;
+      resumeReviewerButton.disabled = !canResumeReviewerFromSnapshot;
       resumeReviewLoopButton.hidden = !canResumeReviewLoopFromSnapshot;
       resumeReviewLoopButton.disabled = !canResumeReviewLoopFromSnapshot;
       if (!canResumeImplementerFromSnapshot) setResumeImplementerChoiceModalOpen(false, { force: true });
+      if (!canResumeReviewerFromSnapshot) setResumeReviewerChoiceModalOpen(false, { force: true });
       requestChangesButton.hidden = state !== 'human-verifying';
       requestChangesShell.hidden = state !== 'human-verifying';
       approveHumanReviewButton.hidden = state !== 'human-verifying';
@@ -5642,12 +5774,18 @@
         && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
         && activeTaskDetail.metadata.retry_gate.reason.startsWith('implementation-')
         && Boolean(activeTaskDetail?.metadata?.retry_gate?.not_before);
+      const canResumeReviewer = state === 'waiting-reviews'
+        && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
+        && activeTaskDetail.metadata.retry_gate.reason.startsWith('review-')
+        && Boolean(activeTaskDetail?.metadata?.retry_gate?.not_before);
       const canResumeReviewLoop = state === 'todos' && review.human_rework_required === true;
       const canStart = state === 'completed-reviews';
       const canApproveOrReject = state === 'human-verifying';
       const canRetryApply = canApproveOrReject && !integrationApplied;
       resumeImplementerButton.hidden = !canResumeImplementer;
       resumeImplementerButton.disabled = !canResumeImplementer || taskDetailStale;
+      resumeReviewerButton.hidden = !canResumeReviewer;
+      resumeReviewerButton.disabled = !canResumeReviewer || taskDetailStale;
       resumeReviewLoopButton.hidden = !canResumeReviewLoop;
       resumeReviewLoopButton.disabled = !canResumeReviewLoop || taskDetailStale;
       startVerificationButton.hidden = !canStart;
@@ -5659,6 +5797,7 @@
       approveHumanReviewButton.hidden = !canApproveOrReject;
       approveHumanReviewShell.hidden = !canApproveOrReject;
       if (!canApproveOrReject) setApprovalChoiceModalOpen(false);
+      if (!canResumeReviewer) setResumeReviewerChoiceModalOpen(false, { force: true });
       updateHumanReviewPanel();
     }
 
@@ -6600,6 +6739,17 @@
       setResumeImplementerChoiceModalOpen(true);
     }
 
+    function openResumeReviewerChoiceModal() {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-reviews') return;
+      if (typeof activeTaskDetail.metadata.retry_gate?.reason !== 'string') return;
+      if (!activeTaskDetail.metadata.retry_gate.reason.startsWith('review-')) return;
+      if (!activeTaskDetail.metadata.retry_gate?.not_before) return;
+      if (resumeReviewerButton.disabled) return;
+      taskModalError.hidden = true;
+      taskModalError.textContent = '';
+      setResumeReviewerChoiceModalOpen(true);
+    }
+
     async function resumeImplementer(resumeMode) {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'todos') return;
       if (typeof activeTaskDetail.metadata.retry_gate?.reason !== 'string') return;
@@ -6639,6 +6789,50 @@
           resumeImplementerChoicePinnedButton.disabled = false;
           resumeImplementerChoiceCurrentButton.disabled = false;
           closeResumeImplementerChoiceButton.disabled = false;
+        }
+        updateHumanVerificationState();
+      }
+    }
+
+    async function resumeReviewer(resumeMode) {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-reviews') return;
+      if (typeof activeTaskDetail.metadata.retry_gate?.reason !== 'string') return;
+      if (!activeTaskDetail.metadata.retry_gate.reason.startsWith('review-')) return;
+      if (!activeTaskDetail.metadata.retry_gate?.not_before) return;
+      const normalizedResumeMode = resumeMode === 'current-settings' ? 'current-settings' : 'pinned';
+      const statusKey = normalizedResumeMode === 'current-settings' ? 'resumeReviewerSubmittingCurrent' : 'resumeReviewerSubmittingPinned';
+      resumeReviewerSubmissionInFlight = true;
+      resumeReviewerButton.disabled = true;
+      resumeReviewerChoicePinnedButton.disabled = true;
+      resumeReviewerChoiceCurrentButton.disabled = true;
+      closeResumeReviewerChoiceButton.disabled = true;
+      resumeReviewerChoiceStatus.hidden = false;
+      resumeReviewerChoiceStatus.dataset.tone = 'neutral';
+      resumeReviewerChoiceStatus.textContent = translateTask(statusKey);
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/resume-reviewer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resume_mode: normalizedResumeMode }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedResumeReviewer'));
+        await loadBoard();
+        resumeReviewerSubmissionInFlight = false;
+        setResumeReviewerChoiceModalOpen(false, { force: true });
+        await loadTaskDetail(activeTaskId, true);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        resumeReviewerChoiceStatus.hidden = false;
+        resumeReviewerChoiceStatus.dataset.tone = 'error';
+        resumeReviewerChoiceStatus.textContent = error.message;
+      } finally {
+        resumeReviewerSubmissionInFlight = false;
+        if (!resumeReviewerChoiceModal.hidden) {
+          resumeReviewerChoicePinnedButton.disabled = false;
+          resumeReviewerChoiceCurrentButton.disabled = false;
+          closeResumeReviewerChoiceButton.disabled = false;
         }
         updateHumanVerificationState();
       }
@@ -6801,13 +6995,14 @@
     closeRetrospectiveModalButton.addEventListener('click', () => { setRetrospectiveModalOpen(false); });
     closeApprovalChoiceButton.addEventListener('click', () => { setApprovalChoiceModalOpen(false); });
     closeResumeImplementerChoiceButton.addEventListener('click', () => { setResumeImplementerChoiceModalOpen(false); });
+    closeResumeReviewerChoiceButton.addEventListener('click', () => { setResumeReviewerChoiceModalOpen(false); });
     retrospectiveCompareBranchInput.addEventListener('input', () => {
       activeRetrospectiveComparisonBranch = normalizedRetrospectiveComparisonBranch();
       retrospectiveContextRow.innerHTML = renderRetrospectiveContextTags();
     });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
@@ -6950,6 +7145,9 @@
     resumeImplementerButton.addEventListener('click', openResumeImplementerChoiceModal);
     resumeImplementerChoicePinnedButton.addEventListener('click', () => { resumeImplementer('pinned'); });
     resumeImplementerChoiceCurrentButton.addEventListener('click', () => { resumeImplementer('current-settings'); });
+    resumeReviewerButton.addEventListener('click', openResumeReviewerChoiceModal);
+    resumeReviewerChoicePinnedButton.addEventListener('click', () => { resumeReviewer('pinned'); });
+    resumeReviewerChoiceCurrentButton.addEventListener('click', () => { resumeReviewer('current-settings'); });
     resumeReviewLoopButton.addEventListener('click', resumeReviewLoop);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });

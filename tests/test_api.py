@@ -2577,6 +2577,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Refresh models" in response.text
     assert "Save settings" in response.text
     assert "window.location.reload();" in response.text
+    assert "await loadModelSettings(true);" in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
     assert "OpenCode LogMode" not in response.text
@@ -2872,20 +2873,24 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/retry-verification-apply" in response.text
     assert "/api/tasks/${activeTaskId}/resume-implementer" in response.text
+    assert "/api/tasks/${activeTaskId}/resume-reviewer" in response.text
     assert "/api/tasks/${activeTaskId}/resume-review-loop" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert 'id="retry-verification-apply"' in response.text
     assert 'id="resume-implementer"' in response.text
+    assert 'id="resume-reviewer"' in response.text
     assert 'id="resume-review-loop"' in response.text
     assert "function stripOuterMarkdownFence(value)" in response.text
     assert "const normalizedValue = activeArtifactName === 'PLAN.md' ? stripOuterMarkdownFence(value || '') : (value || '');" in response.text
     assert "const canResumeImplementerFromSnapshot = state === 'todos'" in response.text
+    assert "const canResumeReviewerFromSnapshot = state === 'waiting-reviews'" in response.text
     assert "const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;" in response.text
     assert "...(snapshotMetadata.review || {})," in response.text
     assert "function retryVerificationApply()" in response.text
     assert "async function resumeImplementer(resumeMode)" in response.text
     assert "body: JSON.stringify({ resume_mode: normalizedResumeMode })" in response.text
+    assert "async function resumeReviewer(resumeMode)" in response.text
     assert "function resumeReviewLoop()" in response.text
     assert "await loadTaskDetail(activeTaskId, true);" in response.text
     assert 'id="approval-choice-modal"' in response.text
