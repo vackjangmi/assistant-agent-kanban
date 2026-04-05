@@ -140,6 +140,121 @@ def test_implementer_worker_uses_pinned_backend_after_global_change(configured_p
     assert updated.metadata.implementation.resolved_model == "openai/gpt-5.3-codex"
 
 
+def test_implementer_worker_uses_current_settings_override_when_requested(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "gemini"
+    config.gemini.implementer_model = "gemini-2.5-pro"
+    create_request_task(config, "implement-current-settings-override-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    task.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(task.task_dir, task.metadata)
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    config.runtime.coding_assistant = "codex"
+    config.runtime.role_backends.implementer = "codex"
+    config.codex.implementer_model = "gpt-5.4"
+    todos.metadata.implementation.resume_mode = "current-settings"
+    todos.metadata.implementation.resume_backend_override = "codex"
+    todos.metadata.implementation.resume_model_override = "gpt-5.4"
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed\n")
+
+    gemini_adapter = FakeAdapter(["## Summary\nwrong backend"], side_effect=modify_workspace, resolved_models=["gemini-2.5-pro"])
+    codex_adapter = FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace, resolved_models=["gpt-5.4", "gpt-5.4"])
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=codex_adapter,
+        workspace_manager=WorkspaceManager(config),
+        adapter_registry={"gemini": gemini_adapter, "codex": codex_adapter},
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert len(codex_adapter.run_calls) == 1
+    assert len(gemini_adapter.run_calls) == 0
+    assert codex_adapter.run_calls[0]["output_format"] == "json"
+    assert updated.metadata.implementation.resolved_model == "gpt-5.4"
+    assert updated.metadata.implementation.resume_mode is None
+    assert updated.metadata.implementation.resume_backend_override is None
+    assert updated.metadata.implementation.resume_model_override is None
+
+
+def test_implementer_current_settings_override_is_one_shot(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "gemini"
+    config.gemini.implementer_model = "gemini-2.5-pro"
+    create_request_task(config, "implement-current-settings-one-shot-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    task.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(task.task_dir, task.metadata)
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    config.runtime.coding_assistant = "codex"
+    config.runtime.role_backends.implementer = "codex"
+    config.codex.implementer_model = "gpt-5.4"
+    todos.metadata.implementation.resume_mode = "current-settings"
+    todos.metadata.implementation.resume_backend_override = "codex"
+    todos.metadata.implementation.resume_model_override = "gpt-5.4"
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    def modify_workspace(cwd):
+        (cwd / "app.txt").write_text("changed\n")
+
+    gemini_adapter = FakeAdapter(implementer_cycle_responses(), side_effect=modify_workspace, resolved_models=["gemini-2.5-pro", "gemini-2.5-pro"])
+    codex_adapter = FakeAdapter(["run failed"], side_effect=modify_workspace, resolved_models=["gpt-5.4"], ok=False)
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=codex_adapter,
+        workspace_manager=WorkspaceManager(config),
+        adapter_registry={"gemini": gemini_adapter, "codex": codex_adapter},
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.implementation.resume_backend_override is None
+    assert updated.metadata.implementation.resume_model_override is None
+    updated.metadata.retry_gate.reason = None
+    updated.metadata.retry_gate.consecutive_count = 0
+    updated.metadata.retry_gate.not_before = None
+    metadata_store.save(updated.task_dir, updated.metadata)
+
+    assert asyncio.run(worker.run_once()) is True
+    final_task = scanner.scan()[0]
+    assert len(codex_adapter.run_calls) == 1
+    assert len(gemini_adapter.run_calls) == 1
+    assert gemini_adapter.run_calls[0]["output_format"] == "json"
+    assert final_task.metadata.implementation.resolved_model == "gemini-2.5-pro"
+
+
 def test_implementer_worker_persists_and_reuses_session_id(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "implement-session-task")

@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 
 from ..assistant_adapter import AssistantAdapter
+from ..exceptions import AdapterRunError
 from ..enums import TaskState
 from ..exceptions import WorkspaceSyncError
 from ..language import generation_language_name
@@ -60,14 +61,14 @@ class ImplementerWorker(WorkerBase):
             finalize_prompt = self._build_finalize_prompt(implementing.task_dir, implementing.metadata)
             loop = asyncio.get_running_loop()
             await self.announce_log_file(implementing.metadata.task_id, log_name)
+            run_config = self._resolve_implementer_run_config(implementing.task_dir, implementing.metadata)
+            adapter = self._resolve_implementer_adapter(run_config)
             session_id = self.reuse_session_id(
                 session_id=implementing.metadata.implementation.session_id,
                 session_tokens=implementing.metadata.implementation.session_tokens,
-                budget=self.resolve_task_run_config(implementing.task_dir, implementing.metadata).role_session_token_budget("implementer"),
+                budget=run_config.role_session_token_budget("implementer"),
             )
             prior_session_tokens = implementing.metadata.implementation.session_tokens if session_id else 0
-            run_config = self.resolve_task_run_config(implementing.task_dir, implementing.metadata)
-            adapter = self.resolve_task_adapter(implementing.task_dir, implementing.metadata)
 
             if not self.worker_live_logs_enabled(run_config):
                 self.append_log_marker(log_path=log_path, phase="run", cycle=cycle)
@@ -293,6 +294,32 @@ class ImplementerWorker(WorkerBase):
         metadata.implementation.session_id = None
         metadata.implementation.last_run_tokens = 0
         metadata.implementation.session_tokens = 0
+
+    def _resolve_implementer_run_config(self, task_dir: Path, metadata):
+        run_config = self.resolve_task_run_config(task_dir, metadata)
+        backend_override = metadata.implementation.resume_backend_override
+        model_override = metadata.implementation.resume_model_override
+        if backend_override is None and model_override is None:
+            return run_config
+        overridden = run_config.model_copy(deep=True)
+        if backend_override is not None:
+            overridden.set_role_backend("implementer", backend_override)
+        overridden.set_role_model("implementer", model_override)
+        metadata.implementation.resume_mode = None
+        metadata.implementation.resume_backend_override = None
+        metadata.implementation.resume_model_override = None
+        self.metadata_store.save(task_dir, metadata)
+        return overridden
+
+    def _resolve_implementer_adapter(self, run_config) -> AssistantAdapter:
+        backend = run_config.backend_for_role("implementer")
+        adapter = self.adapter_registry.get(backend)
+        if adapter is None:
+            adapter = self.adapter
+        availability_error = adapter.availability_error(config=run_config, backend=backend)
+        if availability_error is not None:
+            raise AdapterRunError(f"{backend} backend is unavailable for implementer: {availability_error}")
+        return adapter
 
     async def _run_adapter_with_retry(
         self,
