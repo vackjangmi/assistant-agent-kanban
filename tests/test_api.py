@@ -290,6 +290,176 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
         assert detail.json()["metadata"]["review"]["human_rework_required"] is False
 
 
+def test_api_resumes_implementer_from_todos_retry_gate(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-implementer-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-implementer-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    planning.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    todos.metadata.implementation.last_result = "failure"
+    todos.metadata.implementation.session_id = "ses_impl"
+    todos.metadata.implementation.session_tokens = 321
+    todos.metadata.implementation.last_run_tokens = 123
+    todos.metadata.retry_gate.reason = "implementation-no-changes"
+    todos.metadata.retry_gate.consecutive_count = 1
+    todos.metadata.retry_gate.not_before = utc_now()
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{todos.metadata.task_id}/resume-implementer")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["retry_gate"]["reason"] is None
+        assert payload["retry_gate"]["consecutive_count"] == 0
+        assert payload["retry_gate"]["not_before"] is None
+        assert payload["implementation"]["last_result"] is None
+        assert payload["implementation"]["resume_mode"] == "pinned"
+        assert payload["implementation"]["resume_backend_override"] is None
+        assert payload["implementation"]["resume_model_override"] is None
+        assert payload["implementation"]["session_id"] is None
+        assert payload["implementation"]["session_tokens"] == 0
+        assert payload["implementation"]["last_run_tokens"] == 0
+
+        detail = client.get(f"/api/tasks/{todos.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["metadata"]["retry_gate"]["reason"] is None
+
+
+def test_api_rejects_resume_implementer_without_implementation_failure(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-implementer-reject-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-implementer-reject-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{todos.metadata.task_id}/resume-implementer")
+        assert response.status_code == 409
+        assert response.json()["detail"] == "implementer resume is only allowed when an active implementation retry gate is present"
+
+
+def test_api_rejects_second_resume_implementer_after_gate_is_cleared(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-implementer-once-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-implementer-once-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    todos.metadata.implementation.last_result = "failure"
+    todos.metadata.retry_gate.reason = "implementation-failed"
+    todos.metadata.retry_gate.consecutive_count = 1
+    todos.metadata.retry_gate.not_before = utc_now()
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    with TestClient(app) as client:
+        first = client.post(f"/api/tasks/{todos.metadata.task_id}/resume-implementer")
+        assert first.status_code == 200
+        second = client.post(f"/api/tasks/{todos.metadata.task_id}/resume-implementer")
+        assert second.status_code == 409
+        assert second.json()["detail"] == "implementer resume is only allowed when an active implementation retry gate is present"
+
+
+def test_api_rejects_resume_implementer_when_retry_gate_not_active(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-implementer-inactive-gate-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-implementer-inactive-gate-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    todos.metadata.retry_gate.reason = "implementation-failed"
+    todos.metadata.retry_gate.consecutive_count = 1
+    todos.metadata.retry_gate.not_before = None
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{todos.metadata.task_id}/resume-implementer")
+        assert response.status_code == 409
+        assert response.json()["detail"] == "implementer resume is only allowed when an active implementation retry gate is present"
+
+
+def test_api_resumes_implementer_with_current_settings_override(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.runtime.coding_assistant = "codex"
+    config.runtime.role_backends.implementer = "codex"
+    config.codex.implementer_model = "gpt-5.4"
+    create_request_task(config, "resume-implementer-current-settings-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-implementer-current-settings-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    planning.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    todos.metadata.runtime_pin.backend = "gemini"
+    todos.metadata.runtime_pin.role_backends.implementer = "gemini"
+    todos.metadata.runtime_pin.implementer_model = "gemini-2.5-pro"
+    todos.metadata.implementation.last_result = "failure"
+    todos.metadata.retry_gate.reason = "implementation-failed"
+    todos.metadata.retry_gate.consecutive_count = 1
+    todos.metadata.retry_gate.not_before = utc_now()
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/tasks/{todos.metadata.task_id}/resume-implementer",
+            json={"resume_mode": "current-settings"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["implementation"]["resume_mode"] == "current-settings"
+        assert payload["implementation"]["resume_backend_override"] == "codex"
+        assert payload["implementation"]["resume_model_override"] == "gpt-5.4"
+        assert payload["runtime_pin"]["role_backends"]["implementer"] == "gemini"
+        assert payload["runtime_pin"]["implementer_model"] == "gemini-2.5-pro"
+
+
 def test_api_rejects_empty_plan_md_edit_in_waiting_check_plans(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-empty-edit-task")
@@ -2561,16 +2731,21 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/retry-verification-apply" in response.text
+    assert "/api/tasks/${activeTaskId}/resume-implementer" in response.text
     assert "/api/tasks/${activeTaskId}/resume-review-loop" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert 'id="retry-verification-apply"' in response.text
+    assert 'id="resume-implementer"' in response.text
     assert 'id="resume-review-loop"' in response.text
     assert "function stripOuterMarkdownFence(value)" in response.text
     assert "const normalizedValue = activeArtifactName === 'PLAN.md' ? stripOuterMarkdownFence(value || '') : (value || '');" in response.text
+    assert "const canResumeImplementerFromSnapshot = state === 'todos'" in response.text
     assert "const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;" in response.text
     assert "...(snapshotMetadata.review || {})," in response.text
     assert "function retryVerificationApply()" in response.text
+    assert "async function resumeImplementer(resumeMode)" in response.text
+    assert "body: JSON.stringify({ resume_mode: normalizedResumeMode })" in response.text
     assert "function resumeReviewLoop()" in response.text
     assert "await loadTaskDetail(activeTaskId, true);" in response.text
     assert 'id="approval-choice-modal"' in response.text

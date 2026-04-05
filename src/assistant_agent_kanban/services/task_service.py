@@ -252,6 +252,34 @@ class TaskService:
             self.scanner.metadata_store.save(task.task_dir, task.metadata)
             return self.scanner.find_task(task.metadata.task_id)
 
+    def resume_implementer(self, task_id: str, *, by: str = "human", resume_mode: Literal["pinned", "current-settings"] = "pinned"):
+        task = self._find_task(task_id)
+        if task.state != TaskState.TODOS:
+            raise TransitionError("implementer resume is only allowed in todos")
+        retry_reason = task.metadata.retry_gate.reason or ""
+        implementation_retry = retry_reason.startswith("implementation-")
+        if not implementation_retry or task.metadata.retry_gate.not_before is None:
+            raise TransitionError("implementer resume is only allowed when an active implementation retry gate is present")
+        if self.locks is None:
+            raise TransitionError("implementer resume requires lock manager")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-implementer-resume"):
+            clear_retry_gate(task.metadata)
+            task.metadata.implementation.last_result = None
+            task.metadata.implementation.resolved_model = None
+            task.metadata.implementation.session_id = None
+            task.metadata.implementation.session_tokens = 0
+            task.metadata.implementation.last_run_tokens = 0
+            task.metadata.implementation.resume_mode = resume_mode
+            if resume_mode == "current-settings":
+                current_config = self.scanner.config
+                task.metadata.implementation.resume_backend_override = current_config.backend_for_role("implementer")
+                task.metadata.implementation.resume_model_override = current_config.role_model("implementer")
+            else:
+                task.metadata.implementation.resume_backend_override = None
+                task.metadata.implementation.resume_model_override = None
+            self.scanner.metadata_store.save(task.task_dir, task.metadata)
+            return self.scanner.find_task(task.metadata.task_id)
+
     def _render_human_plan_approval_markdown(self, task, approval_record) -> str:
         signals = ", ".join(approval_record.ai_risk_signals) if approval_record.ai_risk_signals else "none"
         return "\n".join(

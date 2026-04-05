@@ -123,6 +123,9 @@ class ImplementationInfo(BaseModel):
     session_id: str | None = None
     last_run_tokens: int = 0
     session_tokens: int = 0
+    resume_mode: Literal["pinned", "current-settings"] | None = None
+    resume_backend_override: Literal["opencode", "codex", "gemini"] | None = None
+    resume_model_override: str | None = None
 
 
 class ReviewInfo(BaseModel):
