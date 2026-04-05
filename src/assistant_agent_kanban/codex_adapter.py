@@ -47,6 +47,7 @@ class SubprocessCodexAdapter(AssistantAdapter):
         cwd: Path,
         run_log_path: Path,
         config: AppConfig,
+        include_directories: list[Path] | None = None,
         session_id: str | None = None,
         cancel_key: str | None = None,
         on_log_line: Callable[[str, str | None], None] | None = None,
@@ -54,6 +55,7 @@ class SubprocessCodexAdapter(AssistantAdapter):
         stream_stderr_to_log: bool = False,
         show_thinking: bool = False,
     ) -> RunResult:
+        del include_directories
         command = [
             config.codex.binary,
             "exec",
