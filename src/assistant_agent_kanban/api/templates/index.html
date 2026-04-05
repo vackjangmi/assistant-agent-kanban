@@ -1598,6 +1598,7 @@
         <div class="task-modal-actions">
           <button type="button" id="start-verification" class="accent-button" hidden>Start verification</button>
           <button type="button" id="retry-verification-apply" class="accent-button" hidden>Retry apply</button>
+          <button type="button" id="resume-implementer" class="accent-button" hidden>Resume implementer</button>
           <button type="button" id="resume-review-loop" class="accent-button" hidden>Resume review loop</button>
           <button type="button" id="approve-plan" class="primary" hidden disabled>Approve plan</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
@@ -1801,6 +1802,42 @@
       </div>
     </div>
   </section>
+  <section id="resume-implementer-choice-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel approval-choice-panel" role="dialog" aria-modal="true" aria-labelledby="resume-implementer-choice-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="resume-implementer-choice-title">Resume implementer</h2>
+          <p id="resume-implementer-choice-description">Choose which implementer runtime settings to use for this restart.</p>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="close-resume-implementer-choice">Close</button>
+        </div>
+      </div>
+      <div class="approval-choice-shell">
+        <div class="approval-choice-copy">
+          <strong id="resume-implementer-choice-copy-title">Implementer restart mode</strong>
+          <p id="resume-implementer-choice-copy-body">Reuse the failed pinned runtime or restart with the current configured implementer settings.</p>
+        </div>
+        <div class="approval-choice-grid">
+          <section class="approval-choice-card">
+            <div>
+              <strong id="resume-implementer-choice-pinned-title">Use failed pinned runtime</strong>
+            </div>
+            <p id="resume-implementer-choice-pinned-description">Restart with the same pinned implementer backend and model that failed last time.</p>
+            <button type="button" id="resume-implementer-choice-pinned-button" class="accent-button">Use failed pinned runtime</button>
+          </section>
+          <section class="approval-choice-card">
+            <div>
+              <strong id="resume-implementer-choice-current-title">Use current settings</strong>
+            </div>
+            <p id="resume-implementer-choice-current-description">Restart with the implementer backend and model currently configured in Settings.</p>
+            <button type="button" id="resume-implementer-choice-current-button" class="primary">Use current settings</button>
+          </section>
+        </div>
+        <div id="resume-implementer-choice-status" class="approval-choice-status" hidden></div>
+      </div>
+    </div>
+  </section>
   <main>
     <div class="board-phase-shell">
       <div id="board-phase-tabs" class="board-phase-tabs">
@@ -1821,12 +1858,14 @@
     const taskModal = document.getElementById('task-modal');
     const retrospectiveModal = document.getElementById('retrospective-modal');
     const approvalChoiceModal = document.getElementById('approval-choice-modal');
+    const resumeImplementerChoiceModal = document.getElementById('resume-implementer-choice-modal');
     const openComposerButton = document.getElementById('open-composer');
     const openSettingsButton = document.getElementById('open-settings');
     const refreshButton = document.getElementById('refresh');
     const closeTaskModalButton = document.getElementById('close-task-modal');
     const closeRetrospectiveModalButton = document.getElementById('close-retrospective-modal');
     const closeApprovalChoiceButton = document.getElementById('close-approval-choice');
+    const closeResumeImplementerChoiceButton = document.getElementById('close-resume-implementer-choice');
     const cancelComposerButton = document.getElementById('cancel-composer');
     const cancelSettingsButton = document.getElementById('cancel-settings');
     const requestForm = document.getElementById('request-form');
@@ -1919,6 +1958,10 @@
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const startVerificationButton = document.getElementById('start-verification');
     const retryVerificationApplyButton = document.getElementById('retry-verification-apply');
+    const resumeImplementerButton = document.getElementById('resume-implementer');
+    const resumeImplementerChoicePinnedButton = document.getElementById('resume-implementer-choice-pinned-button');
+    const resumeImplementerChoiceCurrentButton = document.getElementById('resume-implementer-choice-current-button');
+    const resumeImplementerChoiceStatus = document.getElementById('resume-implementer-choice-status');
     const resumeReviewLoopButton = document.getElementById('resume-review-loop');
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');
@@ -2030,6 +2073,7 @@
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
     let approvalSubmissionInFlight = false;
+    let resumeImplementerSubmissionInFlight = false;
 
     const roleSettingConfigs = [
       { role: 'planner', backendInput: plannerBackendInput, modelInput: plannerModelInput, modelOptions: plannerModelOptions },
@@ -2395,6 +2439,20 @@
         modalSubtitle: 'Inspect task metadata, current agent activity, and task artifacts.',
         startVerification: 'Start verification',
         retryVerificationApply: 'Retry apply',
+        resumeImplementer: 'Resume implementer',
+        resumeImplementerChoiceTitle: 'Resume implementer',
+        resumeImplementerChoiceDescription: 'Choose which implementer runtime settings to use for this restart.',
+        resumeImplementerChoiceCopyTitle: 'Implementer restart mode',
+        resumeImplementerChoiceCopyBody: 'Reuse the failed pinned runtime or restart with the current configured implementer settings.',
+        resumeImplementerChoicePinnedTitle: 'Use failed pinned runtime',
+        resumeImplementerChoicePinnedDescription: 'Restart with the same pinned implementer backend and model that failed last time.',
+        resumeImplementerChoicePinnedAction: 'Use failed pinned runtime',
+        resumeImplementerChoiceCurrentTitle: 'Use current settings',
+        resumeImplementerChoiceCurrentDescription: 'Restart with the implementer backend and model currently configured in Settings.',
+        resumeImplementerChoiceCurrentAction: 'Use current settings',
+        resumeImplementerChoiceClose: 'Close',
+        resumeImplementerSubmittingPinned: 'Resuming implementer with the failed pinned runtime...',
+        resumeImplementerSubmittingCurrent: 'Resuming implementer with the current configured runtime...',
         resumeReviewLoop: 'Resume review loop',
         approvePlan: 'Approve plan',
         deleteTask: 'Delete task',
@@ -2577,6 +2635,7 @@
         planApproved: 'Plan approved.',
         failedStartVerification: 'Failed to start verification.',
         failedRetryVerificationApply: 'Failed to retry verification apply.',
+        failedResumeImplementer: 'Failed to resume the implementer.',
         failedResumeReviewLoop: 'Failed to resume the review loop.',
         approvalBlockedRetryApply: 'Approval is blocked until verification apply succeeds.',
         failedRejectVerification: 'Failed to reject verification.',
@@ -2588,6 +2647,20 @@
         modalSubtitle: '작업 메타데이터, 현재 에이전트 활동, 산출물을 확인합니다.',
         startVerification: '검증 시작',
         retryVerificationApply: '검증 재적용',
+        resumeImplementer: '구현 재개',
+        resumeImplementerChoiceTitle: '구현 재개',
+        resumeImplementerChoiceDescription: '이번 재시작에 사용할 구현 런타임 설정을 선택하세요.',
+        resumeImplementerChoiceCopyTitle: '구현 재시작 방식',
+        resumeImplementerChoiceCopyBody: '직전에 실패한 pinned 런타임을 다시 쓰거나, 현재 Settings에 있는 구현 설정으로 다시 시작할 수 있습니다.',
+        resumeImplementerChoicePinnedTitle: '실패한 pinned 런타임 사용',
+        resumeImplementerChoicePinnedDescription: '직전 실패에서 사용한 pinned 구현 backend/model 조합으로 다시 시작합니다.',
+        resumeImplementerChoicePinnedAction: '실패한 pinned 런타임 사용',
+        resumeImplementerChoiceCurrentTitle: '현재 설정 사용',
+        resumeImplementerChoiceCurrentDescription: '현재 Settings에 저장된 구현 backend/model 설정으로 다시 시작합니다.',
+        resumeImplementerChoiceCurrentAction: '현재 설정 사용',
+        resumeImplementerChoiceClose: '닫기',
+        resumeImplementerSubmittingPinned: '실패한 pinned 런타임으로 구현을 다시 시작하는 중...',
+        resumeImplementerSubmittingCurrent: '현재 설정된 런타임으로 구현을 다시 시작하는 중...',
         resumeReviewLoop: '리뷰 루프 재개',
         approvePlan: '플랜 승인',
         deleteTask: '작업 삭제',
@@ -2753,6 +2826,7 @@
         planApproved: '플랜을 승인했습니다.',
         failedStartVerification: '검증 시작에 실패했습니다.',
         failedRetryVerificationApply: '검증 재적용에 실패했습니다.',
+        failedResumeImplementer: '구현 재개에 실패했습니다.',
         failedResumeReviewLoop: '리뷰 루프 재개에 실패했습니다.',
         approvalBlockedRetryApply: '검증 재적용이 성공하기 전에는 승인을 진행할 수 없습니다.',
         failedRejectVerification: '검증 반려에 실패했습니다.',
@@ -2856,6 +2930,18 @@
       retrospectiveCompareHelp.textContent = translateTask('retrospectiveCompareHelp');
       startVerificationButton.textContent = translateTask('startVerification');
       retryVerificationApplyButton.textContent = translateTask('retryVerificationApply');
+      resumeImplementerButton.textContent = translateTask('resumeImplementer');
+      document.getElementById('resume-implementer-choice-title').textContent = translateTask('resumeImplementerChoiceTitle');
+      document.getElementById('resume-implementer-choice-description').textContent = translateTask('resumeImplementerChoiceDescription');
+      document.getElementById('resume-implementer-choice-copy-title').textContent = translateTask('resumeImplementerChoiceCopyTitle');
+      document.getElementById('resume-implementer-choice-copy-body').textContent = translateTask('resumeImplementerChoiceCopyBody');
+      document.getElementById('resume-implementer-choice-pinned-title').textContent = translateTask('resumeImplementerChoicePinnedTitle');
+      document.getElementById('resume-implementer-choice-pinned-description').textContent = translateTask('resumeImplementerChoicePinnedDescription');
+      document.getElementById('resume-implementer-choice-current-title').textContent = translateTask('resumeImplementerChoiceCurrentTitle');
+      document.getElementById('resume-implementer-choice-current-description').textContent = translateTask('resumeImplementerChoiceCurrentDescription');
+      resumeImplementerChoicePinnedButton.textContent = translateTask('resumeImplementerChoicePinnedAction');
+      resumeImplementerChoiceCurrentButton.textContent = translateTask('resumeImplementerChoiceCurrentAction');
+      closeResumeImplementerChoiceButton.textContent = translateTask('resumeImplementerChoiceClose');
       resumeReviewLoopButton.textContent = translateTask('resumeReviewLoop');
       approvePlanButton.textContent = translateTask('approvePlan');
       deleteTaskButton.textContent = translateTask('deleteTask');
@@ -4130,6 +4216,7 @@
       taskModal.setAttribute('aria-hidden', String(!isOpen));
       if (!isOpen) {
         setApprovalChoiceModalOpen(false, { force: true });
+        setResumeImplementerChoiceModalOpen(false, { force: true });
         clearTaskRefreshTimer();
         clearReviewerQaRefreshInterval();
         activeTaskRequestToken += 1;
@@ -4163,6 +4250,21 @@
       syncBodyModalState();
     }
 
+    function setResumeImplementerChoiceModalOpen(isOpen, { force = false } = {}) {
+      if (!isOpen && resumeImplementerSubmissionInFlight && !force) return;
+      resumeImplementerChoiceModal.hidden = !isOpen;
+      resumeImplementerChoiceModal.setAttribute('aria-hidden', String(!isOpen));
+      if (!isOpen) {
+        resumeImplementerChoiceStatus.hidden = true;
+        resumeImplementerChoiceStatus.textContent = '';
+        resumeImplementerChoiceStatus.dataset.tone = 'neutral';
+        resumeImplementerChoicePinnedButton.disabled = false;
+        resumeImplementerChoiceCurrentButton.disabled = false;
+        closeResumeImplementerChoiceButton.disabled = false;
+      }
+      syncBodyModalState();
+    }
+
     function setRetrospectiveModalOpen(isOpen) {
       retrospectiveModal.hidden = !isOpen;
       retrospectiveModal.setAttribute('aria-hidden', String(!isOpen));
@@ -4185,7 +4287,7 @@
     }
 
     function syncBodyModalState() {
-      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden);
     }
 
     function renderRetrospectiveMeta(record) {
@@ -4436,6 +4538,10 @@
 
     function hydrateTaskModalChrome(snapshot = null, { preserveTab = false } = {}) {
       const state = snapshot?.state || '';
+      const canResumeImplementerFromSnapshot = state === 'todos'
+        && typeof snapshot?.metadata?.retry_gate?.reason === 'string'
+        && snapshot.metadata.retry_gate.reason.startsWith('implementation-')
+        && Boolean(snapshot?.metadata?.retry_gate?.not_before);
       const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;
       const chrome = taskChromeState(state);
       const nextTab = preserveTab ? activeTaskTab : chrome.defaultTab;
@@ -4455,8 +4561,11 @@
       startVerificationButton.disabled = state !== 'completed-reviews';
       retryVerificationApplyButton.hidden = state !== 'human-verifying';
       retryVerificationApplyButton.disabled = state !== 'human-verifying';
+      resumeImplementerButton.hidden = !canResumeImplementerFromSnapshot;
+      resumeImplementerButton.disabled = !canResumeImplementerFromSnapshot;
       resumeReviewLoopButton.hidden = !canResumeReviewLoopFromSnapshot;
       resumeReviewLoopButton.disabled = !canResumeReviewLoopFromSnapshot;
+      if (!canResumeImplementerFromSnapshot) setResumeImplementerChoiceModalOpen(false, { force: true });
       requestChangesButton.hidden = state !== 'human-verifying';
       requestChangesShell.hidden = state !== 'human-verifying';
       approveHumanReviewButton.hidden = state !== 'human-verifying';
@@ -5529,10 +5638,16 @@
       const state = activeTaskDetail?.metadata?.state;
       const review = activeTaskDetail?.metadata?.review || {};
       const integrationApplied = Boolean(activeTaskDetail?.metadata?.integration?.applied);
+      const canResumeImplementer = state === 'todos'
+        && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
+        && activeTaskDetail.metadata.retry_gate.reason.startsWith('implementation-')
+        && Boolean(activeTaskDetail?.metadata?.retry_gate?.not_before);
       const canResumeReviewLoop = state === 'todos' && review.human_rework_required === true;
       const canStart = state === 'completed-reviews';
       const canApproveOrReject = state === 'human-verifying';
       const canRetryApply = canApproveOrReject && !integrationApplied;
+      resumeImplementerButton.hidden = !canResumeImplementer;
+      resumeImplementerButton.disabled = !canResumeImplementer || taskDetailStale;
       resumeReviewLoopButton.hidden = !canResumeReviewLoop;
       resumeReviewLoopButton.disabled = !canResumeReviewLoop || taskDetailStale;
       startVerificationButton.hidden = !canStart;
@@ -6474,6 +6589,61 @@
       }
     }
 
+    function openResumeImplementerChoiceModal() {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'todos') return;
+      if (typeof activeTaskDetail.metadata.retry_gate?.reason !== 'string') return;
+      if (!activeTaskDetail.metadata.retry_gate.reason.startsWith('implementation-')) return;
+      if (!activeTaskDetail.metadata.retry_gate?.not_before) return;
+      if (resumeImplementerButton.disabled) return;
+      taskModalError.hidden = true;
+      taskModalError.textContent = '';
+      setResumeImplementerChoiceModalOpen(true);
+    }
+
+    async function resumeImplementer(resumeMode) {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'todos') return;
+      if (typeof activeTaskDetail.metadata.retry_gate?.reason !== 'string') return;
+      if (!activeTaskDetail.metadata.retry_gate.reason.startsWith('implementation-')) return;
+      if (!activeTaskDetail.metadata.retry_gate?.not_before) return;
+      const normalizedResumeMode = resumeMode === 'current-settings' ? 'current-settings' : 'pinned';
+      const statusKey = normalizedResumeMode === 'current-settings' ? 'resumeImplementerSubmittingCurrent' : 'resumeImplementerSubmittingPinned';
+      resumeImplementerSubmissionInFlight = true;
+      resumeImplementerButton.disabled = true;
+      resumeImplementerChoicePinnedButton.disabled = true;
+      resumeImplementerChoiceCurrentButton.disabled = true;
+      closeResumeImplementerChoiceButton.disabled = true;
+      resumeImplementerChoiceStatus.hidden = false;
+      resumeImplementerChoiceStatus.dataset.tone = 'neutral';
+      resumeImplementerChoiceStatus.textContent = translateTask(statusKey);
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/resume-implementer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resume_mode: normalizedResumeMode }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedResumeImplementer'));
+        await loadBoard();
+        resumeImplementerSubmissionInFlight = false;
+        setResumeImplementerChoiceModalOpen(false, { force: true });
+        await loadTaskDetail(activeTaskId, true);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        resumeImplementerChoiceStatus.hidden = false;
+        resumeImplementerChoiceStatus.dataset.tone = 'error';
+        resumeImplementerChoiceStatus.textContent = error.message;
+      } finally {
+        resumeImplementerSubmissionInFlight = false;
+        if (!resumeImplementerChoiceModal.hidden) {
+          resumeImplementerChoicePinnedButton.disabled = false;
+          resumeImplementerChoiceCurrentButton.disabled = false;
+          closeResumeImplementerChoiceButton.disabled = false;
+        }
+        updateHumanVerificationState();
+      }
+    }
+
     async function resumeReviewLoop() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'todos' || activeTaskDetail.metadata.review?.human_rework_required !== true) return;
       resumeReviewLoopButton.disabled = true;
@@ -6630,13 +6800,14 @@
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
     closeRetrospectiveModalButton.addEventListener('click', () => { setRetrospectiveModalOpen(false); });
     closeApprovalChoiceButton.addEventListener('click', () => { setApprovalChoiceModalOpen(false); });
+    closeResumeImplementerChoiceButton.addEventListener('click', () => { setResumeImplementerChoiceModalOpen(false); });
     retrospectiveCompareBranchInput.addEventListener('input', () => {
       activeRetrospectiveComparisonBranch = normalizedRetrospectiveComparisonBranch();
       retrospectiveContextRow.innerHTML = renderRetrospectiveContextTags();
     });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
@@ -6776,6 +6947,9 @@
     approvePlanButton.addEventListener('click', approvePlan);
     startVerificationButton.addEventListener('click', startVerification);
     retryVerificationApplyButton.addEventListener('click', retryVerificationApply);
+    resumeImplementerButton.addEventListener('click', openResumeImplementerChoiceModal);
+    resumeImplementerChoicePinnedButton.addEventListener('click', () => { resumeImplementer('pinned'); });
+    resumeImplementerChoiceCurrentButton.addEventListener('click', () => { resumeImplementer('current-settings'); });
     resumeReviewLoopButton.addEventListener('click', resumeReviewLoop);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
