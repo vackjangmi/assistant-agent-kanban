@@ -252,6 +252,34 @@ class TaskService:
             self.scanner.metadata_store.save(task.task_dir, task.metadata)
             return self.scanner.find_task(task.metadata.task_id)
 
+    def resume_reviewer(self, task_id: str, *, by: str = "human", resume_mode: Literal["pinned", "current-settings"] = "pinned"):
+        task = self._find_task(task_id)
+        if task.state != TaskState.WAITING_REVIEWS:
+            raise TransitionError("reviewer resume is only allowed in waiting-reviews")
+        retry_reason = task.metadata.retry_gate.reason or ""
+        review_retry = retry_reason.startswith("review-")
+        if not review_retry or task.metadata.retry_gate.not_before is None:
+            raise TransitionError("reviewer resume is only allowed when an active review retry gate is present")
+        if self.locks is None:
+            raise TransitionError("reviewer resume requires lock manager")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-reviewer-resume"):
+            clear_retry_gate(task.metadata)
+            task.metadata.review.last_verdict = None
+            task.metadata.review.resolved_model = None
+            task.metadata.review.session_id = None
+            task.metadata.review.session_tokens = 0
+            task.metadata.review.last_run_tokens = 0
+            task.metadata.review.resume_mode = resume_mode
+            if resume_mode == "current-settings":
+                current_config = self.scanner.config
+                task.metadata.review.resume_backend_override = current_config.backend_for_role("reviewer")
+                task.metadata.review.resume_model_override = current_config.role_model("reviewer")
+            else:
+                task.metadata.review.resume_backend_override = None
+                task.metadata.review.resume_model_override = None
+            self.scanner.metadata_store.save(task.task_dir, task.metadata)
+            return self.scanner.find_task(task.metadata.task_id)
+
     def resume_implementer(self, task_id: str, *, by: str = "human", resume_mode: Literal["pinned", "current-settings"] = "pinned"):
         task = self._find_task(task_id)
         if task.state != TaskState.TODOS:

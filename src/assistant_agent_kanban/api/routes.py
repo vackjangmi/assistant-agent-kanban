@@ -155,6 +155,10 @@ class ResumeImplementerPayload(BaseModel):
     resume_mode: Literal["pinned", "current-settings"] | None = None
 
 
+class ResumeReviewerPayload(BaseModel):
+    resume_mode: Literal["pinned", "current-settings"] | None = None
+
+
 def _normalize_model_override(value: str | None) -> str | None:
     if value is None:
         return None
@@ -664,6 +668,20 @@ def build_router() -> APIRouter:
         runtime = request.app.state.runtime
         try:
             moved = runtime.task_service.resume_implementer(
+                task_id,
+                by="human",
+                resume_mode=(payload.resume_mode if payload and payload.resume_mode else "pinned"),
+            )
+        except (TransitionError, TaskNotFoundError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
+    @router.post("/api/tasks/{task_id}/resume-reviewer")
+    async def resume_reviewer(task_id: str, request: Request, payload: ResumeReviewerPayload | None = None):
+        runtime = request.app.state.runtime
+        try:
+            moved = runtime.task_service.resume_reviewer(
                 task_id,
                 by="human",
                 resume_mode=(payload.resume_mode if payload and payload.resume_mode else "pinned"),

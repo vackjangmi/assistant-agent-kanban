@@ -290,6 +290,96 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
         assert detail.json()["metadata"]["review"]["human_rework_required"] is False
 
 
+def test_api_resumes_reviewer_from_waiting_reviews_retry_gate(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-reviewer-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-reviewer-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    planning.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    implementing.metadata.implementation.workspace = str(config.repo_root)
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    waiting_reviews.metadata.review.last_verdict = None
+    waiting_reviews.metadata.review.session_id = "ses_review"
+    waiting_reviews.metadata.review.session_tokens = 123
+    waiting_reviews.metadata.review.last_run_tokens = 45
+    waiting_reviews.metadata.retry_gate.reason = "review-finalize-failed"
+    waiting_reviews.metadata.retry_gate.consecutive_count = 1
+    waiting_reviews.metadata.retry_gate.not_before = utc_now()
+    metadata_store.save(waiting_reviews.task_dir, waiting_reviews.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{waiting_reviews.metadata.task_id}/resume-reviewer")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["retry_gate"]["reason"] is None
+        assert payload["retry_gate"]["consecutive_count"] == 0
+        assert payload["retry_gate"]["not_before"] is None
+        assert payload["review"]["last_verdict"] is None
+        assert payload["review"]["resume_mode"] == "pinned"
+        assert payload["review"]["resume_backend_override"] is None
+        assert payload["review"]["resume_model_override"] is None
+        assert payload["review"]["session_id"] is None
+        assert payload["review"]["session_tokens"] == 0
+        assert payload["review"]["last_run_tokens"] == 0
+
+
+def test_api_resumes_reviewer_with_current_settings_override(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.runtime.coding_assistant = "codex"
+    config.runtime.role_backends.reviewer = "codex"
+    config.codex.reviewer_model = "gpt-5.4"
+    create_request_task(config, "resume-reviewer-current-settings-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-reviewer-current-settings-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    planning.metadata.runtime_pin = config.capture_runtime_pin(captured_by="planner")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    implementing.metadata.runtime_pin.backend = "gemini"
+    implementing.metadata.runtime_pin.role_backends.reviewer = "gemini"
+    implementing.metadata.runtime_pin.reviewer_model = "gemini-2.5-pro"
+    implementing.metadata.implementation.workspace = str(config.repo_root)
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    waiting_reviews.metadata.retry_gate.reason = "review-finalize-failed"
+    waiting_reviews.metadata.retry_gate.consecutive_count = 1
+    waiting_reviews.metadata.retry_gate.not_before = utc_now()
+    metadata_store.save(waiting_reviews.task_dir, waiting_reviews.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{waiting_reviews.metadata.task_id}/resume-reviewer", json={"resume_mode": "current-settings"})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["review"]["resume_mode"] == "current-settings"
+        assert payload["review"]["resume_backend_override"] == "codex"
+        assert payload["review"]["resume_model_override"] == "gpt-5.4"
+        assert payload["runtime_pin"]["role_backends"]["reviewer"] == "gemini"
+        assert payload["runtime_pin"]["reviewer_model"] == "gemini-2.5-pro"
+
+
 def test_api_resumes_implementer_from_todos_retry_gate(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
