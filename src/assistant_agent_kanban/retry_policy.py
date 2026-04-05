@@ -6,8 +6,10 @@ from .models import TaskMetadata, utc_now
 
 
 RETRY_COOLDOWN = timedelta(minutes=10)
+REVIEW_REWORK_BACKSTOP_COOLDOWN = timedelta(hours=1)
 IMMEDIATE_GATE_REASONS = {
     "planner-empty-artifact",
+    "planner-invalid-artifact",
     "implementation-no-changes",
     "implementation-base-sync-conflict",
     "implementation-local-commits",
@@ -44,6 +46,9 @@ def apply_retry_gate(metadata: TaskMetadata, *, reason: str) -> None:
 
     if reason in IMMEDIATE_GATE_REASONS:
         gate.not_before = utc_now() + RETRY_COOLDOWN
+        return
+    if reason == "review-rework-backstop":
+        gate.not_before = utc_now() + REVIEW_REWORK_BACKSTOP_COOLDOWN
         return
     if reason == "review-needs-changes" and gate.consecutive_count >= 2:
         gate.not_before = utc_now() + RETRY_COOLDOWN

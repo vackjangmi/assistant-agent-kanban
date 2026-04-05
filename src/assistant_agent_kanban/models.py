@@ -133,7 +133,10 @@ class ReviewInfo(BaseModel):
     last_run_tokens: int = 0
     session_tokens: int = 0
     consecutive_rework_loops: int = 0
+    total_rework_loops: int = 0
     rework_loop_plan_revision: int = 0
+    primary_blocker: str | None = None
+    last_backstop_pause_total_rework_loops: int = 0
     human_rework_required: bool = False
     human_rework_reason: str | None = None
     qa_path: str | None = None
@@ -145,7 +148,10 @@ class ReviewInfo(BaseModel):
 
 def reset_review_loop_tracking(review: ReviewInfo) -> None:
     review.consecutive_rework_loops = 0
+    review.total_rework_loops = 0
     review.rework_loop_plan_revision = 0
+    review.primary_blocker = None
+    review.last_backstop_pause_total_rework_loops = 0
     review.human_rework_required = False
     review.human_rework_reason = None
 

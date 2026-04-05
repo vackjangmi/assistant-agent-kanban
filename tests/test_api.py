@@ -269,7 +269,9 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
     waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
     blocked = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
     blocked.metadata.review.consecutive_rework_loops = 3
+    blocked.metadata.review.total_rework_loops = 6
     blocked.metadata.review.rework_loop_plan_revision = blocked.metadata.plan.revision
+    blocked.metadata.review.primary_blocker = "changed-scope-coverage"
     blocked.metadata.review.human_rework_required = True
     blocked.metadata.review.human_rework_reason = "human review required after 3 consecutive review rework loops"
     metadata_store.save(blocked.task_dir, blocked.metadata)
@@ -279,6 +281,8 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
         assert response.status_code == 200
         payload = response.json()
         assert payload["review"]["consecutive_rework_loops"] == 0
+        assert payload["review"]["total_rework_loops"] == 0
+        assert payload["review"]["primary_blocker"] is None
         assert payload["review"]["human_rework_required"] is False
 
         detail = client.get(f"/api/tasks/{blocked.metadata.task_id}")

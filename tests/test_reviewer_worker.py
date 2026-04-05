@@ -28,6 +28,7 @@ def reviewer_cycle_responses(
     live: str = "live review",
     *,
     verdict: str = "PASS",
+    primary_blocker: str | None = None,
     markdown: str | None = None,
 ) -> list[str]:
     final_markdown = markdown or f"Verdict: {verdict}\n\n## Acceptance Criteria Check\nReady"
@@ -38,6 +39,7 @@ def reviewer_cycle_responses(
             "task_id": "TASK-TEST",
             "cycle": 1,
             "verdict": verdict,
+            "primary_blocker": primary_blocker,
             "markdown": final_markdown,
         }
     )
@@ -142,9 +144,9 @@ def test_reviewer_worker_requires_human_review_after_third_rework_loop(configure
         transitions,
         EventBus(),
         adapter=FakeAdapter(
-            reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 1")
-            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 2")
-            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 3")
+            reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="same-issue", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 1")
+            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="same-issue", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 2")
+            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="same-issue", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 3")
         ),
         integration_manager=IntegrationManager(config),
     )
@@ -175,6 +177,7 @@ def test_reviewer_worker_requires_human_review_after_third_rework_loop(configure
     after_first = scanner.scan()[0]
     assert after_first.state == TaskState.TODOS
     assert after_first.metadata.review.consecutive_rework_loops == 1
+    assert after_first.metadata.review.total_rework_loops == 1
     assert after_first.metadata.review.human_rework_required is False
 
     assert asyncio.run(implementer.run_once()) is True
@@ -182,6 +185,7 @@ def test_reviewer_worker_requires_human_review_after_third_rework_loop(configure
     after_second = scanner.scan()[0]
     assert after_second.state == TaskState.TODOS
     assert after_second.metadata.review.consecutive_rework_loops == 2
+    assert after_second.metadata.review.total_rework_loops == 2
     assert after_second.metadata.review.human_rework_required is False
 
     assert asyncio.run(implementer.run_once()) is True
@@ -189,8 +193,130 @@ def test_reviewer_worker_requires_human_review_after_third_rework_loop(configure
     after_third = scanner.scan()[0]
     assert after_third.state == TaskState.TODOS
     assert after_third.metadata.review.consecutive_rework_loops == 3
+    assert after_third.metadata.review.total_rework_loops == 3
     assert after_third.metadata.review.human_rework_required is True
-    assert "human review required after 3 consecutive review rework loops" == after_third.metadata.review.human_rework_reason
+    assert "human review required after 3 repeated rework loops for blocker 'same-issue'" == after_third.metadata.review.human_rework_reason
+    assert implementer.candidate_tasks() == []
+
+
+def test_reviewer_worker_resets_same_blocker_streak_when_blocker_changes(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-progress-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+
+    reviewer = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(
+            reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="issue-a", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue a")
+            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="issue-b", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue b")
+            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="issue-c", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue c")
+        ),
+        integration_manager=IntegrationManager(config),
+    )
+
+    rerun_counter = {"value": 1}
+
+    def modify_workspace(cwd):
+        rerun_counter["value"] += 1
+        (cwd / "app.txt").write_text(f"review me {rerun_counter['value']}\n")
+
+    implementer = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(
+            ["hello", "implemented live", "## Summary\nimplemented again"]
+            + ["hello", "implemented live", "## Summary\nimplemented once more"],
+            side_effect=modify_workspace,
+            side_effect_output_formats={"default"},
+        ),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(reviewer.run_once()) is True
+    assert asyncio.run(implementer.run_once()) is True
+    assert asyncio.run(reviewer.run_once()) is True
+    assert asyncio.run(implementer.run_once()) is True
+    assert asyncio.run(reviewer.run_once()) is True
+
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.review.total_rework_loops == 3
+    assert updated.metadata.review.consecutive_rework_loops == 1
+    assert updated.metadata.review.primary_blocker == "issue-c"
+    assert updated.metadata.review.human_rework_required is False
+
+
+def test_reviewer_worker_pauses_after_six_total_rework_loops(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-backstop-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+
+    review_responses: list[str] = []
+    for index in range(1, 7):
+        review_responses.extend(
+            reviewer_cycle_responses(
+                verdict="NEEDS_CHANGES",
+                primary_blocker=f"issue-{index}",
+                markdown=f"Verdict: NEEDS_CHANGES\n\n- fix issue {index}",
+            )
+        )
+    reviewer = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(review_responses),
+        integration_manager=IntegrationManager(config),
+    )
+
+    rerun_counter = {"value": 1}
+
+    def modify_workspace(cwd):
+        rerun_counter["value"] += 1
+        (cwd / "app.txt").write_text(f"review me {rerun_counter['value']}\n")
+
+    implement_responses: list[str] = []
+    for index in range(2, 7):
+        implement_responses.extend(["hello", "implemented live", f"## Summary\nimplemented pass {index}"])
+    implementer = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(
+            implement_responses,
+            side_effect=modify_workspace,
+            side_effect_output_formats={"default"},
+        ),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    for _ in range(5):
+        assert asyncio.run(reviewer.run_once()) is True
+        assert asyncio.run(implementer.run_once()) is True
+    assert asyncio.run(reviewer.run_once()) is True
+
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.review.total_rework_loops == 6
+    assert updated.metadata.review.consecutive_rework_loops == 1
+    assert updated.metadata.review.primary_blocker == "issue-6"
+    assert updated.metadata.review.human_rework_required is False
+    assert updated.metadata.retry_gate.reason == "review-rework-backstop"
+    assert updated.metadata.retry_gate.not_before is not None
     assert implementer.candidate_tasks() == []
 
 

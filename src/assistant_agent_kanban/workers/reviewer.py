@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import timezone, datetime
 from pathlib import Path
 from typing import Literal, TypedDict, cast
@@ -23,12 +24,14 @@ class ReviewFinalizeArtifact(TypedDict):
     task_id: str
     cycle: int
     verdict: Literal["PASS", "NEEDS_CHANGES"]
+    primary_blocker: str | None
     markdown: str
 
 
 class ReviewerWorker(WorkerBase):
     worker_name = "reviewer"
     review_loop_escalation_threshold = 3
+    total_rework_pause_threshold = 6
 
     def __init__(self, *args, adapter: AssistantAdapter, integration_manager: IntegrationManager, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -157,24 +160,12 @@ class ReviewerWorker(WorkerBase):
                 review_payload["task_id"] = artifact["task_id"]
                 review_payload["cycle"] = artifact["cycle"]
                 review_payload["verdict"] = verdict
+                review_payload["primary_blocker"] = artifact["primary_blocker"]
                 (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 if verdict != "PASS":
-                    plan_revision = reviewing.metadata.plan.revision
-                    if reviewing.metadata.review.rework_loop_plan_revision != plan_revision:
-                        reviewing.metadata.review.rework_loop_plan_revision = plan_revision
-                        reviewing.metadata.review.consecutive_rework_loops = 0
-                    reviewing.metadata.review.consecutive_rework_loops += 1
-                    if reviewing.metadata.review.consecutive_rework_loops >= self.review_loop_escalation_threshold:
-                        reviewing.metadata.review.human_rework_required = True
-                        reviewing.metadata.review.human_rework_reason = (
-                            f"human review required after {reviewing.metadata.review.consecutive_rework_loops} consecutive review rework loops"
-                        )
-                    apply_retry_gate(reviewing.metadata, reason="review-needs-changes")
+                    note = self._handle_needs_changes(reviewing.metadata, primary_blocker=cast(str, artifact["primary_blocker"]))
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                    note = "review needs changes"
-                    if reviewing.metadata.review.human_rework_required:
-                        note = "review loop capped: human review required"
                     done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
                 else:
                     reset_review_loop_tracking(reviewing.metadata.review)
@@ -297,24 +288,12 @@ class ReviewerWorker(WorkerBase):
             review_payload["task_id"] = artifact["task_id"]
             review_payload["cycle"] = artifact["cycle"]
             review_payload["verdict"] = verdict
+            review_payload["primary_blocker"] = artifact["primary_blocker"]
             (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
             self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
             if verdict != "PASS":
-                plan_revision = reviewing.metadata.plan.revision
-                if reviewing.metadata.review.rework_loop_plan_revision != plan_revision:
-                    reviewing.metadata.review.rework_loop_plan_revision = plan_revision
-                    reviewing.metadata.review.consecutive_rework_loops = 0
-                reviewing.metadata.review.consecutive_rework_loops += 1
-                if reviewing.metadata.review.consecutive_rework_loops >= self.review_loop_escalation_threshold:
-                    reviewing.metadata.review.human_rework_required = True
-                    reviewing.metadata.review.human_rework_reason = (
-                        f"human review required after {reviewing.metadata.review.consecutive_rework_loops} consecutive review rework loops"
-                    )
-                apply_retry_gate(reviewing.metadata, reason="review-needs-changes")
+                note = self._handle_needs_changes(reviewing.metadata, primary_blocker=cast(str, artifact["primary_blocker"]))
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
-                note = "review needs changes"
-                if reviewing.metadata.review.human_rework_required:
-                    note = "review loop capped: human review required"
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
             else:
                 reset_review_loop_tracking(reviewing.metadata.review)
@@ -440,7 +419,7 @@ class ReviewerWorker(WorkerBase):
                     "",
                     f"# {strings['primary_human_rework_goal']}",
                     "",
-                    strings['primary_human_rework_goal_instruction'],
+                    cast(str, strings['primary_human_rework_goal_instruction']),
                     "",
                     human_verify_files[-1].read_text().rstrip(),
                 ]
@@ -560,8 +539,10 @@ class ReviewerWorker(WorkerBase):
                 "",
                 "# Finalize Review Artifact",
                 "Return only valid JSON with this exact shape:",
-                '{"schema_version":1,"artifact_type":"review","task_id":"...","cycle":1,"verdict":"PASS","markdown":"Verdict: PASS\\n\\n## Acceptance Criteria Check\\n..."}',
+                '{"schema_version":1,"artifact_type":"review","task_id":"...","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\n## Acceptance Criteria Check\\n..."}',
                 "Allowed verdict values are PASS or NEEDS_CHANGES.",
+                "Set `primary_blocker` to null for PASS.",
+                "For NEEDS_CHANGES, set `primary_blocker` to a stable short kebab-case key for the main remaining blocker (example: changed-scope-coverage).",
                 "The markdown field must contain the complete final review markdown.",
             ]
         )
@@ -584,14 +565,51 @@ class ReviewerWorker(WorkerBase):
             return None
         if not isinstance(markdown, str) or not markdown.strip():
             return None
+        primary_blocker = self._normalize_primary_blocker(payload.get("primary_blocker"), verdict=verdict)
         return {
             "schema_version": payload.get("schema_version", 1),
             "artifact_type": "review",
             "task_id": str(payload.get("task_id", "")),
             "cycle": int(payload.get("cycle", 0)),
             "verdict": verdict,
+            "primary_blocker": primary_blocker,
             "markdown": markdown.strip(),
         }
+
+    def _normalize_primary_blocker(self, value: object, *, verdict: Literal["PASS", "NEEDS_CHANGES"]) -> str | None:
+        if verdict == "PASS":
+            return None
+        if not isinstance(value, str) or not value.strip():
+            return "unspecified-needs-changes"
+        normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+        return normalized or "unspecified-needs-changes"
+
+    def _handle_needs_changes(self, metadata, *, primary_blocker: str) -> str:
+        review = metadata.review
+        plan_revision = metadata.plan.revision
+        if review.rework_loop_plan_revision != plan_revision:
+            reset_review_loop_tracking(review)
+            review.rework_loop_plan_revision = plan_revision
+        review.total_rework_loops += 1
+        if review.primary_blocker == primary_blocker:
+            review.consecutive_rework_loops += 1
+        else:
+            review.primary_blocker = primary_blocker
+            review.consecutive_rework_loops = 1
+        if review.consecutive_rework_loops >= self.review_loop_escalation_threshold:
+            review.human_rework_required = True
+            review.human_rework_reason = (
+                f"human review required after {review.consecutive_rework_loops} repeated rework loops for blocker '{primary_blocker}'"
+            )
+            return "review loop capped: repeated blocker requires human review"
+        if review.total_rework_loops >= self.total_rework_pause_threshold and (
+            review.total_rework_loops - review.last_backstop_pause_total_rework_loops >= self.total_rework_pause_threshold
+        ):
+            review.last_backstop_pause_total_rework_loops = review.total_rework_loops
+            apply_retry_gate(metadata, reason="review-rework-backstop")
+            return "review loop paused: too many total rework cycles"
+        apply_retry_gate(metadata, reason="review-needs-changes")
+        return "review needs changes"
 
 
 REVIEWER_TEXT = {
@@ -610,6 +628,7 @@ REVIEWER_TEXT = {
             "- Judge against the original request and approved plan first, then the latest human verification request and reviewer Q&A as the current-cycle delta, and only then older AI review history if it still applies.",
             "- Treat the latest human verification request as the authoritative goal for this cycle, but not in ways that break the original request, the approved plan, or repository invariants.",
             "- Do not repeat earlier findings unless they still apply; explain why they remain unresolved.",
+            "- If you return NEEDS_CHANGES, identify the main remaining blocker consistently so repeated reviews can tell whether the same blocker is still unresolved or a new blocker has replaced it.",
             "- Use `Verdict: NEEDS_CHANGES` only when implementation changes are still required.",
             "- If the work is acceptable with only minor notes, prefer `Verdict: PASS` and list the notes under follow-ups.",
         ],
@@ -629,6 +648,7 @@ REVIEWER_TEXT = {
             "- 판단하기 전에 먼저 원래 요청과 승인된 계획을 기준으로 보고, 그 다음 최신 사람 검증 요청과 리뷰어 질의응답을 이번 사이클의 변경분으로 확인한 뒤, 마지막으로 이전 AI 리뷰 이력이 아직 유효한지 보세요.",
             "- 최신 사람 검증 요청이 예전 리뷰 지침과 충돌하면 이번 사이클에서는 사람 요청을 우선 기준으로 삼되, 원래 요청과 승인된 계획, 저장소 불변 조건을 깨지는 마세요.",
             "- 예전 지적을 그대로 반복하지 말고, 아직 유효하다면 왜 해결되지 않았는지 설명하세요.",
+            "- NEEDS_CHANGES를 반환할 때는 이번 사이클의 주된 남은 blocker를 일관된 짧은 키로 식별해, 같은 blocker의 반복인지 새로운 blocker로 진전된 것인지 구분할 수 있게 하세요.",
             "- 실제 구현 수정이 더 필요할 때만 `Verdict: NEEDS_CHANGES`를 사용하세요.",
             "- 사소한 후속 메모만 남는 수준이면 `Verdict: PASS`를 우선하고 후속 항목 아래에 정리하세요.",
         ],
