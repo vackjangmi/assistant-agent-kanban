@@ -11,9 +11,9 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from fastapi.responses import FileResponse
 
-from ..assistant_factory import build_adapter, build_role_adapters
+from ..assistant_factory import build_role_adapters
 from ..agent_materializer import ensure_runtime_agents
-from ..assistant_adapter import AssistantBackendStatusSnapshot, AssistantModelRegistry
+from ..assistant_adapter import AssistantBackendStatusSnapshot
 from ..config import ASSISTANT_ROLES, DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, AssistantBackend, normalize_runtime_assistant
 from ..enums import TaskState
 from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
@@ -217,6 +217,7 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
     active_backend = active_config.active_backend()
     snapshot = snapshots_by_backend[active_backend]
     omo_snapshot = read_omo_delegation_snapshot() if active_backend == "opencode" else None
+    availability_map = _resolve_availability_map(runtime, snapshots_by_backend)
     response = {
         "language": runtime.config.runtime.language,
         "theme": runtime.config.runtime.theme,
@@ -243,6 +244,7 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
         "available_assistants": [
             {"value": value, "label": label}
             for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
+            if availability_map.get(value) and availability_map[value].available
         ],
         "available_models_by_backend": {
             backend: backend_snapshot.models
@@ -254,7 +256,7 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
                 "error": backend_status.error,
                 "checked_at": backend_status.checked_at,
             }
-            for backend, backend_status in _resolve_availability_map(runtime, snapshots_by_backend).items()
+            for backend, backend_status in availability_map.items()
         },
         "available_models": snapshot.models,
         "discovery_status": snapshot.status,
@@ -348,15 +350,8 @@ def _reconfigure_runtime_adapters(runtime) -> None:
 
 async def _resolve_settings_snapshot(runtime, *, refresh: bool, assistant: str | None):
     requested_assistant = _normalize_runtime_coding_assistant(assistant) if assistant is not None else runtime.config.active_backend()
-    if requested_assistant == runtime.config.active_backend():
-        snapshot = await asyncio.to_thread(runtime.model_registry.get, requested_assistant, refresh=refresh)
-        return snapshot
-    preview_config = runtime.config.model_copy(deep=True)
-    preview_config.runtime.coding_assistant = requested_assistant
-    preview_backend = cast(AssistantBackend, requested_assistant)
-    preview_adapter = runtime.adapter_registry.get(preview_backend) or build_adapter(preview_backend)
-    preview_registry = AssistantModelRegistry(adapter=preview_adapter, config=preview_config)
-    return await asyncio.to_thread(preview_registry.get, refresh=refresh)
+    snapshot = await asyncio.to_thread(runtime.model_registry.get, cast(AssistantBackend, requested_assistant), refresh=refresh)
+    return snapshot
 
 
 async def _resolve_settings_snapshots(runtime, *, refresh: bool, assistant: str | None):
@@ -364,11 +359,8 @@ async def _resolve_settings_snapshots(runtime, *, refresh: bool, assistant: str 
     if assistant is not None:
         view_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(assistant)
     snapshots_by_backend = {}
-    availability_by_backend = {}
     for backend in SUPPORTED_RUNTIME_ASSISTANTS:
-        availability_by_backend[backend] = await asyncio.to_thread(runtime.model_registry.availability, backend, refresh=refresh)
         snapshots_by_backend[backend] = await _resolve_settings_snapshot(runtime, refresh=refresh, assistant=backend)
-    runtime.backend_availability = availability_by_backend
     return view_config, snapshots_by_backend
 
 

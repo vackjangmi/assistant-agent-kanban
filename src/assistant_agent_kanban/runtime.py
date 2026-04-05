@@ -46,7 +46,9 @@ class RecoveryProvider(Protocol):
 
 
 class ModelRegistryProvider(Protocol):
-    def warm(self) -> None: ...
+    def warm_availability(self) -> dict[AssistantBackend, Any]: ...
+    def get(self, backend: AssistantBackend, *, refresh: bool = False) -> Any: ...
+    def all_availability(self, *, refresh: bool = False) -> dict[AssistantBackend, Any]: ...
 
 
 class RuntimeSupervisor:
@@ -83,6 +85,7 @@ class RuntimeSupervisor:
         self.recovery = recovery
         self.events = events
         self.model_registry = model_registry
+        self.backend_availability: dict[AssistantBackend, Any] = {}
         self.adapter_registry: dict[AssistantBackend, AssistantAdapter] = {}
         self._stop_event = asyncio.Event()
         self._background_tasks: list[asyncio.Task[None]] = []
@@ -98,9 +101,7 @@ class RuntimeSupervisor:
     async def start(self) -> None:
         self._stop_event.clear()
         await self.startup_recovery()
-        self._background_tasks.append(
-            asyncio.create_task(self.warm_model_registry(), name="fs-kanban-model-discovery")
-        )
+        self.backend_availability = await asyncio.to_thread(self.model_registry.warm_availability)
         if self.config.runtime.auto_dispatch:
             self._background_tasks = [
                 *self._background_tasks,
@@ -176,9 +177,6 @@ class RuntimeSupervisor:
         for event in self.recovery.recover():
             await self.events.publish(event)
         await self.rescan_and_publish()
-
-    async def warm_model_registry(self) -> None:
-        await asyncio.to_thread(self.model_registry.warm)
 
     async def dispatch_forever(self) -> None:
         while not self._stop_event.is_set():

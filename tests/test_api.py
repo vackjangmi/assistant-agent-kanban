@@ -2195,6 +2195,27 @@ def test_api_rejects_unavailable_role_backend_on_save(configured_paths):
     }
 
 
+def test_api_settings_only_lists_startup_available_assistants(configured_paths):
+    config, _, _ = configured_paths
+
+    class UnavailableCodexAdapter(FakeAdapter):
+        def availability_error(self, *, config, backend):
+            return "binary not found on PATH: codex"
+
+    planner_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
+    adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter, codex_adapter=UnavailableCodexAdapter(["codex"]))
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/models")
+
+    assert response.status_code == 200
+    assert response.json()["available_assistants"] == [
+        {"value": "opencode", "label": "OpenCode"},
+        {"value": "gemini", "label": "Gemini CLI"},
+    ]
+
+
 def test_api_settings_without_assistant_query_returns_persisted_backend(configured_paths):
     config, _, _ = configured_paths
     config.runtime.coding_assistant = "codex"
@@ -2288,6 +2309,35 @@ def test_api_refreshes_model_discovery_and_keeps_cached_options_on_failure(confi
     assert payload["discovery_status"] == "fallback"
     assert payload["discovery_error"] == "opencode models failed"
     assert planner_adapter.discovery_calls == [False, True]
+
+
+def test_api_refreshes_models_without_refreshing_cached_availability(configured_paths):
+    config, _, _ = configured_paths
+
+    class AvailabilityTrackingAdapter(FakeAdapter):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.availability_calls = 0
+
+        def availability_error(self, *, config, backend):
+            self.availability_calls += 1
+            return None
+
+    planner_adapter = AvailabilityTrackingAdapter(
+        ["plan"],
+        discovery_responses=[["gpt-5", "claude-3.7-sonnet"], ["gpt-5", "o3-mini"]],
+    )
+    adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter)
+    app = create_app(config, planner_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        initial = client.get("/api/settings/models")
+        assert initial.status_code == 200
+        refreshed = client.get("/api/settings/models?refresh=true")
+
+    assert refreshed.status_code == 200
+    assert planner_adapter.discovery_calls == [False, True]
+    assert planner_adapter.availability_calls == 1
 
 
 def test_parse_discovered_models_ignores_verbose_json_metadata():

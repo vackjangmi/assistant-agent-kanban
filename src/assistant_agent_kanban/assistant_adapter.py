@@ -136,7 +136,7 @@ class AssistantBackendState:
         return self.refresh(refresh_cli=False)
 
     def refresh(self, *, refresh_cli: bool) -> AssistantModelSnapshot:
-        availability = self.availability(refresh=refresh_cli)
+        availability = self.availability(refresh=False)
         if not availability.available:
             with self._lock:
                 self._attempted = True
@@ -230,6 +230,9 @@ class AssistantBackendManager:
 
     def all_availability(self, *, refresh: bool = False) -> dict[AssistantBackend, AssistantBackendStatusSnapshot]:
         return {backend: state.availability(refresh=refresh) for backend, state in self.states.items()}
+
+    def warm_availability(self) -> dict[AssistantBackend, AssistantBackendStatusSnapshot]:
+        return self.all_availability(refresh=False)
 
     def warm(self) -> None:
         for backend in self.states:
