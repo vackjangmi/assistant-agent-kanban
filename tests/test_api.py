@@ -277,7 +277,10 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
     metadata_store.save(blocked.task_dir, blocked.metadata)
 
     with TestClient(app) as client:
-        response = client.post(f"/api/tasks/{blocked.metadata.task_id}/resume-review-loop")
+        response = client.post(
+            f"/api/tasks/{blocked.metadata.task_id}/resume-review-loop",
+            json={"message": "Please keep the existing review direction, but incorporate the human note."},
+        )
         assert response.status_code == 200
         payload = response.json()
         assert payload["review"]["consecutive_rework_loops"] == 0
@@ -288,6 +291,84 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
         detail = client.get(f"/api/tasks/{blocked.metadata.task_id}")
         assert detail.status_code == 200
         assert detail.json()["metadata"]["review"]["human_rework_required"] is False
+        assert "Please keep the existing review direction" in detail.json()["human_review"]["reviewer_qa_markdown"]
+
+    qa_artifact = blocked.task_dir / "REVIEWER-QA-000.md"
+    assert qa_artifact.exists()
+    qa_markdown = qa_artifact.read_text()
+    assert "## Question 1" in qa_markdown
+    assert "- Source: human resume note" in qa_markdown
+    assert "Please keep the existing review direction, but incorporate the human note." in qa_markdown
+
+
+def test_api_resumes_planner_from_requests_retry_gate_with_message(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-planner-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-planner-task")
+    task.metadata.plan.session_id = "ses_bad_planner"
+    task.metadata.plan.session_tokens = 77
+    task.metadata.plan.last_run_tokens = 13
+    task.metadata.plan.resolved_model = "openai/gpt-bad"
+    task.metadata.retry_gate.reason = "planner-invalid-artifact"
+    metadata_store.save(task.task_dir, task.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/tasks/{task.metadata.task_id}/resume-planner",
+            json={"message": "Please regenerate PLAN.md with the required headings and keep the request scope tight."},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["retry_gate"]["reason"] is None
+        assert payload["retry_gate"]["consecutive_count"] == 0
+        assert payload["retry_gate"]["not_before"] is None
+        assert payload["plan"]["session_id"] is None
+        assert payload["plan"]["session_tokens"] == 0
+        assert payload["plan"]["last_run_tokens"] == 0
+        assert payload["plan"]["resolved_model"] is None
+        assert payload["plan"]["restart_message_path"] == "PLANNER-RESTART.md"
+
+        detail = client.get(f"/api/tasks/{task.metadata.task_id}")
+        assert detail.status_code == 200
+        assert "PLANNER-RESTART.md" in detail.json()["markdown_files"]
+
+    restart_artifact = task.task_dir / "PLANNER-RESTART.md"
+    assert restart_artifact.exists()
+    restart_markdown = restart_artifact.read_text()
+    assert "# Planner Restart Notes" in restart_markdown
+    assert "- Source: manual planner restart" in restart_markdown
+    assert "Please regenerate PLAN.md with the required headings and keep the request scope tight." in restart_markdown
+
+
+def test_api_resume_planner_without_message_clears_restart_pointer(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-planner-empty-message-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-planner-empty-message-task")
+    task.metadata.plan.restart_message_path = "PLANNER-RESTART.md"
+    task.metadata.retry_gate.reason = "planner-invalid-artifact"
+    (task.task_dir / "PLANNER-RESTART.md").write_text("# Planner Restart Notes\n\n## Note 1\nold note\n")
+    metadata_store.save(task.task_dir, task.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/tasks/{task.metadata.task_id}/resume-planner",
+            json={"message": "   "},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["plan"]["restart_message_path"] is None
 
 
 def test_api_resumes_reviewer_from_waiting_reviews_retry_gate(configured_paths):
@@ -322,7 +403,10 @@ def test_api_resumes_reviewer_from_waiting_reviews_retry_gate(configured_paths):
     metadata_store.save(waiting_reviews.task_dir, waiting_reviews.metadata)
 
     with TestClient(app) as client:
-        response = client.post(f"/api/tasks/{waiting_reviews.metadata.task_id}/resume-reviewer")
+        response = client.post(
+            f"/api/tasks/{waiting_reviews.metadata.task_id}/resume-reviewer",
+            json={"message": "Please focus on the reviewer concerns from the prior retry."},
+        )
         assert response.status_code == 200
         payload = response.json()
         assert payload["retry_gate"]["reason"] is None
@@ -335,6 +419,62 @@ def test_api_resumes_reviewer_from_waiting_reviews_retry_gate(configured_paths):
         assert payload["review"]["session_id"] is None
         assert payload["review"]["session_tokens"] == 0
         assert payload["review"]["last_run_tokens"] == 0
+
+        detail = client.get(f"/api/tasks/{waiting_reviews.metadata.task_id}")
+        assert detail.status_code == 200
+        assert "Please focus on the reviewer concerns from the prior retry." in detail.json()["human_review"]["reviewer_qa_markdown"]
+
+    reviewer_qa_artifact = waiting_reviews.task_dir / "REVIEWER-QA-000.md"
+    assert reviewer_qa_artifact.exists()
+    reviewer_qa_markdown = reviewer_qa_artifact.read_text()
+    assert "## Question 1" in reviewer_qa_markdown
+    assert "- Source: human resume note" in reviewer_qa_markdown
+    assert "Please focus on the reviewer concerns from the prior retry." in reviewer_qa_markdown
+
+
+def test_api_resume_message_resets_reviewer_qa_session_on_cycle_change(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "resume-reviewer-cycle-reset-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+
+    task = next(task for task in scanner.scan() if task.metadata.title == "resume-reviewer-cycle-reset-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    implementing.metadata.cycle = 1
+    implementing.metadata.implementation.workspace = str(config.repo_root)
+    implementing.metadata.review.qa_path = "REVIEWER-QA-000.md"
+    implementing.metadata.review.qa_session_id = "ses_old"
+    implementing.metadata.review.qa_last_run_tokens = 11
+    implementing.metadata.review.qa_session_tokens = 29
+    implementing.metadata.review.qa_resolved_model = "old-model"
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    waiting_reviews.metadata.retry_gate.reason = "review-finalize-failed"
+    waiting_reviews.metadata.retry_gate.consecutive_count = 1
+    waiting_reviews.metadata.retry_gate.not_before = utc_now()
+    metadata_store.save(waiting_reviews.task_dir, waiting_reviews.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/tasks/{waiting_reviews.metadata.task_id}/resume-reviewer",
+            json={"message": "Use the fresh cycle context for this rerun."},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["review"]["qa_path"] == "REVIEWER-QA-001.md"
+        assert payload["review"]["qa_session_id"] is None
+        assert payload["review"]["qa_last_run_tokens"] == 0
+        assert payload["review"]["qa_session_tokens"] == 0
+        assert payload["review"]["qa_resolved_model"] is None
 
 
 def test_api_resumes_reviewer_with_current_settings_override(configured_paths):
@@ -407,7 +547,10 @@ def test_api_resumes_implementer_from_todos_retry_gate(configured_paths):
     metadata_store.save(todos.task_dir, todos.metadata)
 
     with TestClient(app) as client:
-        response = client.post(f"/api/tasks/{todos.metadata.task_id}/resume-implementer")
+        response = client.post(
+            f"/api/tasks/{todos.metadata.task_id}/resume-implementer",
+            json={"message": "Please address the missing implementation details before retrying."},
+        )
         assert response.status_code == 200
         payload = response.json()
         assert payload["retry_gate"]["reason"] is None
@@ -424,6 +567,14 @@ def test_api_resumes_implementer_from_todos_retry_gate(configured_paths):
         detail = client.get(f"/api/tasks/{todos.metadata.task_id}")
         assert detail.status_code == 200
         assert detail.json()["metadata"]["retry_gate"]["reason"] is None
+        assert "Please address the missing implementation details before retrying." in detail.json()["human_review"]["reviewer_qa_markdown"]
+
+    implementer_qa_artifact = todos.task_dir / "REVIEWER-QA-000.md"
+    assert implementer_qa_artifact.exists()
+    implementer_qa_markdown = implementer_qa_artifact.read_text()
+    assert "## Question 1" in implementer_qa_markdown
+    assert "- Source: human resume note" in implementer_qa_markdown
+    assert "Please address the missing implementation details before retrying." in implementer_qa_markdown
 
 
 def test_api_rejects_resume_implementer_without_implementation_failure(configured_paths):
@@ -2889,7 +3040,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "...(snapshotMetadata.review || {})," in response.text
     assert "function retryVerificationApply()" in response.text
     assert "async function resumeImplementer(resumeMode)" in response.text
-    assert "body: JSON.stringify({ resume_mode: normalizedResumeMode })" in response.text
+    assert "body: JSON.stringify({ resume_mode: normalizedResumeMode, message })" in response.text
     assert "async function resumeReviewer(resumeMode)" in response.text
     assert "function resumeReviewLoop()" in response.text
     assert "await loadTaskDetail(activeTaskId, true);" in response.text
