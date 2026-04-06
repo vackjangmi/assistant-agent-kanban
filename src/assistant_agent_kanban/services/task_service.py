@@ -37,6 +37,7 @@ from ..models import (
     reset_review_loop_tracking,
     utc_now,
 )
+from ..plan_artifacts import validate_plan_markdown
 from ..scanner import TERMINAL_STATES, KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
@@ -209,6 +210,12 @@ class TaskService:
         if self.transitions is None or self.locks is None:
             raise TransitionError("manual plan approval requires lock manager")
         with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-todos"):
+            validation = validate_plan_markdown(
+                (task.task_dir / "PLAN.md").read_text(),
+                request_language=task.metadata.request.language,
+            )
+            if validation.missing_heading is not None:
+                raise TransitionError(f"PLAN.md missing required section: {validation.missing_heading}")
             approval_record = self.plan_approval_learning.build_human_approval_record(task, approved_by=by)
             approval_markdown_path = task.task_dir / "PLAN-HUMAN-APPROVAL.md"
             approval_json_path = task.task_dir / "PLAN-HUMAN-APPROVAL.json"

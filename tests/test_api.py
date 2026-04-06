@@ -30,6 +30,39 @@ from assistant_agent_kanban.models import utc_now
 from .conftest import FakeAdapter, create_request_task
 
 
+def valid_plan_markdown(summary: str = "plan") -> str:
+    return "\n".join(
+        [
+            "## Summary",
+            summary,
+            "",
+            "## Scope",
+            "- Scope item",
+            "",
+            "## Out of Scope",
+            "- Out of scope item",
+            "",
+            "## File Map",
+            "- `app.txt`: example file",
+            "",
+            "## Step-by-step Plan",
+            "1. Update the task.",
+            "",
+            "## Validation Plan",
+            "- Run focused tests.",
+            "",
+            "## Acceptance Criteria",
+            "- The request is satisfied.",
+            "",
+            "## Risks",
+            "- Low risk.",
+            "",
+            "## Open Questions",
+            "- None.",
+        ]
+    )
+
+
 def _settings_adapter_registry(opencode_adapter=None, codex_adapter=None):
     return {
         "opencode": opencode_adapter or FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]]),
@@ -218,7 +251,7 @@ def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
         assert "original plan" in get_response.json()["content"]
         put_response = client.put(
             f"/api/tasks/{waiting.metadata.task_id}/artifacts/PLAN.md",
-            json={"content": "edited plan"},
+            json={"content": valid_plan_markdown("edited plan")},
         )
         assert put_response.status_code == 200
         approve_response = client.post(f"/api/tasks/{waiting.metadata.task_id}/approve-plan")
@@ -226,9 +259,41 @@ def test_api_allows_editing_plan_md_in_waiting_check_plans(configured_paths):
 
     updated_task = scanner.find_task(waiting.metadata.task_id)
     assert updated_task.state == TaskState.TODOS
-    assert (updated_task.task_dir / "PLAN.md").read_text() == "edited plan\n"
+    assert (updated_task.task_dir / "PLAN.md").read_text() == valid_plan_markdown("edited plan") + "\n"
     assert (updated_task.task_dir / "PLAN-HUMAN-APPROVAL.md").exists()
     assert (updated_task.task_dir / "PLAN-HUMAN-APPROVAL.json").exists()
+
+
+def test_api_rejects_malformed_human_edited_plan_on_approval(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approve-malformed-task")
+    app = create_app(config, FakeAdapter(["## Summary\nplan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    runtime = app.state.runtime
+    metadata_store = runtime.planner.metadata_store
+    scanner = runtime.planner.scanner
+    transitions = runtime.planner.transitions
+    planning = transitions.move(scanner.scan()[0], TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("original plan") + "\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    with TestClient(app) as client:
+        save_response = client.put(
+            f"/api/tasks/{waiting.metadata.task_id}/artifacts/PLAN.md",
+            json={"content": "## Summary\nOnly summary\n"},
+        )
+        assert save_response.status_code == 200
+
+        approve_response = client.post(f"/api/tasks/{waiting.metadata.task_id}/approve-plan")
+
+    assert approve_response.status_code == 409
+    assert approve_response.json()["detail"] == "PLAN.md missing required section: ## Scope"
+    updated = scanner.find_task(waiting.metadata.task_id)
+    assert updated.state == TaskState.WAITING_CHECK_PLANS
+    assert (updated.task_dir / "PLAN.md").read_text() == "## Summary\nOnly summary\n"
+    assert not (updated.task_dir / "PLAN-HUMAN-APPROVAL.md").exists()
+    assert not (updated.task_dir / "PLAN-HUMAN-APPROVAL.json").exists()
 
 
 def test_api_creates_request_with_plan_auto_approve_flag(configured_paths):
