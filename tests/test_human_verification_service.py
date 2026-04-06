@@ -472,6 +472,26 @@ def test_human_verification_start_rolls_note_artifacts_to_current_cycle(configur
     assert (refreshed.task_dir / "HUMAN-VERIFY-002.md").exists()
 
 
+def test_human_verification_start_resets_viewed_files_for_new_cycle(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-viewed-files-cycle-rollover-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    completed.metadata.cycle = 2
+    completed.metadata.human_verification.viewed_cycle = 1
+    completed.metadata.human_verification.viewed_files = {"app.txt": True}
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+
+    started = service.start(completed.metadata.task_id, by="human")
+
+    assert started.metadata.human_verification.viewed_cycle == 2
+    assert started.metadata.human_verification.viewed_files == {}
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+    detail = task_service.get_task(started.metadata.task_id)
+    assert len(detail.changed_files) == 1
+    assert detail.changed_files[0].viewed is False
+
+
 def test_human_verification_shows_previous_cycle_comments_as_read_only_context(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-historical-line-comments-task")

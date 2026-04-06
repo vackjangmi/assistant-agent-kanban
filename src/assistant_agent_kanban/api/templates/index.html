@@ -1102,11 +1102,16 @@
      .log-toggle-group { display: inline-flex; gap: 8px; flex-wrap: wrap; }
      .log-viewer { min-height: 0; height: 100%; max-height: none; margin: 0; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }
     .diff-layout { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
-     .diff-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }
-     .diff-file-list button { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }
-     .diff-file-list button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
-     .diff-file-title { display: block; font-weight: 700; overflow-wrap: anywhere; }
-     .diff-file-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.82rem; color: inherit; opacity: 0.82; }
+    .diff-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }
+    .diff-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: stretch; }
+    .diff-file-list button { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }
+    .diff-file-list button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
+    .diff-file-viewed-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.78); color: var(--muted); font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
+    .diff-file-viewed-toggle input { margin: 0; }
+    .diff-file-viewed-toggle.is-viewed { border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.88); color: var(--success); }
+    .diff-file-viewed-toggle:hover, .diff-file-viewed-toggle:focus-within { border-color: rgba(124,79,44,0.24); color: var(--accent-strong); }
+    .diff-file-title { display: block; font-weight: 700; overflow-wrap: anywhere; }
+    .diff-file-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.82rem; color: inherit; opacity: 0.82; }
     .diff-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; align-content: start; }
      .diff-summary { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }
       .diff-summary-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
@@ -2452,6 +2457,9 @@
         commentsExistingOne: '{count} saved thread',
         commentsExistingMany: '{count} saved threads',
         commentsHistory: 'Previous-round comments stay visible for context only.',
+        viewedLabel: 'Viewed',
+        viewedBadge: 'Viewed',
+        viewedSaveError: 'Failed to update viewed state.',
         approvalChoiceTitle: 'Finalize review',
         approvalChoiceDescription: 'Choose how this reviewed task should be completed in the target repository.',
         approvalChoiceCopyTitle: 'Final approval mode',
@@ -2503,6 +2511,9 @@
         commentsExistingOne: '저장된 스레드 {count}개',
         commentsExistingMany: '저장된 스레드 {count}개',
         commentsHistory: '이전 라운드 코멘트는 참고용으로만 보이며 현재 라운드 승인에는 영향을 주지 않습니다.',
+        viewedLabel: '검토함',
+        viewedBadge: '검토함',
+        viewedSaveError: '검토 완료 상태를 저장하지 못했습니다.',
         approvalChoiceTitle: '리뷰 최종 확정',
         approvalChoiceDescription: '검토가 끝난 이 작업을 대상 저장소에서 어떤 방식으로 마무리할지 선택하세요.',
         approvalChoiceCopyTitle: '최종 승인 방식',
@@ -5175,14 +5186,20 @@
         return;
       }
       taskChangedFiles.innerHTML = files.map((file) => `
-        <button type="button" class="${file.id === activeChangedFileId ? 'active' : ''}" data-changed-file-id="${escapeHtml(file.id)}">
-          <span class="diff-file-title">${escapeHtml(file.display_path)}</span>
-          <span class="diff-file-meta">
-            <span>${escapeHtml(file.change_type)}</span>
-            <span>+${file.additions}</span>
-            <span>-${file.deletions}</span>
-          </span>
-        </button>
+        <div class="diff-file-row">
+          <button type="button" class="${file.id === activeChangedFileId ? 'active' : ''}" data-changed-file-id="${escapeHtml(file.id)}">
+            <span class="diff-file-title">${escapeHtml(file.display_path)}</span>
+            <span class="diff-file-meta">
+              <span>${escapeHtml(file.change_type)}</span>
+              <span>+${file.additions}</span>
+              <span>-${file.deletions}</span>
+            </span>
+          </button>
+          <label class="diff-file-viewed-toggle${file.viewed ? ' is-viewed' : ''}" ${activeTaskDetail?.metadata?.state !== 'human-verifying' ? 'aria-disabled="true"' : ''}>
+            <input type="checkbox" data-viewed-changed-file-id="${escapeHtml(file.id)}" ${file.viewed ? 'checked' : ''} ${activeTaskDetail?.metadata?.state !== 'human-verifying' ? 'disabled' : ''}>
+            <span>${escapeHtml(translateHumanReview('viewedLabel'))}</span>
+          </label>
+        </div>
       `).join('');
     }
 
@@ -5196,6 +5213,9 @@
       const historyBadge = historicalCount
         ? `<span class="diff-badge">${escapeHtml(translateHumanReview('commentHistorical'))}</span>`
         : '';
+      const viewedBadge = summary.viewed
+        ? `<span class="diff-badge">${escapeHtml(translateHumanReview('viewedBadge'))}</span>`
+        : '';
       taskChangedFileSummary.innerHTML = `
         <div class="diff-summary-main">
           <strong>${escapeHtml(summary.display_path)}</strong>
@@ -5203,6 +5223,7 @@
             <span class="diff-badge">${escapeHtml(summary.change_type)}</span>
             <span class="diff-badge">+${summary.additions}</span>
             <span class="diff-badge">-${summary.deletions}</span>
+            ${viewedBadge}
             ${threadBadge}
             ${historyBadge}
           </div>
@@ -6753,6 +6774,28 @@
       renderChangedFileButtons(activeTaskDetail.changed_files || []);
     }
 
+    function applyChangedFileSummaryUpdate(summary) {
+      if (!summary || !activeTaskDetail?.changed_files) return;
+      activeTaskDetail.changed_files = activeTaskDetail.changed_files.map((file) => file.id === summary.id ? { ...file, ...summary } : file);
+      if (activeChangedFileDetail?.summary?.id === summary.id) {
+        activeChangedFileDetail = { ...activeChangedFileDetail, summary: { ...activeChangedFileDetail.summary, ...summary } };
+        renderChangedFileSummaryCard(activeChangedFileDetail.summary);
+      }
+      renderChangedFileButtons(activeTaskDetail.changed_files || []);
+    }
+
+    async function setChangedFileViewed(taskId, changedFileId, viewed) {
+      const response = await fetch(`/api/tasks/${taskId}/changed-files/${encodeURIComponent(changedFileId)}/viewed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ viewed }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateHumanReview('viewedSaveError'));
+      applyChangedFileSummaryUpdate(payload);
+      return payload;
+    }
+
     async function submitInlineComment() {
       if (!activeTaskId || !activeChangedFileId || !activeInlineCommentAnchor) return;
       const restoreAnchor = activeInlineCommentAnchor;
@@ -7347,6 +7390,15 @@
     taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);
     taskReviewerQaTranscript.addEventListener('scroll', updateReviewerQaTranscriptPinnedToBottom);
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
+    taskChangedFiles.addEventListener('change', async (event) => {
+      const toggle = event.target.closest('[data-viewed-changed-file-id]');
+      if (!toggle || !activeTaskId) return;
+      try {
+        await setChangedFileViewed(activeTaskId, toggle.dataset.viewedChangedFileId, Boolean(toggle.checked));
+      } catch (_error) {
+        toggle.checked = !toggle.checked;
+      }
+    });
     taskDiffShell.addEventListener('click', (event) => {
       const lineCommentButton = event.target.closest('[data-line-comment-action]');
       if (lineCommentButton && activeChangedFileDetail) {
