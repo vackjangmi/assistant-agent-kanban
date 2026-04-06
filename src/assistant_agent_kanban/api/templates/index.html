@@ -2162,6 +2162,7 @@
     let reviewerQaSourceMarkdown = '';
     let markdownViewer = null;
     let activeInlineCommentAnchor = null;
+    let activeInlineCommentDraft = '';
     let deletingCommentId = null;
     let branchLookupTimer = null;
     let latestBranchLookupToken = 0;
@@ -4964,6 +4965,11 @@
       return [normalized.path, normalized.side, normalized.line_number == null ? '' : normalized.line_number, normalized.line_kind, normalized.hunk_header].join('::');
     }
 
+    function escapeSelectorValue(value) {
+      if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
+      return String(value).replace(/[\\"\]]/g, '\\$&');
+    }
+
     function sameLineAnchor(left, right) {
       if (!left || !right) return false;
       return buildLineAnchorKey(left) === buildLineAnchorKey(right);
@@ -4989,25 +4995,47 @@
 
     function openInlineCommentComposer(anchor) {
       if (!canUseLineComments() || !anchor) return;
+      const sameAnchor = sameLineAnchor(anchor, activeInlineCommentAnchor);
+      if (!sameAnchor) activeInlineCommentDraft = '';
       activeInlineCommentAnchor = normalizeLineAnchor(anchor);
-      renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true });
+      renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true, focusComposer: true });
     }
 
     function closeInlineCommentComposer() {
+      activeInlineCommentDraft = '';
       activeInlineCommentAnchor = null;
       if (activeChangedFileDetail) renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true });
     }
 
-    function currentInlineCommentDraft() {
-      const fallback = document.querySelector('[data-inline-comment-fallback]');
-      return fallback ? fallback.value : '';
+    function visibleDiffContainer() {
+      if (taskDiffDesktop && taskDiffDesktop.offsetParent !== null) return taskDiffDesktop;
+      if (taskDiffMobile && taskDiffMobile.offsetParent !== null) return taskDiffMobile;
+      return taskDiffDesktop || taskDiffMobile;
     }
 
-    function updateInlineCommentComposerState(status = '', tone = 'neutral') {
-      const submitButton = document.querySelector('[data-inline-comment-submit]');
-      const cancelButton = document.querySelector('[data-inline-comment-cancel]');
-      const statusNode = document.querySelector('[data-inline-comment-status]');
-      const draft = currentInlineCommentDraft().trim();
+    function inlineCommentElements(root = visibleDiffContainer()) {
+      if (!root) return { fallback: null, submitButton: null, cancelButton: null, statusNode: null };
+      return {
+        fallback: root.querySelector('[data-inline-comment-fallback]'),
+        submitButton: root.querySelector('[data-inline-comment-submit]'),
+        cancelButton: root.querySelector('[data-inline-comment-cancel]'),
+        statusNode: root.querySelector('[data-inline-comment-status]'),
+      };
+    }
+
+    function syncInlineCommentDraftFromDom(root = visibleDiffContainer()) {
+      const { fallback } = inlineCommentElements(root);
+      if (fallback) activeInlineCommentDraft = fallback.value;
+      return activeInlineCommentDraft;
+    }
+
+    function currentInlineCommentDraft() {
+      return syncInlineCommentDraftFromDom();
+    }
+
+    function updateInlineCommentComposerState(status = '', tone = 'neutral', root = visibleDiffContainer()) {
+      const { submitButton, cancelButton, statusNode } = inlineCommentElements(root);
+      const draft = syncInlineCommentDraftFromDom(root).trim();
       if (submitButton) submitButton.disabled = taskDetailStale || !draft;
       if (cancelButton) cancelButton.disabled = false;
       if (statusNode) {
@@ -5016,14 +5044,16 @@
       }
     }
 
-    function mountInlineCommentComposer() {
+    function mountInlineCommentComposer(options = {}) {
       if (!activeInlineCommentAnchor) return;
-      const fallback = Array.from(document.querySelectorAll('[data-inline-comment-fallback]')).find((node) => node.offsetParent !== null) || document.querySelector('[data-inline-comment-fallback]');
+      const { focusComposer = false } = options;
+      const { fallback } = inlineCommentElements();
       if (!fallback) return;
       fallback.placeholder = translateHumanReview('commentComposerPlaceholder');
       fallback.hidden = false;
-      fallback.focus();
-      updateInlineCommentComposerState();
+      fallback.value = activeInlineCommentDraft;
+      if (focusComposer) fallback.focus();
+      updateInlineCommentComposerState('', 'neutral');
     }
 
     function mountRenderedCommentViewers() {
@@ -5089,18 +5119,20 @@
 
     function renderLineThreadSection(anchor, threads) {
       if (!anchor) return '';
-      const thread = threads.get(buildLineAnchorKey(anchor)) || [];
+      const anchorKey = buildLineAnchorKey(anchor);
+      const thread = threads.get(anchorKey) || [];
       const threadHtml = renderCommentThread(thread);
       const composerHtml = renderInlineCommentComposer(anchor);
       if (!threadHtml && !composerHtml) return '';
-      return `<div class="diff-line-thread-shell">${threadHtml}${composerHtml}</div>`;
+      return `<div class="diff-line-thread-shell" data-thread-anchor-key="${escapeHtml(anchorKey)}">${threadHtml}${composerHtml}</div>`;
     }
 
     function renderDesktopDiffCell(detail, hunk, line, side, threads) {
       const anchor = buildLineAnchor(detail, hunk, line, side);
-      const thread = anchor ? (threads.get(buildLineAnchorKey(anchor)) || []) : [];
+      const anchorKey = anchor ? buildLineAnchorKey(anchor) : '';
+      const thread = anchorKey ? (threads.get(anchorKey) || []) : [];
       return `
-        <div class="diff-cell ${line.kind}">
+        <div class="diff-cell ${line.kind}"${anchorKey ? ` data-line-anchor-key="${escapeHtml(anchorKey)}"` : ''}>
           <span class="diff-line-number">${escapeHtml(diffLineNumber(line.line_number))}</span>
           ${renderCommentAction(anchor, thread.length > 0)}
           <span class="diff-marker">${escapeHtml(diffMarker(line.kind))}</span>
@@ -5122,9 +5154,10 @@
     }
 
     function renderMobileDiffLine(entry, threads) {
-      const thread = entry.anchor ? (threads.get(buildLineAnchorKey(entry.anchor)) || []) : [];
+      const anchorKey = entry.anchor ? buildLineAnchorKey(entry.anchor) : '';
+      const thread = anchorKey ? (threads.get(anchorKey) || []) : [];
       return `
-        <div class="diff-mobile-line ${entry.line.kind}">
+        <div class="diff-mobile-line ${entry.line.kind}"${anchorKey ? ` data-line-anchor-key="${escapeHtml(anchorKey)}"` : ''}>
           <div class="diff-mobile-line-head">
             <span class="diff-mobile-line-side">${escapeHtml(lineCommentSideLabel(entry.side))}</span>
             <span class="diff-line-number">${escapeHtml(diffLineNumber(entry.line.line_number))}</span>
@@ -5260,22 +5293,59 @@
       `).join('');
     }
 
+    function findDiffAnchorNode(container, anchorKey) {
+      if (!container || !anchorKey) return null;
+      return container.querySelector(`[data-thread-anchor-key="${escapeSelectorValue(anchorKey)}"]`) || container.querySelector(`[data-line-anchor-key="${escapeSelectorValue(anchorKey)}"]`);
+    }
+
+    function captureDiffAnchorState(container, anchorKey) {
+      const node = findDiffAnchorNode(container, anchorKey);
+      if (!node) return null;
+      const containerRect = container.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      return {
+        offsetTop: nodeRect.top - containerRect.top,
+      };
+    }
+
+    function restoreDiffAnchorState(container, anchorKey, state) {
+      if (!container || !anchorKey || !state) return false;
+      const node = findDiffAnchorNode(container, anchorKey);
+      if (!node) return false;
+      const containerRect = container.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      container.scrollTop += (nodeRect.top - containerRect.top) - state.offsetTop;
+      return true;
+    }
+
     function renderChangedFileDetail(detail, options = {}) {
-      const { preserveScroll = false, keepComposer = false } = options;
+      const { preserveScroll = false, keepComposer = false, scrollAnchor = null, focusComposer = false } = options;
+      if (activeInlineCommentAnchor) syncInlineCommentDraftFromDom();
       const desktopScrollTop = taskDiffDesktop.scrollTop;
       const mobileScrollTop = taskDiffMobile.scrollTop;
+      const visibleContainerBeforeRender = visibleDiffContainer();
+      const anchorKey = scrollAnchor ? buildLineAnchorKey(scrollAnchor) : '';
+      const visibleAnchorState = anchorKey ? captureDiffAnchorState(visibleContainerBeforeRender, anchorKey) : null;
       activeChangedFileDetail = detail;
       if (!keepComposer && activeInlineCommentAnchor && !commentThreadsByAnchor(detail).has(buildLineAnchorKey(activeInlineCommentAnchor))) {
+        activeInlineCommentDraft = '';
         activeInlineCommentAnchor = null;
       }
       renderChangedFileSummaryCard(detail.summary);
       taskDiffDesktop.innerHTML = renderDiffDesktop(detail);
       taskDiffMobile.innerHTML = renderDiffMobile(detail);
       mountRenderedCommentViewers();
-      mountInlineCommentComposer();
+      mountInlineCommentComposer({ focusComposer });
       if (preserveScroll) {
-        taskDiffDesktop.scrollTop = desktopScrollTop;
-        taskDiffMobile.scrollTop = mobileScrollTop;
+        const visibleContainerAfterRender = visibleDiffContainer();
+        const restoredVisible = restoreDiffAnchorState(visibleContainerAfterRender, anchorKey, visibleAnchorState);
+        if (visibleContainerAfterRender === taskDiffDesktop) {
+          if (!restoredVisible) taskDiffDesktop.scrollTop = desktopScrollTop;
+          taskDiffMobile.scrollTop = mobileScrollTop;
+        } else {
+          if (!restoredVisible) taskDiffMobile.scrollTop = mobileScrollTop;
+          taskDiffDesktop.scrollTop = desktopScrollTop;
+        }
       }
       updateHumanReviewPanel();
     }
@@ -6685,6 +6755,7 @@
 
     async function submitInlineComment() {
       if (!activeTaskId || !activeChangedFileId || !activeInlineCommentAnchor) return;
+      const restoreAnchor = activeInlineCommentAnchor;
       const body = currentInlineCommentDraft().trim();
       if (!body) {
         updateInlineCommentComposerState(translateHumanReview('commentComposerError'), 'error');
@@ -6706,10 +6777,11 @@
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateHumanReview('commentComposerError'));
+        activeInlineCommentDraft = '';
         activeInlineCommentAnchor = null;
         activeChangedFileId = payload.summary?.id || activeChangedFileId;
         await refreshActiveTaskDetailAfterComment(activeTaskId);
-        renderChangedFileDetail(payload, { preserveScroll: true });
+        renderChangedFileDetail(payload, { preserveScroll: true, scrollAnchor: restoreAnchor });
         taskModalError.hidden = true;
       } catch (error) {
         taskModalError.hidden = false;
@@ -6721,9 +6793,11 @@
     async function deleteInlineComment(commentId) {
       if (!canUseLineComments() || taskDetailStale || !activeTaskId || !activeChangedFileDetail || !commentId) return;
       const changedFileId = activeChangedFileDetail.summary?.id || activeChangedFileId;
+      syncInlineCommentDraftFromDom();
+      const restoreAnchor = (activeChangedFileDetail.comments || []).find((comment) => String(comment.id) === String(commentId))?.anchor || activeInlineCommentAnchor;
       if (!changedFileId) return;
       deletingCommentId = String(commentId);
-      renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true });
+      renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true, scrollAnchor: restoreAnchor });
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}/changed-files/${encodeURIComponent(changedFileId)}/comments/${encodeURIComponent(String(commentId))}`, {
           method: 'DELETE',
@@ -6732,14 +6806,14 @@
         if (!response.ok) throw new Error(payload.detail || translateHumanReview('commentDeleteError'));
         activeChangedFileId = payload.summary?.id || changedFileId;
         await refreshActiveTaskDetailAfterComment(activeTaskId);
-        renderChangedFileDetail(payload, { preserveScroll: true, keepComposer: true });
+        renderChangedFileDetail(payload, { preserveScroll: true, keepComposer: true, scrollAnchor: restoreAnchor });
         taskModalError.hidden = true;
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
       } finally {
         deletingCommentId = null;
-        if (activeChangedFileDetail) renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true });
+        if (activeChangedFileDetail) renderChangedFileDetail(activeChangedFileDetail, { preserveScroll: true, keepComposer: true, scrollAnchor: restoreAnchor });
       }
     }
 
@@ -7293,7 +7367,11 @@
         deleteInlineComment(deleteCommentButton.dataset.deleteCommentId);
       }
     });
-    taskDiffShell.addEventListener('input', (event) => { if (event.target.matches('[data-inline-comment-fallback]')) updateInlineCommentComposerState(); });
+    taskDiffShell.addEventListener('input', (event) => {
+      if (!event.target.matches('[data-inline-comment-fallback]')) return;
+      activeInlineCommentDraft = event.target.value;
+      updateInlineCommentComposerState();
+    });
     taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
     window.addEventListener('resize', () => {
       if (activeTaskTab === 'review-note') syncHumanReviewEditorHeight();
