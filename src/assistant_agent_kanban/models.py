@@ -199,6 +199,8 @@ class HumanVerificationInfo(BaseModel):
     note_path: str | None = None
     comments_path: str | None = None
     note_markdown: str = ""
+    viewed_cycle: int | None = None
+    viewed_files: dict[str, bool] = Field(default_factory=dict)
 
 
 class TargetRepoInfo(BaseModel):
@@ -383,6 +385,7 @@ class ChangedFileSummary(BaseModel):
     deletions: int = 0
     hunk_count: int = 0
     is_binary: bool = False
+    viewed: bool = False
 
 
 class ChangedFileLine(BaseModel):

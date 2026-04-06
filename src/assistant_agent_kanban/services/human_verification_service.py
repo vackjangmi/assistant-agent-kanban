@@ -237,6 +237,9 @@ class HumanVerificationService:
             metadata.human_verification.note_markdown = ""
         if metadata.human_verification.comments_path != expected_comments_path:
             metadata.human_verification.comments_path = expected_comments_path
+        if metadata.human_verification.viewed_cycle != metadata.cycle:
+            metadata.human_verification.viewed_cycle = metadata.cycle
+            metadata.human_verification.viewed_files = {}
         self._save_comments_artifact(task_dir, metadata, self._load_comments_artifact(task_dir, metadata))
         self._write_human_verification_artifact(task_dir, metadata, verdict=verdict)
 

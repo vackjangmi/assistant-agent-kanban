@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from datetime import datetime, timezone
+import hashlib
 import json
 import mimetypes
 from pathlib import Path
@@ -477,6 +478,26 @@ class TaskService:
             self.metadata_store.save(task.task_dir, task.metadata)
             return task
 
+    def set_changed_file_viewed(self, task_id: str, changed_file_id: str, *, by: str, viewed: bool) -> ChangedFileSummary:
+        task = self._find_task(task_id)
+        if task.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("changed file viewed state is only available during human verification")
+        if self.metadata_store is None or self.locks is None:
+            raise TransitionError("changed file viewed updates require a configured runtime")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-changed-file-viewed"):
+            changed_files = self._load_changed_files_for_task(task, require_available=True)
+            for entry in changed_files:
+                if entry.summary.id != changed_file_id:
+                    continue
+                viewed_files = self._current_cycle_viewed_files(task.metadata, create=True)
+                if viewed:
+                    viewed_files[entry.summary.path] = True
+                else:
+                    viewed_files.pop(entry.summary.path, None)
+                self.metadata_store.save(task.task_dir, task.metadata)
+                return entry.summary.model_copy(update={"viewed": viewed})
+        raise TaskNotFoundError(changed_file_id)
+
     def _find_task(self, task_id: str):
         try:
             return self.scanner.find_task(task_id)
@@ -647,7 +668,25 @@ class TaskService:
         patch_text = self._resolve_changed_files_patch(task.metadata, require_available=require_available)
         if patch_text is None:
             return []
-        return self._parse_patch(patch_text)
+        return self._apply_changed_file_viewed_state(self._parse_patch(patch_text), task.metadata)
+
+    def _apply_changed_file_viewed_state(self, details: list[ChangedFileDetail], metadata: TaskMetadata) -> list[ChangedFileDetail]:
+        viewed_files = self._current_cycle_viewed_files(metadata)
+        if not viewed_files:
+            return details
+        return [
+            entry.model_copy(update={"summary": entry.summary.model_copy(update={"viewed": bool(viewed_files.get(entry.summary.path))})})
+            for entry in details
+        ]
+
+    def _current_cycle_viewed_files(self, metadata: TaskMetadata, *, create: bool = False) -> dict[str, bool]:
+        human_verification = metadata.human_verification
+        if human_verification.viewed_cycle != metadata.cycle:
+            if not create:
+                return {}
+            human_verification.viewed_cycle = metadata.cycle
+            human_verification.viewed_files = {}
+        return human_verification.viewed_files
 
     def _resolve_changed_files_patch(self, metadata: TaskMetadata, *, require_available: bool) -> str | None:
         if metadata.integration.patch_path:
@@ -858,7 +897,7 @@ class TaskService:
             deletions = file_int("deletions")
             hunks = file_hunks()
             summary = ChangedFileSummary(
-                id=str(len(details)),
+                id=self._changed_file_id(path, previous_path),
                 path=path,
                 display_path=display_path,
                 previous_path=previous_path,
@@ -953,6 +992,10 @@ class TaskService:
                 new_line_number += 1
         finish_file()
         return details
+
+    def _changed_file_id(self, path: str, previous_path: str | None) -> str:
+        stable_key = f"{previous_path or ''}\0{path}"
+        return hashlib.sha1(stable_key.encode("utf-8")).hexdigest()[:12]
 
     def _parse_diff_header(self, raw_line: str) -> tuple[str, str]:
         parts = raw_line.split(" ", 3)
