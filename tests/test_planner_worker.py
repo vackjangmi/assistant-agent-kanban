@@ -171,6 +171,29 @@ def test_planner_worker_strips_outer_markdown_fence_before_persisting_plan(confi
     assert persisted_json["assistant_text"] == expected
 
 
+def test_planner_worker_strips_outer_tilde_markdown_fence_before_persisting_plan(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-tilde-fenced-plan-task", language="ko")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    artifact = f"~~~markdown\n{valid_plan_artifact('plan', language='ko')}\n~~~"
+    adapter = FakeAdapter(
+        planner_cycle_responses(artifact=artifact),
+        session_ids=["ses_tilde", "ses_tilde", "ses_tilde"],
+        total_tokens=[10, 0, 11],
+    )
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    task = scanner.scan()[0]
+    persisted_markdown = (task.task_dir / "PLAN.md").read_text().strip()
+    expected = valid_plan_artifact("plan", language="ko")
+    assert persisted_markdown == expected
+
+
 def test_planner_worker_pins_runtime_backend_and_models(configured_paths):
     config, _, _ = configured_paths
     config.runtime.coding_assistant = "codex"
@@ -233,7 +256,7 @@ def test_gemini_planner_forces_multi_phase_path(configured_paths):
     assert "# Finalize Plan Artifact" in str(adapter.run_calls[2]["prompt"])
 
 
-def test_non_gemini_planner_stays_single_shot_when_live_logs_disabled(configured_paths):
+def test_non_gemini_planner_uses_finalize_path_when_live_logs_disabled(configured_paths):
     config, _, _ = configured_paths
     config.runtime.coding_assistant = "codex"
     config.opencode.worker_live_logs_enabled = False
@@ -242,13 +265,21 @@ def test_non_gemini_planner_stays_single_shot_when_live_logs_disabled(configured
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
-    adapter = FakeAdapter([valid_plan_artifact("plan")], resolved_models=["gpt-5.4"])
+    artifact = valid_plan_artifact("plan")
+    adapter = FakeAdapter(
+        [artifact, artifact],
+        resolved_models=["gpt-5.4", "gpt-5.4"],
+        session_ids=["ses_single_shot", "ses_single_shot"],
+        total_tokens=[12, 13],
+    )
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
 
-    assert len(adapter.run_calls) == 1
+    assert len(adapter.run_calls) == 2
     assert adapter.run_calls[0]["output_format"] == "json"
+    assert adapter.run_calls[1]["output_format"] == "json"
+    assert "# Finalize Plan Artifact" in str(adapter.run_calls[1]["prompt"])
 
 
 def test_planner_worker_reuses_session_under_budget_and_tracks_tokens(configured_paths):
@@ -387,7 +418,7 @@ def test_planner_worker_rolls_over_session_after_budget_is_exceeded(configured_p
     assert updated.metadata.plan.session_tokens == 3200
 
 
-def test_planner_worker_uses_single_json_run_when_live_logs_disabled(configured_paths):
+def test_planner_worker_uses_json_draft_and_finalize_runs_when_live_logs_disabled(configured_paths):
     config, _, _ = configured_paths
     config.opencode.worker_live_logs_enabled = False
     create_request_task(config, "planner-single-run-task")
@@ -396,19 +427,21 @@ def test_planner_worker_uses_single_json_run_when_live_logs_disabled(configured_
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     artifact = valid_plan_artifact("single plan")
-    adapter = FakeAdapter([artifact], session_ids=["ses_single_plan"], total_tokens=[77])
+    adapter = FakeAdapter([artifact, artifact], session_ids=["ses_single_plan", "ses_single_plan"], total_tokens=[77, 79])
     worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
 
     assert asyncio.run(worker.run_once()) is True
 
     task = scanner.scan()[0]
-    assert len(adapter.run_calls) == 1
+    assert len(adapter.run_calls) == 2
     assert adapter.run_calls[0]["output_format"] == "json"
+    assert adapter.run_calls[1]["output_format"] == "json"
     assert adapter.run_calls[0]["show_thinking"] is False
+    assert adapter.run_calls[1]["show_thinking"] is False
     assert (task.task_dir / "PLAN.md").read_text() == artifact + "\n"
     plan_json = json.loads((task.task_dir / "PLAN.json").read_text())
     assert plan_json["session_id"] == "ses_single_plan"
-    assert plan_json["total_tokens"] == 77
+    assert plan_json["total_tokens"] == 79
 
 
 def test_planner_markdown_edits_do_not_modify_plan_json(configured_paths):
@@ -492,6 +525,7 @@ def test_planner_worker_rejects_malformed_nonempty_plan_artifact(configured_path
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks)
+    adapter = FakeAdapter(["했습니다."], ok=True, returncode=0)
     worker = PlanningWorker(
         config,
         scanner,
@@ -499,7 +533,7 @@ def test_planner_worker_rejects_malformed_nonempty_plan_artifact(configured_path
         locks,
         transitions,
         EventBus(),
-        adapter=FakeAdapter(["했습니다."], ok=True, returncode=0),
+        adapter=adapter,
     )
 
     with pytest.raises(AdapterRunError, match="missing required section"):
@@ -509,6 +543,13 @@ def test_planner_worker_rejects_malformed_nonempty_plan_artifact(configured_path
     assert planning_task.state == TaskState.REQUESTS
     assert not (planning_task.task_dir / "PLAN.md").exists()
     assert not (planning_task.task_dir / "PLAN.json").exists()
+    assert len(adapter.run_calls) == 3
+    assert "# Finalize Plan Artifact" in str(adapter.run_calls[1]["prompt"])
+    assert "# Repair Plan Artifact" in str(adapter.run_calls[2]["prompt"])
+    assert (planning_task.task_dir / "PLAN-REJECTED-001.md").read_text() == "했습니다.\n"
+    assert (planning_task.task_dir / "PLAN-REJECTED-002.md").read_text() == "했습니다.\n"
+    rejected_json = json.loads((planning_task.task_dir / "PLAN-REJECTED-001.json").read_text())
+    assert rejected_json["rejection_reason"] == "planner artifact missing required section: ## Summary"
     assert planning_task.metadata.errors[-1].code == "planner-invalid-artifact"
     assert planning_task.metadata.retry_gate.reason == "planner-invalid-artifact"
     assert planning_task.metadata.retry_gate.not_before is None
@@ -556,10 +597,9 @@ def test_planner_worker_ignores_heading_false_positives_inside_fenced_code_block
         ]
     )
 
-    validated, missing_marker = worker._validated_plan_artifact(artifact, task.metadata)
+    validation = worker._validated_plan_artifact(artifact, task.metadata)
 
-    assert validated is None
-    assert missing_marker == "## Summary"
+    assert validation.missing_heading == "## Summary"
 
 
 def test_planner_worker_skips_retry_gated_requests(configured_paths):
@@ -648,6 +688,13 @@ def test_planner_worker_uses_repair_result_metadata_when_repair_succeeds(configu
     assert plan_json["total_tokens"] == 12
     assert plan_json["raw_events_path"] == "repair"
     assert plan_json["command"] == ["repair"]
+    assert (task.task_dir / "PLAN-REJECTED-001.md").read_text() == "했습니다.\n"
+    rejected_json = json.loads((task.task_dir / "PLAN-REJECTED-001.json").read_text())
+    assert rejected_json["rejection_reason"] == "planner artifact missing required section: ## Summary"
+    repair_prompt = str(adapter.run_calls[3]["prompt"])
+    assert "Failure reason: planner artifact missing required section: ## Summary" in repair_prompt
+    assert "## Rejected Artifact" in repair_prompt
+    assert "했습니다." in repair_prompt
     assert task.metadata.plan.session_tokens == 33
 
 
