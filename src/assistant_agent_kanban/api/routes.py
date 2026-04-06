@@ -153,10 +153,16 @@ class ModelSettingsPayload(BaseModel):
 
 class ResumeImplementerPayload(BaseModel):
     resume_mode: Literal["pinned", "current-settings"] | None = None
+    message: str | None = None
 
 
 class ResumeReviewerPayload(BaseModel):
     resume_mode: Literal["pinned", "current-settings"] | None = None
+    message: str | None = None
+
+
+class ResumeReviewLoopPayload(BaseModel):
+    message: str | None = None
 
 
 def _normalize_model_override(value: str | None) -> str | None:
@@ -654,10 +660,14 @@ def build_router() -> APIRouter:
         return moved.metadata
 
     @router.post("/api/tasks/{task_id}/resume-review-loop")
-    async def resume_review_loop(task_id: str, request: Request):
+    async def resume_review_loop(task_id: str, request: Request, payload: ResumeReviewLoopPayload | None = None):
         runtime = request.app.state.runtime
         try:
-            moved = runtime.task_service.resume_review_loop(task_id, by="human")
+            moved = runtime.task_service.resume_review_loop(
+                task_id,
+                by="human",
+                message=(payload.message if payload else None),
+            )
         except (TransitionError, TaskNotFoundError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
@@ -671,6 +681,7 @@ def build_router() -> APIRouter:
                 task_id,
                 by="human",
                 resume_mode=(payload.resume_mode if payload and payload.resume_mode else "pinned"),
+                message=(payload.message if payload else None),
             )
         except (TransitionError, TaskNotFoundError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -685,6 +696,7 @@ def build_router() -> APIRouter:
                 task_id,
                 by="human",
                 resume_mode=(payload.resume_mode if payload and payload.resume_mode else "pinned"),
+                message=(payload.message if payload else None),
             )
         except (TransitionError, TaskNotFoundError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc

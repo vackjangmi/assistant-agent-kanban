@@ -14,6 +14,7 @@ from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.models import RunResult, utc_now
 from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.transitions import TransitionManager
 from assistant_agent_kanban.workspace_manager import WorkspaceManager
 from assistant_agent_kanban.workers.implementer import ImplementerWorker
@@ -395,6 +396,56 @@ def test_implementer_source_includes_latest_reviewer_qa(configured_paths):
     assert "Can the label stay?" in prompt_source
     assert "Yes, but the helper text should change." in prompt_source
     assert "# Latest Human Verification" in prompt_source
+
+
+def test_implementer_source_includes_persisted_resume_message_artifact(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implementer-resume-message-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task_service = TaskService(
+        scanner,
+        config.runs_dir,
+        config.kanban_root,
+        metadata_store=metadata_store,
+        transitions=transitions,
+        locks=locks,
+    )
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todos = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    todos.metadata.retry_gate.reason = "implementation-failed"
+    todos.metadata.retry_gate.consecutive_count = 1
+    todos.metadata.retry_gate.not_before = utc_now()
+    metadata_store.save(todos.task_dir, todos.metadata)
+
+    task_service.resume_implementer(
+        todos.metadata.task_id,
+        by="human",
+        message="Please keep the existing structure but fix the missing edge case handling.",
+    )
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["implemented"]),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    prompt_source = worker._build_implementer_source(todos.task_dir)
+
+    assert "# Latest Reviewer Q&A" in prompt_source
+    assert "- Source: human resume note" in prompt_source
+    assert "Please keep the existing structure but fix the missing edge case handling." in prompt_source
 
 
 def test_implementer_worker_uses_single_json_run_when_live_logs_disabled(configured_paths):

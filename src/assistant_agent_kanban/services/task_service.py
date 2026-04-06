@@ -238,7 +238,11 @@ class TaskService:
             self.scanner.metadata_store.save(moved.task_dir, moved.metadata)
             return moved
 
-    def resume_review_loop(self, task_id: str, *, by: str = "human"):
+    def append_human_reviewer_qa_message(self, task_id: str, *, message: str, by: str = "human") -> TaskContext:
+        task = self._find_task(task_id)
+        return self._append_human_reviewer_qa_message(task, message=message, by=by)
+
+    def resume_review_loop(self, task_id: str, *, by: str = "human", message: str | None = None):
         task = self._find_task(task_id)
         if task.state != TaskState.TODOS:
             raise TransitionError("review loop resume is only allowed in todos")
@@ -247,12 +251,20 @@ class TaskService:
         if self.locks is None:
             raise TransitionError("review loop resume requires lock manager")
         with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-review-loop-resume"):
+            self._append_human_reviewer_qa_message(task, message=message, by=by)
             reset_review_loop_tracking(task.metadata.review)
             clear_retry_gate(task.metadata)
             self.scanner.metadata_store.save(task.task_dir, task.metadata)
             return self.scanner.find_task(task.metadata.task_id)
 
-    def resume_reviewer(self, task_id: str, *, by: str = "human", resume_mode: Literal["pinned", "current-settings"] = "pinned"):
+    def resume_reviewer(
+        self,
+        task_id: str,
+        *,
+        by: str = "human",
+        resume_mode: Literal["pinned", "current-settings"] = "pinned",
+        message: str | None = None,
+    ):
         task = self._find_task(task_id)
         if task.state != TaskState.WAITING_REVIEWS:
             raise TransitionError("reviewer resume is only allowed in waiting-reviews")
@@ -263,6 +275,7 @@ class TaskService:
         if self.locks is None:
             raise TransitionError("reviewer resume requires lock manager")
         with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-reviewer-resume"):
+            self._append_human_reviewer_qa_message(task, message=message, by=by)
             clear_retry_gate(task.metadata)
             task.metadata.review.last_verdict = None
             task.metadata.review.resolved_model = None
@@ -280,7 +293,14 @@ class TaskService:
             self.scanner.metadata_store.save(task.task_dir, task.metadata)
             return self.scanner.find_task(task.metadata.task_id)
 
-    def resume_implementer(self, task_id: str, *, by: str = "human", resume_mode: Literal["pinned", "current-settings"] = "pinned"):
+    def resume_implementer(
+        self,
+        task_id: str,
+        *,
+        by: str = "human",
+        resume_mode: Literal["pinned", "current-settings"] = "pinned",
+        message: str | None = None,
+    ):
         task = self._find_task(task_id)
         if task.state != TaskState.TODOS:
             raise TransitionError("implementer resume is only allowed in todos")
@@ -291,6 +311,7 @@ class TaskService:
         if self.locks is None:
             raise TransitionError("implementer resume requires lock manager")
         with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-implementer-resume"):
+            self._append_human_reviewer_qa_message(task, message=message, by=by)
             clear_retry_gate(task.metadata)
             task.metadata.implementation.last_result = None
             task.metadata.implementation.resolved_model = None
@@ -307,6 +328,53 @@ class TaskService:
                 task.metadata.implementation.resume_model_override = None
             self.scanner.metadata_store.save(task.task_dir, task.metadata)
             return self.scanner.find_task(task.metadata.task_id)
+
+    def _append_human_reviewer_qa_message(self, task, *, message: str | None, by: str) -> TaskContext:
+        normalized_message = (message or "").strip()
+        if not normalized_message:
+            return task
+        expected_qa_path = f"REVIEWER-QA-{task.metadata.cycle:03d}.md"
+        if task.metadata.review.qa_path != expected_qa_path:
+            task.metadata.review.qa_path = expected_qa_path
+            task.metadata.review.qa_session_id = None
+            task.metadata.review.qa_last_run_tokens = 0
+            task.metadata.review.qa_session_tokens = 0
+            task.metadata.review.qa_resolved_model = None
+        qa_path = task.task_dir / task.metadata.review.qa_path
+        existing = qa_path.read_text().rstrip() if qa_path.exists() else ""
+        exchange_count = existing.count("## Question") + 1
+        now = datetime.now(timezone.utc).isoformat()
+        sections: list[str] = []
+        if existing:
+            sections.extend([existing, ""])
+        else:
+            sections.extend(
+                [
+                    "# Reviewer Q&A",
+                    "",
+                    f"- Cycle: {task.metadata.cycle:03d}",
+                    "",
+                ]
+            )
+        sections.extend(
+            [
+                f"## Question {exchange_count}",
+                f"- Asked by: {by}",
+                f"- Asked at: {now}",
+                "- Source: human resume note",
+                "",
+                normalized_message,
+                "",
+            ]
+        )
+        qa_path.write_text("\n".join(sections).rstrip() + "\n")
+        return task
+
+    def _ensure_reviewer_qa_path(self, metadata: TaskMetadata) -> str:
+        expected_path = f"REVIEWER-QA-{metadata.cycle:03d}.md"
+        if metadata.review.qa_path != expected_path:
+            metadata.review.qa_path = expected_path
+        return expected_path
 
     def _render_human_plan_approval_markdown(self, task, approval_record) -> str:
         signals = ", ".join(approval_record.ai_risk_signals) if approval_record.ai_risk_signals else "none"
