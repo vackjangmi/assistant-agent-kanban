@@ -342,6 +342,28 @@ def test_planner_worker_uses_handshake_and_finalize_prompts_around_live_prompt(c
     assert "Return only the final markdown artifact" in finalize_prompt
 
 
+def test_planner_worker_includes_restart_message_in_planner_source_text(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-restart-note-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    task.metadata.plan.restart_message_path = "PLANNER-RESTART.md"
+    (task.task_dir / "PLANNER-RESTART.md").write_text(
+        "# Planner Restart Notes\n\n## Note 1\n- Source: manual planner restart\n\nRetry with the exact required headings.\n"
+    )
+    metadata_store.save(task.task_dir, task.metadata)
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter())
+
+    source = worker._planner_source_text((task.task_dir / "REQUEST.md").read_text(), task.metadata)
+
+    assert "## Planner Restart Note" in source
+    assert "Retry with the exact required headings." in source
+    assert "## Planner Context Docs" in source
+
+
 def test_planner_worker_rolls_over_session_after_budget_is_exceeded(configured_paths):
     config, _, _ = configured_paths
     config.opencode.planner_session_token_budget = 100000
@@ -492,6 +514,54 @@ def test_planner_worker_rejects_malformed_nonempty_plan_artifact(configured_path
     assert planning_task.metadata.retry_gate.not_before is None
 
 
+def test_planner_worker_ignores_heading_false_positives_inside_fenced_code_blocks(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-fenced-heading-false-positive-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter())
+    artifact = "\n".join(
+        [
+            "```md",
+            "## Summary",
+            "This heading is inside a code fence and must not count.",
+            "```",
+            "",
+            "## Scope",
+            "- Scope item",
+            "",
+            "## Out of Scope",
+            "- Out of scope item",
+            "",
+            "## File Map",
+            "- `lib/models.dart`: scoring logic",
+            "",
+            "## Step-by-step Plan",
+            "1. Update scoring rules",
+            "",
+            "## Validation Plan",
+            "- Run targeted tests",
+            "",
+            "## Acceptance Criteria",
+            "- Request requirements are satisfied",
+            "",
+            "## Risks",
+            "- Possible scoring regressions",
+            "",
+            "## Open Questions",
+            "- None",
+        ]
+    )
+
+    validated, missing_marker = worker._validated_plan_artifact(artifact, task.metadata)
+
+    assert validated is None
+    assert missing_marker == "## Summary"
+
+
 def test_planner_worker_skips_retry_gated_requests(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "planner-gated-task")
@@ -579,6 +649,28 @@ def test_planner_worker_uses_repair_result_metadata_when_repair_succeeds(configu
     assert plan_json["raw_events_path"] == "repair"
     assert plan_json["command"] == ["repair"]
     assert task.metadata.plan.session_tokens == 33
+
+
+def test_planner_worker_clears_restart_message_pointer_after_success(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "planner-restart-pointer-reset-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    task.metadata.plan.restart_message_path = "PLANNER-RESTART.md"
+    (task.task_dir / "PLANNER-RESTART.md").write_text(
+        "# Planner Restart Notes\n\n## Note 1\n- Source: manual planner restart\n\nRetry with exact headings.\n"
+    )
+    metadata_store.save(task.task_dir, task.metadata)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter([valid_plan_artifact("plan")]))
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.scan()[0]
+    assert updated.metadata.plan.restart_message_path is None
 
 
 def test_planner_worker_counts_live_tokens_in_multi_phase_flow(configured_paths):

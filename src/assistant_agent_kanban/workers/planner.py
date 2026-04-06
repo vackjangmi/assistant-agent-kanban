@@ -51,7 +51,7 @@ class PlanningWorker(WorkerBase):
             log_name = log_path.name
             request_text = (planning.task_dir / "REQUEST.md").read_text()
             handshake_prompt = self._handshake_prompt(planning.metadata)
-            live_prompt = self.build_prompt(self._planner_source_text(request_text), planning.metadata, phase="planner")
+            live_prompt = self.build_prompt(self._planner_source_text(request_text, planning.metadata), planning.metadata, phase="planner")
             finalize_prompt = self._finalize_prompt(request_text, planning.metadata)
             planner_cwd = self.config.repo_root.expanduser().resolve()
             await self.emit("task_moved", planning.metadata.task_id, state=planning.state.value)
@@ -125,6 +125,7 @@ class PlanningWorker(WorkerBase):
                     raise AdapterRunError(f"planner artifact missing required section: {missing_marker}")
                 clear_retry_gate(planning.metadata)
                 planning.metadata.plan.revision += 1
+                planning.metadata.plan.restart_message_path = None
                 reset_plan_approval_tracking(planning.metadata.plan_approval)
                 plan_path, _ = self.write_result_artifacts(
                     planning.task_dir,
@@ -264,7 +265,7 @@ class PlanningWorker(WorkerBase):
                 repair_result = await asyncio.to_thread(
                     adapter.run,
                     agent=run_config.role_agent("planner"),
-                    prompt=self._repair_finalize_prompt(request_text, planning.metadata),
+                    prompt=self._repair_finalize_prompt(request_text, planning.metadata, missing_marker),
                     cwd=planner_cwd,
                     run_log_path=log_path,
                     config=run_config,
@@ -319,6 +320,7 @@ class PlanningWorker(WorkerBase):
                 raise AdapterRunError(f"planner artifact missing required section: {missing_marker}")
             clear_retry_gate(planning.metadata)
             planning.metadata.plan.revision += 1
+            planning.metadata.plan.restart_message_path = None
             reset_plan_approval_tracking(planning.metadata.plan_approval)
             finalized_result = RunResult(
                 ok=artifact_result.ok,
@@ -356,21 +358,29 @@ class PlanningWorker(WorkerBase):
 
     def _validated_plan_artifact(self, assistant_text: str, metadata) -> tuple[str | None, str | None]:
         artifact = _strip_outer_markdown_fence(assistant_text.strip())
+        heading_lines = _heading_lines_outside_fences(artifact)
         cursor = 0
-        for heading in _expected_plan_headings(generation_language_code(metadata.request.language)):
-            marker = f"## {heading}"
-            position = artifact.find(marker, cursor)
-            if position < 0:
+        for marker in self._required_heading_lines(metadata):
+            while cursor < len(heading_lines) and heading_lines[cursor] != marker:
+                cursor += 1
+            if cursor >= len(heading_lines):
                 return None, marker
-            cursor = position + len(marker)
+            cursor += 1
         return artifact, None
 
-    def _planner_source_text(self, request_text: str) -> str:
+    def _planner_source_text(self, request_text: str, metadata) -> str:
+        sections = [request_text.rstrip()]
+        restart_message_path = metadata.plan.restart_message_path
+        if restart_message_path:
+            restart_path = self.scanner.find_task(metadata.task_id).task_dir / restart_message_path
+            if restart_path.exists():
+                sections.extend(["## Planner Restart Note", restart_path.read_text().rstrip()])
         context_blocks: list[str] = []
         for relative_path in self.planner_context_docs:
             doc_path = PROJECT_ROOT / relative_path
             context_blocks.extend([f"## {relative_path}", doc_path.read_text().rstrip()])
-        return "\n\n".join([request_text.rstrip(), "## Planner Context Docs", *context_blocks])
+        sections.extend(["## Planner Context Docs", *context_blocks])
+        return "\n\n".join(sections)
 
     def _handshake_prompt(self, metadata) -> str:
         requested_language = generation_language_name(metadata.request.language)
@@ -384,7 +394,7 @@ class PlanningWorker(WorkerBase):
         )
 
     def _finalize_prompt(self, request_text: str, metadata) -> str:
-        source = self._planner_source_text(request_text)
+        source = self._planner_source_text(request_text, metadata)
         headings = self._required_heading_lines(metadata)
         instructions = "\n".join(
             [
@@ -396,15 +406,17 @@ class PlanningWorker(WorkerBase):
                 "- Return only markdown. Do not add prefaces, explanations, code fences, JSON, or tool/log output.",
                 "- Use the exact required headings below, in this exact order.",
                 "- Every heading must start with `## ` exactly.",
+                "- Required headings only count when they appear as their own line outside fenced code blocks.",
                 *headings,
                 "- Return only the final markdown artifact with the required sections.",
             ]
         )
         return self.build_prompt(instructions, metadata, phase="planner")
 
-    def _repair_finalize_prompt(self, request_text: str, metadata) -> str:
-        source = self._planner_source_text(request_text)
+    def _repair_finalize_prompt(self, request_text: str, metadata, missing_marker: str | None) -> str:
+        source = self._planner_source_text(request_text, metadata)
         headings = self._required_heading_lines(metadata)
+        missing_heading_instruction = f"- The missing heading was `{missing_marker}`. Include it as its own line." if missing_marker else "- Ensure every required heading is present as its own line."
         instructions = "\n".join(
             [
                 source,
@@ -415,6 +427,8 @@ class PlanningWorker(WorkerBase):
                 "- Return only markdown. Do not add prefaces, explanations, code fences, JSON, or tool/log output.",
                 "- Use the exact required headings below, in this exact order.",
                 "- Every heading must start with `## ` exactly.",
+                "- Required headings only count when they appear as their own line outside fenced code blocks.",
+                missing_heading_instruction,
                 *headings,
                 "- Return only the corrected final markdown artifact.",
             ]
@@ -467,3 +481,29 @@ def _strip_outer_markdown_fence(text: str) -> str:
     if lines[-1].strip() != "```":
         return stripped
     return "\n".join(lines[1:-1]).strip()
+
+
+def _heading_lines_outside_fences(text: str) -> list[str]:
+    headings: list[str] = []
+    active_fence: str | None = None
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        fence_char = _fence_char(stripped)
+        if active_fence is not None:
+            if fence_char == active_fence:
+                active_fence = None
+            continue
+        if fence_char is not None:
+            active_fence = fence_char
+            continue
+        if raw_line.startswith("## "):
+            headings.append(raw_line.rstrip())
+    return headings
+
+
+def _fence_char(line: str) -> str | None:
+    if line.startswith("```"):
+        return "`"
+    if line.startswith("~~~"):
+        return "~"
+    return None
