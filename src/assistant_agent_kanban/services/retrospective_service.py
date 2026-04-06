@@ -140,7 +140,7 @@ class RetrospectiveService:
         canonical = self._load_canonical_record(target_repo_root, base_branch, comparison_branch)
         if canonical is not None:
             return canonical.model_copy(update={"created": False, "can_create": self.adapter is not None})
-        legacy = self._load_legacy_task_record(group, base_branch, comparison_branch)
+        legacy = self._load_legacy_task_record(target_repo_root, group, base_branch, comparison_branch)
         if legacy is not None:
             return legacy.model_copy(update={"created": False, "can_create": self.adapter is not None})
         return None
@@ -155,7 +155,7 @@ class RetrospectiveService:
             return None
         return record.model_copy(update={"content": markdown_path.read_text()})
 
-    def _load_legacy_task_record(self, group: list[TaskContext], base_branch: str, comparison_branch: str | None) -> RetrospectiveRecord | None:
+    def _load_legacy_task_record(self, target_repo_root: Path, group: list[TaskContext], base_branch: str, comparison_branch: str | None) -> RetrospectiveRecord | None:
         if comparison_branch:
             return None
         artifact_name = self._legacy_artifact_json_name(base_branch)
@@ -167,15 +167,28 @@ class RetrospectiveService:
             record = RetrospectiveRecord.model_validate_json(path.read_text())
             if not record.exists:
                 continue
-            markdown_name = record.artifact_filename or self._legacy_artifact_markdown_name(base_branch)
-            markdown_path = task.task_dir / markdown_name
-            if not markdown_path.exists():
+            repo_relative_path = (record.repo_relative_path or "").strip()
+            if not repo_relative_path:
+                continue
+            markdown_path = self._resolve_repo_relative_path(target_repo_root, repo_relative_path)
+            if markdown_path is None or not markdown_path.is_file():
                 continue
             candidate_records.append((path.stat().st_mtime, record, markdown_path.read_text()))
         if not candidate_records:
             return None
         _, reference, content = sorted(candidate_records, key=lambda item: item[0])[-1]
         return reference.model_copy(update={"content": content})
+
+    def _resolve_repo_relative_path(self, target_repo_root: Path, repo_relative_path: str) -> Path | None:
+        candidate = Path(repo_relative_path)
+        if candidate.is_absolute():
+            return None
+        resolved = (target_repo_root / candidate).resolve()
+        try:
+            resolved.relative_to(target_repo_root.resolve())
+        except ValueError:
+            return None
+        return resolved
 
     def _generate_retrospective(self, group: list[TaskContext], target_repo_root: Path, comparison_branch: str | None) -> RunResult:
         primary = group[0]

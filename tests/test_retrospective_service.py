@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -149,6 +150,85 @@ def test_retrospective_service_rejects_mismatched_group_artifacts(configured_pat
     assert inspected.exists is True
     assert inspected.created is False
     assert inspected.content == "# Retrospective\n\n## Summary\nDrifted content\n"
+
+
+def test_retrospective_service_ignores_task_local_legacy_retrospective_without_repo_path(configured_paths):
+    config, repo_root, _ = configured_paths
+    done, service = _done_task_for_retrospective(config, "retro-ignore-task-local")
+    legacy_json_path = done.task_dir / f"RETRO-{service._branch_slug('main')}.json"
+    legacy_markdown_path = done.task_dir / f"RETRO-{service._branch_slug('main')}.md"
+    legacy_json_path.write_text(
+        service.inspect(str(repo_root), "main").model_copy(
+            update={
+                "exists": True,
+                "created": False,
+                "can_create": True,
+                "artifact_filename": legacy_markdown_path.name,
+                "repo_relative_path": None,
+                "content": "",
+            }
+        ).model_dump_json(indent=2)
+    )
+    legacy_markdown_path.write_text("# Retrospective\n\n## Summary\nTask local only\n")
+
+    inspected = service.inspect(str(repo_root), "main")
+
+    assert inspected.exists is False
+
+
+def test_retrospective_service_reads_legacy_record_from_target_repo_path(configured_paths):
+    config, repo_root, _ = configured_paths
+    done, service = _done_task_for_retrospective(config, "retro-legacy-repo-path")
+    legacy_json_path = done.task_dir / f"RETRO-{service._branch_slug('main')}.json"
+    legacy_markdown_path = done.task_dir / f"RETRO-{service._branch_slug('main')}.md"
+    repo_relative_path = Path("docs/kanban-agent/retrospectives/legacy/retro-main.md")
+    (repo_root / repo_relative_path).parent.mkdir(parents=True, exist_ok=True)
+    (repo_root / repo_relative_path).write_text("# Retrospective\n\n## Summary\nTarget repo legacy\n")
+    legacy_json_path.write_text(
+        service.inspect(str(repo_root), "main").model_copy(
+            update={
+                "exists": True,
+                "created": False,
+                "can_create": True,
+                "artifact_filename": legacy_markdown_path.name,
+                "repo_relative_path": repo_relative_path.as_posix(),
+                "content": "",
+            }
+        ).model_dump_json(indent=2)
+    )
+    legacy_markdown_path.write_text("# Retrospective\n\n## Summary\nTask local shadow\n")
+
+    inspected = service.inspect(str(repo_root), "main")
+
+    assert inspected.exists is True
+    assert inspected.content == "# Retrospective\n\n## Summary\nTarget repo legacy\n"
+
+
+@pytest.mark.parametrize("repo_relative_path", ["../escape.md", "/tmp/escape.md", "docs/kanban-agent/retrospectives"])
+def test_retrospective_service_ignores_unsafe_legacy_repo_paths(configured_paths, repo_relative_path):
+    config, repo_root, _ = configured_paths
+    done, service = _done_task_for_retrospective(config, f"retro-unsafe-{abs(hash(repo_relative_path))}")
+    legacy_json_path = done.task_dir / f"RETRO-{service._branch_slug('main')}.json"
+    legacy_markdown_path = done.task_dir / f"RETRO-{service._branch_slug('main')}.md"
+    if repo_relative_path == "docs/kanban-agent/retrospectives":
+        (repo_root / repo_relative_path).mkdir(parents=True, exist_ok=True)
+    legacy_json_path.write_text(
+        service.inspect(str(repo_root), "main").model_copy(
+            update={
+                "exists": True,
+                "created": False,
+                "can_create": True,
+                "artifact_filename": legacy_markdown_path.name,
+                "repo_relative_path": repo_relative_path,
+                "content": "",
+            }
+        ).model_dump_json(indent=2)
+    )
+    legacy_markdown_path.write_text("# Retrospective\n\n## Summary\nUnsafe task local\n")
+
+    inspected = service.inspect(str(repo_root), "main")
+
+    assert inspected.exists is False
 
 
 def test_retrospective_service_builds_korean_prompt_when_request_language_is_korean(configured_paths):
