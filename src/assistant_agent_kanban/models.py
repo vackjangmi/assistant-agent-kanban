@@ -36,6 +36,7 @@ class PlanInfo(BaseModel):
     revision: int = 0
     approved: bool = False
     path: str | None = None
+    restart_message_path: str | None = None
     resolved_model: str | None = None
     session_id: str | None = None
     last_run_tokens: int = 0

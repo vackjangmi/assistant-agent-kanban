@@ -46,6 +46,7 @@ from ..retry_policy import clear_retry_gate
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
 ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|REVIEWER-QA|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
+PLANNER_RESTART_ARTIFACT = "PLANNER-RESTART.md"
 AI_ACTIVE_STATES = {
     TaskState.PLANNING,
     TaskState.PLAN_APPROVING,
@@ -257,6 +258,27 @@ class TaskService:
             self.scanner.metadata_store.save(task.task_dir, task.metadata)
             return self.scanner.find_task(task.metadata.task_id)
 
+    def resume_planner(self, task_id: str, *, by: str = "human", message: str | None = None):
+        task = self._find_task(task_id)
+        if task.state != TaskState.REQUESTS:
+            raise TransitionError("planner resume is only allowed in requests")
+        retry_reason = task.metadata.retry_gate.reason or ""
+        if not retry_reason.startswith("planner-"):
+            raise TransitionError("planner resume is only allowed when a planner retry gate is present")
+        if self.locks is None:
+            raise TransitionError("planner resume requires lock manager")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-planner-resume"):
+            if not (message or "").strip():
+                task.metadata.plan.restart_message_path = None
+            self._append_planner_restart_message(task, message=message, by=by)
+            clear_retry_gate(task.metadata)
+            task.metadata.plan.resolved_model = None
+            task.metadata.plan.session_id = None
+            task.metadata.plan.session_tokens = 0
+            task.metadata.plan.last_run_tokens = 0
+            self.scanner.metadata_store.save(task.task_dir, task.metadata)
+            return self.scanner.find_task(task.metadata.task_id)
+
     def resume_reviewer(
         self,
         task_id: str,
@@ -368,6 +390,29 @@ class TaskService:
             ]
         )
         qa_path.write_text("\n".join(sections).rstrip() + "\n")
+        return task
+
+    def _append_planner_restart_message(self, task, *, message: str | None, by: str) -> TaskContext:
+        normalized_message = (message or "").strip()
+        if not normalized_message:
+            return task
+        task.metadata.plan.restart_message_path = PLANNER_RESTART_ARTIFACT
+        restart_path = task.task_dir / PLANNER_RESTART_ARTIFACT
+        now = datetime.now(timezone.utc).isoformat()
+        sections = [
+            "# Planner Restart Notes",
+            "",
+            "Saved manual context for the next planner rerun.",
+            "",
+            "## Note 1",
+            f"- Added by: {by}",
+            f"- Added at: {now}",
+            "- Source: manual planner restart",
+            "",
+            normalized_message,
+            "",
+        ]
+        restart_path.write_text("\n".join(sections).rstrip() + "\n")
         return task
 
     def _ensure_reviewer_qa_path(self, metadata: TaskMetadata) -> str:
@@ -553,19 +598,21 @@ class TaskService:
     def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
         if filename == "REQUEST.md":
             return (0, 0, 0, filename)
-        if filename == "PLAN.md":
+        if filename == PLANNER_RESTART_ARTIFACT:
             return (1, 0, 0, filename)
+        if filename == "PLAN.md":
+            return (2, 0, 0, filename)
         match = ARTIFACT_CYCLE_RE.match(filename)
         if match:
             kind = match.group(1)
             cycle = int(match.group("cycle"))
             kind_order = {"WORK": 0, "REVIEW": 1, "REVIEWER-QA": 2, "HUMAN-VERIFY": 3}[kind]
-            return (2, cycle, kind_order, filename)
+            return (3, cycle, kind_order, filename)
         if filename == "COMMIT.md":
-            return (4, 0, 0, filename)
-        if filename.startswith("RETRO-") and filename.endswith(".md"):
             return (5, 0, 0, filename)
-        return (3, 0, 0, filename)
+        if filename.startswith("RETRO-") and filename.endswith(".md"):
+            return (6, 0, 0, filename)
+        return (4, 0, 0, filename)
 
     def _load_changed_files(self, task_id: str, *, require_available: bool) -> list[ChangedFileDetail]:
         task = self._find_task(task_id)

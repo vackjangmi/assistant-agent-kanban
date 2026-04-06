@@ -165,6 +165,10 @@ class ResumeReviewLoopPayload(BaseModel):
     message: str | None = None
 
 
+class ResumePlannerPayload(BaseModel):
+    message: str | None = None
+
+
 def _normalize_model_override(value: str | None) -> str | None:
     if value is None:
         return None
@@ -664,6 +668,20 @@ def build_router() -> APIRouter:
         runtime = request.app.state.runtime
         try:
             moved = runtime.task_service.resume_review_loop(
+                task_id,
+                by="human",
+                message=(payload.message if payload else None),
+            )
+        except (TransitionError, TaskNotFoundError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
+    @router.post("/api/tasks/{task_id}/resume-planner")
+    async def resume_planner(task_id: str, request: Request, payload: ResumePlannerPayload | None = None):
+        runtime = request.app.state.runtime
+        try:
+            moved = runtime.task_service.resume_planner(
                 task_id,
                 by="human",
                 message=(payload.message if payload else None),
