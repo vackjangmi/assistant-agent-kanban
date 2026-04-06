@@ -17,6 +17,39 @@ from assistant_agent_kanban.workers.plan_approval import PlanApprovalWorker
 from .conftest import FakeAdapter, create_request_task
 
 
+def valid_plan_markdown(summary: str = "Historical summary.") -> str:
+    return "\n".join(
+        [
+            "## Summary",
+            summary,
+            "",
+            "## Scope",
+            "- Keep this.",
+            "",
+            "## Out of Scope",
+            "- Keep other work out.",
+            "",
+            "## File Map",
+            "- `src/example.py`: Example entry point.",
+            "",
+            "## Step-by-step Plan",
+            "1. Update the approved flow.",
+            "",
+            "## Validation Plan",
+            "- Run focused tests.",
+            "",
+            "## Acceptance Criteria",
+            "- The request stays satisfied.",
+            "",
+            "## Risks",
+            "- Low risk.",
+            "",
+            "## Open Questions",
+            "- None.",
+        ]
+    )
+
+
 def test_plan_approval_worker_auto_approves_low_risk_plan(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "plan-approval-auto")
@@ -26,7 +59,7 @@ def test_plan_approval_worker_auto_approves_low_risk_plan(configured_paths):
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("small plan"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
@@ -59,7 +92,7 @@ def test_plan_approval_worker_auto_approves_when_request_opted_in(configured_pat
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("small plan"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
@@ -85,7 +118,7 @@ def test_plan_approval_worker_auto_approves_recovered_waiting_check_plans_reques
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall recovered plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("small recovered plan"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="recovery")
@@ -111,7 +144,7 @@ def test_plan_approval_worker_run_once_picks_recovered_waiting_check_plans_reque
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall recovered plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("small recovered plan"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="recovery")
@@ -136,7 +169,7 @@ def test_plan_approval_worker_retries_invalid_output_once_before_approval(config
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nunclear plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("unclear plan"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
@@ -174,7 +207,7 @@ def test_plan_approval_worker_escalates_after_retry_cap_is_exhausted(configured_
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nunclear plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("unclear plan"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
@@ -199,7 +232,7 @@ def test_plan_approval_worker_does_not_retry_substantive_review_required(configu
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\napi touching plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("api touching plan"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
@@ -224,7 +257,7 @@ def test_plan_approval_worker_auto_progresses_recommended_review_after_deadline(
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nmedium scope plan\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("medium scope plan"))
     planning.metadata.plan.revision = 2
     metadata_store.save(planning.task_dir, planning.metadata)
     waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
@@ -251,7 +284,7 @@ def test_plan_edit_resets_plan_approval_retry_tracking(configured_paths):
     transitions = TransitionManager(config, metadata_store, scanner, locks)
     task = scanner.scan()[0]
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
-    (planning.task_dir / "PLAN.md").write_text("## Summary\nfirst draft\n")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown("first draft"))
     planning.metadata.plan.revision = 1
     metadata_store.save(planning.task_dir, planning.metadata)
     waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
@@ -263,14 +296,98 @@ def test_plan_edit_resets_plan_approval_retry_tracking(configured_paths):
     metadata_store.save(waiting.task_dir, waiting.metadata)
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
 
-    task_service.update_markdown_artifact(waiting.metadata.task_id, "PLAN.md", "## Summary\nupdated by human\n")
+    task_service.update_markdown_artifact(waiting.metadata.task_id, "PLAN.md", valid_plan_markdown("updated by human"))
+
+
+def test_plan_approval_worker_blocks_malformed_auto_approve_to_todos(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-invalid-auto")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    adapter = FakeAdapter(
+        [json.dumps({"disposition": "auto_approve", "confidence": "high", "risk_signals": [], "rationale": "Small file-scoped change."})]
+    )
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.WAITING_CHECK_PLANS
+    assert updated.metadata.plan.approved is False
+    assert updated.metadata.plan_approval.disposition == "review_required"
+    assert updated.metadata.plan_approval.risk_signals == ["plan_artifact_invalid"]
+    assert updated.metadata.plan_approval.escalation_reason == "plan_artifact_invalid"
+    assert updated.metadata.errors[-1].code == "plan-approval-invalid-plan"
+
+
+def test_plan_approval_worker_blocks_request_auto_approve_for_malformed_plan(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "request-auto-approve-invalid", plan_auto_approve=True)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nsmall plan\n")
+    planning.metadata.plan.revision = 1
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter())
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.WAITING_CHECK_PLANS
+    assert updated.metadata.plan.approved is False
+    assert updated.metadata.plan_approval.disposition == "review_required"
+    assert updated.metadata.plan_approval.risk_signals == ["plan_artifact_invalid"]
+    assert updated.metadata.errors[-1].code == "plan-approval-invalid-plan"
+
+
+def test_plan_approval_worker_blocks_recommended_auto_progress_for_malformed_plan(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "plan-approval-recommended-invalid")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("## Summary\nmedium scope plan\n")
+    planning.metadata.plan.revision = 2
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    waiting.metadata.plan_approval.disposition = "review_recommended"
+    waiting.metadata.plan_approval.source_plan_revision = 2
+    waiting.metadata.plan_approval.auto_progress_at = utc_now() - timedelta(minutes=1)
+    metadata_store.save(waiting.task_dir, waiting.metadata)
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=FakeAdapter())
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(waiting.metadata.task_id)
+    assert updated.state == TaskState.WAITING_CHECK_PLANS
+    assert updated.metadata.plan.approved is False
+    assert updated.metadata.plan_approval.disposition == "review_required"
+    assert updated.metadata.plan_approval.auto_progress_at is None
+    assert updated.metadata.plan_approval.risk_signals == ["plan_artifact_invalid"]
+    assert updated.metadata.errors[-1].code == "plan-approval-invalid-plan"
 
     updated = scanner.find_task(waiting.metadata.task_id)
     assert updated.metadata.plan.revision == 2
     assert updated.metadata.plan_approval.attempt_count == 0
     assert updated.metadata.plan_approval.last_attempt_plan_revision == 0
     assert updated.metadata.plan_approval.last_retry_reason is None
-    assert updated.metadata.plan_approval.escalation_reason is None
+    assert updated.metadata.plan_approval.escalation_reason == "plan_artifact_invalid"
     assert updated.metadata.plan_approval.attempts == []
 
 
@@ -284,7 +401,7 @@ def test_plan_approval_prompt_includes_historical_examples_for_strong_positives(
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root, transitions=transitions, locks=locks)
     historical = scanner.scan()[0]
     planning = transitions.move(historical, TaskState.PLANNING, by="planner")
-    plan_text = "# Plan\n\n## Summary\nHistorical summary.\n\n## Scope\n- Keep this.\n"
+    plan_text = valid_plan_markdown()
     (planning.task_dir / "PLAN.md").write_text(plan_text)
     (planning.task_dir / "PLAN.json").write_text(json.dumps({"assistant_text": plan_text}) + "\n")
     planning.metadata.plan_approval.disposition = "review_recommended"

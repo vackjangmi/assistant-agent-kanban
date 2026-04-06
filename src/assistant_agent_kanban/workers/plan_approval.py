@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field, ValidationError
 
 from ..assistant_adapter import AssistantAdapter
 from ..enums import TaskState
+from ..exceptions import TransitionError
 from ..models import RunResult, TaskContext, reset_plan_approval_tracking, utc_now
+from ..plan_artifacts import validate_plan_markdown
 from ..retry_policy import can_auto_dispatch, clear_retry_gate
 from ..services.plan_approval_learning import PlanApprovalLearningService
 from .base import WorkerBase
@@ -114,6 +116,10 @@ class PlanApprovalWorker(WorkerBase):
                     continue
                 self.metadata_store.save(task.task_dir, task.metadata)
                 if decision.disposition == "auto_approve":
+                    invalid_done = self._block_invalid_plan_auto_approval(task)
+                    if invalid_done is not None:
+                        done = invalid_done
+                        break
                     clear_retry_gate(task.metadata)
                     done = self.transitions.move(task, TaskState.TODOS, by=self.worker_name, note="plan auto-approved")
                 elif decision.disposition == "review_recommended":
@@ -144,6 +150,11 @@ class PlanApprovalWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             if not self._should_process(task, now=utc_now()):
                 return False
+            invalid_done = self._block_invalid_plan_auto_approval(task)
+            if invalid_done is not None:
+                done = invalid_done
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
             clear_retry_gate(task.metadata)
             task.metadata.plan.approved = True
             task.metadata.plan_approval.auto_progress_at = None
@@ -195,6 +206,11 @@ class PlanApprovalWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             if not self._should_auto_approve_by_request(task):
                 return False
+            invalid_done = self._block_invalid_plan_auto_approval(task)
+            if invalid_done is not None:
+                done = invalid_done
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
             decision = PlanApprovalDecision(
                 disposition="auto_approve",
                 confidence="high",
@@ -221,6 +237,38 @@ class PlanApprovalWorker(WorkerBase):
             done = self.transitions.move(task, TaskState.TODOS, by=self.worker_name, note="plan auto-approved by request")
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
+
+    def _block_invalid_plan_auto_approval(self, task: TaskContext) -> TaskContext | None:
+        validation = validate_plan_markdown(
+            (task.task_dir / "PLAN.md").read_text(),
+            request_language=task.metadata.request.language,
+        )
+        if validation.missing_heading is None:
+            return None
+        message = f"PLAN.md missing required section: {validation.missing_heading}"
+        self.metadata_store.add_error(
+            task.task_dir,
+            task.metadata,
+            code="plan-approval-invalid-plan",
+            message=message,
+        )
+        task.metadata.plan.approved = False
+        task.metadata.plan_approval.disposition = "review_required"
+        task.metadata.plan_approval.confidence = "low"
+        task.metadata.plan_approval.risk_signals = ["plan_artifact_invalid"]
+        task.metadata.plan_approval.rationale = message
+        task.metadata.plan_approval.source_plan_revision = task.metadata.plan.revision
+        task.metadata.plan_approval.auto_progress_at = None
+        task.metadata.plan_approval.resolved_by = self.worker_name
+        task.metadata.plan_approval.resolved_at = utc_now()
+        task.metadata.plan_approval.last_retry_reason = None
+        task.metadata.plan_approval.escalation_reason = "plan_artifact_invalid"
+        self.metadata_store.save(task.task_dir, task.metadata)
+        if task.state == TaskState.PLAN_APPROVING:
+            return self.transitions.move(task, TaskState.WAITING_CHECK_PLANS, by=self.worker_name, note="plan artifact invalid for approval")
+        if task.state != TaskState.WAITING_CHECK_PLANS:
+            raise TransitionError(f"invalid plan approval state: {task.state.value}")
+        return self.scanner.find_task(task.metadata.task_id)
 
     def _parse_decision(self, result: RunResult) -> PlanApprovalDecision:
         fallback_message = result.stderr.strip() or result.assistant_text.strip() or "plan approval failed"
