@@ -1564,6 +1564,81 @@ def test_api_deletes_line_comment_for_changed_file(configured_paths):
         assert refreshed_detail.json()["human_review"]["unresolved_comment_count"] == 0
 
 
+def test_api_updates_changed_file_viewed_state(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-review-viewed-file-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "human-review-viewed-file-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
+        assert detail.status_code == 200
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+        assert changed_files[0]["viewed"] is False
+        changed_file_id = changed_files[0]["id"]
+
+        mark_viewed = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_file_id}/viewed",
+            json={"viewed": True},
+        )
+        assert mark_viewed.status_code == 200
+        assert mark_viewed.json()["viewed"] is True
+
+        refreshed_detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
+        assert refreshed_detail.status_code == 200
+        assert refreshed_detail.json()["changed_files"][0]["viewed"] is True
+        assert refreshed_detail.json()["changed_files"][0]["id"] == changed_file_id
+
+        diff = client.get(f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_file_id}")
+        assert diff.status_code == 200
+        assert diff.json()["summary"]["viewed"] is True
+        assert diff.json()["summary"]["id"] == changed_file_id
+
+        clear_viewed = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_file_id}/viewed",
+            json={"viewed": False},
+        )
+        assert clear_viewed.status_code == 200
+        assert clear_viewed.json()["viewed"] is False
+
+        cleared_detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
+        assert cleared_detail.status_code == 200
+        assert cleared_detail.json()["changed_files"][0]["viewed"] is False
+        assert cleared_detail.json()["changed_files"][0]["id"] == changed_file_id
+
+
+def test_api_blocks_changed_file_viewed_updates_after_done(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "done-viewed-file-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "done-viewed-file-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+        assert approve.status_code == 200
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
+        assert detail.status_code == 200
+        changed_files = detail.json()["changed_files"]
+        assert len(changed_files) == 1
+        assert changed_files[0]["viewed"] is False
+
+        response = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/changed-files/{changed_files[0]['id']}/viewed",
+            json={"viewed": True},
+        )
+        assert response.status_code == 409
+        assert "only available during human verification" in response.json()["detail"]
+
+
 def test_api_blocks_approval_when_line_comments_remain(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False

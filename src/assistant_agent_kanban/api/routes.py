@@ -91,6 +91,10 @@ class CreateLineCommentPayload(BaseModel):
     body: str = ""
 
 
+class UpdateChangedFileViewedPayload(BaseModel):
+    viewed: bool = False
+
+
 class ModelSettingsPayload(BaseModel):
     class RoleBackendsPayload(BaseModel):
         planner: str | None = None
@@ -491,6 +495,23 @@ def build_router() -> APIRouter:
         except (TaskNotFoundError, TransitionError) as exc:
             status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+    @router.post("/api/tasks/{task_id}/changed-files/{changed_file_id}/viewed")
+    async def update_changed_file_viewed(task_id: str, changed_file_id: str, payload: UpdateChangedFileViewedPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            summary = await asyncio.to_thread(
+                runtime.task_service.set_changed_file_viewed,
+                task_id,
+                changed_file_id,
+                by="human",
+                viewed=payload.viewed,
+            )
+        except (TaskNotFoundError, TransitionError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return summary
 
     @router.post("/api/tasks/{task_id}/changed-files/{changed_file_id}/comments")
     async def create_line_comment(task_id: str, changed_file_id: str, payload: CreateLineCommentPayload, request: Request):
