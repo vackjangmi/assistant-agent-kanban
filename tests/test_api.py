@@ -318,6 +318,148 @@ def test_api_creates_request_with_plan_auto_approve_flag(configured_paths):
     assert "plan_auto_approve: true" in (task.task_dir / "REQUEST.md").read_text()
 
 
+def test_api_drafts_request_without_creating_task_dirs(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.runtime.coding_assistant = "codex"
+    draft_adapter = FakeAdapter(
+        [
+            json.dumps(
+                {
+                    "reply": "I tightened the request and added a more testable acceptance list.",
+                    "field_updates": {
+                        "goal": "Implement an AI-assisted drafting flow in the existing request composer without creating tasks before final submit.",
+                        "acceptance_criteria": [
+                            "Users can chat with the drafting assistant in the composer.",
+                            "Suggested field updates are optional and applied per field.",
+                        ],
+                    },
+                }
+            )
+        ],
+        resolved_models=["gpt-5.4"],
+        session_ids=["ses_request_draft"],
+        total_tokens=[31],
+    )
+    app = create_app(
+        config,
+        draft_adapter,
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": draft_adapter},
+    )
+
+    with TestClient(app) as client:
+        before = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
+        response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Composer drafting flow",
+                "goal": "Add a draft assistant.",
+                "background": "Keep the final create flow authoritative.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "transcript": [
+                    {"role": "user", "content": "Help me make this request more precise."},
+                ],
+                "message": "Please tighten the goal and acceptance criteria.",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["reply"] == "I tightened the request and added a more testable acceptance list."
+        assert payload["field_updates"]["goal"].startswith("Implement an AI-assisted drafting flow")
+        assert payload["field_updates"]["acceptance_criteria"] == (
+            "Users can chat with the drafting assistant in the composer.\n"
+            "Suggested field updates are optional and applied per field."
+        )
+        assert payload["backend"] == "codex"
+        assert payload["session_id"] == "ses_request_draft"
+        after = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
+        assert after == before
+
+    assert draft_adapter.run_calls[0]["agent"] == "fs-kanban-request-draft"
+    assert draft_adapter.run_calls[0]["cwd"] == config.repo_root.resolve()
+    assert "Please tighten the goal and acceptance criteria." in str(draft_adapter.run_calls[0]["prompt"])
+
+
+def test_api_rejects_request_draft_for_overlapping_target_repo(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Unsafe draft target",
+                "goal": "Keep drafting safe.",
+                "target_repo": str(PROJECT_ROOT),
+                "base_branch": "main",
+                "message": "Please refine this.",
+            },
+        )
+
+    assert response.status_code == 400
+    assert "target repo" in response.json()["detail"].lower()
+
+
+def test_api_request_creation_flow_stays_authoritative_after_draft_assistance(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    draft_adapter = FakeAdapter(
+        [
+            json.dumps(
+                {
+                    "reply": "Here is a stronger version of the goal.",
+                    "field_updates": {
+                        "goal": "Suggested drafted goal that should only matter if the user applies it.",
+                    },
+                }
+            )
+        ]
+    )
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"opencode": draft_adapter},
+    )
+
+    with TestClient(app) as client:
+        draft_response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Keep create flow authoritative",
+                "goal": "Original goal text.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "message": "Improve the goal.",
+            },
+        )
+        assert draft_response.status_code == 200
+        assert not any(config.state_dir(TaskState.REQUESTS).iterdir())
+
+        create_response = client.post(
+            "/api/requests",
+            json={
+                "title": "Keep create flow authoritative",
+                "goal": "Original goal text.",
+                "background": "The draft assistant should not create tasks.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "plan_auto_approve": True,
+            },
+        )
+        assert create_response.status_code == 200
+
+    tasks = KanbanScanner(config).scan()
+    assert len(tasks) == 1
+    request_markdown = (tasks[0].task_dir / "REQUEST.md").read_text()
+    assert "Original goal text." in request_markdown
+    assert "Suggested drafted goal that should only matter if the user applies it." not in request_markdown
+
+
 def test_api_resumes_human_blocked_review_loop(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "resume-review-loop-task")

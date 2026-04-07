@@ -31,6 +31,7 @@ from ..request_creator import (
     save_request_upload,
     split_lines,
 )
+from ..request_drafting import RequestDraftPayload as RequestDraftRoutePayload, draft_request
 
 
 class CompletedGroupOverridePayload(BaseModel):
@@ -50,8 +51,6 @@ class CreateRequestPayload(BaseModel):
     acceptance_criteria: str | None = None
     target_repo: str
     base_branch: str | None = None
-
-
 class UpdateMarkdownPayload(BaseModel):
     content: str
 
@@ -673,6 +672,20 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return {"task_path": str(task_dir), "created": True}
+
+    @router.post("/api/request-drafts")
+    async def draft_request_response(payload: RequestDraftRoutePayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            result = await asyncio.to_thread(
+                draft_request,
+                config=runtime.config,
+                adapter_registry=runtime.adapter_registry,
+                payload=payload,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return result.model_dump(mode="json")
 
     @router.post("/api/tasks/{task_id}/approve-plan")
     async def approve_plan(task_id: str, request: Request):
