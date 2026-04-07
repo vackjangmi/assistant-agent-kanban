@@ -7168,6 +7168,14 @@
       return payload;
     }
 
+    function nextUnviewedChangedFileId(currentFileId) {
+      const files = activeTaskDetail?.changed_files || [];
+      const currentIndex = files.findIndex((file) => file.id === currentFileId);
+      if (currentIndex === -1) return null;
+      const nextFile = files.slice(currentIndex + 1).find((file) => !file.viewed);
+      return nextFile?.id || null;
+    }
+
     async function submitInlineComment() {
       if (!activeTaskId || !activeChangedFileId || !activeInlineCommentAnchor) return;
       const restoreAnchor = activeInlineCommentAnchor;
@@ -7782,8 +7790,17 @@
     async function handleChangedFileViewedToggleChange(event) {
       const toggle = event.target.closest('[data-viewed-changed-file-id]');
       if (!toggle || !activeTaskId) return;
+      const changedFileId = toggle.dataset.viewedChangedFileId;
+      const viewed = Boolean(toggle.checked);
+      if (!changedFileId) return;
       try {
-        await setChangedFileViewed(activeTaskId, toggle.dataset.viewedChangedFileId, Boolean(toggle.checked));
+        await setChangedFileViewed(activeTaskId, changedFileId, viewed);
+        if (viewed) {
+          const nextFileId = nextUnviewedChangedFileId(changedFileId);
+          if (nextFileId && nextFileId !== activeChangedFileId) {
+            loadChangedFile(activeTaskId, nextFileId);
+          }
+        }
       } catch (_error) {
         toggle.checked = !toggle.checked;
       }
