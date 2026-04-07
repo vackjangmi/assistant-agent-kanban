@@ -937,8 +937,8 @@
     @keyframes activity-pulse { 0% { box-shadow: 0 0 0 0 rgba(33,115,73,0.24); } 70% { box-shadow: 0 0 0 8px rgba(33,115,73,0); } 100% { box-shadow: 0 0 0 0 rgba(33,115,73,0); } }
     .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(24,32,38,0.36); backdrop-filter: blur(4px); }
     .modal[hidden] { display: none; }
-    .modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: var(--panel-strong); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
-    .task-modal-panel { width: min(1380px, 100%); height: min(86vh, calc(100vh - 64px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
+    .modal-panel { width: calc(100vw - 48px); max-width: 100%; max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; background: var(--panel-strong); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 22px; }
+    .task-modal-panel { width: calc(100vw - 48px); max-width: 100%; height: min(86vh, calc(100vh - 64px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .retrospective-modal-panel { width: min(860px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; }
     .modal-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }
     .retrospective-modal-panel .modal-head { margin-bottom: 6px; }
@@ -1101,21 +1101,39 @@
      .log-toolbar { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
      .log-toggle-group { display: inline-flex; gap: 8px; flex-wrap: wrap; }
      .log-viewer { min-height: 0; height: 100%; max-height: none; margin: 0; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1.55; }
-    .diff-layout { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: 0; height: 100%; }
+    .diff-layout { --task-changed-files-width: 260px; display: grid; grid-template-columns: minmax(0, var(--task-changed-files-width)) 14px minmax(0, 1fr); gap: 0; align-items: stretch; min-height: 0; height: 100%; }
     .diff-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding-right: 4px; }
-    .diff-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: stretch; }
-    .diff-file-list button { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }
+    .diff-layout-splitter { position: relative; min-width: 14px; cursor: col-resize; touch-action: none; user-select: none; }
+    .diff-layout-splitter::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); background: var(--border); transition: background 140ms ease, box-shadow 140ms ease; }
+    .diff-layout-splitter::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 44px; transform: translate(-50%, -50%); border-radius: 999px; background: rgba(124,79,44,0.14); box-shadow: 0 0 0 1px rgba(124,79,44,0.12); transition: background 140ms ease, box-shadow 140ms ease; }
+    .diff-layout-splitter:hover::before, .diff-layout-splitter:focus-visible::before, .diff-layout.is-resizing .diff-layout-splitter::before { background: var(--accent); box-shadow: 0 0 0 1px rgba(124,79,44,0.12); }
+    .diff-layout-splitter:hover::after, .diff-layout-splitter:focus-visible::after, .diff-layout.is-resizing .diff-layout-splitter::after { background: rgba(124,79,44,0.28); box-shadow: 0 0 0 1px rgba(124,79,44,0.18); }
+    .diff-layout-splitter:focus-visible { outline: none; }
+    .diff-layout.is-resizing, .diff-layout.is-resizing * { cursor: col-resize; user-select: none; }
+    .diff-file-row { min-width: 0; }
+    .diff-file-list button { width: 100%; text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.84); }
     .diff-file-list button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
-    .diff-file-viewed-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.78); color: var(--muted); font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
+    .diff-file-list button.is-viewed { border-color: rgba(33,115,73,0.18); background: rgba(244,250,246,0.88); }
+    .diff-file-list button.active.is-viewed { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
+    .diff-file-list button.is-viewed .diff-file-title::after { content: ' •'; color: var(--success); }
+    .diff-file-list .diff-badge-viewed { border-color: rgba(33,115,73,0.22); background: rgba(244,250,246,0.92); color: var(--success); font-weight: 700; }
+    .diff-file-list button.active .diff-badge-viewed { border-color: rgba(255,255,255,0.58); background: rgba(255,255,255,0.18); color: #fff; }
+    .diff-file-viewed-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.78); color: var(--muted); font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
     .diff-file-viewed-toggle input { margin: 0; }
     .diff-file-viewed-toggle.is-viewed { border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.88); color: var(--success); }
     .diff-file-viewed-toggle:hover, .diff-file-viewed-toggle:focus-within { border-color: rgba(124,79,44,0.24); color: var(--accent-strong); }
-    .diff-file-title { display: block; font-weight: 700; overflow-wrap: anywhere; }
+    .diff-file-heading { display: grid; gap: 3px; min-width: 0; }
+    .diff-file-title { display: block; font-weight: 700; font-size: 0.96rem; line-height: 1.35; overflow-wrap: anywhere; }
+    .diff-file-path { display: block; font-size: 0.78rem; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
+    .diff-file-list button.active .diff-file-path { color: inherit; opacity: 0.8; }
     .diff-file-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.82rem; color: inherit; opacity: 0.82; }
     .diff-stage { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; align-content: start; }
      .diff-summary { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }
-      .diff-summary-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
-      .diff-summary strong { display: block; min-width: 0; overflow-wrap: anywhere; }
+      .diff-summary-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; min-width: 0; flex: 1 1 auto; }
+      .diff-summary-copy { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
+      .diff-summary strong { display: block; min-width: 0; font-size: 1rem; line-height: 1.35; overflow-wrap: anywhere; }
+      .diff-summary-path { display: block; min-width: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.4; overflow-wrap: anywhere; }
+      .diff-summary-side { display: grid; justify-items: end; gap: 8px; min-width: 0; margin-left: auto; }
       .diff-badges { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; align-items: center; min-width: 0; margin-left: auto; }
       .diff-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); font-size: 0.85rem; }
     .diff-shell { border: 1px solid var(--border); background: rgba(248,246,240,0.95); overflow: auto; min-height: 0; height: 100%; }
@@ -1127,18 +1145,26 @@
     .request-goal-editor-shell .editor-textarea { min-height: 320px; height: 320px; }
     .request-goal-editor-shell .editor-textarea { resize: vertical; }
     .human-review-footer { display: grid; gap: 8px; }
-    .reviewer-qa-log { min-height: 0; height: 100%; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; display: grid; align-content: start; gap: 10px; }
-    .reviewer-qa-empty { margin: 0; color: var(--muted); }
-    .reviewer-qa-entry { display: grid; gap: 6px; justify-items: start; }
-    .reviewer-qa-entry[data-role="question"] { justify-items: end; }
-    .reviewer-qa-role { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-    .reviewer-qa-bubble { max-width: min(100%, 720px); padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; line-height: 1.5; }
-    .reviewer-qa-entry[data-role="question"] .reviewer-qa-bubble { background: var(--accent-soft); border-color: rgba(124,79,44,0.2); }
-    .reviewer-qa-entry[data-role="answer"] .reviewer-qa-bubble { background: rgba(255,255,255,0.94); }
+    .reviewer-qa-log, .request-draft-log { min-height: 0; height: 100%; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; display: grid; align-content: start; gap: 10px; }
+    .reviewer-qa-empty, .request-draft-empty { margin: 0; color: var(--muted); }
+    .reviewer-qa-entry, .request-draft-entry { display: grid; gap: 6px; justify-items: start; }
+    .reviewer-qa-entry[data-role="question"], .request-draft-entry[data-role="user"] { justify-items: end; }
+    .reviewer-qa-role, .request-draft-role { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+    .reviewer-qa-bubble, .request-draft-bubble { max-width: min(100%, 720px); padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; line-height: 1.5; }
+    .reviewer-qa-entry[data-role="question"] .reviewer-qa-bubble, .request-draft-entry[data-role="user"] .request-draft-bubble { background: var(--accent-soft); border-color: rgba(124,79,44,0.2); }
+    .reviewer-qa-entry[data-role="answer"] .reviewer-qa-bubble, .request-draft-entry[data-role="assistant"] .request-draft-bubble { background: rgba(255,255,255,0.94); }
     .reviewer-qa-entry[data-role="transcript"] .reviewer-qa-bubble { max-width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.94rem; }
-    .reviewer-qa-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
-    #task-reviewer-qa-input.reviewer-qa-input { min-height: 120px; max-height: 120px; height: 120px; resize: none; }
-    .reviewer-qa-send { min-height: 120px; height: 120px; align-self: end; }
+    .reviewer-qa-composer, .request-draft-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+    #task-reviewer-qa-input.reviewer-qa-input, #request-draft-input.request-draft-input { min-height: 120px; max-height: 120px; height: 120px; resize: none; }
+    .reviewer-qa-send, .request-draft-send { min-height: 120px; height: 120px; align-self: end; }
+    .request-draft-suggestions { display: grid; gap: 8px; width: min(100%, 720px); }
+    .request-draft-suggestions-title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }
+    .request-draft-suggestion-list { display: grid; gap: 8px; }
+    .request-draft-suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); }
+    .request-draft-suggestion-copy { display: grid; gap: 4px; min-width: 0; }
+    .request-draft-suggestion-copy strong { color: var(--accent-strong); font-size: 0.85rem; }
+    .request-draft-suggestion-copy span { color: var(--muted); font-size: 0.85rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+    .request-draft-suggestion button { min-height: 40px; }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -1268,7 +1294,8 @@
     .human-review-editor-shell .toastui-editor-md-container,
     .human-review-editor-shell .toastui-editor-ww-container { height: 100%; }
     .viewer-host .toastui-editor-contents { overflow-wrap: anywhere; word-break: break-word; }
-      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .stage-timing-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .stage-timing-total { justify-items: start; min-width: 0; } .stage-timing-breakdown { justify-content: flex-start; gap: 6px 10px; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .reviewer-qa-composer { grid-template-columns: 1fr; } .reviewer-qa-send { width: 100%; min-height: 44px; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
+    @media (max-width: 900px) { .diff-layout-splitter { display: none; } }
+      @media (max-width: 900px) { #board, .composer-grid, .task-meta-grid, .log-layout, .artifact-layout, .settings-grid, .settings-grid-basic, .task-model-row, .diff-layout, .implementation-board-row, .approval-choice-grid { grid-template-columns: 1fr; } .stage-timing-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .stage-timing-total { justify-items: start; min-width: 0; } .stage-timing-breakdown { justify-content: flex-start; gap: 6px 10px; } .modal { padding: 12px; align-items: stretch; } .modal-panel { max-height: none; } .form-actions { flex-direction: column-reverse; } .form-actions button { width: 100%; } .diff-desktop { display: none; } .diff-mobile { display: block; } .human-review-actions { flex-direction: column-reverse; align-items: stretch; } .human-review-actions button { width: 100%; } .diff-line-comment-button { opacity: 1; transform: translateY(0); width: auto; min-width: 32px; padding: 0 10px; border-radius: 999px; font-size: 0.82rem; } .diff-mobile-line-head { grid-template-columns: auto 58px auto 18px minmax(0, 1fr); } .diff-inline-comment-actions { flex-direction: column-reverse; } .diff-inline-comment-actions button { width: 100%; } .diff-inline-comment-fallback { min-height: 76px; max-height: 144px; } .diff-thread-comment-meta-actions { width: 100%; justify-content: space-between; margin-left: 0; } .diff-thread-comment-delete { width: auto; } .reviewer-qa-composer, .request-draft-composer { grid-template-columns: 1fr; } .reviewer-qa-send, .request-draft-send { width: 100%; min-height: 44px; } .request-draft-suggestion { grid-template-columns: 1fr; } .request-draft-suggestion button { width: 100%; } .card { padding: 10px 11px; } .card-button { padding-right: 20px; } .card-subline { align-items: start; flex-direction: column; gap: 2px; } .card-tag { max-width: 100%; } .card-tag-value { max-width: 100%; } .target-branch-toggle { padding-right: 0; } .target-branch-label-side { padding: 11px 12px 11px 8px; } .target-branch-retrospective { width: auto; } }
      @media (min-width: 901px) { .diff-mobile { display: none; } }
   </style>
 </head>
@@ -1385,6 +1412,29 @@
                 <span id="request-references-description">One path per line.</span>
                 <textarea id="references" name="references"></textarea>
                 <div class="error-text" data-error-for="references"></div>
+              </div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <div class="settings-section-head">
+              <strong id="request-draft-heading">Draft with assistant</strong>
+              <span id="request-draft-description">Ask for help refining the request before you create the final task.</span>
+            </div>
+            <div class="human-review-panel">
+              <div class="human-review-box">
+                <div class="editor-toolbar">
+                  <div>
+                    <strong id="request-draft-title">Composer assistant</strong>
+                    <div id="request-draft-status" class="muted">Ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates are optional until you apply them.</div>
+                  </div>
+                </div>
+                <div id="request-draft-transcript" class="request-draft-log" role="log" aria-live="polite" aria-relevant="additions text"><p class="request-draft-empty">No draft conversation yet.</p></div>
+                <div class="human-review-footer">
+                  <div class="request-draft-composer">
+                    <textarea id="request-draft-input" class="editor-textarea request-draft-input" spellcheck="true" placeholder="Ask the assistant to improve this request..."></textarea>
+                    <button type="button" id="send-request-draft" class="request-draft-send">Send</button>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -1645,8 +1695,9 @@
         </div>
       </section>
       <section id="task-panel-changed-files" class="task-panel" hidden>
-        <div class="diff-layout">
+        <div id="task-changed-files-layout" class="diff-layout">
           <div id="task-changed-files" class="diff-file-list"></div>
+          <div id="task-changed-files-splitter" class="diff-layout-splitter" role="separator" aria-orientation="vertical" aria-label="Resize changed files panel" tabindex="0"></div>
           <div class="diff-stage">
              <div id="task-changed-file-summary" class="diff-summary">
                <div class="diff-summary-main">
@@ -1968,6 +2019,7 @@
     const formError = document.getElementById('form-error');
     const requestTitleInput = document.getElementById('title');
     const goalInput = document.getElementById('goal');
+    const requestBackgroundInput = document.getElementById('background');
     const requestGoalEditorHost = document.getElementById('request-goal-editor-host');
     const requestGoalEditorFallback = document.getElementById('request-goal-editor-fallback');
     const targetRepoInput = document.getElementById('target_repo');
@@ -1975,6 +2027,10 @@
     const baseBranchInput = document.getElementById('base_branch');
     const baseBranchOptions = document.getElementById('base-branch-options');
     const baseBranchHelp = document.getElementById('base-branch-help');
+    const requestDraftStatus = document.getElementById('request-draft-status');
+    const requestDraftTranscript = document.getElementById('request-draft-transcript');
+    const requestDraftInput = document.getElementById('request-draft-input');
+    const sendRequestDraftButton = document.getElementById('send-request-draft');
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
     const runtimeLanguageInput = document.getElementById('runtime_language');
@@ -2035,6 +2091,9 @@
     ];
     const lastTargetRepoStorageKey = 'assistant-agent-kanban.last-target-repo';
     const legacyLastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
+    const taskChangedFilesPaneWidthStorageKey = 'assistant-agent-kanban.task-changed-files-pane-width';
+    const taskChangedFilesPaneDefaultWidth = 260;
+    const taskChangedFilesPaneMinWidth = 220;
     const taskModalError = document.getElementById('task-modal-error');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
@@ -2046,6 +2105,8 @@
     const taskPanelOverview = document.getElementById('task-panel-overview');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
+    const taskChangedFilesLayout = document.getElementById('task-changed-files-layout');
+    const taskChangedFilesSplitter = document.getElementById('task-changed-files-splitter');
     const taskPanelReviewerQa = document.getElementById('task-panel-reviewer-qa');
     const taskPanelReviewNote = document.getElementById('task-panel-review-note');
     const taskPanelEditor = document.getElementById('task-panel-editor');
@@ -2162,6 +2223,12 @@
     let planEditorResizeObserver = null;
     let requestGoalEditor = null;
     let requestUploadToken = '';
+    let requestDraftEntries = [];
+    let requestDraftPendingMessage = '';
+    let requestDraftMessageInFlight = false;
+    let requestDraftLastRenderedSignature = '';
+    let requestDraftTranscriptPinnedToBottom = true;
+    const requestDraftAttachmentRegex = /!\[[^\]]*\]\((?:\/api\/request-uploads\/[^)]+|data:image\/[^)]+)\)/g;
     let humanReviewEditor = null;
     let humanReviewSourceMarkdown = '';
     let reviewerQaSourceMarkdown = '';
@@ -2376,6 +2443,18 @@
         referencesDescription: 'One path per line.',
         acceptanceLabel: 'Acceptance criteria',
         acceptanceDescription: 'One expected outcome per line.',
+        draftHeading: 'Draft with assistant',
+        draftDescription: 'Ask for help refining the request before you create the final task.',
+        draftTitle: 'Composer assistant',
+        draftPlaceholder: 'Ask the assistant to improve this request...',
+        draftSend: 'Send',
+        draftEmpty: 'No draft conversation yet.',
+        draftIdle: 'Ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates are optional until you apply them.',
+        draftSending: 'Assistant is drafting a suggestion…',
+        draftApplied: 'Applied the suggested update to {field}.',
+        draftSuggestedUpdates: 'Suggested updates',
+        draftApply: 'Apply',
+        draftReplyError: 'Drafting help failed.',
         close: 'Close',
         submit: 'Create request',
         creating: 'Creating...',
@@ -2424,6 +2503,18 @@
         referencesDescription: '한 줄에 하나씩 적습니다.',
         acceptanceLabel: '승인 기준',
         acceptanceDescription: '기대 결과를 한 줄에 하나씩 적습니다.',
+        draftHeading: '어시스턴트와 초안 다듬기',
+        draftDescription: '최종 요청을 만들기 전에 초안을 다듬는 도움을 받습니다.',
+        draftTitle: '작성 도우미',
+        draftPlaceholder: '이 요청을 더 좋게 다듬어 달라고 물어보세요...',
+        draftSend: '보내기',
+        draftEmpty: '아직 초안 대화가 없습니다.',
+        draftIdle: '범위 정리, 승인 기준 보강, 목표 다듬기 등을 요청할 수 있습니다. 제안된 변경은 적용하기 전까지 폼에 반영되지 않습니다.',
+        draftSending: '어시스턴트가 초안을 정리하는 중...',
+        draftApplied: '{field} 필드에 제안을 적용했습니다.',
+        draftSuggestedUpdates: '제안된 변경',
+        draftApply: '적용',
+        draftReplyError: '초안 도움 요청에 실패했습니다.',
         close: '닫기',
         submit: '요청 생성',
         creating: '생성 중...',
@@ -3314,8 +3405,14 @@
       setRequestText('request-references-description', 'referencesDescription');
       setRequestText('request-acceptance-label', 'acceptanceLabel');
       setRequestText('request-acceptance-description', 'acceptanceDescription');
+      setRequestText('request-draft-heading', 'draftHeading');
+      setRequestText('request-draft-description', 'draftDescription');
+      setRequestText('request-draft-title', 'draftTitle');
+      requestDraftInput.placeholder = translateRequest('draftPlaceholder');
+      sendRequestDraftButton.textContent = translateRequest('draftSend');
       cancelComposerButton.textContent = translateRequest('close');
       submitButton.textContent = translateRequest('submit');
+      updateRequestDraftPanel();
     }
 
     function refreshRequestDerivedText() {
@@ -4147,6 +4244,57 @@
       }
     }
 
+    function isDesktopDiffLayout() {
+      return window.innerWidth > 900;
+    }
+
+    function readTaskChangedFilesPaneWidth() {
+      try {
+        const value = Number.parseFloat(window.localStorage.getItem(taskChangedFilesPaneWidthStorageKey) || '');
+        return Number.isFinite(value) ? value : taskChangedFilesPaneDefaultWidth;
+      } catch (_error) {
+        return taskChangedFilesPaneDefaultWidth;
+      }
+    }
+
+    function taskChangedFilesPaneMaxWidth() {
+      const layoutWidth = taskChangedFilesLayout?.clientWidth || window.innerWidth || taskChangedFilesPaneDefaultWidth;
+      const viewportMax = Math.floor(window.innerWidth * 0.45);
+      const layoutMax = Math.floor(layoutWidth - 280);
+      return Math.max(taskChangedFilesPaneMinWidth, Math.min(viewportMax, layoutMax));
+    }
+
+    function clampTaskChangedFilesPaneWidth(width) {
+      const numericWidth = Number(width);
+      if (!Number.isFinite(numericWidth)) return taskChangedFilesPaneDefaultWidth;
+      return Math.min(taskChangedFilesPaneMaxWidth(), Math.max(taskChangedFilesPaneMinWidth, Math.round(numericWidth)));
+    }
+
+    function applyTaskChangedFilesPaneWidth(width, options = {}) {
+      if (!taskChangedFilesLayout) return taskChangedFilesPaneDefaultWidth;
+      const clampedWidth = clampTaskChangedFilesPaneWidth(width);
+      taskChangedFilesLayout.style.setProperty('--task-changed-files-width', `${clampedWidth}px`);
+      if (options.persist) {
+        try {
+          window.localStorage.setItem(taskChangedFilesPaneWidthStorageKey, String(clampedWidth));
+        } catch (_error) {
+        }
+      }
+      return clampedWidth;
+    }
+
+    function syncTaskChangedFilesPaneWidth() {
+      return applyTaskChangedFilesPaneWidth(readTaskChangedFilesPaneWidth());
+    }
+
+    function updateTaskChangedFilesPaneWidthFromClientX(clientX, options = {}) {
+      if (!taskChangedFilesLayout) return taskChangedFilesPaneDefaultWidth;
+      const layoutRect = taskChangedFilesLayout.getBoundingClientRect();
+      return applyTaskChangedFilesPaneWidth(clientX - layoutRect.left, options);
+    }
+
+    syncTaskChangedFilesPaneWidth();
+
     function currentTargetRepoOptions() {
       return Array.from(targetRepoOptions.querySelectorAll('option')).map((option) => option.value).filter(Boolean);
     }
@@ -4760,6 +4908,7 @@
       acceptanceCriteriaField.dataset.autofilled = 'true';
       applyTargetRepoAutofill(currentTargetRepoOptions());
       applyRepoDefaults();
+      resetRequestDraftState();
     }
 
     function escapeHtml(value) {
@@ -5187,18 +5336,15 @@
       }
       taskChangedFiles.innerHTML = files.map((file) => `
         <div class="diff-file-row">
-          <button type="button" class="${file.id === activeChangedFileId ? 'active' : ''}" data-changed-file-id="${escapeHtml(file.id)}">
-            <span class="diff-file-title">${escapeHtml(file.display_path)}</span>
+          <button type="button" class="${file.id === activeChangedFileId ? 'active' : ''}${file.viewed ? ' is-viewed' : ''}" data-changed-file-id="${escapeHtml(file.id)}">
+            ${renderChangedFilePathHeading(file.display_path)}
             <span class="diff-file-meta">
+              ${file.viewed ? `<span class="diff-badge diff-badge-viewed">${escapeHtml(translateHumanReview('viewedBadge'))}</span>` : ''}
               <span>${escapeHtml(file.change_type)}</span>
               <span>+${file.additions}</span>
               <span>-${file.deletions}</span>
             </span>
           </button>
-          <label class="diff-file-viewed-toggle${file.viewed ? ' is-viewed' : ''}" ${activeTaskDetail?.metadata?.state !== 'human-verifying' ? 'aria-disabled="true"' : ''}>
-            <input type="checkbox" data-viewed-changed-file-id="${escapeHtml(file.id)}" ${file.viewed ? 'checked' : ''} ${activeTaskDetail?.metadata?.state !== 'human-verifying' ? 'disabled' : ''}>
-            <span>${escapeHtml(translateHumanReview('viewedLabel'))}</span>
-          </label>
         </div>
       `).join('');
     }
@@ -5207,28 +5353,60 @@
       const commentCount = Array.isArray(activeChangedFileDetail?.comments) ? activeChangedFileDetail.comments.length : 0;
       const historicalCount = commentCount ? activeChangedFileDetail.comments.filter((comment) => comment.editable === false).length : 0;
       const threadCount = commentCount ? new Set((activeChangedFileDetail.comments || []).map((comment) => buildLineAnchorKey(comment.anchor || {}))).size : 0;
+      const headingMarkup = renderChangedFilePathHeading(summary.display_path, 'diff-summary-copy');
       const threadBadge = threadCount
         ? `<span class="diff-badge">${escapeHtml(translateHumanReview(threadCount === 1 ? 'commentsExistingOne' : 'commentsExistingMany', { count: threadCount }))}</span>`
         : '';
       const historyBadge = historicalCount
         ? `<span class="diff-badge">${escapeHtml(translateHumanReview('commentHistorical'))}</span>`
         : '';
-      const viewedBadge = summary.viewed
-        ? `<span class="diff-badge">${escapeHtml(translateHumanReview('viewedBadge'))}</span>`
-        : '';
+      const canToggleViewed = activeTaskDetail?.metadata?.state === 'human-verifying';
+      const viewedToggle = `
+        <label class="diff-file-viewed-toggle${summary.viewed ? ' is-viewed' : ''}" ${canToggleViewed ? '' : 'aria-disabled="true"'}>
+          <input type="checkbox" data-viewed-changed-file-id="${escapeHtml(summary.id)}" ${summary.viewed ? 'checked' : ''} ${canToggleViewed ? '' : 'disabled'}>
+          <span>${escapeHtml(translateHumanReview('viewedLabel'))}</span>
+        </label>`;
       taskChangedFileSummary.innerHTML = `
         <div class="diff-summary-main">
-          <strong>${escapeHtml(summary.display_path)}</strong>
-          <div class="diff-badges">
-            <span class="diff-badge">${escapeHtml(summary.change_type)}</span>
-            <span class="diff-badge">+${summary.additions}</span>
-            <span class="diff-badge">-${summary.deletions}</span>
-            ${viewedBadge}
-            ${threadBadge}
-            ${historyBadge}
+          ${headingMarkup}
+          <div class="diff-summary-side">
+            ${viewedToggle}
+            <div class="diff-badges">
+              <span class="diff-badge">${escapeHtml(summary.change_type)}</span>
+              <span class="diff-badge">+${summary.additions}</span>
+              <span class="diff-badge">-${summary.deletions}</span>
+              ${threadBadge}
+              ${historyBadge}
+            </div>
           </div>
         </div>
       `;
+    }
+
+    function splitDisplayPath(displayPath) {
+      const normalizedPath = typeof displayPath === 'string' ? displayPath.trim() : '';
+      if (!normalizedPath) {
+        return { filename: '', directory: '' };
+      }
+      const lastSlashIndex = normalizedPath.lastIndexOf('/');
+      if (lastSlashIndex === -1) {
+        return { filename: normalizedPath, directory: '' };
+      }
+      return {
+        filename: normalizedPath.slice(lastSlashIndex + 1),
+        directory: normalizedPath.slice(0, lastSlashIndex + 1),
+      };
+    }
+
+    function renderChangedFilePathHeading(displayPath, containerClass = 'diff-file-heading') {
+      const { filename, directory } = splitDisplayPath(displayPath);
+      const safeFilename = escapeHtml(filename || displayPath || '');
+      const safeDirectory = directory ? `<span class="diff-file-path">${escapeHtml(directory)}</span>` : '';
+      return `
+        <span class="${escapeHtml(containerClass)}">
+          <span class="diff-file-title">${safeFilename}</span>
+          ${safeDirectory}
+        </span>`;
     }
 
     function renderDiffPlaceholder(message) {
@@ -5588,6 +5766,191 @@
     function syncRequestGoalField(value) {
       goalInput.value = typeof value === 'string' ? value : getRequestGoalEditorContent();
       return goalInput.value;
+    }
+
+    function requestDraftFieldLabel(fieldName) {
+      const labels = {
+        title: translateRequest('titleLabel'),
+        goal: translateRequest('goalLabel'),
+        background: translateRequest('backgroundLabel'),
+        scope: translateRequest('scopeLabel'),
+        out_of_scope: translateRequest('outOfScopeLabel'),
+        constraints: translateRequest('constraintsLabel'),
+        references: translateRequest('referencesLabel'),
+        acceptance_criteria: translateRequest('acceptanceLabel'),
+        target_repo: translateRequest('targetRepoLabel'),
+        base_branch: translateRequest('baseBranchLabel'),
+      };
+      return labels[fieldName] || fieldName;
+    }
+
+    function captureRequestDraftScrollState() {
+      const maxScrollTop = Math.max(0, requestDraftTranscript.scrollHeight - requestDraftTranscript.clientHeight);
+      return {
+        pinnedToBottom: requestDraftTranscriptPinnedToBottom,
+        offsetFromBottom: maxScrollTop - requestDraftTranscript.scrollTop,
+      };
+    }
+
+    function restoreRequestDraftScrollState(state) {
+      if (!state || state.pinnedToBottom) {
+        scrollRequestDraftTranscriptToBottom();
+        return;
+      }
+      const maxScrollTop = Math.max(0, requestDraftTranscript.scrollHeight - requestDraftTranscript.clientHeight);
+      requestDraftTranscript.scrollTop = Math.max(0, maxScrollTop - state.offsetFromBottom);
+      updateRequestDraftTranscriptPinnedToBottom();
+    }
+
+    function scrollRequestDraftTranscriptToBottom() {
+      requestDraftTranscript.scrollTop = requestDraftTranscript.scrollHeight;
+      requestDraftTranscriptPinnedToBottom = true;
+    }
+
+    function updateRequestDraftTranscriptPinnedToBottom() {
+      const remaining = requestDraftTranscript.scrollHeight - requestDraftTranscript.clientHeight - requestDraftTranscript.scrollTop;
+      requestDraftTranscriptPinnedToBottom = remaining <= 24;
+    }
+
+    function renderRequestDraftTranscript() {
+      const entries = requestDraftEntries.map((entry, index) => {
+        const suggestions = entry.role === 'assistant' && entry.field_updates && Object.keys(entry.field_updates).length
+          ? `<div class="request-draft-suggestions"><div class="request-draft-suggestions-title">${escapeHtml(translateRequest('draftSuggestedUpdates'))}</div><div class="request-draft-suggestion-list">${Object.entries(entry.field_updates).map(([fieldName, value]) => `<div class="request-draft-suggestion"><div class="request-draft-suggestion-copy"><strong>${escapeHtml(requestDraftFieldLabel(fieldName))}</strong><span>${escapeHtml(value)}</span></div><button type="button" data-request-draft-apply="${escapeHtml(fieldName)}" data-request-draft-entry="${String(index)}">${escapeHtml(translateRequest('draftApply'))}</button></div>`).join('')}</div></div>`
+          : '';
+        return `<article class="request-draft-entry" data-role="${escapeHtml(entry.role)}"${entry.pending ? ' data-pending="true"' : ''}><span class="request-draft-role">${escapeHtml(entry.role === 'user' ? 'You' : translateRequest('draftTitle'))}${entry.pending ? ' · live' : ''}</span><div class="request-draft-bubble">${escapeHtml(entry.text)}</div>${suggestions}</article>`;
+      });
+      return entries.length ? entries.join('') : `<p class="request-draft-empty">${escapeHtml(translateRequest('draftEmpty'))}</p>`;
+    }
+
+    function setRequestDraftTranscript() {
+      const nextMarkup = renderRequestDraftTranscript();
+      const nextSignature = JSON.stringify(requestDraftEntries);
+      if (requestDraftLastRenderedSignature === nextSignature && requestDraftTranscript.innerHTML === nextMarkup) return;
+      const scrollState = captureRequestDraftScrollState();
+      requestDraftLastRenderedSignature = nextSignature;
+      requestDraftTranscript.innerHTML = nextMarkup;
+      requestAnimationFrame(() => restoreRequestDraftScrollState(scrollState));
+    }
+
+    function updateRequestDraftPanel(statusMessage = '') {
+      sendRequestDraftButton.disabled = requestDraftMessageInFlight || !(requestDraftInput.value || '').trim();
+      requestDraftStatus.textContent = statusMessage || (requestDraftMessageInFlight ? translateRequest('draftSending') : translateRequest('draftIdle'));
+      setRequestDraftTranscript();
+    }
+
+    function serializeRequestDraftTranscript() {
+      return requestDraftEntries
+        .filter((entry) => !entry.pending)
+        .map((entry) => ({ role: entry.role, content: entry.text }));
+    }
+
+    function currentRequestDraftPayload(message) {
+      syncRequestGoalField();
+      const payload = Object.fromEntries(new FormData(requestForm).entries());
+      payload.plan_auto_approve = document.getElementById('plan_auto_approve').checked;
+      payload.transcript = serializeRequestDraftTranscript();
+      payload.message = message;
+      return payload;
+    }
+
+    function applyRequestDraftFieldUpdate(fieldName, value) {
+      if (!value) return;
+      value = preserveRequestDraftAttachments(fieldName, value);
+      if (fieldName === 'goal') {
+        setRequestGoalEditorContent(value);
+      } else if (fieldName === 'background') {
+        requestBackgroundInput.value = value;
+      } else {
+        const field = requestForm.elements.namedItem(fieldName);
+        if (!field || !('value' in field)) return;
+        field.value = value;
+      }
+      if (fieldName === 'target_repo') {
+        targetRepoInput.dataset.autofilled = 'false';
+        queueTargetRepoBranchLookup();
+      }
+      if (fieldName === 'base_branch') baseBranchInput.dataset.autofilled = 'false';
+      if (fieldName === 'scope') scopeField.dataset.autofilled = 'false';
+      if (fieldName === 'out_of_scope') outOfScopeField.dataset.autofilled = 'false';
+      if (fieldName === 'acceptance_criteria') acceptanceCriteriaField.dataset.autofilled = 'false';
+      clearRequestFieldError(fieldName);
+      formError.hidden = true;
+      updateRequestDraftPanel(translateRequest('draftApplied', { field: requestDraftFieldLabel(fieldName) }));
+    }
+
+    function currentRequestDraftFieldValue(fieldName) {
+      if (fieldName === 'goal') return currentRequestGoalValue();
+      if (fieldName === 'background') return requestBackgroundInput.value || '';
+      const field = requestForm.elements.namedItem(fieldName);
+      if (!field || !('value' in field)) return '';
+      return field.value || '';
+    }
+
+    function preserveRequestDraftAttachments(fieldName, nextValue) {
+      if (!['goal', 'background'].includes(fieldName)) return nextValue;
+      const currentValue = currentRequestDraftFieldValue(fieldName);
+      const attachments = currentValue.match(requestDraftAttachmentRegex) || [];
+      if (!attachments.length) return nextValue;
+      let preservedValue = nextValue;
+      attachments.forEach((attachment) => {
+        if (preservedValue.includes(attachment)) return;
+        preservedValue = preservedValue.trimEnd();
+        preservedValue = preservedValue ? `${preservedValue}\n\n${attachment}` : attachment;
+      });
+      return preservedValue;
+    }
+
+    async function sendRequestDraftMessage() {
+      const message = (requestDraftInput.value || '').trim();
+      if (!message || requestDraftMessageInFlight) {
+        updateRequestDraftPanel();
+        return;
+      }
+      formError.hidden = true;
+      requestDraftPendingMessage = message;
+      requestDraftMessageInFlight = true;
+      requestDraftEntries = [
+        ...requestDraftEntries,
+        { role: 'user', text: message },
+        { role: 'assistant', text: translateRequest('draftSending'), pending: true, field_updates: {} },
+      ];
+      requestDraftInput.value = '';
+      requestDraftTranscriptPinnedToBottom = true;
+      updateRequestDraftPanel(translateRequest('draftSending'));
+      try {
+        const response = await fetch('/api/request-drafts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentRequestDraftPayload(message)),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateRequest('draftReplyError'));
+        requestDraftEntries = [
+          ...requestDraftEntries.slice(0, -1),
+          { role: 'assistant', text: payload.reply || '', field_updates: payload.field_updates || {} },
+        ];
+        updateRequestDraftPanel();
+      } catch (error) {
+        requestDraftInput.value = requestDraftPendingMessage;
+        requestDraftEntries = requestDraftEntries.slice(0, -1);
+        formError.hidden = false;
+        formError.textContent = error.message;
+        updateRequestDraftPanel(error.message);
+      } finally {
+        requestDraftPendingMessage = '';
+        requestDraftMessageInFlight = false;
+        updateRequestDraftPanel(requestDraftStatus.textContent);
+      }
+    }
+
+    function resetRequestDraftState() {
+      requestDraftEntries = [];
+      requestDraftPendingMessage = '';
+      requestDraftMessageInFlight = false;
+      requestDraftLastRenderedSignature = '';
+      requestDraftTranscriptPinnedToBottom = true;
+      requestDraftInput.value = '';
+      updateRequestDraftPanel();
     }
 
     function generateRequestUploadToken() {
@@ -6288,7 +6651,7 @@
       if (!reviewNoteVisible && taskTabReviewNote.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
       if (planEditable && activeArtifactName !== 'PLAN.md') activeArtifactName = 'PLAN.md';
-      if (!activeChangedFileId || !detail.changed_files.some((file) => file.id === activeChangedFileId)) activeChangedFileId = detail.changed_files[0]?.id || null;
+      if (detail.changed_files.length && (!activeChangedFileId || !detail.changed_files.some((file) => file.id === activeChangedFileId))) activeChangedFileId = detail.changed_files[0]?.id || null;
       if (!activeArtifactName || !detail.markdown_files.includes(activeArtifactName)) activeArtifactName = preferredArtifact(detail.markdown_files, metadata);
       planEditMode = false;
       taskModeBadge.textContent = translateTask('viewerMode');
@@ -6299,9 +6662,11 @@
       setReviewerQaTranscript(detail.human_review?.reviewer_qa_markdown || '', { preserveScroll: true });
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
       updateReviewerQaPanel();
-      activeChangedFileDetail = null;
-      renderChangedFileButtons(detail.changed_files);
-      renderDiffPlaceholder(detail.changed_files.length ? translateTask('selectChangedFile') : translateTask('changedFilesPatchAvailable'));
+      if (detail.changed_files.length || !detail.changed_files_available) {
+        activeChangedFileDetail = null;
+        renderChangedFileButtons(detail.changed_files);
+        renderDiffPlaceholder(detail.changed_files.length ? translateTask('selectChangedFile') : translateTask('changedFilesPatchAvailable'));
+      }
       renderArtifactButtons(detail.markdown_files);
       taskOverview.innerHTML = `
         ${renderStageTiming(detail.stage_timing)}
@@ -6614,8 +6979,10 @@
 
     async function loadTaskDetail(taskId, preserveTab = false, options = {}) {
       const { softRefresh = false, reloadArtifact = true } = options;
+      const previousDetail = activeTaskDetail;
       const snapshot = options.snapshot || boardTaskSnapshots.get(taskId) || null;
       const nextTab = preserveTab ? activeTaskTab : taskChromeState(snapshot?.state).defaultTab;
+      const shouldIncludeChangedFiles = nextTab === 'changed-files';
       const requestToken = ++activeTaskRequestToken;
       activeTaskId = taskId;
       taskModalError.hidden = true;
@@ -6661,10 +7028,16 @@
         setTaskModalOpen(true);
       }
       try {
-        const response = await fetch(`/api/tasks/${taskId}`);
+        const detailUrl = shouldIncludeChangedFiles
+          ? `/api/tasks/${taskId}?include_changed_files=true`
+          : `/api/tasks/${taskId}`;
+        const response = await fetch(detailUrl);
         const detail = await response.json();
         if (!response.ok) throw new Error(detail.detail || translateTask('failedLoadTaskDetails'));
         if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId) return;
+        if (!shouldIncludeChangedFiles && detail.changed_files_available && !detail.changed_files.length && previousDetail?.changed_files?.length) {
+          detail.changed_files = previousDetail.changed_files;
+        }
         renderTaskOverview(detail);
         const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
         const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
@@ -6770,7 +7143,6 @@
         changed_files_available: detail.changed_files_available,
         changed_files: detail.changed_files,
       };
-      renderTaskOverview(activeTaskDetail);
       renderChangedFileButtons(activeTaskDetail.changed_files || []);
     }
 
@@ -7317,6 +7689,23 @@
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
+    requestDraftInput.addEventListener('input', () => updateRequestDraftPanel());
+    requestDraftTranscript.addEventListener('scroll', updateRequestDraftTranscriptPinnedToBottom);
+    requestDraftTranscript.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-request-draft-apply]');
+      if (!button) return;
+      const entryIndex = Number(button.dataset.requestDraftEntry || -1);
+      const fieldName = button.dataset.requestDraftApply || '';
+      const entry = requestDraftEntries[entryIndex];
+      const value = entry?.field_updates?.[fieldName];
+      if (!fieldName || !value) return;
+      applyRequestDraftFieldUpdate(fieldName, value);
+    });
+    sendRequestDraftButton.addEventListener('click', () => sendRequestDraftMessage().catch((error) => {
+      formError.hidden = false;
+      formError.textContent = error.message;
+      updateRequestDraftPanel(error.message);
+    }));
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
     function handleAssistantModeVisibilityChange() {
@@ -7390,7 +7779,7 @@
     taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);
     taskReviewerQaTranscript.addEventListener('scroll', updateReviewerQaTranscriptPinnedToBottom);
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
-    taskChangedFiles.addEventListener('change', async (event) => {
+    async function handleChangedFileViewedToggleChange(event) {
       const toggle = event.target.closest('[data-viewed-changed-file-id]');
       if (!toggle || !activeTaskId) return;
       try {
@@ -7398,7 +7787,9 @@
       } catch (_error) {
         toggle.checked = !toggle.checked;
       }
-    });
+    }
+    taskChangedFiles.addEventListener('change', handleChangedFileViewedToggleChange);
+    taskChangedFileSummary.addEventListener('change', handleChangedFileViewedToggleChange);
     taskDiffShell.addEventListener('click', (event) => {
       const lineCommentButton = event.target.closest('[data-line-comment-action]');
       if (lineCommentButton && activeChangedFileDetail) {
@@ -7425,7 +7816,38 @@
       updateInlineCommentComposerState();
     });
     taskHumanReviewEditorFallback.addEventListener('input', updateHumanReviewPanel);
+    taskChangedFilesSplitter.addEventListener('pointerdown', (event) => {
+      if (!isDesktopDiffLayout() || event.button !== 0) return;
+      taskChangedFilesLayout.classList.add('is-resizing');
+      taskChangedFilesSplitter.setPointerCapture(event.pointerId);
+      updateTaskChangedFilesPaneWidthFromClientX(event.clientX, { persist: true });
+      event.preventDefault();
+    });
+    taskChangedFilesSplitter.addEventListener('pointermove', (event) => {
+      if (!taskChangedFilesSplitter.hasPointerCapture(event.pointerId)) return;
+      updateTaskChangedFilesPaneWidthFromClientX(event.clientX, { persist: true });
+    });
+    taskChangedFilesSplitter.addEventListener('pointerup', (event) => {
+      if (!taskChangedFilesSplitter.hasPointerCapture(event.pointerId)) return;
+      taskChangedFilesSplitter.releasePointerCapture(event.pointerId);
+      taskChangedFilesLayout.classList.remove('is-resizing');
+      updateTaskChangedFilesPaneWidthFromClientX(event.clientX, { persist: true });
+    });
+    taskChangedFilesSplitter.addEventListener('pointercancel', (event) => {
+      if (!taskChangedFilesSplitter.hasPointerCapture(event.pointerId)) return;
+      taskChangedFilesSplitter.releasePointerCapture(event.pointerId);
+      taskChangedFilesLayout.classList.remove('is-resizing');
+      syncTaskChangedFilesPaneWidth();
+    });
+    taskChangedFilesSplitter.addEventListener('keydown', (event) => {
+      if (!isDesktopDiffLayout()) return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      const direction = event.key === 'ArrowLeft' ? -24 : 24;
+      applyTaskChangedFilesPaneWidth(readTaskChangedFilesPaneWidth() + direction, { persist: true });
+      event.preventDefault();
+    });
     window.addEventListener('resize', () => {
+      syncTaskChangedFilesPaneWidth();
       if (activeTaskTab === 'review-note') syncHumanReviewEditorHeight();
       if (activeTaskTab === 'editor' && planEditMode && activeArtifactName === 'PLAN.md') schedulePlanEditorHeightSync();
     });
