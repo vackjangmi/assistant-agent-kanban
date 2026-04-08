@@ -18,8 +18,9 @@ DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
 AssistantBackend = Literal["opencode", "codex", "gemini"]
-AssistantRole = Literal["planner", "plan_approval", "implementer", "reviewer", "commit"]
-ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
+AssistantRole = Literal["planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit"]
+ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit")
+TASK_RUNTIME_ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
 SUPPORTED_RUNTIME_ASSISTANTS = {"opencode": "OpenCode", "codex": "Codex CLI", "gemini": "Gemini CLI"}
 
 
@@ -40,6 +41,8 @@ class OpenCodeConfig(BaseModel):
     planner_agent: str = "fs-kanban-planner"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    request_draft_agent: str = "fs-kanban-request-draft"
+    request_draft_model: str | None = None
     plan_approval_agent: str = "fs-kanban-plan-approval"
     plan_approval_model: str | None = None
     plan_approval_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
@@ -59,6 +62,7 @@ class CodexConfig(BaseModel):
     binary: str = "codex"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    request_draft_model: str | None = None
     plan_approval_model: str | None = None
     plan_approval_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     implementer_model: str | None = None
@@ -74,6 +78,7 @@ class GeminiConfig(BaseModel):
     binary: str = "gemini"
     planner_model: str | None = None
     planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    request_draft_model: str | None = None
     plan_approval_model: str | None = None
     plan_approval_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
     implementer_model: str | None = None
@@ -101,6 +106,7 @@ class LocksConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     class RoleBackends(BaseModel):
         planner: AssistantBackend | None = None
+        request_draft: AssistantBackend | None = None
         plan_approval: AssistantBackend | None = None
         implementer: AssistantBackend | None = None
         reviewer: AssistantBackend | None = None
@@ -247,7 +253,13 @@ class AppConfig(BaseModel):
         return TaskRuntimePin(
             backend=self.active_backend(),
             captured_by=captured_by,
-            role_backends=TaskRuntimeRoleBackends(**self.role_backend_overrides()),
+            role_backends=TaskRuntimeRoleBackends(
+                planner=self.runtime.role_backends.planner,
+                plan_approval=self.runtime.role_backends.plan_approval,
+                implementer=self.runtime.role_backends.implementer,
+                reviewer=self.runtime.role_backends.reviewer,
+                commit=self.runtime.role_backends.commit,
+            ),
             planner_model=self.role_model("planner"),
             plan_approval_model=self.role_model("plan_approval"),
             implementer_model=self.role_model("implementer"),
@@ -260,7 +272,7 @@ class AppConfig(BaseModel):
             return self.model_copy(deep=True)
         pinned = self.model_copy(deep=True)
         pinned.runtime.coding_assistant = runtime_pin.backend
-        for role in ASSISTANT_ROLES:
+        for role in TASK_RUNTIME_ASSISTANT_ROLES:
             pinned.set_role_backend(role, getattr(runtime_pin.role_backends, role))
         pinned.set_role_model("planner", runtime_pin.planner_model)
         pinned.set_role_model("plan_approval", runtime_pin.plan_approval_model)

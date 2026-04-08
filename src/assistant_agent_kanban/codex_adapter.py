@@ -156,6 +156,8 @@ def _role_from_agent(agent: str) -> AssistantRole:
     suffix = agent.removeprefix("fs-kanban-")
     if suffix == "planner":
         return "planner"
+    if suffix in {"request-draft", "request_draft"}:
+        return "request_draft"
     if suffix in {"plan-approval", "plan_approval"}:
         return "plan_approval"
     if suffix == "implementer":

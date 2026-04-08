@@ -16,7 +16,7 @@ from ..agent_materializer import ensure_runtime_agents
 from ..assistant_adapter import AssistantBackendStatusSnapshot
 from ..config import ASSISTANT_ROLES, DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, AssistantBackend, normalize_runtime_assistant
 from ..enums import TaskState
-from ..exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
+from ..exceptions import AdapterRunError, CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..language import normalize_runtime_language
 from ..omo_config import read_omo_delegation_snapshot
 from ..repo_branches import describe_target_repo_branches
@@ -42,6 +42,7 @@ class CreateRequestPayload(BaseModel):
     title: str
     goal: str
     request_upload_token: str | None = None
+    request_draft_markdown: str | None = None
     background: str | None = None
     plan_auto_approve: bool = True
     scope: str | None = None
@@ -97,12 +98,13 @@ class UpdateChangedFileViewedPayload(BaseModel):
 class ModelSettingsPayload(BaseModel):
     class RoleBackendsPayload(BaseModel):
         planner: str | None = None
+        request_draft: str | None = None
         plan_approval: str | None = None
         implementer: str | None = None
         reviewer: str | None = None
         commit: str | None = None
 
-        @field_validator("planner", "plan_approval", "implementer", "reviewer", "commit", mode="before")
+        @field_validator("planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit", mode="before")
         @classmethod
         def normalize_role_backend(cls, value: str | None) -> str | None:
             if value is None:
@@ -120,6 +122,7 @@ class ModelSettingsPayload(BaseModel):
     planner_model: str | None = None
     planner_session_token_budget: int | None = Field(default=None, ge=1)
     planner_agent_count: int | None = Field(default=None, ge=1)
+    request_draft_model: str | None = None
     plan_approval_model: str | None = None
     plan_approval_session_token_budget: int | None = Field(default=None, ge=1)
     implementer_model: str | None = None
@@ -245,6 +248,7 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
         "planner_model": active_config.role_model("planner"),
         "planner_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("planner")),
         "planner_agent_count": runtime.config.runtime.planner_agent_count,
+        "request_draft_model": active_config.role_model("request_draft"),
         "plan_approval_model": active_config.role_model("plan_approval"),
         "plan_approval_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("plan_approval")),
         "implementer_model": active_config.role_model("implementer"),
@@ -424,6 +428,8 @@ def build_router() -> APIRouter:
             next_config.opencode.worker_live_logs_enabled = payload.worker_live_logs_enabled
         if "planner_model" in fields_set:
             next_config.set_role_model("planner", _normalize_model_override(payload.planner_model))
+        if "request_draft_model" in fields_set:
+            next_config.set_role_model("request_draft", _normalize_model_override(payload.request_draft_model))
         if "planner_session_token_budget" in fields_set:
             next_config.set_role_session_token_budget("planner", _normalize_session_token_budget(payload.planner_session_token_budget))
         if "planner_agent_count" in fields_set:
@@ -598,7 +604,7 @@ def build_router() -> APIRouter:
         data = await file.read()
         try:
             saved = save_request_upload(runtime.config, upload_token, file.filename or "image", file.content_type, data)
-        except ValueError as exc:
+        except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return saved
 
@@ -636,7 +642,7 @@ def build_router() -> APIRouter:
         runtime = request.app.state.runtime
         try:
             snapshot = describe_target_repo_branches(runtime.config, Path(target_repo))
-        except ValueError as exc:
+        except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return snapshot.model_dump(mode="json")
 
@@ -667,8 +673,9 @@ def build_router() -> APIRouter:
                 target_repo_root=Path(payload.target_repo),
                 base_branch=normalized_base_branch,
                 request_upload_token=payload.request_upload_token,
+                request_draft_markdown=payload.request_draft_markdown,
             )
-        except ValueError as exc:
+        except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return {"task_path": str(task_dir), "created": True}
@@ -683,7 +690,7 @@ def build_router() -> APIRouter:
                 adapter_registry=runtime.adapter_registry,
                 payload=payload,
             )
-        except ValueError as exc:
+        except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return result.model_dump(mode="json")
 

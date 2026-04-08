@@ -183,6 +183,41 @@ def test_subprocess_adapter_reports_resolved_model_from_materialized_agent(monke
     assert result.session_id is None
 
 
+def test_subprocess_adapter_materializes_request_draft_agent_with_dedicated_model(monkeypatch, tmp_path):
+    class FakeProcess:
+        def __init__(self):
+            self.stdout = ['{"type":"final","content":"ok"}\n']
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        return FakeProcess()
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessOpenCodeAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.opencode.request_draft_model = "openai/gpt-5.4-mini"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-request-draft",
+        prompt="sample",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "request-draft.jsonl",
+        config=config,
+    )
+
+    assert result.resolved_model == "openai/gpt-5.4-mini"
+    agent_file = tmp_path / ".kanban-agent" / "_runtime" / "opencode-config" / "opencode" / "agents" / "fs-kanban-request-draft.md"
+    assert agent_file.exists()
+    assert "model: openai/gpt-5.4-mini" in agent_file.read_text().split("---", 2)[1]
+
+
 def test_subprocess_adapter_skips_model_flag_when_no_override(monkeypatch, tmp_path):
     recorded: dict[str, object] = {}
 

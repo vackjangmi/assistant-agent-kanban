@@ -101,3 +101,42 @@ def test_codex_adapter_exposes_known_models(tmp_path):
     config.bootstrap()
 
     assert adapter.discover_models(config=config) == CODEX_KNOWN_MODELS
+
+
+def test_codex_adapter_uses_request_draft_model_for_request_draft_agent(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = ['{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n']
+            self.stderr = []
+            self.command = command
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessCodexAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "codex"
+    config.codex.request_draft_model = "gpt-5.1"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-request-draft",
+        prompt="draft this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "request-draft.jsonl",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert command[command.index("--model") + 1] == "gpt-5.1"
+    assert result.resolved_model == "gpt-5.1"

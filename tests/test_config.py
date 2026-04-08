@@ -145,8 +145,11 @@ def test_load_config_accepts_role_backend_overrides(tmp_path):
                 "runtime:",
                 "  coding_assistant: opencode",
                 "  role_backends:",
+                "    request_draft: gemini",
                 "    implementer: codex",
                 "    reviewer: codex",
+                "gemini:",
+                "  request_draft_model: gemini-2.5-flash",
                 "codex:",
                 "  implementer_model: gpt-5.4",
                 "  reviewer_model: gpt-5.3-codex",
@@ -158,8 +161,10 @@ def test_load_config_accepts_role_backend_overrides(tmp_path):
 
     assert config.runtime.coding_assistant == "opencode"
     assert config.backend_for_role("planner") == "opencode"
+    assert config.backend_for_role("request_draft") == "gemini"
     assert config.backend_for_role("implementer") == "codex"
     assert config.backend_for_role("reviewer") == "codex"
+    assert config.role_model("request_draft") == "gemini-2.5-flash"
     assert config.role_model("implementer") == "gpt-5.4"
     assert config.role_model("reviewer") == "gpt-5.3-codex"
 

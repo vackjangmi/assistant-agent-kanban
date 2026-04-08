@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from .assistant_adapter import AssistantAdapter
 from .config import AppConfig
+from .exceptions import AdapterRunError
 from .language import runtime_language_code_to_request_language
 from .request_creator import build_default_scope_sections_for_language
 from .target_repo_guard import resolve_safe_target_repo_root
@@ -66,12 +67,12 @@ def draft_request(
     adapter_registry: dict[str, AssistantAdapter],
     payload: RequestDraftPayload,
 ) -> RequestDraftResult:
-    backend = config.backend_for_role("planner")
+    backend = config.backend_for_role("request_draft")
     adapter = adapter_registry[backend]
-    agent = "fs-kanban-request-draft"
+    agent = config.role_agent("request_draft")
     prompt = build_request_drafting_prompt(config=config, payload=payload)
-    cwd = _resolve_drafting_cwd(config=config, payload=payload)
     with tempfile.TemporaryDirectory(prefix="assistant-agent-kanban-draft-") as temp_dir:
+        cwd = _resolve_drafting_cwd(config=config, payload=payload, temp_dir=Path(temp_dir))
         run_log_path = Path(temp_dir) / "request-draft.jsonl"
         result = adapter.run(
             agent=agent,
@@ -81,6 +82,8 @@ def draft_request(
             config=config,
             output_format="json",
         )
+    if not result.ok:
+        raise AdapterRunError(result.stderr.strip() or result.assistant_text.strip() or "request drafting failed")
     reply, field_updates = parse_request_drafting_response(result.assistant_text)
     return RequestDraftResult(
         reply=reply,
@@ -217,8 +220,11 @@ def _normalize_field_update_value(value: object) -> str | None:
     return stripped or None
 
 
-def _resolve_drafting_cwd(*, config: AppConfig, payload: RequestDraftPayload) -> Path:
+def _resolve_drafting_cwd(*, config: AppConfig, payload: RequestDraftPayload, temp_dir: Path) -> Path:
     target_repo = (payload.target_repo or "").strip()
     if not target_repo:
-        return config.repo_root.resolve()
-    return resolve_safe_target_repo_root(Path(target_repo))
+        return temp_dir.resolve()
+    resolved = resolve_safe_target_repo_root(Path(target_repo))
+    if not resolved.exists() or not resolved.is_dir():
+        raise ValueError("target repo must be an existing directory")
+    return resolved

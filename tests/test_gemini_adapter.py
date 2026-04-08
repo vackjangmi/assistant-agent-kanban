@@ -262,3 +262,45 @@ def test_gemini_adapter_skips_duplicate_include_directory(monkeypatch, tmp_path)
 
     command = cast(list[str], recorded["command"])
     assert "--include-directories" not in command
+
+
+def test_gemini_adapter_uses_request_draft_model_for_request_draft_agent(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.command = command
+            self.stdout = ['{"type":"message","role":"assistant","content":"ok"}\n']
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessGeminiAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "gemini"
+    config.gemini.request_draft_model = "gemini-2.5-flash"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-request-draft",
+        prompt="draft this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "request-draft.jsonl",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert command[command.index("--model") + 1] == "gemini-2.5-flash"
+    assert result.resolved_model == "gemini-2.5-flash"
