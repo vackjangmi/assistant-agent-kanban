@@ -847,9 +847,8 @@
     .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .drafts-shell { display: grid; gap: 8px; }
     .drafts-shell[hidden] { display: none; }
-    .drafts-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .drafts-head strong { font-size: 0.95rem; }
-    .drafts-head span { color: var(--muted); font-size: 0.86rem; }
+    .drafts-head { display: flex; align-items: center; gap: 8px; }
+    .drafts-head strong { font-size: 0.9rem; }
     .drafts-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }
     .drafts-status[hidden] { display: none; }
     .drafts-status[data-tone="error"] { border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
@@ -2051,10 +2050,7 @@
   <main class="main-dashboard">
     <section id="request-drafts-shell" class="drafts-shell" hidden>
       <div class="drafts-head">
-        <div class="drafts-copy">
-          <strong id="request-drafts-title">Request drafts</strong>
-          <span id="request-drafts-description">Continue refining temporary request drafts before creating a real request.</span>
-        </div>
+        <strong id="request-drafts-title">Request drafts</strong>
       </div>
       <div id="request-drafts-status" class="drafts-status" hidden></div>
       <div id="request-drafts-grid" class="drafts-grid"></div>

@@ -724,6 +724,26 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return draft.model_dump(mode="json")
 
+    @router.get("/api/request-drafts")
+    async def list_request_drafts(request: Request):
+        drafts = _request_draft_store(request).list()
+        return {
+            "items": [
+                {
+                    "draft_id": draft.draft_id,
+                    "title": draft.title,
+                    "target_repo": draft.target_repo,
+                    "base_branch": draft.base_branch,
+                    "updated_at": draft.updated_at,
+                    "created_at": draft.created_at,
+                    "active_tab": draft.active_tab,
+                    "has_transcript": bool(draft.transcript),
+                    "has_unsent_input": bool((draft.request_draft_input or "").strip()),
+                }
+                for draft in drafts
+            ]
+        }
+
     @router.get("/api/request-drafts/{draft_id}")
     async def get_request_draft(draft_id: str, request: Request):
         try:

@@ -20,6 +20,8 @@ class StoredRequestDraftTranscriptEntry(BaseModel):
 
 class StoredRequestDraft(BaseModel):
     draft_id: str
+    created_at: str = Field(default_factory=lambda: utc_now().isoformat())
+    updated_at: str = Field(default_factory=lambda: utc_now().isoformat())
     title: str = ""
     goal: str = ""
     background: str = ""
@@ -74,10 +76,20 @@ class RequestDraftStore:
     def save(self, draft: StoredRequestDraft) -> StoredRequestDraft:
         path = self._path(draft.draft_id)
         path.parent.mkdir(parents=True, exist_ok=True)
+        draft.updated_at = utc_now().isoformat()
         tmp_path = path.with_suffix(".json.tmp")
         tmp_path.write_text(json.dumps(draft.model_dump(mode="json"), indent=2) + "\n")
         os.replace(tmp_path, path)
         return draft
+
+    def list(self) -> list[StoredRequestDraft]:
+        drafts: list[StoredRequestDraft] = []
+        for path in sorted(self._config.request_drafts_dir.glob("*.json")):
+            try:
+                drafts.append(StoredRequestDraft.model_validate_json(path.read_text()))
+            except Exception:
+                continue
+        return sorted(drafts, key=lambda draft: draft.updated_at, reverse=True)
 
     def update(self, draft_id: str, data: dict[str, object]) -> StoredRequestDraft:
         draft = self.load(draft_id)
@@ -145,6 +157,12 @@ def _merge_draft(draft: StoredRequestDraft, data: dict[str, object]) -> StoredRe
         **draft.model_dump(mode="json"),
         **_normalize_update_data(data),
     })
+
+
+def utc_now():
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc)
 
 
 def _field_label(field_name: str, *, language_code: str) -> str:
