@@ -168,6 +168,7 @@ class AppConfig(BaseModel):
             "_runtime/workspaces",
             "_runtime/runs",
             "_runtime/archive-runs",
+            "_runtime/request-drafts",
             "_runtime/request-uploads",
             "_runtime/events",
             "_runtime/board-cache",
@@ -314,6 +315,10 @@ class AppConfig(BaseModel):
     @property
     def request_uploads_dir(self) -> Path:
         return self.kanban_root / "_runtime/request-uploads"
+
+    @property
+    def request_drafts_dir(self) -> Path:
+        return self.kanban_root / "_runtime/request-drafts"
 
     @property
     def events_dir(self) -> Path:

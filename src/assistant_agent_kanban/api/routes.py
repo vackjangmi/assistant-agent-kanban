@@ -32,6 +32,7 @@ from ..request_creator import (
     split_lines,
 )
 from ..request_drafting import RequestDraftPayload as RequestDraftRoutePayload, draft_request
+from ..request_draft_store import RequestDraftStore, serialize_request_draft_transcript_markdown
 
 
 class CompletedGroupOverridePayload(BaseModel):
@@ -42,6 +43,7 @@ class CreateRequestPayload(BaseModel):
     title: str
     goal: str
     request_upload_token: str | None = None
+    request_draft_id: str | None = None
     request_draft_markdown: str | None = None
     background: str | None = None
     plan_auto_approve: bool = True
@@ -54,6 +56,56 @@ class CreateRequestPayload(BaseModel):
     base_branch: str | None = None
 class UpdateMarkdownPayload(BaseModel):
     content: str
+
+
+class UpdateRequestDraftPayload(BaseModel):
+    title: str | None = None
+    goal: str | None = None
+    background: str | None = None
+    plan_auto_approve: bool | None = None
+    scope: str | None = None
+    out_of_scope: str | None = None
+    constraints: str | None = None
+    references: str | None = None
+    acceptance_criteria: str | None = None
+    target_repo: str | None = None
+    base_branch: str | None = None
+    request_upload_token: str | None = None
+    active_tab: Literal["assistant", "fields"] | None = None
+    request_draft_input: str | None = None
+
+
+class CreateRequestDraftPayload(UpdateRequestDraftPayload):
+    pass
+
+
+def _request_draft_store(request: Request) -> RequestDraftStore:
+    return RequestDraftStore(request.app.state.runtime.config)
+
+
+def _request_draft_state_from_payload(payload: UpdateRequestDraftPayload | RequestDraftRoutePayload) -> dict[str, object]:
+    state: dict[str, object] = {}
+    for field_name in [
+        "title",
+        "goal",
+        "background",
+        "scope",
+        "out_of_scope",
+        "constraints",
+        "references",
+        "acceptance_criteria",
+        "target_repo",
+        "base_branch",
+        "request_upload_token",
+        "active_tab",
+        "request_draft_input",
+    ]:
+        value = getattr(payload, field_name, None)
+        if value is not None:
+            state[field_name] = value
+    if getattr(payload, "plan_auto_approve", None) is not None:
+        state["plan_auto_approve"] = payload.plan_auto_approve
+    return state
 
 
 class HumanVerificationPayload(BaseModel):
@@ -623,6 +675,90 @@ def build_router() -> APIRouter:
         delete_request_uploads(runtime.config, upload_token)
         return {"deleted": True}
 
+    @router.post("/api/request-drafts")
+    async def draft_request_response(payload: RequestDraftRoutePayload, request: Request):
+        runtime = request.app.state.runtime
+        store = _request_draft_store(request)
+        try:
+            draft_id = (payload.request_draft_id or "").strip() if hasattr(payload, "request_draft_id") else ""
+            draft = store.load(draft_id) if draft_id else store.create()
+            draft = store.update(draft.draft_id, _request_draft_state_from_payload(payload))
+            user_message = payload.message.strip()
+            draft_for_run = draft.model_copy(update={
+                "request_draft_input": "",
+            })
+            result = await asyncio.to_thread(
+                draft_request,
+                config=runtime.config,
+                adapter_registry=runtime.adapter_registry,
+                payload=draft_for_run.to_drafting_payload(message=user_message),
+            )
+            draft = store.update(draft.draft_id, {
+                "request_draft_input": "",
+                "transcript": [
+                    *draft.transcript,
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": result.reply, "field_updates": result.field_updates},
+                ],
+            })
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="request draft not found") from exc
+        except (ValueError, AdapterRunError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        response = result.model_dump(mode="json")
+        response.update(
+            {
+                "request_draft_id": draft.draft_id,
+                "request_upload_token": draft.request_upload_token,
+                "transcript": [entry.model_dump(mode="json") for entry in draft.transcript],
+            }
+        )
+        return response
+
+    @router.post("/api/request-drafts/state")
+    async def create_request_draft_state(payload: CreateRequestDraftPayload, request: Request):
+        store = _request_draft_store(request)
+        try:
+            draft = store.create(_request_draft_state_from_payload(payload))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return draft.model_dump(mode="json")
+
+    @router.get("/api/request-drafts/{draft_id}")
+    async def get_request_draft(draft_id: str, request: Request):
+        try:
+            draft = _request_draft_store(request).load(draft_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="request draft not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return draft.model_dump(mode="json")
+
+    @router.put("/api/request-drafts/{draft_id}")
+    async def update_request_draft(draft_id: str, payload: UpdateRequestDraftPayload, request: Request):
+        store = _request_draft_store(request)
+        try:
+            draft = store.update(draft_id, _request_draft_state_from_payload(payload))
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="request draft not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return draft.model_dump(mode="json")
+
+    @router.delete("/api/request-drafts/{draft_id}")
+    async def delete_request_draft(draft_id: str, request: Request):
+        store = _request_draft_store(request)
+        try:
+            draft = store.load(draft_id)
+            store.delete(draft_id)
+        except FileNotFoundError:
+            return {"deleted": True}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if draft.request_upload_token:
+            delete_request_uploads(request.app.state.runtime.config, draft.request_upload_token)
+        return {"deleted": True}
+
     @router.get("/api/target-repos")
     async def target_repos(request: Request):
         runtime = request.app.state.runtime
@@ -651,6 +787,18 @@ def build_router() -> APIRouter:
         runtime = request.app.state.runtime
         normalized_base_branch = payload.base_branch.strip() if payload.base_branch else runtime.config.base_branch
         request_language = runtime_language_code_to_request_language(runtime.config.runtime.language)
+        request_draft_store = _request_draft_store(request)
+        stored_draft = None
+        if payload.request_draft_id:
+            try:
+                stored_draft = request_draft_store.load(payload.request_draft_id)
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=404, detail="request draft not found") from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        draft_markdown = payload.request_draft_markdown
+        if stored_draft is not None:
+            draft_markdown = serialize_request_draft_transcript_markdown(stored_draft, language_code=request_language)
         try:
             default_scope, default_out_of_scope = build_default_scope_sections_for_language(
                 payload.target_repo,
@@ -673,26 +821,14 @@ def build_router() -> APIRouter:
                 target_repo_root=Path(payload.target_repo),
                 base_branch=normalized_base_branch,
                 request_upload_token=payload.request_upload_token,
-                request_draft_markdown=payload.request_draft_markdown,
+                request_draft_markdown=draft_markdown,
             )
         except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if stored_draft is not None:
+            request_draft_store.delete(stored_draft.draft_id)
         await runtime.rescan_and_publish()
         return {"task_path": str(task_dir), "created": True}
-
-    @router.post("/api/request-drafts")
-    async def draft_request_response(payload: RequestDraftRoutePayload, request: Request):
-        runtime = request.app.state.runtime
-        try:
-            result = await asyncio.to_thread(
-                draft_request,
-                config=runtime.config,
-                adapter_registry=runtime.adapter_registry,
-                payload=payload,
-            )
-        except (ValueError, AdapterRunError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return result.model_dump(mode="json")
 
     @router.post("/api/tasks/{task_id}/approve-plan")
     async def approve_plan(task_id: str, request: Request):

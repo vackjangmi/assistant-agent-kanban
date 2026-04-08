@@ -15,6 +15,7 @@ def test_app_config_bootstrap_creates_state_and_runtime_dirs(tmp_path):
 
     assert config.locks_dir.is_dir()
     assert config.runs_dir.is_dir()
+    assert config.request_drafts_dir.is_dir()
     assert config.events_dir.is_dir()
     assert config.workspace.root is not None
     assert config.workspace.root.is_dir()

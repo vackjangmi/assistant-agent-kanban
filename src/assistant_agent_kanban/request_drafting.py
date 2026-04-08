@@ -36,6 +36,7 @@ class RequestDraftTranscriptEntry(BaseModel):
 
 
 class RequestDraftPayload(BaseModel):
+    request_draft_id: str | None = None
     title: str | None = None
     goal: str | None = None
     background: str | None = None
@@ -47,6 +48,9 @@ class RequestDraftPayload(BaseModel):
     acceptance_criteria: str | None = None
     target_repo: str | None = None
     base_branch: str | None = None
+    request_upload_token: str | None = None
+    active_tab: Literal["assistant", "fields"] | None = None
+    request_draft_input: str | None = None
     transcript: list[RequestDraftTranscriptEntry] = Field(default_factory=list)
     message: str
 
