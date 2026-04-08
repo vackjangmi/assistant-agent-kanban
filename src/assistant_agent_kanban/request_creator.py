@@ -90,6 +90,7 @@ def create_request(
     target_repo_root: Path,
     base_branch: str | None = None,
     request_upload_token: str | None = None,
+    request_draft_markdown: str | None = None,
 ) -> Path:
     title = template.title.strip()
     goal = (template.goal or "").strip()
@@ -99,21 +100,21 @@ def create_request(
     task_dir = requests_dir / _generate_task_key(config.kanban_root)
     task_dir.mkdir(parents=True, exist_ok=False)
     try:
+        resolved_repo = resolve_safe_target_repo_root(target_repo_root)
+        request_language = runtime_language_code_to_request_language(config.runtime.language)
+        finalized_uploads: dict[str, dict[str, str]] = {}
         normalized_template = template.model_copy(
             update={
-                "goal": _normalize_markdown_attachments(
-                    task_dir,
-                    _finalize_request_uploads(config, task_dir, goal or None, request_upload_token),
-                ),
-                "background": _normalize_markdown_attachments(
-                    task_dir,
-                    _finalize_request_uploads(config, task_dir, template.background, request_upload_token),
-                ),
+                "goal": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, goal or None, request_upload_token, finalized_uploads)),
+                "background": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, template.background, request_upload_token, finalized_uploads)),
+                "scope": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, template.scope, request_upload_token, finalized_uploads)),
+                "out_of_scope": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, template.out_of_scope, request_upload_token, finalized_uploads)),
+                "constraints": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, template.constraints, request_upload_token, finalized_uploads)),
+                "references": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, template.references, request_upload_token, finalized_uploads)),
+                "acceptance_criteria": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, template.acceptance_criteria, request_upload_token, finalized_uploads)),
             }
         )
         request_path = task_dir / "REQUEST.md"
-        resolved_repo = resolve_safe_target_repo_root(target_repo_root)
-        request_language = runtime_language_code_to_request_language(config.runtime.language)
         lines = [
             "---",
             f"title: {title}",
@@ -128,6 +129,12 @@ def create_request(
         ]
         lines.extend(_render_request_sections(normalized_template.model_copy(update={"title": title}), language_code=request_language))
         request_path.write_text("\n".join(lines))
+        draft_markdown = _normalize_request_markdown_field(
+            task_dir,
+            _finalize_request_uploads(config, task_dir, request_draft_markdown, request_upload_token, finalized_uploads),
+        )
+        if isinstance(draft_markdown, str) and draft_markdown.strip():
+            (task_dir / "REQUEST-DRAFT.md").write_text(_render_request_draft_artifact(draft_markdown))
         _clear_request_uploads(config, request_upload_token)
         return task_dir
     except Exception:
@@ -184,19 +191,63 @@ def _normalize_markdown_attachments(task_dir: Path, content: str | None) -> str 
     return EMBEDDED_IMAGE_RE.sub(replace, content)
 
 
-def _finalize_request_uploads(config: AppConfig, task_dir: Path, content: str | None, upload_token: str | None) -> str | None:
-    if not content or not content.strip() or not upload_token:
+def _normalize_request_markdown_field(task_dir: Path, content: str | list[str] | None) -> str | list[str] | None:
+    if content is None:
+        return None
+    if isinstance(content, list):
+        return [normalized for item in content if (normalized := _normalize_markdown_attachments(task_dir, item))]
+    return _normalize_markdown_attachments(task_dir, content)
+
+
+def _render_request_draft_artifact(content: str) -> str:
+    body = content.strip()
+    if body.startswith('# Request Draft Transcript'):
+        body = body.removeprefix('# Request Draft Transcript').lstrip()
+    return "\n".join(
+        [
+            "# Request Draft Transcript",
+            "",
+            "> Non-authoritative drafting context captured at request creation time.",
+            "> `REQUEST.md` remains the only authoritative planner input.",
+            "",
+            body,
+            "",
+        ]
+    )
+
+
+def _finalize_request_uploads(
+    config: AppConfig,
+    task_dir: Path,
+    content: str | list[str] | None,
+    upload_token: str | None,
+    finalized_uploads: dict[str, dict[str, str]] | None = None,
+) -> str | list[str] | None:
+    if not content or not upload_token:
+        return content
+    if isinstance(content, list):
+        finalized_items: list[str] = []
+        for item in content:
+            finalized_item = _finalize_request_uploads(config, task_dir, item, upload_token, finalized_uploads)
+            if isinstance(finalized_item, str) and finalized_item:
+                finalized_items.append(finalized_item)
+        return finalized_items
+    if not content.strip():
         return content
     token = _normalize_request_upload_token(upload_token)
     upload_dir = _request_upload_dir(config, token)
     pattern = re.compile(rf"(?P<prefix>!\[[^\]]*\]\()/api/request-uploads/{re.escape(token)}/(?P<filename>[^)]+)(?P<suffix>\))")
+    finalized: dict[str, dict[str, str]] = finalized_uploads if finalized_uploads is not None else {}
 
     def replace(match: re.Match[str]) -> str:
         filename = Path(match.group("filename")).name
-        source = (upload_dir / filename).resolve()
-        if source.parent != upload_dir or not source.exists():
-            raise ValueError("request upload not found")
-        saved = _move_attachment_into_task(task_dir, source)
+        saved = finalized.get(filename)
+        if saved is None:
+            source = (upload_dir / filename).resolve()
+            if source.parent != upload_dir or not source.exists():
+                raise ValueError("request upload not found")
+            saved = _move_attachment_into_task(task_dir, source)
+            finalized[filename] = saved
         return f"{match.group('prefix')}{saved['relative_path']}{match.group('suffix')}"
 
     return pattern.sub(replace, content)
