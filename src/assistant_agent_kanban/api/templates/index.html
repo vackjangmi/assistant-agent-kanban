@@ -971,6 +971,17 @@
     .retrospective-content { min-height: 220px; max-height: min(52vh, 560px); overflow: auto; padding: 14px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); white-space: pre-wrap; line-height: 1.5; }
     .retrospective-empty { color: var(--muted); }
     .composer-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; }
+    .request-composer-shell { display: grid; gap: 14px; }
+    .request-composer-tabs { margin-bottom: 0; }
+    .request-composer-panel { display: grid; gap: 18px; }
+    .request-composer-panel[hidden] { display: none; }
+    .request-composer-assistant .human-review-box { min-height: 560px; }
+    .request-draft-guidance { display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,249,239,0.96), rgba(247,242,232,0.84)); }
+    .request-draft-guidance-copy { display: grid; gap: 6px; }
+    .request-draft-guidance-copy strong { color: var(--accent-strong); font-size: 1rem; }
+    .request-draft-guidance-copy p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .request-draft-starters { display: flex; flex-wrap: wrap; gap: 8px; }
+    .request-draft-starters button { min-height: 40px; }
     .group { display: grid; gap: 12px; align-content: start; }
     .field { display: grid; gap: 6px; }
     .field.span-full { grid-column: 1 / -1; }
@@ -1155,8 +1166,17 @@
     .reviewer-qa-entry[data-role="answer"] .reviewer-qa-bubble, .request-draft-entry[data-role="assistant"] .request-draft-bubble { background: rgba(255,255,255,0.94); }
     .reviewer-qa-entry[data-role="transcript"] .reviewer-qa-bubble { max-width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.94rem; }
     .reviewer-qa-composer, .request-draft-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+    .request-draft-composer-main { display: grid; gap: 8px; min-width: 0; }
+    .request-draft-composer-actions { display: grid; gap: 10px; align-self: stretch; }
     #task-reviewer-qa-input.reviewer-qa-input, #request-draft-input.request-draft-input { min-height: 120px; max-height: 120px; height: 120px; resize: none; }
     .reviewer-qa-send, .request-draft-send { min-height: 120px; height: 120px; align-self: end; }
+    .request-draft-attach { min-height: 48px; }
+    .request-draft-attachment-status { min-height: 1.4em; font-size: 0.88rem; line-height: 1.45; }
+    .request-draft-attachment-status[data-tone="success"] { color: var(--success); }
+    .request-draft-attachment-status[data-tone="error"] { color: var(--danger); }
+    .request-draft-attachment-status[data-tone="busy"] { color: var(--accent-strong); }
+    .request-draft-composer.is-drop-target #request-draft-input.request-draft-input { border-color: var(--accent-strong); background: rgba(255,249,239,0.98); }
+    body[data-theme="dark"] .request-draft-composer.is-drop-target #request-draft-input.request-draft-input { background: rgba(30, 41, 52, 0.98); }
     .request-draft-suggestions { display: grid; gap: 8px; width: min(100%, 720px); }
     .request-draft-suggestions-title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }
     .request-draft-suggestion-list { display: grid; gap: 8px; }
@@ -1359,82 +1379,116 @@
                   </div>
                 </div>
               </div>
-              <div class="field span-full">
-                <label id="request-background-label" for="background">Background / Why</label>
-                <span id="request-background-description">Context that helps the planner understand motivation and history.</span>
-                <textarea id="background" name="background"></textarea>
-                <div class="error-text" data-error-for="background"></div>
-              </div>
-              <div class="field span-full">
-                <label id="request-goal-label" for="request-goal-editor-fallback">Goal</label>
-                <span id="request-goal-description">The concrete outcome you want from the implementation.</span>
-                <textarea id="goal" name="goal" hidden></textarea>
-                <div class="human-review-editor-shell request-goal-editor-shell">
-                  <div id="request-goal-editor-host" class="editor-host" aria-labelledby="request-goal-label"></div>
-                  <textarea id="request-goal-editor-fallback" class="editor-textarea" aria-labelledby="request-goal-label" hidden></textarea>
-                </div>
-                <div class="error-text" data-error-for="goal"></div>
-              </div>
             </div>
           </section>
           <section class="settings-section">
-            <div class="settings-section-head">
-              <strong id="request-repo-heading">Repo scope</strong>
-              <span id="request-repo-description">Target repo, branch, and delivery guardrails.</span>
-            </div>
-            <div class="composer-grid">
-              <div class="field compact">
-                <label id="request-constraints-label" for="constraints">Constraints / Notes</label>
-                <span id="request-constraints-description">Technical limits, deadlines, or environment rules.</span>
-                <textarea id="constraints" name="constraints"></textarea>
-                <div class="error-text" data-error-for="constraints"></div>
+            <div class="request-composer-shell">
+              <div id="request-composer-tabs" class="task-tabs request-composer-tabs" role="tablist" aria-label="Request composer views">
+                <button type="button" id="request-composer-tab-assistant" class="active" role="tab" aria-selected="true" aria-controls="request-composer-panel-assistant" tabindex="0">Assistant draft</button>
+                <button type="button" id="request-composer-tab-fields" role="tab" aria-selected="false" aria-controls="request-composer-panel-fields" tabindex="-1">Request details</button>
               </div>
-              <div class="field compact">
-                <label id="request-acceptance-label" for="acceptance_criteria">Acceptance criteria</label>
-                <span id="request-acceptance-description">One expected outcome per line.</span>
-                <textarea id="acceptance_criteria" name="acceptance_criteria"></textarea>
-                <div class="error-text" data-error-for="acceptance_criteria"></div>
-              </div>
-              <div class="field compact">
-                <label id="request-scope-label" for="scope">Scope</label>
-                <span id="request-scope-description">Starts with repo-based defaults; you can edit each line.</span>
-                <textarea id="scope" name="scope"></textarea>
-                <div class="error-text" data-error-for="scope"></div>
-              </div>
-              <div class="field compact">
-                <label id="request-out-of-scope-label" for="out_of_scope">Out of scope</label>
-                <span id="request-out-of-scope-description">Pre-filled to keep changes inside the target repo; you can edit it.</span>
-                <textarea id="out_of_scope" name="out_of_scope"></textarea>
-                <div class="error-text" data-error-for="out_of_scope"></div>
-              </div>
-              <div class="field compact span-full">
-                <label id="request-references-label" for="references">Reference files / paths</label>
-                <span id="request-references-description">One path per line.</span>
-                <textarea id="references" name="references"></textarea>
-                <div class="error-text" data-error-for="references"></div>
-              </div>
-            </div>
-          </section>
-          <section class="settings-section">
-            <div class="settings-section-head">
-              <strong id="request-draft-heading">Draft with assistant</strong>
-              <span id="request-draft-description">Ask for help refining the request before you create the final task.</span>
-            </div>
-            <div class="human-review-panel">
-              <div class="human-review-box">
-                <div class="editor-toolbar">
-                  <div>
-                    <strong id="request-draft-title">Composer assistant</strong>
-                    <div id="request-draft-status" class="muted">Ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates are optional until you apply them.</div>
+              <div id="request-composer-panel-fields" class="request-composer-panel" role="tabpanel" aria-labelledby="request-composer-tab-fields" hidden>
+                <section class="settings-section">
+                  <div class="settings-section-head">
+                    <strong id="request-repo-heading">Repo scope</strong>
+                    <span id="request-repo-description">Target repo, branch, and delivery guardrails.</span>
                   </div>
-                </div>
-                <div id="request-draft-transcript" class="request-draft-log" role="log" aria-live="polite" aria-relevant="additions text"><p class="request-draft-empty">No draft conversation yet.</p></div>
-                <div class="human-review-footer">
-                  <div class="request-draft-composer">
-                    <textarea id="request-draft-input" class="editor-textarea request-draft-input" spellcheck="true" placeholder="Ask the assistant to improve this request..."></textarea>
-                    <button type="button" id="send-request-draft" class="request-draft-send">Send</button>
+                  <div class="composer-grid">
+                    <div class="field span-full">
+                      <label id="request-background-label" for="background">Background / Why</label>
+                      <span id="request-background-description">Context that helps the planner understand motivation and history.</span>
+                      <textarea id="background" name="background"></textarea>
+                      <div class="error-text" data-error-for="background"></div>
+                    </div>
+                    <div class="field span-full">
+                      <label id="request-goal-label" for="request-goal-editor-fallback">Goal</label>
+                      <span id="request-goal-description">The concrete outcome you want from the implementation.</span>
+                      <textarea id="goal" name="goal" hidden></textarea>
+                      <div class="human-review-editor-shell request-goal-editor-shell">
+                        <div id="request-goal-editor-host" class="editor-host" aria-labelledby="request-goal-label"></div>
+                        <textarea id="request-goal-editor-fallback" class="editor-textarea" aria-labelledby="request-goal-label" hidden></textarea>
+                      </div>
+                      <div class="error-text" data-error-for="goal"></div>
+                    </div>
+                    <div class="field compact">
+                      <label id="request-constraints-label" for="constraints">Constraints / Notes</label>
+                      <span id="request-constraints-description">Technical limits, deadlines, or environment rules.</span>
+                      <textarea id="constraints" name="constraints"></textarea>
+                      <div class="error-text" data-error-for="constraints"></div>
+                    </div>
+                    <div class="field compact">
+                      <label id="request-acceptance-label" for="acceptance_criteria">Acceptance criteria</label>
+                      <span id="request-acceptance-description">One expected outcome per line.</span>
+                      <textarea id="acceptance_criteria" name="acceptance_criteria"></textarea>
+                      <div class="error-text" data-error-for="acceptance_criteria"></div>
+                    </div>
+                    <div class="field compact">
+                      <label id="request-scope-label" for="scope">Scope</label>
+                      <span id="request-scope-description">Starts with repo-based defaults; you can edit each line.</span>
+                      <textarea id="scope" name="scope"></textarea>
+                      <div class="error-text" data-error-for="scope"></div>
+                    </div>
+                    <div class="field compact">
+                      <label id="request-out-of-scope-label" for="out_of_scope">Out of scope</label>
+                      <span id="request-out-of-scope-description">Pre-filled to keep changes inside the target repo; you can edit it.</span>
+                      <textarea id="out_of_scope" name="out_of_scope"></textarea>
+                      <div class="error-text" data-error-for="out_of_scope"></div>
+                    </div>
+                    <div class="field compact span-full">
+                      <label id="request-references-label" for="references">Reference files / paths</label>
+                      <span id="request-references-description">One path per line.</span>
+                      <textarea id="references" name="references"></textarea>
+                      <div class="error-text" data-error-for="references"></div>
+                    </div>
                   </div>
-                </div>
+                </section>
+              </div>
+              <div id="request-composer-panel-assistant" class="request-composer-panel request-composer-assistant" role="tabpanel" aria-labelledby="request-composer-tab-assistant">
+                <section class="settings-section">
+                  <div class="settings-section-head">
+                    <strong id="request-draft-heading">Draft with assistant</strong>
+                    <span id="request-draft-description">Ask for help refining the request before you create the final task.</span>
+                  </div>
+                  <div class="request-draft-guidance">
+                    <div class="request-draft-guidance-copy">
+                      <strong id="request-draft-guidance-title">Start here with the assistant</strong>
+                      <p id="request-draft-guidance-body">Describe the outcome, tradeoffs, or rough notes you already have. The assistant can help tighten scope and make the request easier to implement.</p>
+                      <p id="request-draft-guidance-review">When the draft looks right, switch to Request details to review or edit the actual form fields. Create request still submits only the form values.</p>
+                    </div>
+                    <div>
+                      <div id="request-draft-starters-title" class="request-draft-suggestions-title">Starter prompts</div>
+                      <div id="request-draft-starters" class="request-draft-starters" aria-label="Starter prompts for the request assistant">
+                        <button type="button" class="ghost-button" data-request-draft-starter="scope">Tighten the scope</button>
+                        <button type="button" class="ghost-button" data-request-draft-starter="acceptance">Strengthen acceptance criteria</button>
+                        <button type="button" class="ghost-button" data-request-draft-starter="risks">Find missing risks or constraints</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="human-review-panel">
+                    <div class="human-review-box">
+                      <div class="editor-toolbar">
+                        <div>
+                          <strong id="request-draft-title">Composer assistant</strong>
+                          <div id="request-draft-status" class="muted">Ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates are optional until you apply them.</div>
+                        </div>
+                      </div>
+                      <div id="request-draft-transcript" class="request-draft-log" role="log" aria-live="polite" aria-relevant="additions text"><p class="request-draft-empty">No draft conversation yet.</p></div>
+                      <div class="human-review-footer">
+                        <div id="request-draft-composer" class="request-draft-composer">
+                          <div class="request-draft-composer-main">
+                            <textarea id="request-draft-input" class="editor-textarea request-draft-input" spellcheck="true" placeholder="Ask the assistant to improve this request..."></textarea>
+                            <input id="request-draft-image-input" type="file" accept="image/*" hidden>
+                            <div id="request-draft-attachment-status" class="muted request-draft-attachment-status">Attach an image file or paste a screenshot. Uploaded images are inserted as markdown at the cursor.</div>
+                          </div>
+                          <div class="request-draft-composer-actions">
+                            <button type="button" id="attach-request-draft-image" class="ghost-button request-draft-attach">Attach image</button>
+                            <button type="button" id="send-request-draft" class="request-draft-send">Send</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
           </section>
@@ -1526,6 +1580,21 @@
               </div>
             </div>
             <div class="settings-grid">
+          <div class="settings-card">
+            <strong id="settings-request-draft-title">Request drafting runtime</strong>
+            <span id="settings-request-draft-description">Pre-submit request drafting assistance.</span>
+            <div class="settings-role-inline settings-role-inline-no-agents">
+              <div class="settings-field">
+                <label id="settings-request-draft-assistant-label" for="request_draft_backend">Assistant</label>
+                <select id="request_draft_backend" name="request_draft_backend"></select>
+              </div>
+              <div class="settings-field">
+                <label id="settings-request-draft-model-label" for="request_draft_model">Model</label>
+                <input id="request_draft_model" name="request_draft_model" list="request-draft-model-options" placeholder="inherit assistant default model">
+              </div>
+            </div>
+            <small id="settings-request-draft-note">Assistant override and model for composer-only drafting help.</small>
+          </div>
           <div class="settings-card">
             <strong id="settings-planner-title">Planner runtime</strong>
             <span id="settings-planner-description">Planning runs.</span>
@@ -1637,6 +1706,7 @@
           </section>
         </div>
         <datalist id="planner-model-options"></datalist>
+        <datalist id="request-draft-model-options"></datalist>
         <datalist id="plan-approval-model-options"></datalist>
         <datalist id="implementer-model-options"></datalist>
         <datalist id="reviewer-model-options"></datalist>
@@ -2022,6 +2092,11 @@
     const requestBackgroundInput = document.getElementById('background');
     const requestGoalEditorHost = document.getElementById('request-goal-editor-host');
     const requestGoalEditorFallback = document.getElementById('request-goal-editor-fallback');
+    const requestComposerTabFields = document.getElementById('request-composer-tab-fields');
+    const requestComposerTabAssistant = document.getElementById('request-composer-tab-assistant');
+    const requestComposerPanelFields = document.getElementById('request-composer-panel-fields');
+    const requestComposerPanelAssistant = document.getElementById('request-composer-panel-assistant');
+    const requestComposerTabs = document.getElementById('request-composer-tabs');
     const targetRepoInput = document.getElementById('target_repo');
     const targetRepoOptions = document.getElementById('target-repo-options');
     const baseBranchInput = document.getElementById('base_branch');
@@ -2029,7 +2104,12 @@
     const baseBranchHelp = document.getElementById('base-branch-help');
     const requestDraftStatus = document.getElementById('request-draft-status');
     const requestDraftTranscript = document.getElementById('request-draft-transcript');
+    const requestDraftStarters = document.getElementById('request-draft-starters');
+    const requestDraftComposer = document.getElementById('request-draft-composer');
     const requestDraftInput = document.getElementById('request-draft-input');
+    const requestDraftImageInput = document.getElementById('request-draft-image-input');
+    const requestDraftAttachmentStatus = document.getElementById('request-draft-attachment-status');
+    const attachRequestDraftImageButton = document.getElementById('attach-request-draft-image');
     const sendRequestDraftButton = document.getElementById('send-request-draft');
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
@@ -2041,6 +2121,8 @@
     const plannerModelInput = document.getElementById('planner_model');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const plannerAgentCountInput = document.getElementById('planner_agent_count');
+    const requestDraftBackendInput = document.getElementById('request_draft_backend');
+    const requestDraftModelInput = document.getElementById('request_draft_model');
     const planApprovalBackendInput = document.getElementById('plan_approval_backend');
     const planApprovalModelInput = document.getElementById('plan_approval_model');
     const planApprovalSessionTokenBudgetInput = document.getElementById('plan_approval_session_token_budget');
@@ -2056,6 +2138,7 @@
     const commitModelInput = document.getElementById('commit_model');
     const commitSessionTokenBudgetInput = document.getElementById('commit_session_token_budget');
     const plannerModelOptions = document.getElementById('planner-model-options');
+    const requestDraftModelOptions = document.getElementById('request-draft-model-options');
     const planApprovalModelOptions = document.getElementById('plan-approval-model-options');
     const implementerModelOptions = document.getElementById('implementer-model-options');
     const reviewerModelOptions = document.getElementById('reviewer-model-options');
@@ -2063,9 +2146,11 @@
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
     const settingsStatus = document.getElementById('settings-status');
     const refreshModelOptionsButton = document.getElementById('refresh-model-options');
+    const constraintsField = document.getElementById('constraints');
     const scopeField = document.getElementById('scope');
     const outOfScopeField = document.getElementById('out_of_scope');
     const acceptanceCriteriaField = document.getElementById('acceptance_criteria');
+    const referencesField = document.getElementById('references');
     const defaultTargetRepo = __DEFAULT_TARGET_REPO__;
     const defaultBaseBranch = __DEFAULT_BASE_BRANCH__;
     const targetRepoDocsRoot = __TARGET_REPO_DOCS_ROOT__;
@@ -2092,6 +2177,8 @@
     const lastTargetRepoStorageKey = 'assistant-agent-kanban.last-target-repo';
     const legacyLastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
     const taskChangedFilesPaneWidthStorageKey = 'assistant-agent-kanban.task-changed-files-pane-width';
+    const requestComposerDraftStorageKey = 'assistant-agent-kanban.request-composer-draft';
+    const requestComposerDraftMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
     const taskChangedFilesPaneDefaultWidth = 260;
     const taskChangedFilesPaneMinWidth = 220;
     const taskModalError = document.getElementById('task-modal-error');
@@ -2192,6 +2279,7 @@
     let lastAutoBaseBranch = '';
     let activeTaskId = null;
     let activeTaskTab = 'overview';
+    let activeRequestComposerTab = 'assistant';
     let activeTaskDetail = null;
     let activeTaskLogs = null;
     let taskLogViewerPinnedToBottom = true;
@@ -2226,8 +2314,15 @@
     let requestDraftEntries = [];
     let requestDraftPendingMessage = '';
     let requestDraftMessageInFlight = false;
+    let requestDraftAttachmentInFlight = false;
+    let requestDraftAttachmentStatusKey = '';
+    let requestDraftAttachmentStatusMessage = '';
+    let requestDraftAttachmentStatusTone = 'neutral';
+    let requestDraftAttachmentStatusVars = {};
+    let requestDraftDropDepth = 0;
     let requestDraftLastRenderedSignature = '';
     let requestDraftTranscriptPinnedToBottom = true;
+    let requestDraftSessionToken = 0;
     const requestDraftAttachmentRegex = /!\[[^\]]*\]\((?:\/api\/request-uploads\/[^)]+|data:image\/[^)]+)\)/g;
     let humanReviewEditor = null;
     let humanReviewSourceMarkdown = '';
@@ -2251,6 +2346,7 @@
 
     const roleSettingConfigs = [
       { role: 'planner', backendInput: plannerBackendInput, modelInput: plannerModelInput, modelOptions: plannerModelOptions },
+      { role: 'request_draft', backendInput: requestDraftBackendInput, modelInput: requestDraftModelInput, modelOptions: requestDraftModelOptions },
       { role: 'plan_approval', backendInput: planApprovalBackendInput, modelInput: planApprovalModelInput, modelOptions: planApprovalModelOptions },
       { role: 'implementer', backendInput: implementerBackendInput, modelInput: implementerModelInput, modelOptions: implementerModelOptions },
       { role: 'reviewer', backendInput: reviewerBackendInput, modelInput: reviewerModelInput, modelOptions: reviewerModelOptions },
@@ -2294,6 +2390,8 @@
         repoDepthNote: 'Increase only for nested repos.',
         plannerTitle: 'Planner runtime',
         plannerDescription: 'Planning runs.',
+        requestDraftTitle: 'Request drafting runtime',
+        requestDraftDescription: 'Pre-submit request drafting assistance.',
         planApprovalTitle: 'Plan approval runtime',
         planApprovalDescription: 'Selective plan gate decisions.',
         implementerTitle: 'Implementer runtime',
@@ -2306,6 +2404,7 @@
         tokenLabel: 'Token',
         agentsLabel: 'Agent',
         plannerNote: 'Assistant override, model, token budget, and parallel agents.',
+        requestDraftNote: 'Assistant override and model for composer-only drafting help.',
         planApprovalNote: 'Assistant override, model, and token budget for auto-approve decisions.',
         implementerNote: 'Assistant override, model, token budget, and parallel agents.',
         reviewerNote: 'Assistant override, model, token budget, and parallel agents.',
@@ -2365,6 +2464,8 @@
         repoDepthNote: '중첩 저장소가 필요할 때만 늘리세요.',
         plannerTitle: 'Planner 런타임',
         plannerDescription: '계획 실행용입니다.',
+        requestDraftTitle: '요청 초안 런타임',
+        requestDraftDescription: '요청 생성 전 초안 작성 보조용입니다.',
         planApprovalTitle: '플랜 승인 런타임',
         planApprovalDescription: '선별적인 플랜 게이트 판단용입니다.',
         implementerTitle: 'Implementer 런타임',
@@ -2377,6 +2478,7 @@
         tokenLabel: 'Token',
         agentsLabel: '에이전트',
         plannerNote: '어시스턴트 오버라이드, 모델, 토큰 예산, 병렬 수.',
+        requestDraftNote: '작성 보조용 어시스턴트 오버라이드와 모델입니다.',
         planApprovalNote: '어시스턴트 오버라이드, 모델, 토큰 예산.',
         implementerNote: '어시스턴트 오버라이드, 모델, 토큰 예산, 병렬 수.',
         reviewerNote: '어시스턴트 오버라이드, 모델, 토큰 예산, 병렬 수.',
@@ -2407,7 +2509,7 @@
         openComposer: 'New request',
         refreshBoard: 'Refresh',
         title: 'Create request',
-        description: 'Build a structured REQUEST.md with repo-aware defaults and editable planning fields.',
+        description: 'Start with the assistant to shape the draft, then review the Request details form before creating REQUEST.md.',
         copyTitle: 'Quick setup',
         copyBody: 'Start with the task basics, then adjust repo-aware defaults only where needed.',
         basicsHeading: 'Request basics',
@@ -2444,16 +2546,35 @@
         acceptanceLabel: 'Acceptance criteria',
         acceptanceDescription: 'One expected outcome per line.',
         draftHeading: 'Draft with assistant',
-        draftDescription: 'Ask for help refining the request before you create the final task.',
+        draftDescription: 'Start with the assistant, then switch to Request details to review or edit the final form fields.',
+        composerTabsLabel: 'Request composer views',
+        composerTabFields: 'Request details',
+        composerTabAssistant: 'Assistant draft',
         draftTitle: 'Composer assistant',
+        draftGuidanceTitle: 'Start here with the assistant',
+        draftGuidanceBody: 'Describe the outcome, tradeoffs, or rough notes you already have. The assistant can help tighten scope and make the request easier to implement.',
+        draftGuidanceReview: 'When the draft looks right, switch to Request details to review or edit the actual form fields. Create request still submits only the form values.',
+        draftStartersTitle: 'Starter prompts',
+        draftStarterScope: 'Tighten the scope',
+        draftStarterAcceptance: 'Strengthen acceptance criteria',
+        draftStarterRisks: 'Find missing risks or constraints',
+        draftUserLabel: 'You',
+        draftLiveSuffix: ' · live',
         draftPlaceholder: 'Ask the assistant to improve this request...',
+        draftStarterPrompt: 'Please help turn these notes into a crisp request. Tighten the goal, highlight missing constraints, and suggest clearer acceptance criteria.',
+        draftAttachImage: 'Attach image',
+        draftAttachmentHelp: 'Attach an image file or paste a screenshot. Uploaded images are inserted as markdown at the cursor.',
+        draftAttachmentUploading: 'Uploading {filename}...',
+        draftAttachmentAttached: 'Inserted image markdown for {filename}.',
+        draftAttachmentFailed: 'Image upload failed.',
         draftSend: 'Send',
         draftEmpty: 'No draft conversation yet.',
-        draftIdle: 'Ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates are optional until you apply them.',
+        draftIdle: 'Start here: ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates stay optional until you apply them, and Create request still uses only the form fields.',
         draftSending: 'Assistant is drafting a suggestion…',
         draftApplied: 'Applied the suggested update to {field}.',
         draftSuggestedUpdates: 'Suggested updates',
         draftApply: 'Apply',
+        draftClearField: '(clear field)',
         draftReplyError: 'Drafting help failed.',
         close: 'Close',
         submit: 'Create request',
@@ -2467,7 +2588,7 @@
         openComposer: '새 요청',
         refreshBoard: '새로고침',
         title: '요청 생성',
-        description: '저장소 기본값이 반영된 REQUEST.md를 빠르게 작성합니다.',
+        description: '먼저 어시스턴트로 초안을 다듬고, 요청 세부사항 폼을 검토한 뒤 REQUEST.md를 생성합니다.',
         copyTitle: '빠른 설정',
         copyBody: '핵심 요청을 먼저 적고, 저장소 범위는 필요한 만큼만 다듬으세요.',
         basicsHeading: '요청 기본값',
@@ -2504,16 +2625,35 @@
         acceptanceLabel: '승인 기준',
         acceptanceDescription: '기대 결과를 한 줄에 하나씩 적습니다.',
         draftHeading: '어시스턴트와 초안 다듬기',
-        draftDescription: '최종 요청을 만들기 전에 초안을 다듬는 도움을 받습니다.',
+        draftDescription: '먼저 어시스턴트로 초안을 다듬고, 요청 세부사항에서 최종 폼 값을 검토하거나 수정하세요.',
+        composerTabsLabel: '요청 작성 보기',
+        composerTabFields: '요청 세부사항',
+        composerTabAssistant: '어시스턴트 초안',
         draftTitle: '작성 도우미',
+        draftGuidanceTitle: '어시스턴트부터 시작하세요',
+        draftGuidanceBody: '원하는 결과, 고려 중인 트레이드오프, 대략적인 메모만 적어도 됩니다. 어시스턴트가 범위를 다듬고 구현하기 쉬운 요청으로 정리해 줍니다.',
+        draftGuidanceReview: '초안이 괜찮아지면 요청 세부사항 탭으로 이동해 실제 폼 값을 검토하거나 수정하세요. 요청 생성은 항상 그 폼 값만 사용합니다.',
+        draftStartersTitle: '시작 프롬프트',
+        draftStarterScope: '범위를 더 선명하게 다듬기',
+        draftStarterAcceptance: '승인 기준 보강하기',
+        draftStarterRisks: '빠진 리스크나 제약 찾기',
+        draftUserLabel: '나',
+        draftLiveSuffix: ' · 작성 중',
         draftPlaceholder: '이 요청을 더 좋게 다듬어 달라고 물어보세요...',
+        draftStarterPrompt: '이 메모를 구현 가능한 요청으로 정리해 주세요. 목표를 선명하게 만들고, 빠진 제약을 짚고, 승인 기준을 더 명확하게 제안해 주세요.',
+        draftAttachImage: '이미지 첨부',
+        draftAttachmentHelp: '이미지 파일을 첨부하거나 스크린샷을 붙여넣으세요. 업로드된 이미지는 커서 위치에 markdown으로 삽입됩니다.',
+        draftAttachmentUploading: '{filename} 업로드 중...',
+        draftAttachmentAttached: '{filename} 이미지 markdown을 삽입했습니다.',
+        draftAttachmentFailed: '이미지 업로드에 실패했습니다.',
         draftSend: '보내기',
         draftEmpty: '아직 초안 대화가 없습니다.',
-        draftIdle: '범위 정리, 승인 기준 보강, 목표 다듬기 등을 요청할 수 있습니다. 제안된 변경은 적용하기 전까지 폼에 반영되지 않습니다.',
+        draftIdle: '여기서 먼저 시작해 보세요. 범위 정리, 승인 기준 보강, 목표 다듬기 등을 요청할 수 있습니다. 제안된 변경은 적용하기 전까지 폼에 반영되지 않으며, 요청 생성은 항상 폼 값만 사용합니다.',
         draftSending: '어시스턴트가 초안을 정리하는 중...',
         draftApplied: '{field} 필드에 제안을 적용했습니다.',
         draftSuggestedUpdates: '제안된 변경',
         draftApply: '적용',
+        draftClearField: '(필드 비우기)',
         draftReplyError: '초안 도움 요청에 실패했습니다.',
         close: '닫기',
         submit: '요청 생성',
@@ -3337,6 +3477,8 @@
       setSettingsHtml('settings-repo-depth-note', 'repoDepthNote');
       setSettingsText('settings-planner-title', 'plannerTitle');
       setSettingsText('settings-planner-description', 'plannerDescription');
+      setSettingsText('settings-request-draft-title', 'requestDraftTitle');
+      setSettingsText('settings-request-draft-description', 'requestDraftDescription');
       setSettingsText('settings-plan-approval-title', 'planApprovalTitle');
       setSettingsText('settings-plan-approval-description', 'planApprovalDescription');
       setSettingsText('settings-implementer-title', 'implementerTitle');
@@ -3345,7 +3487,7 @@
       setSettingsText('settings-reviewer-description', 'reviewerDescription');
       setSettingsText('settings-commit-title', 'commitTitle');
       setSettingsText('settings-commit-description', 'commitDescription');
-      ['planner', 'plan-approval', 'implementer', 'reviewer', 'commit'].forEach((prefix) => {
+      ['planner', 'request-draft', 'plan-approval', 'implementer', 'reviewer', 'commit'].forEach((prefix) => {
         const assistantLabel = document.getElementById(`settings-${prefix}-assistant-label`);
         if (assistantLabel) assistantLabel.textContent = translateSettings('roleAssistantLabel');
         const modelLabel = document.getElementById(`settings-${prefix}-model-label`);
@@ -3357,6 +3499,7 @@
       setSettingsText('settings-implementer-agents-label', 'agentsLabel');
       setSettingsText('settings-reviewer-agents-label', 'agentsLabel');
       setSettingsHtml('settings-planner-note', 'plannerNote');
+      setSettingsHtml('settings-request-draft-note', 'requestDraftNote');
       setSettingsHtml('settings-plan-approval-note', 'planApprovalNote');
       setSettingsHtml('settings-implementer-note', 'implementerNote');
       setSettingsHtml('settings-reviewer-note', 'reviewerNote');
@@ -3405,10 +3548,24 @@
       setRequestText('request-references-description', 'referencesDescription');
       setRequestText('request-acceptance-label', 'acceptanceLabel');
       setRequestText('request-acceptance-description', 'acceptanceDescription');
+      requestComposerTabs.setAttribute('aria-label', translateRequest('composerTabsLabel'));
       setRequestText('request-draft-heading', 'draftHeading');
       setRequestText('request-draft-description', 'draftDescription');
+      setRequestText('request-draft-guidance-title', 'draftGuidanceTitle');
+      setRequestText('request-draft-guidance-body', 'draftGuidanceBody');
+      setRequestText('request-draft-guidance-review', 'draftGuidanceReview');
+      setRequestText('request-draft-starters-title', 'draftStartersTitle');
+      requestComposerTabFields.textContent = translateRequest('composerTabFields');
+      requestComposerTabAssistant.textContent = translateRequest('composerTabAssistant');
+      const requestDraftStarterScopeButton = requestDraftStarters.querySelector('[data-request-draft-starter="scope"]');
+      const requestDraftStarterAcceptanceButton = requestDraftStarters.querySelector('[data-request-draft-starter="acceptance"]');
+      const requestDraftStarterRisksButton = requestDraftStarters.querySelector('[data-request-draft-starter="risks"]');
+      if (requestDraftStarterScopeButton) requestDraftStarterScopeButton.textContent = translateRequest('draftStarterScope');
+      if (requestDraftStarterAcceptanceButton) requestDraftStarterAcceptanceButton.textContent = translateRequest('draftStarterAcceptance');
+      if (requestDraftStarterRisksButton) requestDraftStarterRisksButton.textContent = translateRequest('draftStarterRisks');
       setRequestText('request-draft-title', 'draftTitle');
       requestDraftInput.placeholder = translateRequest('draftPlaceholder');
+      attachRequestDraftImageButton.textContent = translateRequest('draftAttachImage');
       sendRequestDraftButton.textContent = translateRequest('draftSend');
       cancelComposerButton.textContent = translateRequest('close');
       submitButton.textContent = translateRequest('submit');
@@ -3505,6 +3662,7 @@
         coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
         role_backends: {
           planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
+          request_draft: requestDraftBackendInput.value === 'default' ? null : requestDraftBackendInput.value,
           plan_approval: planApprovalBackendInput.value === 'default' ? null : planApprovalBackendInput.value,
           implementer: implementerBackendInput.value === 'default' ? null : implementerBackendInput.value,
           reviewer: reviewerBackendInput.value === 'default' ? null : reviewerBackendInput.value,
@@ -3514,6 +3672,7 @@
         repo_discovery_root: repoDiscoveryRootInput.value || '../',
         repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
         planner_model: plannerModelInput.value || '',
+        request_draft_model: requestDraftModelInput.value || '',
         planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
         planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
         plan_approval_model: planApprovalModelInput.value || '',
@@ -3536,6 +3695,7 @@
       applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions(cachedAssistantOptions, state.coding_assistant || 'opencode');
       plannerBackendInput.value = state.role_backends?.planner || 'default';
+      requestDraftBackendInput.value = state.role_backends?.request_draft || 'default';
       planApprovalBackendInput.value = state.role_backends?.plan_approval || 'default';
       implementerBackendInput.value = state.role_backends?.implementer || 'default';
       reviewerBackendInput.value = state.role_backends?.reviewer || 'default';
@@ -3545,6 +3705,7 @@
       repoDiscoveryRootInput.value = state.repo_discovery_root || '../';
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, state.repo_discovery_max_depth, 2);
       plannerModelInput.value = state.planner_model || '';
+      requestDraftModelInput.value = state.request_draft_model || '';
       syncNumericSettingInput(plannerSessionTokenBudgetInput, state.planner_session_token_budget, 250);
       syncNumericSettingInput(plannerAgentCountInput, state.planner_agent_count, 1);
       planApprovalModelInput.value = state.plan_approval_model || '';
@@ -4244,6 +4405,141 @@
       }
     }
 
+    function serializeRequestDraftArtifactMarkdown() {
+      const transcript = requestDraftEntries.filter((entry) => !entry.pending && (entry.role === 'user' || entry.role === 'assistant'));
+      if (!transcript.length) return '';
+      const sections = [];
+      transcript.forEach((entry, index) => {
+        sections.push(`## ${entry.role === 'user' ? translateRequest('draftUserLabel') : translateRequest('draftTitle')} ${index + 1}`);
+        sections.push('');
+        sections.push(entry.text || '');
+        if (entry.role === 'assistant' && entry.field_updates && Object.keys(entry.field_updates).length) {
+          sections.push('');
+          sections.push(`### ${translateRequest('draftSuggestedUpdates')}`);
+          sections.push('');
+          Object.entries(entry.field_updates)
+            .filter(([, value]) => value != null)
+            .forEach(([fieldName, value]) => {
+              sections.push(`- **${requestDraftFieldLabel(fieldName)}**: ${value === '' ? translateRequest('draftClearField') : value}`);
+            });
+        }
+        sections.push('');
+      });
+      return sections.join('\n').trim();
+    }
+
+    function currentRequestComposerDraftState() {
+      syncRequestGoalField();
+      return {
+        title: requestTitleInput.value || '',
+        target_repo: targetRepoInput.value || '',
+        base_branch: baseBranchInput.value || '',
+        background: requestBackgroundInput.value || '',
+        goal: currentRequestGoalValue(),
+        constraints: constraintsField.value || '',
+        acceptance_criteria: acceptanceCriteriaField.value || '',
+        scope: scopeField.value || '',
+        out_of_scope: outOfScopeField.value || '',
+        references: referencesField.value || '',
+        plan_auto_approve: document.getElementById('plan_auto_approve').checked,
+        active_tab: activeRequestComposerTab,
+        request_upload_token: requestUploadToken || '',
+        request_draft_input: requestDraftInput.value || '',
+        request_draft_entries: requestDraftEntries.filter((entry) => !entry.pending).map((entry) => ({ role: entry.role, text: entry.text || '', field_updates: entry.field_updates || {} })),
+        saved_at: Date.now(),
+      };
+    }
+
+    function persistRequestComposerDraftState() {
+      const state = currentRequestComposerDraftState();
+      const hasContent = Boolean(
+        (state.title || '').trim() ||
+        (state.target_repo || '').trim() ||
+        (state.base_branch || '').trim() ||
+        (state.background || '').trim() ||
+        (state.goal || '').trim() ||
+        (state.constraints || '').trim() ||
+        (state.acceptance_criteria || '').trim() ||
+        (state.scope || '').trim() ||
+        (state.out_of_scope || '').trim() ||
+        (state.references || '').trim() ||
+        (state.request_draft_input || '').trim() ||
+        (state.request_draft_entries || []).length ||
+        state.request_upload_token
+      );
+      try {
+        if (!hasContent) {
+          window.localStorage.removeItem(requestComposerDraftStorageKey);
+          return;
+        }
+        window.localStorage.setItem(requestComposerDraftStorageKey, JSON.stringify(state));
+      } catch (_error) {
+      }
+    }
+
+    function clearRequestComposerDraftState() {
+      try {
+        window.localStorage.removeItem(requestComposerDraftStorageKey);
+      } catch (_error) {
+      }
+    }
+
+    function cleanupPersistedRequestDraftUploads(saved) {
+      const uploadToken = (saved?.request_upload_token || '').trim();
+      if (!uploadToken) return;
+      void cleanupRequestUploads(uploadToken);
+    }
+
+    function restoreRequestComposerDraftState() {
+      try {
+        const raw = window.localStorage.getItem(requestComposerDraftStorageKey);
+        if (!raw) return false;
+        const saved = JSON.parse(raw);
+        if (saved?.saved_at && Date.now() - Number(saved.saved_at) > requestComposerDraftMaxAgeMs) {
+          cleanupPersistedRequestDraftUploads(saved);
+          clearRequestComposerDraftState();
+          return false;
+        }
+        requestForm.reset();
+        requestTitleInput.value = saved.title || '';
+        targetRepoInput.value = saved.target_repo || defaultTargetRepo;
+        targetRepoInput.dataset.autofilled = 'false';
+        baseBranchInput.value = saved.base_branch || defaultBaseBranch;
+        baseBranchInput.dataset.autofilled = 'false';
+        requestBackgroundInput.value = saved.background || '';
+        setRequestGoalEditorContent(saved.goal || '', { initialize: false });
+        constraintsField.value = saved.constraints || '';
+        acceptanceCriteriaField.value = saved.acceptance_criteria || '';
+        scopeField.value = saved.scope || '';
+        outOfScopeField.value = saved.out_of_scope || '';
+        referencesField.value = saved.references || '';
+        document.getElementById('plan_auto_approve').checked = Boolean(saved.plan_auto_approve);
+        requestUploadToken = saved.request_upload_token || generateRequestUploadToken();
+        requestDraftInput.value = saved.request_draft_input || '';
+        requestDraftEntries = Array.isArray(saved.request_draft_entries)
+          ? saved.request_draft_entries
+              .filter((entry) => entry && (entry.role === 'user' || entry.role === 'assistant'))
+              .map((entry) => ({ role: entry.role, text: entry.text || '', field_updates: entry.field_updates || {} }))
+          : [];
+        requestDraftPendingMessage = '';
+        requestDraftMessageInFlight = false;
+        requestDraftAttachmentInFlight = false;
+        requestDraftAttachmentStatusKey = '';
+        requestDraftAttachmentStatusMessage = '';
+        requestDraftAttachmentStatusTone = 'neutral';
+        requestDraftAttachmentStatusVars = {};
+        requestDraftDropDepth = 0;
+        requestDraftLastRenderedSignature = '';
+        requestDraftTranscriptPinnedToBottom = true;
+        setRequestComposerTab(saved.active_tab === 'fields' ? 'fields' : 'assistant');
+        updateRequestDraftPanel();
+        return true;
+      } catch (_error) {
+        clearRequestComposerDraftState();
+        return false;
+      }
+    }
+
     function isDesktopDiffLayout() {
       return window.innerWidth > 900;
     }
@@ -4451,6 +4747,7 @@
         cachedAssistantOptions = resolveAssistantOptions(data);
         renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
         plannerBackendInput.value = data.role_backends?.planner || 'default';
+        requestDraftBackendInput.value = data.role_backends?.request_draft || 'default';
         planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
         implementerBackendInput.value = data.role_backends?.implementer || 'default';
         reviewerBackendInput.value = data.role_backends?.reviewer || 'default';
@@ -4461,6 +4758,7 @@
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         plannerModelInput.value = data.planner_model || '';
+        requestDraftModelInput.value = data.request_draft_model || '';
         syncNumericSettingInput(plannerSessionTokenBudgetInput, data.planner_session_token_budget, 250);
         syncNumericSettingInput(plannerAgentCountInput, data.planner_agent_count, 1);
         planApprovalModelInput.value = data.plan_approval_model || '';
@@ -4505,6 +4803,7 @@
             coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
             role_backends: {
               planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
+              request_draft: requestDraftBackendInput.value === 'default' ? null : requestDraftBackendInput.value,
               plan_approval: planApprovalBackendInput.value === 'default' ? null : planApprovalBackendInput.value,
               implementer: implementerBackendInput.value === 'default' ? null : implementerBackendInput.value,
               reviewer: reviewerBackendInput.value === 'default' ? null : reviewerBackendInput.value,
@@ -4514,6 +4813,7 @@
             repo_discovery_root: repoDiscoveryRootInput.value,
             repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
             planner_model: plannerModelInput.value,
+            request_draft_model: requestDraftModelInput.value,
             planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
             planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
             plan_approval_model: planApprovalModelInput.value,
@@ -4536,6 +4836,7 @@
         cachedAssistantOptions = resolveAssistantOptions(data);
         renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
         plannerBackendInput.value = data.role_backends?.planner || 'default';
+        requestDraftBackendInput.value = data.role_backends?.request_draft || 'default';
         planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
         implementerBackendInput.value = data.role_backends?.implementer || 'default';
         reviewerBackendInput.value = data.role_backends?.reviewer || 'default';
@@ -4546,6 +4847,7 @@
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         plannerModelInput.value = data.planner_model || '';
+        requestDraftModelInput.value = data.request_draft_model || '';
         syncNumericSettingInput(plannerSessionTokenBudgetInput, data.planner_session_token_budget, 250);
         syncNumericSettingInput(plannerAgentCountInput, data.planner_agent_count, 1);
         planApprovalModelInput.value = data.plan_approval_model || '';
@@ -4573,6 +4875,17 @@
 
     let requestModalFocusToken = 0;
 
+    function focusRequestFieldForValidation(fieldName) {
+      if (fieldName === 'goal') {
+        requestGoalEditor?.focus?.();
+        if (!requestGoalEditor && !requestGoalEditorHost.hidden) requestGoalEditorHost.focus?.();
+        if (!requestGoalEditorFallback.hidden) requestGoalEditorFallback.focus();
+        return;
+      }
+      const field = requestForm.elements.namedItem(fieldName);
+      if (field && 'focus' in field) field.focus();
+    }
+
     function focusRequestTitleWhenReady(token) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -4588,6 +4901,20 @@
       syncBodyModalState();
       requestModalFocusToken += 1;
       if (isOpen) focusRequestTitleWhenReady(requestModalFocusToken);
+    }
+
+    function setRequestComposerTab(tab) {
+      activeRequestComposerTab = tab === 'assistant' ? 'assistant' : 'fields';
+      const showingFields = activeRequestComposerTab === 'fields';
+      requestComposerTabFields.classList.toggle('active', showingFields);
+      requestComposerTabAssistant.classList.toggle('active', !showingFields);
+      requestComposerTabFields.setAttribute('aria-selected', String(showingFields));
+      requestComposerTabAssistant.setAttribute('aria-selected', String(!showingFields));
+      requestComposerTabFields.tabIndex = showingFields ? 0 : -1;
+      requestComposerTabAssistant.tabIndex = showingFields ? -1 : 0;
+      requestComposerPanelFields.hidden = !showingFields;
+      requestComposerPanelAssistant.hidden = showingFields;
+      persistRequestComposerDraftState();
     }
 
     function setTaskModalOpen(isOpen) {
@@ -4889,7 +5216,8 @@
       lastAutoAcceptanceCriteria = nextAcceptanceCriteria;
     }
 
-    function resetFormState() {
+    function resetFormState(options = {}) {
+      const { clearSavedDraft = true } = options;
       invalidateBranchLookup();
       const previousUploadToken = requestUploadToken;
       requestUploadToken = generateRequestUploadToken();
@@ -4909,6 +5237,8 @@
       applyTargetRepoAutofill(currentTargetRepoOptions());
       applyRepoDefaults();
       resetRequestDraftState();
+      setRequestComposerTab('assistant');
+      if (clearSavedDraft) clearRequestComposerDraftState();
     }
 
     function escapeHtml(value) {
@@ -5768,6 +6098,10 @@
       return goalInput.value;
     }
 
+    function currentRequestGoalValue() {
+      return getRequestGoalEditorContent();
+    }
+
     function requestDraftFieldLabel(fieldName) {
       const labels = {
         title: translateRequest('titleLabel'),
@@ -5815,9 +6149,9 @@
     function renderRequestDraftTranscript() {
       const entries = requestDraftEntries.map((entry, index) => {
         const suggestions = entry.role === 'assistant' && entry.field_updates && Object.keys(entry.field_updates).length
-          ? `<div class="request-draft-suggestions"><div class="request-draft-suggestions-title">${escapeHtml(translateRequest('draftSuggestedUpdates'))}</div><div class="request-draft-suggestion-list">${Object.entries(entry.field_updates).map(([fieldName, value]) => `<div class="request-draft-suggestion"><div class="request-draft-suggestion-copy"><strong>${escapeHtml(requestDraftFieldLabel(fieldName))}</strong><span>${escapeHtml(value)}</span></div><button type="button" data-request-draft-apply="${escapeHtml(fieldName)}" data-request-draft-entry="${String(index)}">${escapeHtml(translateRequest('draftApply'))}</button></div>`).join('')}</div></div>`
+          ? `<div class="request-draft-suggestions"><div class="request-draft-suggestions-title">${escapeHtml(translateRequest('draftSuggestedUpdates'))}</div><div class="request-draft-suggestion-list">${Object.entries(entry.field_updates).filter(([, value]) => value != null).map(([fieldName, value]) => `<div class="request-draft-suggestion"><div class="request-draft-suggestion-copy"><strong>${escapeHtml(requestDraftFieldLabel(fieldName))}</strong><span>${escapeHtml(value === '' ? translateRequest('draftClearField') : value)}</span></div><button type="button" data-request-draft-apply="${escapeHtml(fieldName)}" data-request-draft-entry="${String(index)}">${escapeHtml(translateRequest('draftApply'))}</button></div>`).join('')}</div></div>`
           : '';
-        return `<article class="request-draft-entry" data-role="${escapeHtml(entry.role)}"${entry.pending ? ' data-pending="true"' : ''}><span class="request-draft-role">${escapeHtml(entry.role === 'user' ? 'You' : translateRequest('draftTitle'))}${entry.pending ? ' · live' : ''}</span><div class="request-draft-bubble">${escapeHtml(entry.text)}</div>${suggestions}</article>`;
+        return `<article class="request-draft-entry" data-role="${escapeHtml(entry.role)}"${entry.pending ? ' data-pending="true"' : ''}><span class="request-draft-role">${escapeHtml(entry.role === 'user' ? translateRequest('draftUserLabel') : translateRequest('draftTitle'))}${entry.pending ? escapeHtml(translateRequest('draftLiveSuffix')) : ''}</span><div class="request-draft-bubble">${escapeHtml(entry.text)}</div>${suggestions}</article>`;
       });
       return entries.length ? entries.join('') : `<p class="request-draft-empty">${escapeHtml(translateRequest('draftEmpty'))}</p>`;
     }
@@ -5833,9 +6167,104 @@
     }
 
     function updateRequestDraftPanel(statusMessage = '') {
-      sendRequestDraftButton.disabled = requestDraftMessageInFlight || !(requestDraftInput.value || '').trim();
+      attachRequestDraftImageButton.disabled = requestDraftAttachmentInFlight;
+      sendRequestDraftButton.disabled = requestDraftMessageInFlight || requestDraftAttachmentInFlight || !(requestDraftInput.value || '').trim();
       requestDraftStatus.textContent = statusMessage || (requestDraftMessageInFlight ? translateRequest('draftSending') : translateRequest('draftIdle'));
+      requestDraftAttachmentStatus.dataset.tone = requestDraftAttachmentInFlight ? 'busy' : requestDraftAttachmentStatusTone;
+      requestDraftAttachmentStatus.textContent = requestDraftAttachmentInFlight
+        ? translateRequest('draftAttachmentUploading', requestDraftAttachmentStatusVars)
+        : (requestDraftAttachmentStatusMessage || translateRequest(requestDraftAttachmentStatusKey || 'draftAttachmentHelp', requestDraftAttachmentStatusVars));
       setRequestDraftTranscript();
+      persistRequestComposerDraftState();
+    }
+
+    function seedRequestDraftInput(force = false) {
+      if (!force && (requestDraftInput.value || '').trim()) return;
+      requestDraftInput.value = '';
+    }
+
+    function applyRequestDraftStarterPrompt(prompt) {
+      const nextPrompt = (prompt || '').trim();
+      if (!nextPrompt) return;
+      const existing = (requestDraftInput.value || '').trim();
+      requestDraftInput.value = existing ? `${requestDraftInput.value.trimEnd()}\n${nextPrompt}` : nextPrompt;
+      requestDraftInput.focus();
+      requestDraftInput.setSelectionRange(requestDraftInput.value.length, requestDraftInput.value.length);
+      updateRequestDraftPanel();
+    }
+
+    function setRequestDraftAttachmentStatusState(key, tone = 'neutral', variables = {}) {
+      requestDraftAttachmentStatusKey = key;
+      requestDraftAttachmentStatusMessage = '';
+      requestDraftAttachmentStatusTone = tone;
+      requestDraftAttachmentStatusVars = variables;
+      updateRequestDraftPanel(requestDraftStatus.textContent);
+    }
+
+    function setRequestDraftAttachmentStatusMessage(message, tone = 'error') {
+      requestDraftAttachmentStatusKey = '';
+      requestDraftAttachmentStatusMessage = message || translateRequest('draftAttachmentFailed');
+      requestDraftAttachmentStatusTone = tone;
+      requestDraftAttachmentStatusVars = {};
+      updateRequestDraftPanel(requestDraftStatus.textContent);
+    }
+
+    function buildRequestDraftImageMarkdown(uploaded) {
+      const filename = uploaded?.filename || 'image';
+      const alt = filename.replace(/\.[^.]+$/, '') || 'image';
+      return `![${alt}](${uploaded.url})`;
+    }
+
+    function insertTextAtTextareaCursor(textarea, text) {
+      const currentValue = textarea.value || '';
+      const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : currentValue.length;
+      const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : currentValue.length;
+      const prefix = currentValue.slice(0, start);
+      const suffix = currentValue.slice(end);
+      const needsLeadingBreak = prefix && !prefix.endsWith('\n');
+      const needsTrailingBreak = suffix && !suffix.startsWith('\n');
+      const insertion = `${needsLeadingBreak ? '\n' : ''}${text}${needsTrailingBreak ? '\n' : ''}`;
+      const nextValue = `${prefix}${insertion}${suffix}`;
+      const caret = prefix.length + insertion.length;
+      textarea.value = nextValue;
+      textarea.focus();
+      textarea.setSelectionRange(caret, caret);
+    }
+
+    async function attachImagesToRequestDraft(files) {
+      const imageFiles = Array.from(files || []).filter((file) => file && typeof file.type === 'string' && file.type.startsWith('image/'));
+      if (!imageFiles.length || requestDraftAttachmentInFlight) return;
+      const sessionToken = requestDraftSessionToken;
+      requestDraftAttachmentInFlight = true;
+      formError.hidden = true;
+      try {
+        for (const file of imageFiles) {
+          setRequestDraftAttachmentStatusState('draftAttachmentUploading', 'busy', { filename: file.name || 'image' });
+          const uploaded = await uploadRequestAttachment(file, { uploadName: file.name || '' });
+          if (sessionToken !== requestDraftSessionToken) return;
+          insertTextAtTextareaCursor(requestDraftInput, buildRequestDraftImageMarkdown(uploaded));
+          setRequestDraftAttachmentStatusState('draftAttachmentAttached', 'success', { filename: uploaded.filename || file.name || 'image' });
+        }
+      } catch (error) {
+        if (sessionToken !== requestDraftSessionToken) return;
+        setRequestDraftAttachmentStatusMessage(error.message || translateRequest('draftAttachmentFailed'), 'error');
+      } finally {
+        if (sessionToken !== requestDraftSessionToken) return;
+        requestDraftAttachmentInFlight = false;
+        requestDraftImageInput.value = '';
+        updateRequestDraftPanel(requestDraftStatus.textContent);
+      }
+    }
+
+    function requestDraftClipboardImageFiles(event) {
+      return Array.from(event.clipboardData?.items || [])
+        .filter((item) => item && typeof item.type === 'string' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+    }
+
+    function updateRequestDraftDropTarget(active) {
+      requestDraftComposer.classList.toggle('is-drop-target', active);
     }
 
     function serializeRequestDraftTranscript() {
@@ -5854,7 +6283,7 @@
     }
 
     function applyRequestDraftFieldUpdate(fieldName, value) {
-      if (!value) return;
+      if (value == null) return;
       value = preserveRequestDraftAttachments(fieldName, value);
       if (fieldName === 'goal') {
         setRequestGoalEditorContent(value);
@@ -5888,6 +6317,7 @@
 
     function preserveRequestDraftAttachments(fieldName, nextValue) {
       if (!['goal', 'background'].includes(fieldName)) return nextValue;
+      if (!nextValue.trim()) return nextValue;
       const currentValue = currentRequestDraftFieldValue(fieldName);
       const attachments = currentValue.match(requestDraftAttachmentRegex) || [];
       if (!attachments.length) return nextValue;
@@ -5906,6 +6336,7 @@
         updateRequestDraftPanel();
         return;
       }
+      const sessionToken = requestDraftSessionToken;
       formError.hidden = true;
       requestDraftPendingMessage = message;
       requestDraftMessageInFlight = true;
@@ -5925,18 +6356,21 @@
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateRequest('draftReplyError'));
+        if (sessionToken !== requestDraftSessionToken) return;
         requestDraftEntries = [
           ...requestDraftEntries.slice(0, -1),
           { role: 'assistant', text: payload.reply || '', field_updates: payload.field_updates || {} },
         ];
         updateRequestDraftPanel();
       } catch (error) {
+        if (sessionToken !== requestDraftSessionToken) return;
         requestDraftInput.value = requestDraftPendingMessage;
         requestDraftEntries = requestDraftEntries.slice(0, -1);
         formError.hidden = false;
         formError.textContent = error.message;
         updateRequestDraftPanel(error.message);
       } finally {
+        if (sessionToken !== requestDraftSessionToken) return;
         requestDraftPendingMessage = '';
         requestDraftMessageInFlight = false;
         updateRequestDraftPanel(requestDraftStatus.textContent);
@@ -5944,12 +6378,21 @@
     }
 
     function resetRequestDraftState() {
+      requestDraftSessionToken += 1;
       requestDraftEntries = [];
       requestDraftPendingMessage = '';
       requestDraftMessageInFlight = false;
+      requestDraftAttachmentInFlight = false;
+      requestDraftAttachmentStatusKey = '';
+      requestDraftAttachmentStatusMessage = '';
+      requestDraftAttachmentStatusTone = 'neutral';
+      requestDraftAttachmentStatusVars = {};
+      requestDraftDropDepth = 0;
+      requestDraftImageInput.value = '';
+      updateRequestDraftDropTarget(false);
       requestDraftLastRenderedSignature = '';
       requestDraftTranscriptPinnedToBottom = true;
-      requestDraftInput.value = '';
+      seedRequestDraftInput(true);
       updateRequestDraftPanel();
     }
 
@@ -7640,7 +8083,7 @@
       document.querySelectorAll('[data-error-for]').forEach((node) => {
         node.textContent = errors[node.dataset.errorFor] || '';
       });
-      return Object.keys(errors).length === 0;
+      return { valid: Object.keys(errors).length === 0, errors };
     }
 
     async function submitRequest(event) {
@@ -7648,10 +8091,20 @@
       clearMessages();
       applyRepoDefaults();
       syncRequestGoalField();
-      if (!validateForm()) return;
+      const validation = validateForm();
+      if (!validation.valid) {
+        const firstInvalidField = ['title', 'target_repo', 'base_branch', 'background', 'goal', 'constraints', 'acceptance_criteria', 'scope', 'out_of_scope', 'references'].find((fieldName) => validation.errors[fieldName]);
+        if (firstInvalidField) {
+          const lowerComposerFields = new Set(['background', 'goal', 'constraints', 'acceptance_criteria', 'scope', 'out_of_scope', 'references']);
+          if (lowerComposerFields.has(firstInvalidField)) setRequestComposerTab('fields');
+          requestAnimationFrame(() => focusRequestFieldForValidation(firstInvalidField));
+        }
+        return;
+      }
       const payload = Object.fromEntries(new FormData(requestForm).entries());
       payload.plan_auto_approve = document.getElementById('plan_auto_approve').checked;
       payload.request_upload_token = requestUploadToken;
+      payload.request_draft_markdown = serializeRequestDraftArtifactMarkdown();
       submitButton.disabled = true;
       submitButton.textContent = translateRequest('creating');
       try {
@@ -7663,6 +8116,7 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Request creation failed.');
         persistLastTargetRepo(payload.target_repo);
+        clearRequestComposerDraftState();
         resetFormState();
         setModalOpen(false);
         boardPhaseManuallySelected = true;
@@ -7678,10 +8132,16 @@
     }
 
     document.getElementById('refresh').addEventListener('click', loadBoard);
-    openComposerButton.addEventListener('click', async () => { clearMessages(); applyRequestTranslations(); resetFormState(); setModalOpen(true); await loadTargetRepoBranches(); });
+    openComposerButton.addEventListener('click', async () => {
+      clearMessages();
+      applyRequestTranslations();
+      if (!restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });
+      setModalOpen(true);
+      await loadTargetRepoBranches();
+    });
     openSettingsButton.addEventListener('click', openSettingsModal);
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });
-    cancelComposerButton.addEventListener('click', () => { clearMessages(); resetFormState(); setModalOpen(false); });
+    cancelComposerButton.addEventListener('click', () => { clearMessages(); persistRequestComposerDraftState(); setModalOpen(false); });
     cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
     closeRetrospectiveModalButton.addEventListener('click', () => { setRetrospectiveModalOpen(false); });
@@ -7695,9 +8155,19 @@
     });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) setModalOpen(false); if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); persistRequestComposerDraftState(); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
+    requestForm.addEventListener('input', () => persistRequestComposerDraftState());
+    requestForm.addEventListener('change', () => persistRequestComposerDraftState());
     requestDraftInput.addEventListener('input', () => updateRequestDraftPanel());
+    requestDraftInput.addEventListener('paste', (event) => {
+      const imageFiles = requestDraftClipboardImageFiles(event);
+      if (!imageFiles.length) return;
+      event.preventDefault();
+      attachImagesToRequestDraft(imageFiles).catch((error) => {
+        setRequestDraftAttachmentStatusMessage(error.message || translateRequest('draftAttachmentFailed'), 'error');
+      });
+    });
     requestDraftTranscript.addEventListener('scroll', updateRequestDraftTranscriptPinnedToBottom);
     requestDraftTranscript.addEventListener('click', (event) => {
       const button = event.target.closest('[data-request-draft-apply]');
@@ -7706,7 +8176,7 @@
       const fieldName = button.dataset.requestDraftApply || '';
       const entry = requestDraftEntries[entryIndex];
       const value = entry?.field_updates?.[fieldName];
-      if (!fieldName || !value) return;
+      if (!fieldName || value == null) return;
       applyRequestDraftFieldUpdate(fieldName, value);
     });
     sendRequestDraftButton.addEventListener('click', () => sendRequestDraftMessage().catch((error) => {
@@ -7714,6 +8184,38 @@
       formError.textContent = error.message;
       updateRequestDraftPanel(error.message);
     }));
+    attachRequestDraftImageButton.addEventListener('click', () => requestDraftImageInput.click());
+    requestDraftImageInput.addEventListener('change', () => {
+      attachImagesToRequestDraft(requestDraftImageInput.files).catch((error) => {
+        setRequestDraftAttachmentStatusMessage(error.message || translateRequest('draftAttachmentFailed'), 'error');
+      });
+    });
+    requestDraftComposer.addEventListener('dragenter', (event) => {
+      if (!Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      requestDraftDropDepth += 1;
+      updateRequestDraftDropTarget(true);
+    });
+    requestDraftComposer.addEventListener('dragover', (event) => {
+      if (!Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+      updateRequestDraftDropTarget(true);
+    });
+    requestDraftComposer.addEventListener('dragleave', (event) => {
+      if (!Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      requestDraftDropDepth = Math.max(0, requestDraftDropDepth - 1);
+      if (requestDraftDropDepth === 0 || event.target === requestDraftComposer) updateRequestDraftDropTarget(false);
+    });
+    requestDraftComposer.addEventListener('drop', (event) => {
+      const files = Array.from(event.dataTransfer?.files || []).filter((file) => file && typeof file.type === 'string' && file.type.startsWith('image/'));
+      requestDraftDropDepth = 0;
+      updateRequestDraftDropTarget(false);
+      if (!files.length) return;
+      event.preventDefault();
+      attachImagesToRequestDraft(files).catch((error) => {
+        setRequestDraftAttachmentStatusMessage(error.message || translateRequest('draftAttachmentFailed'), 'error');
+      });
+    });
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
     function handleAssistantModeVisibilityChange() {
@@ -7777,6 +8279,35 @@
     taskTabReviewerQa.addEventListener('click', () => setTaskTab('reviewer-qa'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
+    requestComposerTabFields.addEventListener('click', () => setRequestComposerTab('fields'));
+    requestComposerTabAssistant.addEventListener('click', () => setRequestComposerTab('assistant'));
+    requestDraftStarters.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-request-draft-starter]');
+      if (!button) return;
+      const starterKey = button.dataset.requestDraftStarter;
+      const translationKey = starterKey === 'scope'
+        ? 'draftStarterScope'
+        : (starterKey === 'acceptance' ? 'draftStarterAcceptance' : (starterKey === 'risks' ? 'draftStarterRisks' : ''));
+      if (!translationKey) return;
+      applyRequestDraftStarterPrompt(translateRequest(translationKey));
+    });
+    requestComposerTabs.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === 'Home') {
+        setRequestComposerTab('assistant');
+        requestComposerTabAssistant.focus();
+        return;
+      }
+      if (event.key === 'End') {
+        setRequestComposerTab('fields');
+        requestComposerTabFields.focus();
+        return;
+      }
+      const nextTab = activeRequestComposerTab === 'fields' ? 'assistant' : 'fields';
+      setRequestComposerTab(nextTab);
+      (nextTab === 'fields' ? requestComposerTabFields : requestComposerTabAssistant).focus();
+    });
     taskLogFiles.addEventListener('click', (event) => {
       const button = event.target.closest('[data-log-name]');
       if (!button || !activeTaskLogs) return;
