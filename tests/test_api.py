@@ -15,6 +15,7 @@ from assistant_agent_kanban.api.ui import TEMPLATE_PATH
 from assistant_agent_kanban import config as config_module
 from assistant_agent_kanban.config import PROJECT_ROOT, load_config
 from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.exceptions import AdapterRunError
 from assistant_agent_kanban.exceptions import IntegrationError
 from assistant_agent_kanban.events import EventBus
 from assistant_agent_kanban.locks import TaskLockManager
@@ -341,6 +342,8 @@ def test_api_drafts_request_without_creating_task_dirs(configured_paths):
         session_ids=["ses_request_draft"],
         total_tokens=[31],
     )
+    config.runtime.role_backends.request_draft = "codex"
+    config.codex.request_draft_model = "gpt-5.4"
     app = create_app(
         config,
         draft_adapter,
@@ -403,6 +406,57 @@ def test_api_rejects_request_draft_for_overlapping_target_repo(configured_paths)
     assert "target repo" in response.json()["detail"].lower()
 
 
+def test_api_rejects_request_draft_for_missing_target_repo_directory(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Missing target repo",
+                "goal": "Keep drafting safe.",
+                "target_repo": str(config.repo_root / "missing-repo"),
+                "base_branch": "main",
+                "message": "Please refine this.",
+            },
+        )
+
+    assert response.status_code == 400
+    assert "existing directory" in response.json()["detail"]
+
+
+def test_api_rejects_request_draft_adapter_failures_cleanly(configured_paths):
+    config, _, _ = configured_paths
+
+    class FailingDraftAdapter(FakeAdapter):
+        def run(self, **kwargs):
+            raise AdapterRunError("request drafting backend unavailable")
+
+    failing_adapter = FailingDraftAdapter([])
+    config.runtime.role_backends.request_draft = "codex"
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": failing_adapter},
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Draft backend failure",
+                "goal": "Show a clean API error.",
+                "message": "Please refine this.",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "request drafting backend unavailable"
+
+
 def test_api_request_creation_flow_stays_authoritative_after_draft_assistance(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -458,6 +512,182 @@ def test_api_request_creation_flow_stays_authoritative_after_draft_assistance(co
     request_markdown = (tasks[0].task_dir / "REQUEST.md").read_text()
     assert "Original goal text." in request_markdown
     assert "Suggested drafted goal that should only matter if the user applies it." not in request_markdown
+
+
+def test_api_request_creation_finalizes_shared_request_upload_links_once(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    image_bytes = (
+        b"\x89PNG\r\n\x1a\n"
+        b"\x00\x00\x00\rIHDR"
+        b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+        b"\x00\x00\x00\x0bIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3"
+        b"\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+    with TestClient(app) as client:
+        upload = client.post(
+            "/api/request-uploads?upload_token=req-shared-upload",
+            files={"file": ("shared.png", image_bytes, "image/png")},
+        )
+        assert upload.status_code == 200
+        upload_url = upload.json()["url"]
+
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Shared upload request",
+                "goal": f"See image twice\n\n![first]({upload_url})\n\n![second]({upload_url})",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_upload_token": "req-shared-upload",
+            },
+        )
+
+    assert response.status_code == 200
+    task = KanbanScanner(config).scan()[0]
+    request_markdown = (task.task_dir / "REQUEST.md").read_text()
+    assert request_markdown.count("_attachments/") == 2
+    attachments = list((task.task_dir / "_attachments").iterdir())
+    assert len(attachments) == 1
+
+
+def test_api_request_creation_finalizes_request_upload_links_in_all_request_fields(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    image_bytes = (
+        b"\x89PNG\r\n\x1a\n"
+        b"\x00\x00\x00\rIHDR"
+        b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+        b"\x00\x00\x00\x0bIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3"
+        b"\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+    with TestClient(app) as client:
+        upload = client.post(
+            "/api/request-uploads?upload_token=req-all-fields",
+            files={"file": ("scope.png", image_bytes, "image/png")},
+        )
+        assert upload.status_code == 200
+        upload_url = upload.json()["url"]
+
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "All field uploads request",
+                "goal": "Keep the create path authoritative.",
+                "scope": f"Include image\n\n![scope]({upload_url})",
+                "constraints": f"Visual note\n\n![constraint]({upload_url})",
+                "references": f"Ref path\n\n![reference]({upload_url})",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_upload_token": "req-all-fields",
+            },
+        )
+
+    assert response.status_code == 200
+    task = KanbanScanner(config).scan()[0]
+    request_markdown = (task.task_dir / "REQUEST.md").read_text()
+    assert "/api/request-uploads/req-all-fields/" not in request_markdown
+    assert request_markdown.count("_attachments/") == 3
+
+
+def test_api_request_creation_writes_request_draft_artifact(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    image_bytes = (
+        b"\x89PNG\r\n\x1a\n"
+        b"\x00\x00\x00\rIHDR"
+        b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+        b"\x00\x00\x00\x0bIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3"
+        b"\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+    with TestClient(app) as client:
+        upload = client.post(
+            "/api/request-uploads?upload_token=req-draft-artifact",
+            files={"file": ("draft.png", image_bytes, "image/png")},
+        )
+        assert upload.status_code == 200
+        upload_url = upload.json()["url"]
+
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Draft artifact request",
+                "goal": "Persist the authoritative request normally.",
+                "background": "The draft transcript should be saved separately.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_upload_token": "req-draft-artifact",
+                "request_draft_markdown": f"# Request Draft Transcript\n\n## You 1\n\nPlease consider this image.\n\n![draft]({upload_url})\n\n## Composer assistant 2\n\nI tightened the draft.\n\n### Suggested updates\n\n- **Goal**: (clear field)\n- **Scope**: Add the retry path\n",
+            },
+        )
+
+    assert response.status_code == 200
+    task = KanbanScanner(config).scan()[0]
+    request_draft_markdown = (task.task_dir / "REQUEST-DRAFT.md").read_text()
+    assert "Non-authoritative drafting context" in request_draft_markdown
+    assert "/api/request-uploads/req-draft-artifact/" not in request_draft_markdown
+    assert "_attachments/" in request_draft_markdown
+    assert "### Suggested updates" in request_draft_markdown
+    assert "**Goal**: (clear field)" in request_draft_markdown
+
+
+def test_api_request_creation_failure_does_not_consume_request_uploads(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    image_bytes = (
+        b"\x89PNG\r\n\x1a\n"
+        b"\x00\x00\x00\rIHDR"
+        b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+        b"\x00\x00\x00\x0bIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3"
+        b"\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+    with TestClient(app) as client:
+        upload = client.post(
+            "/api/request-uploads?upload_token=req-failed-create",
+            files={"file": ("draft.png", image_bytes, "image/png")},
+        )
+        assert upload.status_code == 200
+        upload_url = upload.json()["url"]
+
+        failed = client.post(
+            "/api/requests",
+            json={
+                "title": "Failed create keeps uploads",
+                "goal": f"![draft]({upload_url})",
+                "target_repo": str(PROJECT_ROOT),
+                "base_branch": "main",
+                "request_upload_token": "req-failed-create",
+            },
+        )
+        assert failed.status_code == 400
+
+        still_exists = client.get(upload_url)
+        assert still_exists.status_code == 200
+
+        succeeded = client.post(
+            "/api/requests",
+            json={
+                "title": "Retry create keeps uploads",
+                "goal": f"![draft]({upload_url})",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_upload_token": "req-failed-create",
+            },
+        )
+
+    assert succeeded.status_code == 200
+    task = KanbanScanner(config).scan()[0]
+    request_markdown = (task.task_dir / "REQUEST.md").read_text()
+    assert "/api/request-uploads/req-failed-create/" not in request_markdown
+    assert "_attachments/" in request_markdown
 
 
 def test_api_resumes_human_blocked_review_loop(configured_paths):
@@ -2181,6 +2411,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["coding_assistant"] == "opencode"
         assert get_response.json()["role_backends"] == {
             "planner": None,
+            "request_draft": None,
             "plan_approval": None,
             "implementer": None,
             "reviewer": None,
@@ -2188,6 +2419,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         }
         assert get_response.json()["effective_role_backends"] == {
             "planner": "opencode",
+            "request_draft": "opencode",
             "plan_approval": "opencode",
             "implementer": "opencode",
             "reviewer": "opencode",
@@ -2200,6 +2432,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             {"value": "gemini", "label": "Gemini CLI"},
         ]
         assert get_response.json()["planner_model"] is None
+        assert get_response.json()["request_draft_model"] is None
         assert get_response.json()["planner_session_token_budget"] == 250
         assert get_response.json()["planner_agent_count"] == 1
         assert get_response.json()["implementer_session_token_budget"] == 250
@@ -2230,11 +2463,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
                 "language": "KO",
                 "coding_assistant": "opencode",
                 "role_backends": {
+                    "request_draft": "gemini",
                     "implementer": "codex",
                     "commit": "codex",
                 },
                 "worker_live_logs_enabled": False,
                 "planner_model": "gpt-5",
+                "request_draft_model": "gemini-2.5-flash",
                 "planner_session_token_budget": 210,
                 "planner_agent_count": 2,
                 "implementer_model": " gpt-5.4 ",
@@ -2257,6 +2492,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["coding_assistant"] == "opencode"
     assert payload["role_backends"] == {
         "planner": None,
+        "request_draft": "gemini",
         "plan_approval": None,
         "implementer": "codex",
         "reviewer": None,
@@ -2264,6 +2500,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     }
     assert payload["effective_role_backends"] == {
         "planner": "opencode",
+        "request_draft": "gemini",
         "plan_approval": "opencode",
         "implementer": "codex",
         "reviewer": "opencode",
@@ -2271,6 +2508,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     }
     assert payload["worker_live_logs_enabled"] is False
     assert payload["planner_model"] == "gpt-5"
+    assert payload["request_draft_model"] == "gemini-2.5-flash"
     assert payload["planner_session_token_budget"] == 210
     assert payload["planner_agent_count"] == 2
     assert payload["implementer_model"] == "gpt-5.4"
@@ -2286,11 +2524,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.opencode.planner_model == "gpt-5"
     assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
+    assert app.state.runtime.config.runtime.role_backends.request_draft == "gemini"
     assert app.state.runtime.config.runtime.role_backends.implementer == "codex"
     assert app.state.runtime.config.runtime.role_backends.commit == "codex"
     assert app.state.runtime.config.opencode.worker_live_logs_enabled is False
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.runtime.planner_agent_count == 2
+    assert app.state.runtime.config.gemini.request_draft_model == "gemini-2.5-flash"
     assert app.state.runtime.config.codex.implementer_model == "gpt-5.4"
     assert app.state.runtime.config.codex.implementer_session_token_budget == 230000
     assert app.state.runtime.config.runtime.implementer_agent_count == 3
@@ -2997,6 +3237,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "reviewer_agent_count" in response.text
     assert "commit_model" in response.text
     assert "commit_session_token_budget" in response.text
+    assert "request_draft_backend" in response.text
+    assert "request_draft_model" in response.text
+    assert "assistant-agent-kanban.request-composer-draft" in response.text
+    assert "requestComposerDraftMaxAgeMs" in response.text
+    assert "function restoreRequestComposerDraftState()" in response.text
+    assert "function cleanupPersistedRequestDraftUploads(saved)" in response.text
+    assert "function serializeRequestDraftArtifactMarkdown()" in response.text
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
     assert "readNumericSettingInput" in response.text
@@ -3032,6 +3279,17 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "task-reviewer-qa-panel" in response.text
     assert 'class="reviewer-qa-log"' in response.text
     assert 'class="reviewer-qa-composer"' in response.text
+    assert 'id="request-composer-tab-assistant" class="active"' in response.text
+    assert 'id="request-composer-panel-fields" class="request-composer-panel" role="tabpanel" aria-labelledby="request-composer-tab-fields" hidden' in response.text
+    assert "Start here with the assistant" in response.text
+    assert "Create request still submits only the form values." in response.text
+    assert 'id="request-draft-starters" class="request-draft-starters"' in response.text
+    assert 'data-request-draft-starter="scope"' in response.text
+    assert 'id="request-draft-composer" class="request-draft-composer"' in response.text
+    assert 'id="request-draft-image-input" type="file" accept="image/*" hidden' in response.text
+    assert 'id="attach-request-draft-image" class="ghost-button request-draft-attach"' in response.text
+    assert 'id="request-draft-attachment-status" class="muted request-draft-attachment-status"' in response.text
+    assert "Please help turn these notes into a crisp request. Tighten the goal, highlight missing constraints, and suggest clearer acceptance criteria." in response.text
     assert 'class="editor-textarea reviewer-qa-input"' in response.text
     assert 'class="reviewer-qa-send"' in response.text
     assert "function appendReviewerQaWorkerLogPayload(payload)" in response.text
@@ -3074,6 +3332,15 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "body[data-theme=\"dark\"] .request-goal-editor-shell .CodeMirror-selected" in response.text
     assert "addImageBlobHook: async (blob, callback) => {" in response.text
     assert "async function uploadRequestAttachment(blob, options = {})" in response.text
+    assert "function buildRequestDraftImageMarkdown(uploaded)" in response.text
+    assert "function insertTextAtTextareaCursor(textarea, text)" in response.text
+    assert "async function attachImagesToRequestDraft(files)" in response.text
+    assert "function requestDraftClipboardImageFiles(event)" in response.text
+    assert "requestDraftInput.addEventListener('paste', (event) => {" in response.text
+    assert "attachRequestDraftImageButton.addEventListener('click', () => requestDraftImageInput.click());" in response.text
+    assert "requestDraftImageInput.addEventListener('change', () => {" in response.text
+    assert "requestDraftComposer.addEventListener('drop', (event) => {" in response.text
+    assert "insertTextAtTextareaCursor(requestDraftInput, buildRequestDraftImageMarkdown(uploaded));" in response.text
     assert "payload.request_upload_token = requestUploadToken;" in response.text
     assert "function generateRequestUploadToken()" in response.text
     assert "fetch(`/api/request-uploads?upload_token=${encodeURIComponent(uploadToken)}`" in response.text
@@ -3087,7 +3354,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "assistant-agent-kanban.last-target-repo" in response.text
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
-    assert "resetFormState(); setModalOpen(true); await loadTargetRepoBranches();" in response.text
+    assert "if (!restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });" in response.text
+    assert "persistRequestComposerDraftState(); setModalOpen(false);" in response.text
+    assert "let activeRequestComposerTab = 'assistant';" in response.text
+    assert "setRequestComposerTab('assistant');" in response.text
+    assert "function seedRequestDraftInput(force = false)" in response.text
+    assert "requestDraftInput.value = '';" in response.text
     assert "function applyBoardSnapshot(data)" in response.text
     assert "source.addEventListener('board_snapshot', (event) => {" in response.text
     assert "applyBoardSnapshot(message.payload);" in response.text
@@ -3241,7 +3513,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" not in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
     assert "Final branch" in response.text
-    assert "width: min(1380px, 100%)" in response.text
+    assert "width: calc(100vw - 48px)" in response.text
     assert "height: min(86vh, calc(100vh - 64px))" in response.text
     assert ".diff-desktop { font-size: 0.82rem; }" in response.text
     assert ".diff-mobile { font-size: 0.82rem; }" in response.text
