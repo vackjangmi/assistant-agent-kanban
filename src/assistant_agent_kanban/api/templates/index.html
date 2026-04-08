@@ -843,30 +843,31 @@
     html, body { height: 100%; }
     body { font-family: "Nanum Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; min-height: 100%; display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }
     body.modal-open { overflow: hidden; }
-    header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    .drafts-shell { display: grid; gap: 12px; margin-bottom: 18px; }
+    header { padding: 12px 20px 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .drafts-shell { display: grid; gap: 8px; }
     .drafts-shell[hidden] { display: none; }
     .drafts-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .drafts-head strong { font-size: 1rem; }
-    .drafts-head span { color: var(--muted); font-size: 0.92rem; }
+    .drafts-head strong { font-size: 0.95rem; }
+    .drafts-head span { color: var(--muted); font-size: 0.86rem; }
     .drafts-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }
     .drafts-status[hidden] { display: none; }
     .drafts-status[data-tone="error"] { border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
-    .drafts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-    .draft-card { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }
-    .draft-card strong { font-size: 0.98rem; }
-    .draft-card p { margin: 0; color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+    .drafts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+    .draft-card { display: grid; gap: 8px; padding: 11px 12px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 8px 18px rgba(24,32,38,0.05); }
+    .draft-card strong { font-size: 0.94rem; }
+    .draft-card p { margin: 0; color: var(--muted); font-size: 0.84rem; overflow-wrap: anywhere; }
     .draft-card-meta { display: flex; flex-wrap: wrap; gap: 8px; }
-    .draft-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .draft-card-actions button { flex: 1 1 0; min-width: 120px; }
+    .draft-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .draft-card-actions button { flex: 1 1 0; min-width: 108px; padding: 7px 10px; }
     button { padding: 9px 14px; border: 1px solid var(--text); background-color: #fff9ef; cursor: pointer; font: inherit; color: var(--text); }
     body[data-theme="dark"] button { background-color: rgba(31,42,54,0.94); }
     button.primary { background: var(--accent); border-color: var(--accent-strong); color: #fff; }
     .accent-button { background: #8b5a2b; border-color: #72461f; color: #fff; }
     .ghost-button { background: transparent; border-color: var(--border); }
     button:disabled { opacity: 0.7; cursor: progress; }
-    .board-phase-shell { padding: 0 20px 12px; flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; }
+    .main-dashboard { display: grid; gap: 18px; padding: 0 20px 12px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+    .board-phase-shell { flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; }
     .board-phase-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
     .board-phase-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
     main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -901,9 +902,10 @@
     .target-branch-retrospective { padding: 6px 10px; border-color: rgba(82,96,107,0.18); background: rgba(255,255,255,0.82); color: #45525d; font-size: 0.6rem; font-weight: 700; white-space: nowrap; }
     .target-branch-retrospective:hover, .target-branch-retrospective:focus-visible { background: rgba(255,249,239,0.98); border-color: rgba(124,79,44,0.26); color: var(--accent-strong); }
     .target-branch-group .column-cards { padding: 10px; }
-    .column-cards { display: grid; gap: 10px; }
+    .column-cards { display: grid; gap: 10px; min-height: 0; }
     .plan-board .column-cards, .implementation-board .column-cards, .final-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
     .final-board .column-cards { overflow-x: hidden; }
+    .board-empty { color: var(--muted); padding: 12px; border: 1px dashed var(--border); background: rgba(255,255,255,0.55); text-align: center; min-height: 88px; display: flex; align-items: center; justify-content: center; }
     .card { position: relative; background: white; border-left: 4px solid var(--card-accent, var(--accent)); padding: 11px 12px; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
     .card-button { width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
     .card:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
@@ -995,8 +997,6 @@
     .request-draft-guidance-copy { display: grid; gap: 6px; }
     .request-draft-guidance-copy strong { color: var(--accent-strong); font-size: 1rem; }
     .request-draft-guidance-copy p { margin: 0; color: var(--muted); line-height: 1.5; }
-    .request-draft-starters { display: flex; flex-wrap: wrap; gap: 8px; }
-    .request-draft-starters button { min-height: 40px; }
     .group { display: grid; gap: 12px; align-content: start; }
     .field { display: grid; gap: 6px; }
     .field.span-full { grid-column: 1 / -1; }
@@ -1463,14 +1463,6 @@
                   <div class="settings-section-head">
                     <strong id="request-draft-heading">Draft with assistant</strong>
                     <span id="request-draft-description">Ask for help refining the request before you create the final task.</span>
-                  </div>
-                  <div>
-                    <div id="request-draft-starters-title" class="request-draft-suggestions-title">Starter prompts</div>
-                    <div id="request-draft-starters" class="request-draft-starters" aria-label="Starter prompts for the request assistant">
-                      <button type="button" class="ghost-button" data-request-draft-starter="scope">Tighten the scope</button>
-                      <button type="button" class="ghost-button" data-request-draft-starter="acceptance">Strengthen acceptance criteria</button>
-                      <button type="button" class="ghost-button" data-request-draft-starter="risks">Find missing risks or constraints</button>
-                    </div>
                   </div>
                   <div class="human-review-panel">
                     <div class="human-review-box">
@@ -2056,18 +2048,18 @@
       </div>
     </div>
   </section>
-  <main>
-    <div class="board-phase-shell">
-      <section id="request-drafts-shell" class="drafts-shell" hidden>
-        <div class="drafts-head">
-          <div class="drafts-copy">
-            <strong id="request-drafts-title">Request drafts</strong>
-            <span id="request-drafts-description">Continue refining temporary request drafts before creating a real request.</span>
-          </div>
+  <main class="main-dashboard">
+    <section id="request-drafts-shell" class="drafts-shell" hidden>
+      <div class="drafts-head">
+        <div class="drafts-copy">
+          <strong id="request-drafts-title">Request drafts</strong>
+          <span id="request-drafts-description">Continue refining temporary request drafts before creating a real request.</span>
         </div>
-        <div id="request-drafts-status" class="drafts-status" hidden></div>
-        <div id="request-drafts-grid" class="drafts-grid"></div>
-      </section>
+      </div>
+      <div id="request-drafts-status" class="drafts-status" hidden></div>
+      <div id="request-drafts-grid" class="drafts-grid"></div>
+    </section>
+    <div class="board-phase-shell">
       <div id="board-phase-tabs" class="board-phase-tabs">
         <button type="button" data-board-phase="plan">Planning</button>
         <button type="button" data-board-phase="implementation" class="active">Implementation</button>
@@ -2125,7 +2117,6 @@
     const baseBranchHelp = document.getElementById('base-branch-help');
     const requestDraftStatus = document.getElementById('request-draft-status');
     const requestDraftTranscript = document.getElementById('request-draft-transcript');
-    const requestDraftStarters = document.getElementById('request-draft-starters');
     const requestDraftComposer = document.getElementById('request-draft-composer');
     const requestDraftInput = document.getElementById('request-draft-input');
     const requestDraftImageInput = document.getElementById('request-draft-image-input');
@@ -2578,10 +2569,6 @@
         draftGuidanceTitle: 'Start here with the assistant',
         draftGuidanceBody: 'Describe the outcome, tradeoffs, or rough notes you already have. The assistant can help tighten scope and make the request easier to implement.',
         draftGuidanceReview: 'When the draft looks right, switch to Request details to review or edit the actual form fields. Create request still submits only the form values.',
-        draftStartersTitle: 'Starter prompts',
-        draftStarterScope: 'Tighten the scope',
-        draftStarterAcceptance: 'Strengthen acceptance criteria',
-        draftStarterRisks: 'Find missing risks or constraints',
         draftUserLabel: 'You',
         draftLiveSuffix: ' · live',
         draftPlaceholder: 'Ask the assistant to improve this request...',
@@ -2665,10 +2652,6 @@
         draftGuidanceTitle: '어시스턴트부터 시작하세요',
         draftGuidanceBody: '원하는 결과, 고려 중인 트레이드오프, 대략적인 메모만 적어도 됩니다. 어시스턴트가 범위를 다듬고 구현하기 쉬운 요청으로 정리해 줍니다.',
         draftGuidanceReview: '초안이 괜찮아지면 요청 세부사항 탭으로 이동해 실제 폼 값을 검토하거나 수정하세요. 요청 생성은 항상 그 폼 값만 사용합니다.',
-        draftStartersTitle: '시작 프롬프트',
-        draftStarterScope: '범위를 더 선명하게 다듬기',
-        draftStarterAcceptance: '승인 기준 보강하기',
-        draftStarterRisks: '빠진 리스크나 제약 찾기',
         draftUserLabel: '나',
         draftLiveSuffix: ' · 작성 중',
         draftPlaceholder: '이 요청을 더 좋게 다듬어 달라고 물어보세요...',
@@ -2894,6 +2877,7 @@
         selectTask: 'Select a task to inspect.',
         selectTaskTimeline: 'Select a task to inspect its stage timeline.',
         selectChangedFile: 'Select a changed file.',
+        noItemsInColumn: 'No tasks in this column yet.',
         noDocumentSelected: 'No document selected',
         viewerMode: 'Viewer mode',
         editMode: 'Edit mode',
@@ -3135,6 +3119,7 @@
         selectTask: '확인할 작업을 선택하세요.',
         selectTaskTimeline: '단계 타임라인을 볼 작업을 선택하세요.',
         selectChangedFile: '변경 파일을 선택하세요.',
+        noItemsInColumn: '이 컬럼에는 아직 작업이 없습니다.',
         noDocumentSelected: '선택된 문서 없음',
         viewerMode: '보기 모드',
         editMode: '편집 모드',
@@ -3591,17 +3576,10 @@
       requestComposerTabs.setAttribute('aria-label', translateRequest('composerTabsLabel'));
       setRequestText('request-draft-heading', 'draftHeading');
       setRequestText('request-draft-description', 'draftDescription');
-      setRequestText('request-draft-starters-title', 'draftStartersTitle');
       setRequestText('request-drafts-title', 'draftsTitle');
       setRequestText('request-drafts-description', 'draftsDescription');
       requestComposerTabFields.textContent = translateRequest('composerTabFields');
       requestComposerTabAssistant.textContent = translateRequest('composerTabAssistant');
-      const requestDraftStarterScopeButton = requestDraftStarters.querySelector('[data-request-draft-starter="scope"]');
-      const requestDraftStarterAcceptanceButton = requestDraftStarters.querySelector('[data-request-draft-starter="acceptance"]');
-      const requestDraftStarterRisksButton = requestDraftStarters.querySelector('[data-request-draft-starter="risks"]');
-      if (requestDraftStarterScopeButton) requestDraftStarterScopeButton.textContent = translateRequest('draftStarterScope');
-      if (requestDraftStarterAcceptanceButton) requestDraftStarterAcceptanceButton.textContent = translateRequest('draftStarterAcceptance');
-      if (requestDraftStarterRisksButton) requestDraftStarterRisksButton.textContent = translateRequest('draftStarterRisks');
       setRequestText('request-draft-title', 'draftTitle');
       requestDraftInput.placeholder = translateRequest('draftPlaceholder');
       attachRequestDraftImageButton.textContent = translateRequest('draftAttachImage');
@@ -4141,10 +4119,11 @@
     }
 
     function renderBoardColumn(column) {
+      const items = column.items || [];
       return `
         <section class="column">
           <h2>${stateLabel(column.state)}</h2>
-          <div class="column-cards">${(column.items || []).map((item) => renderTaskCard(item)).join('')}</div>
+          <div class="column-cards">${items.length ? items.map((item) => renderTaskCard(item)).join('') : `<div class="board-empty">${escapeHtml(translateTask('noItemsInColumn'))}</div>`}</div>
         </section>`;
     }
 
@@ -6411,17 +6390,6 @@
       requestDraftInput.value = '';
     }
 
-    function applyRequestDraftStarterPrompt(prompt) {
-      const nextPrompt = (prompt || '').trim();
-      if (!nextPrompt) return;
-      const existing = (requestDraftInput.value || '').trim();
-      requestDraftInput.value = existing ? `${requestDraftInput.value.trimEnd()}\n${nextPrompt}` : nextPrompt;
-      requestDraftInput.focus();
-      requestDraftInput.setSelectionRange(requestDraftInput.value.length, requestDraftInput.value.length);
-      updateRequestDraftPanel();
-      void syncRequestComposerDraftState({ silent: true });
-    }
-
     function setRequestDraftAttachmentStatusState(key, tone = 'neutral', variables = {}) {
       requestDraftAttachmentStatusKey = key;
       requestDraftAttachmentStatusMessage = '';
@@ -8547,16 +8515,6 @@
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     requestComposerTabFields.addEventListener('click', () => setRequestComposerTab('fields'));
     requestComposerTabAssistant.addEventListener('click', () => setRequestComposerTab('assistant'));
-    requestDraftStarters.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-request-draft-starter]');
-      if (!button) return;
-      const starterKey = button.dataset.requestDraftStarter;
-      const translationKey = starterKey === 'scope'
-        ? 'draftStarterScope'
-        : (starterKey === 'acceptance' ? 'draftStarterAcceptance' : (starterKey === 'risks' ? 'draftStarterRisks' : ''));
-      if (!translationKey) return;
-      applyRequestDraftStarterPrompt(translateRequest(translationKey));
-    });
     requestComposerTabs.addEventListener('keydown', (event) => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();

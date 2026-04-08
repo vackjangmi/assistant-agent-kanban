@@ -3417,10 +3417,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'class="reviewer-qa-composer"' in response.text
     assert 'id="request-composer-tab-assistant" class="active"' in response.text
     assert 'id="request-composer-panel-fields" class="request-composer-panel" role="tabpanel" aria-labelledby="request-composer-tab-fields" hidden' in response.text
-    assert "Start here with the assistant" in response.text
-    assert "Create request still submits only the form values." in response.text
-    assert 'id="request-draft-starters" class="request-draft-starters"' in response.text
-    assert 'data-request-draft-starter="scope"' in response.text
+    assert "Assistant updates merge into the form automatically" in response.text
+    assert 'id="request-draft-starters" class="request-draft-starters"' not in response.text
+    assert 'data-request-draft-starter="scope"' not in response.text
     assert 'id="request-draft-composer" class="request-draft-composer"' in response.text
     assert 'id="request-draft-image-input" type="file" accept="image/*" hidden' in response.text
     assert 'id="attach-request-draft-image" class="ghost-button request-draft-attach"' in response.text
