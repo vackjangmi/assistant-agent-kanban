@@ -362,9 +362,6 @@ def test_api_drafts_request_without_creating_task_dirs(configured_paths):
                 "background": "Keep the final create flow authoritative.",
                 "target_repo": str(config.repo_root),
                 "base_branch": "main",
-                "transcript": [
-                    {"role": "user", "content": "Help me make this request more precise."},
-                ],
                 "message": "Please tighten the goal and acceptance criteria.",
             },
         )
@@ -378,12 +375,60 @@ def test_api_drafts_request_without_creating_task_dirs(configured_paths):
         )
         assert payload["backend"] == "codex"
         assert payload["session_id"] == "ses_request_draft"
+        assert payload["request_draft_id"]
+        assert len(payload["transcript"]) == 2
+        stored = client.get(f"/api/request-drafts/{payload['request_draft_id']}")
+        assert stored.status_code == 200
+        assert stored.json()["transcript"][0]["content"] == "Please tighten the goal and acceptance criteria."
         after = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
         assert after == before
 
     assert draft_adapter.run_calls[0]["agent"] == "fs-kanban-request-draft"
     assert draft_adapter.run_calls[0]["cwd"] == config.repo_root.resolve()
     assert "Please tighten the goal and acceptance criteria." in str(draft_adapter.run_calls[0]["prompt"])
+
+
+def test_api_can_create_load_update_and_delete_request_draft_state(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/request-drafts/state",
+            json={
+                "title": "Server draft",
+                "goal": "Keep draft state on the server.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_upload_token": "server-draft-token",
+            },
+        )
+        assert created.status_code == 200
+        draft_id = created.json()["draft_id"]
+
+        loaded = client.get(f"/api/request-drafts/{draft_id}")
+        assert loaded.status_code == 200
+        assert loaded.json()["goal"] == "Keep draft state on the server."
+
+        updated = client.put(
+            f"/api/request-drafts/{draft_id}",
+            json={
+                "background": "Updated background.",
+                "active_tab": "fields",
+                "request_draft_input": "pending prompt",
+            },
+        )
+        assert updated.status_code == 200
+        assert updated.json()["background"] == "Updated background."
+        assert updated.json()["active_tab"] == "fields"
+        assert updated.json()["request_draft_input"] == "pending prompt"
+
+        deleted = client.delete(f"/api/request-drafts/{draft_id}")
+        assert deleted.status_code == 200
+
+        missing = client.get(f"/api/request-drafts/{draft_id}")
+        assert missing.status_code == 404
+        assert not (config.request_uploads_dir / "server-draft-token").exists()
 
 
 def test_api_rejects_request_draft_for_overlapping_target_repo(configured_paths):
@@ -492,6 +537,7 @@ def test_api_request_creation_flow_stays_authoritative_after_draft_assistance(co
             },
         )
         assert draft_response.status_code == 200
+        draft_id = draft_response.json()["request_draft_id"]
         assert not any(config.state_dir(TaskState.REQUESTS).iterdir())
 
         create_response = client.post(
@@ -503,9 +549,13 @@ def test_api_request_creation_flow_stays_authoritative_after_draft_assistance(co
                 "target_repo": str(config.repo_root),
                 "base_branch": "main",
                 "plan_auto_approve": True,
+                "request_draft_id": draft_id,
             },
         )
         assert create_response.status_code == 200
+
+        deleted_draft = client.get(f"/api/request-drafts/{draft_id}")
+        assert deleted_draft.status_code == 404
 
     tasks = KanbanScanner(config).scan()
     assert len(tasks) == 1
@@ -596,7 +646,21 @@ def test_api_request_creation_finalizes_request_upload_links_in_all_request_fiel
 
 def test_api_request_creation_writes_request_draft_artifact(configured_paths):
     config, _, _ = configured_paths
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    config.runtime.role_backends.request_draft = "codex"
+    draft_adapter = FakeAdapter(
+        [
+            json.dumps(
+                {
+                    "reply": "I tightened the draft.",
+                    "field_updates": {
+                        "goal": "",
+                        "scope": "Add the retry path",
+                    },
+                }
+            )
+        ]
+    )
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry={"codex": draft_adapter})
 
     image_bytes = (
         b"\x89PNG\r\n\x1a\n"
@@ -614,6 +678,21 @@ def test_api_request_creation_writes_request_draft_artifact(configured_paths):
         assert upload.status_code == 200
         upload_url = upload.json()["url"]
 
+        draft = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Draft artifact request",
+                "goal": "Persist the authoritative request normally.",
+                "background": "The draft transcript should be saved separately.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_upload_token": "req-draft-artifact",
+                "message": f"Please consider this image.\n\n![draft]({upload_url})",
+            },
+        )
+        assert draft.status_code == 200
+        draft_id = draft.json()["request_draft_id"]
+
         response = client.post(
             "/api/requests",
             json={
@@ -623,7 +702,7 @@ def test_api_request_creation_writes_request_draft_artifact(configured_paths):
                 "target_repo": str(config.repo_root),
                 "base_branch": "main",
                 "request_upload_token": "req-draft-artifact",
-                "request_draft_markdown": f"# Request Draft Transcript\n\n## You 1\n\nPlease consider this image.\n\n![draft]({upload_url})\n\n## Composer assistant 2\n\nI tightened the draft.\n\n### Suggested updates\n\n- **Goal**: (clear field)\n- **Scope**: Add the retry path\n",
+                "request_draft_id": draft_id,
             },
         )
 
@@ -634,7 +713,7 @@ def test_api_request_creation_writes_request_draft_artifact(configured_paths):
     assert "/api/request-uploads/req-draft-artifact/" not in request_draft_markdown
     assert "_attachments/" in request_draft_markdown
     assert "### Suggested updates" in request_draft_markdown
-    assert "**Goal**: (clear field)" in request_draft_markdown
+    assert "**Scope**: Add the retry path" in request_draft_markdown
 
 
 def test_api_request_creation_failure_does_not_consume_request_uploads(configured_paths):
@@ -657,6 +736,19 @@ def test_api_request_creation_failure_does_not_consume_request_uploads(configure
         assert upload.status_code == 200
         upload_url = upload.json()["url"]
 
+        created_draft = client.post(
+            "/api/request-drafts/state",
+            json={
+                "title": "Failed create keeps uploads",
+                "goal": f"![draft]({upload_url})",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_upload_token": "req-failed-create",
+            },
+        )
+        assert created_draft.status_code == 200
+        draft_id = created_draft.json()["draft_id"]
+
         failed = client.post(
             "/api/requests",
             json={
@@ -665,12 +757,15 @@ def test_api_request_creation_failure_does_not_consume_request_uploads(configure
                 "target_repo": str(PROJECT_ROOT),
                 "base_branch": "main",
                 "request_upload_token": "req-failed-create",
+                "request_draft_id": draft_id,
             },
         )
         assert failed.status_code == 400
 
         still_exists = client.get(upload_url)
         assert still_exists.status_code == 200
+        preserved_draft = client.get(f"/api/request-drafts/{draft_id}")
+        assert preserved_draft.status_code == 200
 
         succeeded = client.post(
             "/api/requests",
@@ -680,10 +775,14 @@ def test_api_request_creation_failure_does_not_consume_request_uploads(configure
                 "target_repo": str(config.repo_root),
                 "base_branch": "main",
                 "request_upload_token": "req-failed-create",
+                "request_draft_id": draft_id,
             },
         )
 
+        deleted_draft = client.get(f"/api/request-drafts/{draft_id}")
+
     assert succeeded.status_code == 200
+    assert deleted_draft.status_code == 404
     task = KanbanScanner(config).scan()[0]
     request_markdown = (task.task_dir / "REQUEST.md").read_text()
     assert "/api/request-uploads/req-failed-create/" not in request_markdown
@@ -3240,9 +3339,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request_draft_backend" in response.text
     assert "request_draft_model" in response.text
     assert "assistant-agent-kanban.request-composer-draft" in response.text
-    assert "requestComposerDraftMaxAgeMs" in response.text
+    assert "requestComposerDraftSyncDelayMs" in response.text
     assert "function restoreRequestComposerDraftState()" in response.text
-    assert "function cleanupPersistedRequestDraftUploads(saved)" in response.text
+    assert "function ensureRequestComposerDraft(options = {})" in response.text
     assert "function serializeRequestDraftArtifactMarkdown()" in response.text
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
@@ -3354,8 +3453,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "assistant-agent-kanban.last-target-repo" in response.text
     assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
     assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
-    assert "if (!restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });" in response.text
-    assert "persistRequestComposerDraftState(); setModalOpen(false);" in response.text
+    assert "if (!await restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });" in response.text
+    assert "void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false);" in response.text
     assert "let activeRequestComposerTab = 'assistant';" in response.text
     assert "setRequestComposerTab('assistant');" in response.text
     assert "function seedRequestDraftInput(force = false)" in response.text

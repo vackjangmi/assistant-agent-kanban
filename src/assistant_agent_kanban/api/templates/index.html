@@ -2178,7 +2178,7 @@
     const legacyLastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
     const taskChangedFilesPaneWidthStorageKey = 'assistant-agent-kanban.task-changed-files-pane-width';
     const requestComposerDraftStorageKey = 'assistant-agent-kanban.request-composer-draft';
-    const requestComposerDraftMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
+    const requestComposerDraftSyncDelayMs = 250;
     const taskChangedFilesPaneDefaultWidth = 260;
     const taskChangedFilesPaneMinWidth = 220;
     const taskModalError = document.getElementById('task-modal-error');
@@ -2311,6 +2311,7 @@
     let planEditorResizeObserver = null;
     let requestGoalEditor = null;
     let requestUploadToken = '';
+    let requestDraftId = '';
     let requestDraftEntries = [];
     let requestDraftPendingMessage = '';
     let requestDraftMessageInFlight = false;
@@ -2323,6 +2324,7 @@
     let requestDraftLastRenderedSignature = '';
     let requestDraftTranscriptPinnedToBottom = true;
     let requestDraftSessionToken = 0;
+    let requestDraftSyncTimer = null;
     const requestDraftAttachmentRegex = /!\[[^\]]*\]\((?:\/api\/request-uploads\/[^)]+|data:image\/[^)]+)\)/g;
     let humanReviewEditor = null;
     let humanReviewSourceMarkdown = '';
@@ -4428,9 +4430,16 @@
       return sections.join('\n').trim();
     }
 
+    function currentRequestComposerDraftPointer() {
+      return {
+        request_draft_id: requestDraftId || '',
+      };
+    }
+
     function currentRequestComposerDraftState() {
       syncRequestGoalField();
       return {
+        request_draft_id: requestDraftId || '',
         title: requestTitleInput.value || '',
         target_repo: targetRepoInput.value || '',
         base_branch: baseBranchInput.value || '',
@@ -4450,9 +4459,8 @@
       };
     }
 
-    function persistRequestComposerDraftState() {
-      const state = currentRequestComposerDraftState();
-      const hasContent = Boolean(
+    function requestComposerDraftHasContent(state) {
+      return Boolean(
         (state.title || '').trim() ||
         (state.target_repo || '').trim() ||
         (state.base_branch || '').trim() ||
@@ -4467,12 +4475,15 @@
         (state.request_draft_entries || []).length ||
         state.request_upload_token
       );
+    }
+
+    function persistRequestComposerDraftPointer() {
       try {
-        if (!hasContent) {
+        if (!requestDraftId) {
           window.localStorage.removeItem(requestComposerDraftStorageKey);
           return;
         }
-        window.localStorage.setItem(requestComposerDraftStorageKey, JSON.stringify(state));
+        window.localStorage.setItem(requestComposerDraftStorageKey, JSON.stringify(currentRequestComposerDraftPointer()));
       } catch (_error) {
       }
     }
@@ -4484,55 +4495,136 @@
       }
     }
 
-    function cleanupPersistedRequestDraftUploads(saved) {
-      const uploadToken = (saved?.request_upload_token || '').trim();
-      if (!uploadToken) return;
-      void cleanupRequestUploads(uploadToken);
+    async function ensureRequestComposerDraft(options = {}) {
+      if (requestDraftId) return requestDraftId;
+      const { silent = false } = options;
+      const state = currentRequestComposerDraftState();
+      if (!requestComposerDraftHasContent(state)) return '';
+      const response = await fetch('/api/request-drafts/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        if (!silent) throw new Error(payload.detail || 'Request draft creation failed.');
+        return '';
+      }
+      requestDraftId = payload.draft_id || '';
+      requestUploadToken = payload.request_upload_token || requestUploadToken;
+      persistRequestComposerDraftPointer();
+      return requestDraftId;
     }
 
-    function restoreRequestComposerDraftState() {
+    async function syncRequestComposerDraftState(options = {}) {
+      const { immediate = false, silent = false } = options;
+      if (requestDraftSyncTimer) {
+        window.clearTimeout(requestDraftSyncTimer);
+        requestDraftSyncTimer = null;
+      }
+      const run = async () => {
+        const state = currentRequestComposerDraftState();
+        if (!requestComposerDraftHasContent(state)) {
+          if (requestDraftId) await deleteRequestComposerDraftState({ preserveFormState: true, silent: true });
+          else clearRequestComposerDraftState();
+          return;
+        }
+        const draftId = await ensureRequestComposerDraft({ silent });
+        if (!draftId) return;
+        const response = await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentRequestComposerDraftState()),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          if (!silent) throw new Error(payload.detail || 'Request draft save failed.');
+          return;
+        }
+        requestDraftId = payload.draft_id || requestDraftId;
+        requestUploadToken = payload.request_upload_token || requestUploadToken;
+        persistRequestComposerDraftPointer();
+      };
+      if (immediate) return run();
+      requestDraftSyncTimer = window.setTimeout(() => {
+        requestDraftSyncTimer = null;
+        void run();
+      }, requestComposerDraftSyncDelayMs);
+    }
+
+    async function deleteRequestComposerDraftState(options = {}) {
+      const { preserveFormState = false, silent = false } = options;
+      if (requestDraftSyncTimer) {
+        window.clearTimeout(requestDraftSyncTimer);
+        requestDraftSyncTimer = null;
+      }
+      const draftId = requestDraftId;
+      requestDraftId = '';
+      if (!preserveFormState) requestDraftEntries = [];
+      clearRequestComposerDraftState();
+      if (!draftId) return;
+      try {
+        await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
+      } catch (error) {
+        if (!silent) throw error;
+      }
+    }
+
+    function applyRequestComposerDraftState(saved) {
+      requestForm.reset();
+      requestDraftId = saved.draft_id || saved.request_draft_id || '';
+      requestTitleInput.value = saved.title || '';
+      targetRepoInput.value = saved.target_repo || defaultTargetRepo;
+      targetRepoInput.dataset.autofilled = 'false';
+      baseBranchInput.value = saved.base_branch || defaultBaseBranch;
+      baseBranchInput.dataset.autofilled = 'false';
+      requestBackgroundInput.value = saved.background || '';
+      setRequestGoalEditorContent(saved.goal || '', { initialize: false });
+      constraintsField.value = saved.constraints || '';
+      acceptanceCriteriaField.value = saved.acceptance_criteria || '';
+      scopeField.value = saved.scope || '';
+      outOfScopeField.value = saved.out_of_scope || '';
+      referencesField.value = saved.references || '';
+      document.getElementById('plan_auto_approve').checked = Boolean(saved.plan_auto_approve);
+      requestUploadToken = saved.request_upload_token || generateRequestUploadToken();
+      requestDraftInput.value = saved.request_draft_input || '';
+      requestDraftEntries = Array.isArray(saved.transcript)
+        ? saved.transcript
+            .filter((entry) => entry && (entry.role === 'user' || entry.role === 'assistant'))
+            .map((entry) => ({ role: entry.role, text: entry.content || '', field_updates: entry.field_updates || {} }))
+        : [];
+      requestDraftPendingMessage = '';
+      requestDraftMessageInFlight = false;
+      requestDraftAttachmentInFlight = false;
+      requestDraftAttachmentStatusKey = '';
+      requestDraftAttachmentStatusMessage = '';
+      requestDraftAttachmentStatusTone = 'neutral';
+      requestDraftAttachmentStatusVars = {};
+      requestDraftDropDepth = 0;
+      requestDraftLastRenderedSignature = '';
+      requestDraftTranscriptPinnedToBottom = true;
+      setRequestComposerTab(saved.active_tab === 'fields' ? 'fields' : 'assistant');
+      updateRequestDraftPanel();
+      persistRequestComposerDraftPointer();
+    }
+
+    async function restoreRequestComposerDraftState() {
       try {
         const raw = window.localStorage.getItem(requestComposerDraftStorageKey);
         if (!raw) return false;
         const saved = JSON.parse(raw);
-        if (saved?.saved_at && Date.now() - Number(saved.saved_at) > requestComposerDraftMaxAgeMs) {
-          cleanupPersistedRequestDraftUploads(saved);
+        const draftId = (saved?.request_draft_id || '').trim();
+        if (!draftId) {
           clearRequestComposerDraftState();
           return false;
         }
-        requestForm.reset();
-        requestTitleInput.value = saved.title || '';
-        targetRepoInput.value = saved.target_repo || defaultTargetRepo;
-        targetRepoInput.dataset.autofilled = 'false';
-        baseBranchInput.value = saved.base_branch || defaultBaseBranch;
-        baseBranchInput.dataset.autofilled = 'false';
-        requestBackgroundInput.value = saved.background || '';
-        setRequestGoalEditorContent(saved.goal || '', { initialize: false });
-        constraintsField.value = saved.constraints || '';
-        acceptanceCriteriaField.value = saved.acceptance_criteria || '';
-        scopeField.value = saved.scope || '';
-        outOfScopeField.value = saved.out_of_scope || '';
-        referencesField.value = saved.references || '';
-        document.getElementById('plan_auto_approve').checked = Boolean(saved.plan_auto_approve);
-        requestUploadToken = saved.request_upload_token || generateRequestUploadToken();
-        requestDraftInput.value = saved.request_draft_input || '';
-        requestDraftEntries = Array.isArray(saved.request_draft_entries)
-          ? saved.request_draft_entries
-              .filter((entry) => entry && (entry.role === 'user' || entry.role === 'assistant'))
-              .map((entry) => ({ role: entry.role, text: entry.text || '', field_updates: entry.field_updates || {} }))
-          : [];
-        requestDraftPendingMessage = '';
-        requestDraftMessageInFlight = false;
-        requestDraftAttachmentInFlight = false;
-        requestDraftAttachmentStatusKey = '';
-        requestDraftAttachmentStatusMessage = '';
-        requestDraftAttachmentStatusTone = 'neutral';
-        requestDraftAttachmentStatusVars = {};
-        requestDraftDropDepth = 0;
-        requestDraftLastRenderedSignature = '';
-        requestDraftTranscriptPinnedToBottom = true;
-        setRequestComposerTab(saved.active_tab === 'fields' ? 'fields' : 'assistant');
-        updateRequestDraftPanel();
+        const response = await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`);
+        const payload = await response.json();
+        if (!response.ok) {
+          clearRequestComposerDraftState();
+          return false;
+        }
+        applyRequestComposerDraftState(payload);
         return true;
       } catch (_error) {
         clearRequestComposerDraftState();
@@ -4914,7 +5006,7 @@
       requestComposerTabAssistant.tabIndex = showingFields ? -1 : 0;
       requestComposerPanelFields.hidden = !showingFields;
       requestComposerPanelAssistant.hidden = showingFields;
-      persistRequestComposerDraftState();
+      void syncRequestComposerDraftState({ silent: true });
     }
 
     function setTaskModalOpen(isOpen) {
@@ -5218,6 +5310,7 @@
 
     function resetFormState(options = {}) {
       const { clearSavedDraft = true } = options;
+      const previousDraftId = requestDraftId;
       invalidateBranchLookup();
       const previousUploadToken = requestUploadToken;
       requestUploadToken = generateRequestUploadToken();
@@ -5238,7 +5331,10 @@
       applyRepoDefaults();
       resetRequestDraftState();
       setRequestComposerTab('assistant');
-      if (clearSavedDraft) clearRequestComposerDraftState();
+      if (clearSavedDraft) {
+        requestDraftId = previousDraftId;
+        void deleteRequestComposerDraftState({ silent: true });
+      }
     }
 
     function escapeHtml(value) {
@@ -6175,7 +6271,7 @@
         ? translateRequest('draftAttachmentUploading', requestDraftAttachmentStatusVars)
         : (requestDraftAttachmentStatusMessage || translateRequest(requestDraftAttachmentStatusKey || 'draftAttachmentHelp', requestDraftAttachmentStatusVars));
       setRequestDraftTranscript();
-      persistRequestComposerDraftState();
+      persistRequestComposerDraftPointer();
     }
 
     function seedRequestDraftInput(force = false) {
@@ -6191,6 +6287,7 @@
       requestDraftInput.focus();
       requestDraftInput.setSelectionRange(requestDraftInput.value.length, requestDraftInput.value.length);
       updateRequestDraftPanel();
+      void syncRequestComposerDraftState({ silent: true });
     }
 
     function setRequestDraftAttachmentStatusState(key, tone = 'neutral', variables = {}) {
@@ -6244,6 +6341,7 @@
           if (sessionToken !== requestDraftSessionToken) return;
           insertTextAtTextareaCursor(requestDraftInput, buildRequestDraftImageMarkdown(uploaded));
           setRequestDraftAttachmentStatusState('draftAttachmentAttached', 'success', { filename: uploaded.filename || file.name || 'image' });
+          void syncRequestComposerDraftState({ silent: true });
         }
       } catch (error) {
         if (sessionToken !== requestDraftSessionToken) return;
@@ -6276,7 +6374,11 @@
     function currentRequestDraftPayload(message) {
       syncRequestGoalField();
       const payload = Object.fromEntries(new FormData(requestForm).entries());
+      payload.request_draft_id = requestDraftId || null;
       payload.plan_auto_approve = document.getElementById('plan_auto_approve').checked;
+      payload.request_upload_token = requestUploadToken || '';
+      payload.active_tab = activeRequestComposerTab;
+      payload.request_draft_input = requestDraftInput.value || '';
       payload.transcript = serializeRequestDraftTranscript();
       payload.message = message;
       return payload;
@@ -6305,6 +6407,7 @@
       clearRequestFieldError(fieldName);
       formError.hidden = true;
       updateRequestDraftPanel(translateRequest('draftApplied', { field: requestDraftFieldLabel(fieldName) }));
+      void syncRequestComposerDraftState({ silent: true });
     }
 
     function currentRequestDraftFieldValue(fieldName) {
@@ -6336,6 +6439,7 @@
         updateRequestDraftPanel();
         return;
       }
+      await ensureRequestComposerDraft();
       const sessionToken = requestDraftSessionToken;
       formError.hidden = true;
       requestDraftPendingMessage = message;
@@ -6357,10 +6461,15 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateRequest('draftReplyError'));
         if (sessionToken !== requestDraftSessionToken) return;
-        requestDraftEntries = [
-          ...requestDraftEntries.slice(0, -1),
-          { role: 'assistant', text: payload.reply || '', field_updates: payload.field_updates || {} },
-        ];
+        requestDraftId = payload.request_draft_id || requestDraftId;
+        requestUploadToken = payload.request_upload_token || requestUploadToken;
+        requestDraftEntries = Array.isArray(payload.transcript)
+          ? payload.transcript.map((entry) => ({ role: entry.role, text: entry.content || '', field_updates: entry.field_updates || {} }))
+          : [
+              ...requestDraftEntries.slice(0, -1),
+              { role: 'assistant', text: payload.reply || '', field_updates: payload.field_updates || {} },
+            ];
+        persistRequestComposerDraftPointer();
         updateRequestDraftPanel();
       } catch (error) {
         if (sessionToken !== requestDraftSessionToken) return;
@@ -6379,6 +6488,7 @@
 
     function resetRequestDraftState() {
       requestDraftSessionToken += 1;
+      requestDraftId = '';
       requestDraftEntries = [];
       requestDraftPendingMessage = '';
       requestDraftMessageInFlight = false;
@@ -6454,6 +6564,7 @@
       requestGoalEditor.on('change', () => {
         syncRequestGoalField(requestGoalEditor.getMarkdown());
         clearRequestFieldError('goal');
+        void syncRequestComposerDraftState({ silent: true });
       });
       requestGoalEditorFallback.hidden = true;
       requestGoalEditorHost.hidden = false;
@@ -8104,10 +8215,12 @@
       const payload = Object.fromEntries(new FormData(requestForm).entries());
       payload.plan_auto_approve = document.getElementById('plan_auto_approve').checked;
       payload.request_upload_token = requestUploadToken;
-      payload.request_draft_markdown = serializeRequestDraftArtifactMarkdown();
+      payload.request_draft_id = requestDraftId || null;
       submitButton.disabled = true;
       submitButton.textContent = translateRequest('creating');
       try {
+        await syncRequestComposerDraftState({ immediate: true, silent: true });
+        payload.request_draft_id = requestDraftId || null;
         const response = await fetch('/api/requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -8117,6 +8230,7 @@
         if (!response.ok) throw new Error(data.detail || 'Request creation failed.');
         persistLastTargetRepo(payload.target_repo);
         clearRequestComposerDraftState();
+        requestDraftId = '';
         resetFormState();
         setModalOpen(false);
         boardPhaseManuallySelected = true;
@@ -8135,13 +8249,13 @@
     openComposerButton.addEventListener('click', async () => {
       clearMessages();
       applyRequestTranslations();
-      if (!restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });
+      if (!await restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });
       setModalOpen(true);
       await loadTargetRepoBranches();
     });
     openSettingsButton.addEventListener('click', openSettingsModal);
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });
-    cancelComposerButton.addEventListener('click', () => { clearMessages(); persistRequestComposerDraftState(); setModalOpen(false); });
+    cancelComposerButton.addEventListener('click', () => { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); });
     cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
     closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
     closeRetrospectiveModalButton.addEventListener('click', () => { setRetrospectiveModalOpen(false); });
@@ -8155,11 +8269,11 @@
     });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); persistRequestComposerDraftState(); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
-    requestForm.addEventListener('input', () => persistRequestComposerDraftState());
-    requestForm.addEventListener('change', () => persistRequestComposerDraftState());
-    requestDraftInput.addEventListener('input', () => updateRequestDraftPanel());
+    requestForm.addEventListener('input', () => void syncRequestComposerDraftState({ silent: true }));
+    requestForm.addEventListener('change', () => void syncRequestComposerDraftState({ silent: true }));
+    requestDraftInput.addEventListener('input', () => { updateRequestDraftPanel(); void syncRequestComposerDraftState({ silent: true }); });
     requestDraftInput.addEventListener('paste', (event) => {
       const imageFiles = requestDraftClipboardImageFiles(event);
       if (!imageFiles.length) return;
