@@ -845,6 +845,21 @@
     body.modal-open { overflow: hidden; }
     header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .drafts-shell { display: grid; gap: 12px; margin-bottom: 18px; }
+    .drafts-shell[hidden] { display: none; }
+    .drafts-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .drafts-head strong { font-size: 1rem; }
+    .drafts-head span { color: var(--muted); font-size: 0.92rem; }
+    .drafts-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }
+    .drafts-status[hidden] { display: none; }
+    .drafts-status[data-tone="error"] { border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
+    .drafts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .draft-card { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }
+    .draft-card strong { font-size: 0.98rem; }
+    .draft-card p { margin: 0; color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+    .draft-card-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+    .draft-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .draft-card-actions button { flex: 1 1 0; min-width: 120px; }
     button { padding: 9px 14px; border: 1px solid var(--text); background-color: #fff9ef; cursor: pointer; font: inherit; color: var(--text); }
     body[data-theme="dark"] button { background-color: rgba(31,42,54,0.94); }
     button.primary { background: var(--accent); border-color: var(--accent-strong); color: #fff; }
@@ -1180,11 +1195,11 @@
     .request-draft-suggestions { display: grid; gap: 8px; width: min(100%, 720px); }
     .request-draft-suggestions-title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-strong); }
     .request-draft-suggestion-list { display: grid; gap: 8px; }
-    .request-draft-suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); }
+    .request-draft-suggestion { display: grid; gap: 8px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); }
+    .request-draft-suggestion-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .request-draft-suggestion-copy { display: grid; gap: 4px; min-width: 0; }
     .request-draft-suggestion-copy strong { color: var(--accent-strong); font-size: 0.85rem; }
     .request-draft-suggestion-copy span { color: var(--muted); font-size: 0.85rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
-    .request-draft-suggestion button { min-height: 40px; }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -1449,19 +1464,12 @@
                     <strong id="request-draft-heading">Draft with assistant</strong>
                     <span id="request-draft-description">Ask for help refining the request before you create the final task.</span>
                   </div>
-                  <div class="request-draft-guidance">
-                    <div class="request-draft-guidance-copy">
-                      <strong id="request-draft-guidance-title">Start here with the assistant</strong>
-                      <p id="request-draft-guidance-body">Describe the outcome, tradeoffs, or rough notes you already have. The assistant can help tighten scope and make the request easier to implement.</p>
-                      <p id="request-draft-guidance-review">When the draft looks right, switch to Request details to review or edit the actual form fields. Create request still submits only the form values.</p>
-                    </div>
-                    <div>
-                      <div id="request-draft-starters-title" class="request-draft-suggestions-title">Starter prompts</div>
-                      <div id="request-draft-starters" class="request-draft-starters" aria-label="Starter prompts for the request assistant">
-                        <button type="button" class="ghost-button" data-request-draft-starter="scope">Tighten the scope</button>
-                        <button type="button" class="ghost-button" data-request-draft-starter="acceptance">Strengthen acceptance criteria</button>
-                        <button type="button" class="ghost-button" data-request-draft-starter="risks">Find missing risks or constraints</button>
-                      </div>
+                  <div>
+                    <div id="request-draft-starters-title" class="request-draft-suggestions-title">Starter prompts</div>
+                    <div id="request-draft-starters" class="request-draft-starters" aria-label="Starter prompts for the request assistant">
+                      <button type="button" class="ghost-button" data-request-draft-starter="scope">Tighten the scope</button>
+                      <button type="button" class="ghost-button" data-request-draft-starter="acceptance">Strengthen acceptance criteria</button>
+                      <button type="button" class="ghost-button" data-request-draft-starter="risks">Find missing risks or constraints</button>
                     </div>
                   </div>
                   <div class="human-review-panel">
@@ -1469,7 +1477,7 @@
                       <div class="editor-toolbar">
                         <div>
                           <strong id="request-draft-title">Composer assistant</strong>
-                          <div id="request-draft-status" class="muted">Ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates are optional until you apply them.</div>
+                          <div id="request-draft-status" class="muted">Ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Assistant updates merge into the form automatically, and Create request still uses the current form values.</div>
                         </div>
                       </div>
                       <div id="request-draft-transcript" class="request-draft-log" role="log" aria-live="polite" aria-relevant="additions text"><p class="request-draft-empty">No draft conversation yet.</p></div>
@@ -2050,6 +2058,16 @@
   </section>
   <main>
     <div class="board-phase-shell">
+      <section id="request-drafts-shell" class="drafts-shell" hidden>
+        <div class="drafts-head">
+          <div class="drafts-copy">
+            <strong id="request-drafts-title">Request drafts</strong>
+            <span id="request-drafts-description">Continue refining temporary request drafts before creating a real request.</span>
+          </div>
+        </div>
+        <div id="request-drafts-status" class="drafts-status" hidden></div>
+        <div id="request-drafts-grid" class="drafts-grid"></div>
+      </section>
       <div id="board-phase-tabs" class="board-phase-tabs">
         <button type="button" data-board-phase="plan">Planning</button>
         <button type="button" data-board-phase="implementation" class="active">Implementation</button>
@@ -2061,6 +2079,9 @@
   <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
   <script>
     const board = document.getElementById('board');
+    const requestDraftsShell = document.getElementById('request-drafts-shell');
+    const requestDraftsStatus = document.getElementById('request-drafts-status');
+    const requestDraftsGrid = document.getElementById('request-drafts-grid');
     const boardPhaseTabs = document.getElementById('board-phase-tabs');
     const body = document.body;
     const modal = document.getElementById('request-modal');
@@ -2280,6 +2301,7 @@
     let activeTaskId = null;
     let activeTaskTab = 'overview';
     let activeRequestComposerTab = 'assistant';
+    let requestDraftList = [];
     let activeTaskDetail = null;
     let activeTaskLogs = null;
     let taskLogViewerPinnedToBottom = true;
@@ -2571,13 +2593,21 @@
         draftAttachmentFailed: 'Image upload failed.',
         draftSend: 'Send',
         draftEmpty: 'No draft conversation yet.',
-        draftIdle: 'Start here: ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Suggested updates stay optional until you apply them, and Create request still uses only the form fields.',
+        draftIdle: 'Start here: ask for help clarifying scope, refining acceptance criteria, or tightening the goal. Assistant updates merge into the form automatically, and Create request still uses the current form values.',
         draftSending: 'Assistant is drafting a suggestion…',
-        draftApplied: 'Applied the suggested update to {field}.',
-        draftSuggestedUpdates: 'Suggested updates',
-        draftApply: 'Apply',
+        draftApplied: 'Updated {field}.',
+        draftAutoApplied: 'Assistant updated {fields}. You can keep editing the form before creating the request.',
+        draftSuggestedUpdates: 'Updated request fields',
+        draftAutoAppliedBadge: 'Auto-applied',
         draftClearField: '(clear field)',
         draftReplyError: 'Drafting help failed.',
+        draftsTitle: 'Request drafts',
+        draftsDescription: 'Continue refining temporary request drafts before creating a real request.',
+        draftsContinue: 'Continue drafting',
+        draftsDelete: 'Delete draft',
+        draftsUpdated: 'Updated {time}',
+        draftsEmpty: 'No saved request drafts.',
+        draftsDeleteError: 'Failed to delete request draft.',
         close: 'Close',
         submit: 'Create request',
         creating: 'Creating...',
@@ -2650,13 +2680,21 @@
         draftAttachmentFailed: '이미지 업로드에 실패했습니다.',
         draftSend: '보내기',
         draftEmpty: '아직 초안 대화가 없습니다.',
-        draftIdle: '여기서 먼저 시작해 보세요. 범위 정리, 승인 기준 보강, 목표 다듬기 등을 요청할 수 있습니다. 제안된 변경은 적용하기 전까지 폼에 반영되지 않으며, 요청 생성은 항상 폼 값만 사용합니다.',
+        draftIdle: '여기서 먼저 시작해 보세요. 범위 정리, 승인 기준 보강, 목표 다듬기 등을 요청할 수 있습니다. 어시스턴트 변경사항은 폼에 자동으로 반영되며, 요청 생성은 항상 현재 폼 값만 사용합니다.',
         draftSending: '어시스턴트가 초안을 정리하는 중...',
-        draftApplied: '{field} 필드에 제안을 적용했습니다.',
-        draftSuggestedUpdates: '제안된 변경',
-        draftApply: '적용',
+        draftApplied: '{field} 필드를 업데이트했습니다.',
+        draftAutoApplied: '어시스턴트가 {fields} 필드를 자동으로 반영했습니다. 요청 생성 전까지 직접 계속 수정할 수 있습니다.',
+        draftSuggestedUpdates: '업데이트된 요청 필드',
+        draftAutoAppliedBadge: '자동 반영됨',
         draftClearField: '(필드 비우기)',
         draftReplyError: '초안 도움 요청에 실패했습니다.',
+        draftsTitle: '임시 요청서',
+        draftsDescription: '정식 요청을 만들기 전에 임시 초안을 이어서 다듬을 수 있습니다.',
+        draftsContinue: '이어서 작성',
+        draftsDelete: '초안 삭제',
+        draftsUpdated: '마지막 수정 {time}',
+        draftsEmpty: '저장된 임시 요청서가 없습니다.',
+        draftsDeleteError: '임시 요청서를 삭제하지 못했습니다.',
         close: '닫기',
         submit: '요청 생성',
         creating: '생성 중...',
@@ -3553,10 +3591,9 @@
       requestComposerTabs.setAttribute('aria-label', translateRequest('composerTabsLabel'));
       setRequestText('request-draft-heading', 'draftHeading');
       setRequestText('request-draft-description', 'draftDescription');
-      setRequestText('request-draft-guidance-title', 'draftGuidanceTitle');
-      setRequestText('request-draft-guidance-body', 'draftGuidanceBody');
-      setRequestText('request-draft-guidance-review', 'draftGuidanceReview');
       setRequestText('request-draft-starters-title', 'draftStartersTitle');
+      setRequestText('request-drafts-title', 'draftsTitle');
+      setRequestText('request-drafts-description', 'draftsDescription');
       requestComposerTabFields.textContent = translateRequest('composerTabFields');
       requestComposerTabAssistant.textContent = translateRequest('composerTabAssistant');
       const requestDraftStarterScopeButton = requestDraftStarters.querySelector('[data-request-draft-starter="scope"]');
@@ -3571,6 +3608,7 @@
       sendRequestDraftButton.textContent = translateRequest('draftSend');
       cancelComposerButton.textContent = translateRequest('close');
       submitButton.textContent = translateRequest('submit');
+      renderRequestDrafts();
       updateRequestDraftPanel();
     }
 
@@ -3830,9 +3868,17 @@
     }
 
     async function loadBoard() {
-      const res = await fetch('/api/board');
-      const data = await res.json();
-      applyBoardSnapshot(data);
+      const [boardResponse, draftResponse] = await Promise.all([
+        fetch('/api/board'),
+        fetch('/api/request-drafts'),
+      ]);
+      const boardData = await boardResponse.json();
+      if (!boardResponse.ok) throw new Error(boardData.detail || 'Failed to load board.');
+      applyBoardSnapshot(boardData);
+      const draftData = await draftResponse.json();
+      if (!draftResponse.ok) throw new Error(draftData.detail || 'Failed to load request drafts.');
+      requestDraftList = Array.isArray(draftData.items) ? draftData.items : [];
+      renderRequestDrafts();
     }
 
     function boardCardLabel(key) {
@@ -4100,6 +4146,44 @@
           <h2>${stateLabel(column.state)}</h2>
           <div class="column-cards">${(column.items || []).map((item) => renderTaskCard(item)).join('')}</div>
         </section>`;
+    }
+
+    function renderRequestDrafts() {
+      if (!requestDraftList.length) {
+        requestDraftsShell.hidden = true;
+        requestDraftsGrid.innerHTML = '';
+        setRequestDraftsStatus('');
+        return;
+      }
+      requestDraftsShell.hidden = false;
+      requestDraftsGrid.innerHTML = requestDraftList.map((draft) => {
+        const repoPath = normalizeRepoPath(draft.target_repo || '');
+        const repoLabel = deriveRepoContext(repoPath).repoName || repoPath || 'draft';
+        const updatedLabel = translateRequest('draftsUpdated', { time: formatDateTime(draft.updated_at) });
+        return `
+          <article class="draft-card">
+            <strong>${escapeHtml(draft.title || translateRequest('draftsTitle'))}</strong>
+            <p>${escapeHtml(repoLabel)}${draft.base_branch ? ` · ${escapeHtml(draft.base_branch)}` : ''}</p>
+            <div class="draft-card-meta">
+              ${draft.has_transcript ? `<span class="diff-badge">${escapeHtml(translateRequest('draftTitle'))}</span>` : ''}
+              ${draft.has_unsent_input ? `<span class="diff-badge">${escapeHtml(translateRequest('draftLiveSuffix').trim())}</span>` : ''}
+              <span class="diff-badge">${escapeHtml(updatedLabel)}</span>
+            </div>
+            <div class="draft-card-actions">
+              <button type="button" class="primary" data-request-draft-open="${escapeHtml(draft.draft_id)}">${escapeHtml(translateRequest('draftsContinue'))}</button>
+              <button type="button" data-request-draft-delete="${escapeHtml(draft.draft_id)}">${escapeHtml(translateRequest('draftsDelete'))}</button>
+            </div>
+          </article>`;
+      }).join('');
+    }
+
+    async function loadRequestDrafts() {
+      const response = await fetch('/api/request-drafts');
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Failed to load request drafts.');
+      requestDraftList = Array.isArray(payload.items) ? payload.items : [];
+      setRequestDraftsStatus('');
+      renderRequestDrafts();
     }
 
     function renderCardModelMeta(item) {
@@ -4459,11 +4543,15 @@
       };
     }
 
+    function setRequestDraftsStatus(message = '', tone = 'neutral') {
+      requestDraftsStatus.hidden = !message;
+      requestDraftsStatus.dataset.tone = message ? tone : 'neutral';
+      requestDraftsStatus.textContent = message || '';
+    }
+
     function requestComposerDraftHasContent(state) {
       return Boolean(
         (state.title || '').trim() ||
-        (state.target_repo || '').trim() ||
-        (state.base_branch || '').trim() ||
         (state.background || '').trim() ||
         (state.goal || '').trim() ||
         (state.constraints || '').trim() ||
@@ -4472,8 +4560,7 @@
         (state.out_of_scope || '').trim() ||
         (state.references || '').trim() ||
         (state.request_draft_input || '').trim() ||
-        (state.request_draft_entries || []).length ||
-        state.request_upload_token
+        (state.request_draft_entries || []).length
       );
     }
 
@@ -4525,7 +4612,10 @@
       const run = async () => {
         const state = currentRequestComposerDraftState();
         if (!requestComposerDraftHasContent(state)) {
-          if (requestDraftId) await deleteRequestComposerDraftState({ preserveFormState: true, silent: true });
+          if (requestDraftId) {
+            await deleteRequestComposerDraftState({ preserveFormState: true, silent: true });
+            await loadRequestDrafts().catch(() => {});
+          }
           else clearRequestComposerDraftState();
           return;
         }
@@ -4544,6 +4634,7 @@
         requestDraftId = payload.draft_id || requestDraftId;
         requestUploadToken = payload.request_upload_token || requestUploadToken;
         persistRequestComposerDraftPointer();
+        await loadRequestDrafts().catch(() => {});
       };
       if (immediate) return run();
       requestDraftSyncTimer = window.setTimeout(() => {
@@ -4616,19 +4707,60 @@
         const draftId = (saved?.request_draft_id || '').trim();
         if (!draftId) {
           clearRequestComposerDraftState();
+          setRequestDraftsStatus('');
           return false;
         }
         const response = await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`);
         const payload = await response.json();
         if (!response.ok) {
           clearRequestComposerDraftState();
+          setRequestDraftsStatus(payload.detail || 'Failed to load request draft.', 'error');
+          await loadRequestDrafts().catch(() => {});
           return false;
         }
+        setRequestDraftsStatus('');
         applyRequestComposerDraftState(payload);
         return true;
       } catch (_error) {
         clearRequestComposerDraftState();
         return false;
+      }
+    }
+
+    async function openRequestDraftFromList(draftId) {
+      if (!draftId) return;
+      clearMessages();
+      applyRequestTranslations();
+      try {
+        const response = await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to load request draft.');
+        setRequestDraftsStatus('');
+        clearRequestComposerDraftState();
+        window.localStorage.setItem(requestComposerDraftStorageKey, JSON.stringify({ request_draft_id: draftId }));
+        applyRequestComposerDraftState(payload);
+        setModalOpen(true);
+        await loadTargetRepoBranches();
+      } catch (error) {
+        setRequestDraftsStatus(error.message, 'error');
+        await loadRequestDrafts().catch(() => {});
+      }
+    }
+
+    async function deleteRequestDraftFromList(draftId) {
+      if (!draftId) return;
+      try {
+        const response = await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`, { method: 'DELETE' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateRequest('draftsDeleteError'));
+        setRequestDraftsStatus('');
+        if (requestDraftId === draftId) {
+          requestDraftId = '';
+          clearRequestComposerDraftState();
+        }
+        await loadRequestDrafts();
+      } catch (error) {
+        setRequestDraftsStatus(error.message, 'error');
       }
     }
 
@@ -6245,7 +6377,7 @@
     function renderRequestDraftTranscript() {
       const entries = requestDraftEntries.map((entry, index) => {
         const suggestions = entry.role === 'assistant' && entry.field_updates && Object.keys(entry.field_updates).length
-          ? `<div class="request-draft-suggestions"><div class="request-draft-suggestions-title">${escapeHtml(translateRequest('draftSuggestedUpdates'))}</div><div class="request-draft-suggestion-list">${Object.entries(entry.field_updates).filter(([, value]) => value != null).map(([fieldName, value]) => `<div class="request-draft-suggestion"><div class="request-draft-suggestion-copy"><strong>${escapeHtml(requestDraftFieldLabel(fieldName))}</strong><span>${escapeHtml(value === '' ? translateRequest('draftClearField') : value)}</span></div><button type="button" data-request-draft-apply="${escapeHtml(fieldName)}" data-request-draft-entry="${String(index)}">${escapeHtml(translateRequest('draftApply'))}</button></div>`).join('')}</div></div>`
+          ? `<div class="request-draft-suggestions"><div class="request-draft-suggestions-title">${escapeHtml(translateRequest('draftSuggestedUpdates'))}</div><div class="request-draft-suggestion-list">${Object.entries(entry.field_updates).filter(([, value]) => value != null).map(([fieldName, value]) => `<div class="request-draft-suggestion"><div class="request-draft-suggestion-meta"><strong>${escapeHtml(requestDraftFieldLabel(fieldName))}</strong><span class="diff-badge">${escapeHtml(translateRequest('draftAutoAppliedBadge'))}</span></div><div class="request-draft-suggestion-copy"><span>${escapeHtml(value === '' ? translateRequest('draftClearField') : value)}</span></div></div>`).join('')}</div></div>`
           : '';
         return `<article class="request-draft-entry" data-role="${escapeHtml(entry.role)}"${entry.pending ? ' data-pending="true"' : ''}><span class="request-draft-role">${escapeHtml(entry.role === 'user' ? translateRequest('draftUserLabel') : translateRequest('draftTitle'))}${entry.pending ? escapeHtml(translateRequest('draftLiveSuffix')) : ''}</span><div class="request-draft-bubble">${escapeHtml(entry.text)}</div>${suggestions}</article>`;
       });
@@ -6384,7 +6516,8 @@
       return payload;
     }
 
-    function applyRequestDraftFieldUpdate(fieldName, value) {
+    function applyRequestDraftFieldUpdate(fieldName, value, options = {}) {
+      const { sync = true, statusMessage = null } = options;
       if (value == null) return;
       value = preserveRequestDraftAttachments(fieldName, value);
       if (fieldName === 'goal') {
@@ -6406,8 +6539,26 @@
       if (fieldName === 'acceptance_criteria') acceptanceCriteriaField.dataset.autofilled = 'false';
       clearRequestFieldError(fieldName);
       formError.hidden = true;
-      updateRequestDraftPanel(translateRequest('draftApplied', { field: requestDraftFieldLabel(fieldName) }));
-      void syncRequestComposerDraftState({ silent: true });
+      if (statusMessage !== false) updateRequestDraftPanel(statusMessage || translateRequest('draftApplied', { field: requestDraftFieldLabel(fieldName) }));
+      if (sync) void syncRequestComposerDraftState({ silent: true });
+    }
+
+    function applyRequestDraftFieldUpdates(fieldUpdates, options = {}) {
+      const { sync = true, statusMessage = null } = options;
+      const updates = Object.entries(fieldUpdates || {}).filter(([, value]) => value != null);
+      if (!updates.length) return [];
+      const labels = [];
+      updates.forEach(([fieldName, value]) => {
+        applyRequestDraftFieldUpdate(fieldName, value, { sync: false, statusMessage: false });
+        labels.push(requestDraftFieldLabel(fieldName));
+      });
+      const uniqueLabels = [...new Set(labels)];
+      if (statusMessage !== false) {
+        const nextStatus = statusMessage || translateRequest('draftAutoApplied', { fields: uniqueLabels.join(', ') });
+        updateRequestDraftPanel(nextStatus);
+      }
+      if (sync) void syncRequestComposerDraftState({ silent: true });
+      return uniqueLabels;
     }
 
     function currentRequestDraftFieldValue(fieldName) {
@@ -6470,7 +6621,8 @@
               { role: 'assistant', text: payload.reply || '', field_updates: payload.field_updates || {} },
             ];
         persistRequestComposerDraftPointer();
-        updateRequestDraftPanel();
+        applyRequestDraftFieldUpdates(payload.field_updates || {}, { sync: true });
+        if (!payload.field_updates || !Object.keys(payload.field_updates).length) updateRequestDraftPanel();
       } catch (error) {
         if (sessionToken !== requestDraftSessionToken) return;
         requestDraftInput.value = requestDraftPendingMessage;
@@ -8233,6 +8385,7 @@
         requestDraftId = '';
         resetFormState();
         setModalOpen(false);
+        renderRequestDrafts();
         boardPhaseManuallySelected = true;
         activeBoardPhase = 'plan';
         await loadBoard();
@@ -8252,6 +8405,15 @@
       if (!await restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });
       setModalOpen(true);
       await loadTargetRepoBranches();
+    });
+    requestDraftsGrid.addEventListener('click', (event) => {
+      const openButton = event.target.closest('[data-request-draft-open]');
+      if (openButton) {
+        void openRequestDraftFromList(openButton.dataset.requestDraftOpen || '');
+        return;
+      }
+      const deleteButton = event.target.closest('[data-request-draft-delete]');
+      if (deleteButton) void deleteRequestDraftFromList(deleteButton.dataset.requestDraftDelete || '');
     });
     openSettingsButton.addEventListener('click', openSettingsModal);
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });
@@ -8283,16 +8445,6 @@
       });
     });
     requestDraftTranscript.addEventListener('scroll', updateRequestDraftTranscriptPinnedToBottom);
-    requestDraftTranscript.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-request-draft-apply]');
-      if (!button) return;
-      const entryIndex = Number(button.dataset.requestDraftEntry || -1);
-      const fieldName = button.dataset.requestDraftApply || '';
-      const entry = requestDraftEntries[entryIndex];
-      const value = entry?.field_updates?.[fieldName];
-      if (!fieldName || value == null) return;
-      applyRequestDraftFieldUpdate(fieldName, value);
-    });
     sendRequestDraftButton.addEventListener('click', () => sendRequestDraftMessage().catch((error) => {
       formError.hidden = false;
       formError.textContent = error.message;

@@ -431,6 +431,36 @@ def test_api_can_create_load_update_and_delete_request_draft_state(configured_pa
         assert not (config.request_uploads_dir / "server-draft-token").exists()
 
 
+def test_api_lists_request_drafts_without_affecting_board(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/request-drafts/state",
+            json={
+                "title": "Visible draft",
+                "goal": "Show drafts separately from requests.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_draft_input": "still editing",
+            },
+        )
+        assert created.status_code == 200
+        listing = client.get("/api/request-drafts")
+        assert listing.status_code == 200
+        payload = listing.json()
+        assert len(payload["items"]) == 1
+        assert payload["items"][0]["title"] == "Visible draft"
+        assert payload["items"][0]["has_unsent_input"] is True
+
+        board = client.get("/api/board")
+        assert board.status_code == 200
+        board_payload = board.json()
+        request_column = next(column for column in board_payload["columns"] if column["state"] == "requests")
+        assert request_column["items"] == []
+
+
 def test_api_rejects_request_draft_for_overlapping_target_repo(configured_paths):
     config, _, _ = configured_paths
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
@@ -3340,9 +3370,16 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "request_draft_model" in response.text
     assert "assistant-agent-kanban.request-composer-draft" in response.text
     assert "requestComposerDraftSyncDelayMs" in response.text
+    assert "request-drafts-shell" in response.text
+    assert "request-drafts-grid" in response.text
     assert "function restoreRequestComposerDraftState()" in response.text
     assert "function ensureRequestComposerDraft(options = {})" in response.text
+    assert "function loadRequestDrafts()" in response.text
+    assert "function renderRequestDrafts()" in response.text
     assert "function serializeRequestDraftArtifactMarkdown()" in response.text
+    assert "Assistant updates merge into the form automatically" in response.text
+    assert "function applyRequestDraftFieldUpdates(fieldUpdates, options = {})" in response.text
+    assert "data-request-draft-apply=" not in response.text
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
     assert "readNumericSettingInput" in response.text
