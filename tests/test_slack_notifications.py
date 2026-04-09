@@ -186,6 +186,41 @@ def test_slack_notifier_reuses_existing_thread(configured_paths, monkeypatch):
     assert completed.metadata.slack.thread_ts == "173.456"
 
 
+def test_slack_notifier_adds_human_verification_action_buttons(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-human-action-task")
+    task = KanbanScanner(config).scan()[0]
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
+    verifying = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.HUMAN_VERIFYING)
+    verifying.metadata.state = TaskState.HUMAN_VERIFYING
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
+
+    assert calls
+    payload = calls[0][2]
+    assert payload is not None
+    blocks = payload["blocks"]
+    assert isinstance(blocks, list)
+    first_block = blocks[0]
+    assert first_block["type"] == "actions"
+    elements = first_block["elements"]
+    assert isinstance(elements, list)
+    assert elements[0]["action_id"] == "approve_verification"
+    assert elements[1]["action_id"] == "reject_verification"
+
+
 def test_slack_notifier_leaves_thread_empty_when_parent_ts_missing(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     config.slack.enabled = True

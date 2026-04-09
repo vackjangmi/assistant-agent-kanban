@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Protocol
 
@@ -51,6 +52,9 @@ class SlackMilestoneNotifier:
                 is_parent_message=context.metadata.slack.thread_ts is None,
             ),
         }
+        blocks = self._build_blocks(context, milestone=milestone)
+        if blocks is not None:
+            payload["blocks"] = blocks
         if context.metadata.slack.thread_ts:
             payload["thread_ts"] = context.metadata.slack.thread_ts
         response = slack_api_call("chat.postMessage", token=token, body=payload)
@@ -97,6 +101,32 @@ class SlackMilestoneNotifier:
         if note:
             lines.append(f"Note: {note}")
         return "\n".join(lines)
+
+    def _build_blocks(self, context: TaskContext, *, milestone: str) -> list[dict[str, object]] | None:
+        if milestone != "Human verification started":
+            return None
+        task_id = context.metadata.task_id
+        return [
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Approve"},
+                        "style": "primary",
+                        "action_id": "approve_verification",
+                        "value": json.dumps({"task_id": task_id, "action": "approve_verification"}),
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Request changes"},
+                        "style": "danger",
+                        "action_id": "reject_verification",
+                        "value": json.dumps({"task_id": task_id, "action": "reject_verification"}),
+                    },
+                ],
+            }
+        ]
 
     def _record_thread_identity(self, context: TaskContext, *, fallback_channel: str, response: dict[str, object]) -> None:
         if context.metadata.slack.thread_ts:
