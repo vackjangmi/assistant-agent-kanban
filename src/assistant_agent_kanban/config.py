@@ -144,6 +144,23 @@ class RepoDiscoveryConfig(BaseModel):
     max_depth: int = 2
 
 
+class SlackConfig(BaseModel):
+    enabled: bool = False
+    socket_mode_enabled: bool = True
+    bot_token: str | None = None
+    app_token: str | None = None
+    default_channel: str | None = None
+    app_mention_enabled: bool = False
+
+    @field_validator("bot_token", "app_token", "default_channel", mode="before")
+    @classmethod
+    def normalize_optional_secret(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class AppConfig(BaseModel):
     kanban_root: Path = Path("./.kanban-agent")
     repo_root: Path = Path(".")
@@ -156,6 +173,7 @@ class AppConfig(BaseModel):
     locks: LocksConfig = Field(default_factory=LocksConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     repo_discovery: RepoDiscoveryConfig = Field(default_factory=RepoDiscoveryConfig)
+    slack: SlackConfig = Field(default_factory=SlackConfig)
     loaded_from: Path | None = Field(default=None, exclude=True)
     loaded_local_from: Path | None = Field(default=None, exclude=True)
 

@@ -66,6 +66,10 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
                 "  language: ko",
                 "  coding_assistant: opencode",
                 "  planner_agent_count: 2",
+                "slack:",
+                "  enabled: true",
+                "  bot_token: '  xoxb-local  '",
+                "  app_token: ''",
             ]
         )
     )
@@ -83,6 +87,9 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
     assert config.runtime.planner_agent_count == 2
     assert config.runtime.implementer_agent_count == 1
     assert config.runtime.reviewer_agent_count == 1
+    assert config.slack.enabled is True
+    assert config.slack.bot_token == "xoxb-local"
+    assert config.slack.app_token is None
     assert config.loaded_from == base_path.resolve()
     assert config.loaded_local_from == local_path.resolve()
 
