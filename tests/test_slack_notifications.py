@@ -36,8 +36,12 @@ def test_slack_notifier_sends_milestone_message(configured_paths, monkeypatch):
     assert body is not None
     text = str(body["text"])
     assert body["channel"] == "#agent-alerts"
-    assert "Plan ready for review" in text
-    assert planning.metadata.task_id in text
+    assert text == "[{}] {}\n- repo: {}\n- base branch: {}".format(
+        planning.metadata.task_id,
+        planning.metadata.title,
+        planning.metadata.target.repo_root,
+        planning.metadata.target.base_branch,
+    )
     assert planning.metadata.slack.thread_ts is None
 
 
@@ -70,6 +74,9 @@ def test_slack_notifier_handles_plan_approving_review_milestone(configured_paths
     config.slack.default_channel = "#agent-alerts"
     create_request_task(config, "slack-plan-approval-task")
     task = KanbanScanner(config).scan()[0]
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
     waiting = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.WAITING_CHECK_PLANS)
     waiting.metadata.state = TaskState.WAITING_CHECK_PLANS
     calls: list[tuple[str, str, dict[str, object] | None]] = []
@@ -85,7 +92,37 @@ def test_slack_notifier_handles_plan_approving_review_milestone(configured_paths
     assert calls
     payload = calls[0][2]
     assert payload is not None
+    assert payload["thread_ts"] == "173.456"
     assert "Plan ready for review" in str(payload["text"])
+
+
+def test_slack_notifier_handles_reviewing_to_todos_milestone(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-review-changes-task")
+    task = KanbanScanner(config).scan()[0]
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
+    todo = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.TODOS)
+    todo.metadata.state = TaskState.TODOS
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(todo, previous_state=TaskState.REVIEWING, by="reviewer", note="fix remaining issues")
+
+    assert calls
+    payload = calls[0][2]
+    assert payload is not None
+    assert payload["thread_ts"] == "173.456"
+    assert "Review requested changes" in str(payload["text"])
 
 
 def test_slack_notifier_creates_parent_message_and_persists_thread(configured_paths, monkeypatch):
@@ -112,6 +149,7 @@ def test_slack_notifier_creates_parent_message_and_persists_thread(configured_pa
     payload = calls[0][2]
     assert payload is not None
     assert "thread_ts" not in payload
+    assert str(payload["text"]).startswith(f"[{waiting.metadata.task_id}] {waiting.metadata.title}")
     assert waiting.metadata.slack.thread_ts == "173.456"
     assert waiting.metadata.slack.channel == "C123"
     persisted = MetadataStore().load(waiting.task_dir)

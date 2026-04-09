@@ -19,6 +19,7 @@ MILESTONE_TRANSITIONS: dict[tuple[TaskState, TaskState], str] = {
     (TaskState.PLAN_APPROVING, TaskState.TODOS): "Plan approved",
     (TaskState.WAITING_CHECK_PLANS, TaskState.TODOS): "Plan approved",
     (TaskState.IMPLEMENTING, TaskState.WAITING_REVIEWS): "Implementation ready for review",
+    (TaskState.REVIEWING, TaskState.TODOS): "Review requested changes",
     (TaskState.REVIEWING, TaskState.COMPLETED_REVIEWS): "AI review passed",
     (TaskState.COMPLETED_REVIEWS, TaskState.HUMAN_VERIFYING): "Human verification started",
     (TaskState.HUMAN_VERIFYING, TaskState.TODOS): "Human requested changes",
@@ -41,7 +42,14 @@ class SlackMilestoneNotifier:
             return
         payload: dict[str, object] = {
             "channel": channel,
-            "text": self._build_message(context, milestone=milestone, previous_state=previous_state, by=by, note=note),
+            "text": self._build_message(
+                context,
+                milestone=milestone,
+                previous_state=previous_state,
+                by=by,
+                note=note,
+                is_parent_message=context.metadata.slack.thread_ts is None,
+            ),
         }
         if context.metadata.slack.thread_ts:
             payload["thread_ts"] = context.metadata.slack.thread_ts
@@ -59,7 +67,23 @@ class SlackMilestoneNotifier:
             },
         )
 
-    def _build_message(self, context: TaskContext, *, milestone: str, previous_state: TaskState, by: str, note: str | None) -> str:
+    def _build_message(
+        self,
+        context: TaskContext,
+        *,
+        milestone: str,
+        previous_state: TaskState,
+        by: str,
+        note: str | None,
+        is_parent_message: bool,
+    ) -> str:
+        if is_parent_message:
+            lines = [
+                f"[{context.metadata.task_id}] {context.metadata.title}",
+                f"- repo: {context.metadata.target.repo_root}",
+                f"- base branch: {context.metadata.target.base_branch}",
+            ]
+            return "\n".join(lines)
         lines = [
             f"🔔 {milestone}",
             f"Task: {context.metadata.task_id} — {context.metadata.title}",
