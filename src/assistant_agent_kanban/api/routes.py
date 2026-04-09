@@ -33,6 +33,7 @@ from ..request_creator import (
 )
 from ..request_drafting import RequestDraftPayload as RequestDraftRoutePayload, draft_request
 from ..request_draft_store import RequestDraftStore, serialize_request_draft_transcript_markdown
+from ..slack_settings_test import run_slack_settings_test
 
 
 class CompletedGroupOverridePayload(BaseModel):
@@ -187,6 +188,12 @@ class ModelSettingsPayload(BaseModel):
     commit_session_token_budget: int | None = Field(default=None, ge=1)
     repo_discovery_root: str | None = None
     repo_discovery_max_depth: int | None = Field(default=None, ge=1)
+    slack_enabled: bool | None = None
+    slack_socket_mode_enabled: bool | None = None
+    slack_bot_token: str | None = None
+    slack_app_token: str | None = None
+    slack_default_channel: str | None = None
+    slack_app_mention_enabled: bool | None = None
 
     @field_validator("language", mode="before")
     @classmethod
@@ -207,6 +214,19 @@ class ModelSettingsPayload(BaseModel):
         if normalized is None:
             raise ValueError("coding assistant must be OpenCode, Codex CLI, or Gemini CLI")
         return normalized
+
+
+class SlackSettingsTestPayload(BaseModel):
+    slack_enabled: bool | None = None
+    slack_socket_mode_enabled: bool | None = None
+    slack_bot_token: str | None = None
+    slack_app_token: str | None = None
+    slack_default_channel: str | None = None
+    slack_app_mention_enabled: bool | None = None
+
+
+class SlackReceiveTestStartPayload(BaseModel):
+    pass
 
 
 class ResumeImplementerPayload(BaseModel):
@@ -237,6 +257,13 @@ def _normalize_model_override(value: str | None) -> str | None:
 def _normalize_repo_discovery_root(value: str | None) -> str:
     normalized = (value or "").strip()
     return normalized or DEFAULT_REPO_DISCOVERY_ROOT
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
 
 
 def _normalize_session_token_budget(value: int | None) -> int:
@@ -280,12 +307,30 @@ def _apply_config_update(target, updated) -> None:
     target.locks = updated.locks
     target.runtime = updated.runtime
     target.repo_discovery = updated.repo_discovery
+    target.slack = updated.slack
     target.loaded_from = updated.loaded_from
     target.loaded_local_from = updated.loaded_local_from
 
 
+def _mask_secret(value: str | None) -> str | None:
+    if not value:
+        return None
+    if len(value) <= 4:
+        return "•" * len(value)
+    return f"{'•' * (len(value) - 4)}{value[-4:]}"
+
+
 def _settings_response(runtime, snapshots_by_backend, *, view_config=None, config_path: str | None = None, saved: bool = False) -> Mapping[str, object]:
     active_config = view_config or runtime.config
+    slack_runtime_snapshot = runtime.slack_runtime.snapshot() if getattr(runtime, "slack_runtime", None) is not None else {
+        "listener_enabled": False,
+        "listener_connected": False,
+        "listener_last_error": None,
+        "last_event_at": None,
+        "last_event_type": None,
+        "last_event_channel": None,
+        "receive_test": None,
+    }
     active_backend = active_config.active_backend()
     snapshot = snapshots_by_backend[active_backend]
     omo_snapshot = read_omo_delegation_snapshot() if active_backend == "opencode" else None
@@ -313,6 +358,15 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
         "commit_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("commit")),
         "repo_discovery_root": runtime.config.repo_discovery_root_value(),
         "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
+        "slack_enabled": active_config.slack.enabled,
+        "slack_socket_mode_enabled": active_config.slack.socket_mode_enabled,
+        "slack_default_channel": active_config.slack.default_channel,
+        "slack_app_mention_enabled": active_config.slack.app_mention_enabled,
+        "slack_bot_token_configured": active_config.slack.bot_token is not None,
+        "slack_bot_token_masked": _mask_secret(active_config.slack.bot_token),
+        "slack_app_token_configured": active_config.slack.app_token is not None,
+        "slack_app_token_masked": _mask_secret(active_config.slack.app_token),
+        "slack_runtime": slack_runtime_snapshot,
         "config_path": config_path or str(runtime.config.config_path_for_persistence()),
         "available_assistants": [
             {"value": value, "label": label}
@@ -433,7 +487,8 @@ async def _resolve_settings_snapshots(runtime, *, refresh: bool, assistant: str 
         view_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(assistant)
     snapshots_by_backend = {}
     for backend in SUPPORTED_RUNTIME_ASSISTANTS:
-        snapshots_by_backend[backend] = await _resolve_settings_snapshot(runtime, refresh=refresh, assistant=backend)
+        should_refresh_backend = refresh and (assistant is None or backend == assistant)
+        snapshots_by_backend[backend] = await _resolve_settings_snapshot(runtime, refresh=should_refresh_backend, assistant=backend)
     return view_config, snapshots_by_backend
 
 
@@ -510,6 +565,18 @@ def build_router() -> APIRouter:
             next_config.repo_discovery.root = _normalize_repo_discovery_root(payload.repo_discovery_root)
         if payload.repo_discovery_max_depth is not None:
             next_config.repo_discovery.max_depth = payload.repo_discovery_max_depth
+        if "slack_enabled" in fields_set and payload.slack_enabled is not None:
+            next_config.slack.enabled = payload.slack_enabled
+        if "slack_socket_mode_enabled" in fields_set and payload.slack_socket_mode_enabled is not None:
+            next_config.slack.socket_mode_enabled = payload.slack_socket_mode_enabled
+        if "slack_bot_token" in fields_set:
+            next_config.slack.bot_token = _normalize_optional_text(payload.slack_bot_token)
+        if "slack_app_token" in fields_set:
+            next_config.slack.app_token = _normalize_optional_text(payload.slack_app_token)
+        if "slack_default_channel" in fields_set:
+            next_config.slack.default_channel = _normalize_optional_text(payload.slack_default_channel)
+        if "slack_app_mention_enabled" in fields_set and payload.slack_app_mention_enabled is not None:
+            next_config.slack.app_mention_enabled = payload.slack_app_mention_enabled
         _view_config, validation_snapshots = await _resolve_settings_snapshots(runtime, refresh=True, assistant=next_config.active_backend())
         availability_map = _resolve_availability_map(runtime, validation_snapshots)
         _validate_backend_available(availability_map[next_config.active_backend()], field_name="coding_assistant")
@@ -522,11 +589,50 @@ def build_router() -> APIRouter:
             _validate_model_selection(next_config.role_model(role), field_name=f"{role}_model", available_models=available_models)
         config_path = next_config.persist()
         _apply_config_update(runtime.config, next_config)
+        if getattr(runtime, "slack_runtime", None) is not None:
+            await runtime.slack_runtime.restart_if_running()
         if previous_backend != runtime.config.active_backend() or previous_role_backends != runtime.config.role_backend_overrides() or _uses_builtin_runtime_adapter(runtime):
             _reconfigure_runtime_adapters(runtime)
         ensure_runtime_agents(runtime.config)
         refreshed_config, snapshots_by_backend = await _resolve_settings_snapshots(runtime, refresh=False, assistant=None)
         return _settings_response(runtime, snapshots_by_backend, view_config=refreshed_config, config_path=str(config_path), saved=True)
+
+    @router.post("/api/settings/slack-test")
+    async def test_slack_settings(payload: SlackSettingsTestPayload, request: Request) -> Mapping[str, object]:
+        runtime = request.app.state.runtime
+        slack_config = runtime.config.slack.model_copy(deep=True)
+        fields_set = payload.model_fields_set
+        if "slack_enabled" in fields_set and payload.slack_enabled is not None:
+            slack_config.enabled = payload.slack_enabled
+        if "slack_socket_mode_enabled" in fields_set and payload.slack_socket_mode_enabled is not None:
+            slack_config.socket_mode_enabled = payload.slack_socket_mode_enabled
+        if "slack_bot_token" in fields_set:
+            slack_config.bot_token = _normalize_optional_text(payload.slack_bot_token)
+        if "slack_app_token" in fields_set:
+            slack_config.app_token = _normalize_optional_text(payload.slack_app_token)
+        if "slack_default_channel" in fields_set:
+            slack_config.default_channel = _normalize_optional_text(payload.slack_default_channel)
+        if "slack_app_mention_enabled" in fields_set and payload.slack_app_mention_enabled is not None:
+            slack_config.app_mention_enabled = payload.slack_app_mention_enabled
+        result = await asyncio.to_thread(run_slack_settings_test, slack_config, uses_posted_values=bool(fields_set))
+        return result.to_payload()
+
+    @router.post("/api/settings/slack-receive-test/start")
+    async def start_slack_receive_test(_payload: SlackReceiveTestStartPayload, request: Request) -> Mapping[str, object]:
+        runtime = request.app.state.runtime
+        if getattr(runtime, "slack_runtime", None) is None:
+            raise HTTPException(status_code=503, detail="Slack runtime is unavailable.")
+        try:
+            return await runtime.slack_runtime.start_receive_test()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.get("/api/settings/slack-receive-test")
+    async def get_slack_receive_test_status(request: Request) -> Mapping[str, object]:
+        runtime = request.app.state.runtime
+        if getattr(runtime, "slack_runtime", None) is None:
+            raise HTTPException(status_code=503, detail="Slack runtime is unavailable.")
+        return runtime.slack_runtime.snapshot()
 
     @router.get("/api/tasks/{task_id}")
     async def task_detail(task_id: str, request: Request, include_changed_files: bool = False):
