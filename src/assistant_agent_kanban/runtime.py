@@ -107,6 +107,8 @@ class RuntimeSupervisor:
         self._stop_event.clear()
         await self.startup_recovery()
         self.backend_availability = await asyncio.to_thread(self.model_registry.warm_availability)
+        if self.slack_runtime is not None:
+            await self.slack_runtime.start_if_configured()
         if self.config.runtime.auto_dispatch:
             self._background_tasks = [
                 *self._background_tasks,

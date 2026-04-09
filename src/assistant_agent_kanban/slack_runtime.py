@@ -84,6 +84,19 @@ class SlackRuntime:
         self._listener_last_error = None
         self._listener_task = asyncio.create_task(self._run_forever(), name="fs-kanban-slack-listener")
 
+    async def start_if_configured(self) -> None:
+        if not self.config.slack.enabled:
+            return
+        if not self.config.slack.socket_mode_enabled:
+            return
+        if not self.config.slack.bot_token or not self.config.slack.app_token:
+            return
+        try:
+            await self.start_listener()
+        except RuntimeError as exc:
+            self._listener_last_error = str(exc)
+            await self._publish_status_event()
+
     async def start_receive_test(self) -> dict[str, object]:
         self._validate_receive_test_config()
         await self.start_listener()
@@ -195,6 +208,7 @@ class SlackRuntime:
             return
         if error:
             await asyncio.to_thread(self._post_interaction_status, payload, f"⚠️ {error}")
+            return
 
     def _post_interaction_status(self, payload: dict[str, Any], text: str) -> None:
         token = self.config.slack.bot_token
@@ -224,6 +238,7 @@ class SlackRuntime:
         if thread_ts:
             response_payload["thread_ts"] = thread_ts
         slack_api_call("chat.postMessage", token=token, body=response_payload)
+
 
     async def _maybe_match_receive_test(self, inner_payload: dict[str, Any], event: dict[str, Any]) -> None:
         session = self._current_receive_test()

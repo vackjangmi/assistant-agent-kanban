@@ -1733,6 +1733,26 @@ def test_runtime_rejects_slack_start_verification_from_wrong_thread(configured_p
     assert app.state.runtime.scanner.find_task(completed.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
 
 
+def test_runtime_start_auto_starts_slack_listener_when_configured(configured_paths):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.socket_mode_enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.app_token = "xapp-test"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    calls: list[str] = []
+
+    async def fake_start_if_configured():
+        calls.append("started")
+
+    app.state.runtime.slack_runtime.start_if_configured = fake_start_if_configured  # type: ignore[method-assign]
+
+    with TestClient(app):
+        pass
+
+    assert calls == ["started"]
+
+
 def test_api_creates_and_reads_retrospective(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
