@@ -9,9 +9,35 @@ from assistant_agent_kanban.exceptions import TransitionError
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.slack_notifications import MILESTONE_TRANSITIONS
 from assistant_agent_kanban.transitions import TransitionManager
 
 from .conftest import create_request_task
+
+
+class _FakeSlackNotifier:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str | None]] = []
+
+    def notify_transition(self, context, *, previous_state, by, note=None) -> None:
+        previous_state_value = getattr(previous_state, "value", previous_state)
+        current_state_value = getattr(context.state, "value", context.state)
+        if (TaskState(previous_state_value), TaskState(current_state_value)) not in MILESTONE_TRANSITIONS:
+            return
+        self.calls.append(
+            {
+                "task_id": context.metadata.task_id,
+                "from_state": previous_state_value,
+                "to_state": current_state_value,
+                "by": by,
+                "note": note,
+            }
+        )
+
+
+class _RaisingSlackNotifier:
+    def notify_transition(self, context, *, previous_state, by, note=None) -> None:
+        raise RuntimeError("slack broke")
 
 
 def test_manual_transition_respects_allowed_edges(configured_paths):
@@ -107,3 +133,55 @@ def test_completed_reviews_can_return_to_todos(configured_paths):
     moved = transitions.move(completed, TaskState.TODOS, by="human", note="integration conflict")
 
     assert moved.state == TaskState.TODOS
+
+
+def test_transitions_emit_slack_notifications_for_selected_milestones(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "slack-milestone-task")
+    scanner = KanbanScanner(config)
+    notifier = _FakeSlackNotifier()
+    transitions = TransitionManager(config, MetadataStore(), scanner, TaskLockManager(config), slack_notifier=notifier)
+    task = scanner.scan()[0]
+
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner", note="plan ready")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human", note="manual approval")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer", note="implementation complete")
+
+    assert notifier.calls == [
+        {
+            "task_id": waiting.metadata.task_id,
+            "from_state": "planning",
+            "to_state": "waiting-check-plans",
+            "by": "planner",
+            "note": "plan ready",
+        },
+        {
+            "task_id": todo.metadata.task_id,
+            "from_state": "waiting-check-plans",
+            "to_state": "todos",
+            "by": "human",
+            "note": "manual approval",
+        },
+        {
+            "task_id": waiting_reviews.metadata.task_id,
+            "from_state": "implementing",
+            "to_state": "waiting-reviews",
+            "by": "implementer",
+            "note": "implementation complete",
+        },
+    ]
+
+
+def test_transitions_do_not_fail_when_slack_notification_raises(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "slack-notifier-failure-task")
+    scanner = KanbanScanner(config)
+    transitions = TransitionManager(config, MetadataStore(), scanner, TaskLockManager(config), slack_notifier=_RaisingSlackNotifier())
+    task = scanner.scan()[0]
+
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+
+    assert planning.state == TaskState.PLANNING
+    assert planning.task_dir.exists()

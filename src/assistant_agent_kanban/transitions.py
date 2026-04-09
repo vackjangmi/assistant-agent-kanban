@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from pathlib import Path
 import shutil
 
@@ -12,14 +13,26 @@ from .metadata_store import MetadataStore
 from .models import HistoryEntry, TaskContext, reset_plan_approval_tracking, reset_review_loop_tracking, utc_now
 from .retry_policy import clear_retry_gate
 from .scanner import KanbanScanner
+from .slack_notifications import SlackTransitionNotifier
+
+
+logger = logging.getLogger(__name__)
 
 
 class TransitionManager:
-    def __init__(self, config: AppConfig, metadata_store: MetadataStore | None = None, scanner: KanbanScanner | None = None, locks: TaskLockManager | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        metadata_store: MetadataStore | None = None,
+        scanner: KanbanScanner | None = None,
+        locks: TaskLockManager | None = None,
+        slack_notifier: SlackTransitionNotifier | None = None,
+    ) -> None:
         self.config = config
         self.metadata_store = metadata_store or MetadataStore()
         self.scanner = scanner or KanbanScanner(config, self.metadata_store)
         self.locks = locks
+        self.slack_notifier = slack_notifier
 
     def move(self, context: TaskContext, target: TaskState, by: str, note: str | None = None) -> TaskContext:
         if target not in ALLOWED_TRANSITIONS[context.state]:
@@ -47,7 +60,20 @@ class TransitionManager:
             del metadata.history[previous_history_len:]
             shutil.move(str(target_dir), str(source_dir))
             raise
-        return TaskContext(metadata=metadata, task_dir=target_dir, state=target)
+        moved = TaskContext(metadata=metadata, task_dir=target_dir, state=target)
+        if self.slack_notifier is not None:
+            try:
+                self.slack_notifier.notify_transition(moved, previous_state=previous_state, by=by, note=note)
+            except Exception:
+                logger.exception(
+                    "slack milestone notification failed unexpectedly",
+                    extra={
+                        "task_id": moved.metadata.task_id,
+                        "from_state": previous_state,
+                        "to_state": target,
+                    },
+                )
+        return moved
 
     def _target_dir_for_state(self, task_dir_name: str, target: TaskState, entered_at: datetime) -> Path:
         state_root = self.config.state_dir(target)
