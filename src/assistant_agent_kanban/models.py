@@ -192,6 +192,7 @@ class CommitInfo(BaseModel):
 class SlackThreadInfo(BaseModel):
     channel: str | None = None
     thread_ts: str | None = None
+    uploaded_markdown: dict[str, str] = Field(default_factory=dict)
 
 
 class RequestInfo(BaseModel):
