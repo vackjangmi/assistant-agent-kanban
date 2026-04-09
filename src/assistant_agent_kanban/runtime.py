@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterable
+import json
 import logging
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -20,6 +21,7 @@ from .services.task_deletion_service import TaskDeletionService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
 from .assistant_adapter import AssistantAdapter, AssistantBackendManager, build_backend_manager
+from .exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from .slack_notifications import SlackMilestoneNotifier
 from .slack_runtime import SlackRuntime
 from .workers.committer import CommitWorker
@@ -131,6 +133,64 @@ class RuntimeSupervisor:
         refresh = getattr(self.board_service, "refresh_board", None)
         board = refresh() if callable(refresh) else self.board_service.get_board()
         await self.events.publish(board_to_event(board))
+
+    async def handle_slack_interactive_action(self, payload: dict[str, Any]) -> str | None:
+        actions = payload.get("actions")
+        if not isinstance(actions, list) or not actions:
+            return None
+        action = actions[0]
+        if not isinstance(action, dict):
+            return None
+        action_id = action.get("action_id")
+        if action_id not in {"approve_verification", "reject_verification"}:
+            return None
+        raw_value = action.get("value")
+        if not isinstance(raw_value, str) or not raw_value:
+            return "Slack action payload is missing task context."
+        try:
+            value = json.loads(raw_value)
+        except json.JSONDecodeError:
+            return "Slack action payload is invalid."
+        if not isinstance(value, dict):
+            return "Slack action payload is invalid."
+        task_id = value.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            return "Slack action payload is missing task id."
+        try:
+            task = self.scanner.find_task(task_id)
+        except FileNotFoundError:
+            return f"Task {task_id} no longer exists."
+        expected_thread_ts = task.metadata.slack.thread_ts
+        expected_channel = task.metadata.slack.channel
+        message = payload.get("message")
+        current_thread_ts = None
+        if isinstance(message, dict):
+            raw_thread_ts = message.get("thread_ts") or message.get("ts")
+            if isinstance(raw_thread_ts, str) and raw_thread_ts:
+                current_thread_ts = raw_thread_ts
+        channel = payload.get("channel")
+        current_channel = channel.get("id") if isinstance(channel, dict) else None
+        if expected_thread_ts and current_thread_ts and expected_thread_ts != current_thread_ts:
+            return "This Slack action no longer matches the current task thread."
+        if expected_channel and isinstance(current_channel, str) and expected_channel != current_channel:
+            return "This Slack action was clicked from the wrong Slack channel."
+        user = payload.get("user")
+        user_id = user.get("id") if isinstance(user, dict) else None
+        by = f"slack:{user_id}" if isinstance(user_id, str) and user_id else "slack"
+        try:
+            if action_id == "approve_verification":
+                await asyncio.to_thread(self.verification_service.approve, task_id, by=by, completion_mode="new-branch")
+            else:
+                await asyncio.to_thread(
+                    self.verification_service.reject,
+                    task_id,
+                    by=by,
+                    note=f"requested via Slack by {by}",
+                )
+        except (TransitionError, TaskNotFoundError, CommitError, IntegrationError) as exc:
+            return str(exc)
+        await self.rescan_and_publish()
+        return None
 
     async def force_delete(self, task_id: str, *, by: str) -> None:
         await self.cancel_task(task_id)
@@ -362,5 +422,5 @@ def build_runtime(
         model_registry,
     )
     runtime.adapter_registry = registry
-    runtime.slack_runtime = SlackRuntime(config, events)
+    runtime.slack_runtime = SlackRuntime(config, events, action_handler=runtime.handle_slack_interactive_action)
     return runtime

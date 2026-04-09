@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -33,9 +34,15 @@ class SlackReceiveTestSession:
 
 
 class SlackRuntime:
-    def __init__(self, config: AppConfig, events: EventBus) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        events: EventBus,
+        action_handler: Callable[[dict[str, Any]], Awaitable[str | None]] | None = None,
+    ) -> None:
         self.config = config
         self.events = events
+        self.action_handler = action_handler
         self._listener_task: asyncio.Task[None] | None = None
         self._listener_stop = asyncio.Event()
         self._lock = asyncio.Lock()
@@ -158,7 +165,13 @@ class SlackRuntime:
         await websocket.send(json.dumps({"envelope_id": envelope_id}))
 
     async def _handle_socket_payload(self, payload: dict[str, Any]) -> None:
-        if payload.get("type") != "events_api":
+        payload_type = payload.get("type")
+        if payload_type == "interactive":
+            inner_payload = payload.get("payload") or {}
+            if inner_payload.get("type") == "block_actions":
+                await self._handle_block_actions(inner_payload)
+            return
+        if payload_type != "events_api":
             return
         inner_payload = payload.get("payload") or {}
         event = inner_payload.get("event") or {}
@@ -171,6 +184,46 @@ class SlackRuntime:
         if event_type == "app_mention":
             await self._maybe_match_receive_test(inner_payload, event)
         await self._publish_status_event()
+
+    async def _handle_block_actions(self, payload: dict[str, Any]) -> None:
+        if self.action_handler is None:
+            return
+        try:
+            error = await self.action_handler(payload)
+        except Exception as exc:
+            await asyncio.to_thread(self._post_interaction_status, payload, f"⚠️ Slack action failed unexpectedly: {exc}")
+            return
+        if error:
+            await asyncio.to_thread(self._post_interaction_status, payload, f"⚠️ {error}")
+
+    def _post_interaction_status(self, payload: dict[str, Any], text: str) -> None:
+        token = self.config.slack.bot_token
+        if not token:
+            return
+        channel_id = None
+        channel = payload.get("channel")
+        if isinstance(channel, dict):
+            raw_channel_id = channel.get("id")
+            if isinstance(raw_channel_id, str) and raw_channel_id:
+                channel_id = raw_channel_id
+        if channel_id is None:
+            container = payload.get("container")
+            if isinstance(container, dict):
+                raw_channel_id = container.get("channel_id")
+                if isinstance(raw_channel_id, str) and raw_channel_id:
+                    channel_id = raw_channel_id
+        if not channel_id:
+            return
+        thread_ts = None
+        message = payload.get("message")
+        if isinstance(message, dict):
+            raw_thread_ts = message.get("thread_ts") or message.get("ts")
+            if isinstance(raw_thread_ts, str) and raw_thread_ts:
+                thread_ts = raw_thread_ts
+        response_payload: dict[str, object] = {"channel": channel_id, "text": text}
+        if thread_ts:
+            response_payload["thread_ts"] = thread_ts
+        slack_api_call("chat.postMessage", token=token, body=response_payload)
 
     async def _maybe_match_receive_test(self, inner_payload: dict[str, Any], event: dict[str, Any]) -> None:
         session = self._current_receive_test()

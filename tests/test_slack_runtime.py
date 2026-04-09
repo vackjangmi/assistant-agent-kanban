@@ -79,3 +79,66 @@ def test_slack_runtime_restart_if_running_captures_invalid_config(tmp_path):
     snapshot = asyncio.run(scenario())
     assert snapshot["listener_connected"] is False
     assert snapshot["listener_last_error"] == "Slack is disabled."
+
+
+def test_slack_runtime_handles_block_actions(tmp_path):
+    config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
+    seen: list[dict[str, Any]] = []
+
+    async def fake_handler(payload: dict[str, Any]) -> str | None:
+        seen.append(payload)
+        return None
+
+    runtime = SlackRuntime(config, EventBus(), action_handler=fake_handler)
+
+    async def scenario():
+        await runtime._handle_socket_payload(
+            {
+                "type": "interactive",
+                "payload": {
+                    "type": "block_actions",
+                    "actions": [{"action_id": "approve_verification", "value": '{"task_id":"task-1"}'}],
+                },
+            }
+        )
+
+    asyncio.run(scenario())
+    assert seen
+    assert seen[0]["type"] == "block_actions"
+
+
+def test_slack_runtime_posts_error_for_failed_block_action(tmp_path, monkeypatch):
+    config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
+    config.slack.bot_token = "xoxb-test"
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    async def fake_handler(payload: dict[str, Any]) -> str | None:
+        return "approval is blocked"
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_runtime.slack_api_call", fake_call)
+    runtime = SlackRuntime(config, EventBus(), action_handler=fake_handler)
+
+    async def scenario():
+        await runtime._handle_socket_payload(
+            {
+                "type": "interactive",
+                "payload": {
+                    "type": "block_actions",
+                    "channel": {"id": "C123"},
+                    "message": {"thread_ts": "173.456", "ts": "173.789"},
+                    "actions": [{"action_id": "approve_verification", "value": '{"task_id":"task-1"}'}],
+                },
+            }
+        )
+
+    asyncio.run(scenario())
+    assert calls
+    payload = calls[0][2]
+    assert payload is not None
+    assert payload["channel"] == "C123"
+    assert payload["thread_ts"] == "173.456"
+    assert "approval is blocked" in str(payload["text"])

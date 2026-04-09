@@ -1636,6 +1636,39 @@ def test_api_supports_human_verification_approve_to_target_branch(configured_pat
     assert current_branch == config.base_branch
 
 
+def test_runtime_handles_slack_interactive_approve_action(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "slack-interactive-approve-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "slack-interactive-approve-task")
+
+    with TestClient(app):
+        app.state.runtime.verification_service.start(completed.metadata.task_id, by="human")
+        task = app.state.runtime.scanner.find_task(completed.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        error = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "user": {"id": "U123"},
+                    "channel": {"id": "C123"},
+                    "message": {"thread_ts": "173.456", "ts": "173.789"},
+                    "actions": [
+                        {
+                            "action_id": "approve_verification",
+                            "value": json.dumps({"task_id": completed.metadata.task_id, "action": "approve_verification"}),
+                        }
+                    ],
+                }
+            )
+        )
+
+    assert error is None
+    assert app.state.runtime.scanner.find_task(completed.metadata.task_id).state == TaskState.DONE
+
+
 def test_api_creates_and_reads_retrospective(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
