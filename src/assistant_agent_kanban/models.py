@@ -193,6 +193,8 @@ class SlackThreadInfo(BaseModel):
     channel: str | None = None
     thread_ts: str | None = None
     uploaded_markdown: dict[str, str] = Field(default_factory=dict)
+    action_message_ts: dict[str, str] = Field(default_factory=dict)
+    action_message_text: dict[str, str] = Field(default_factory=dict)
 
 
 class RequestInfo(BaseModel):

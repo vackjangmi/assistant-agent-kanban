@@ -36,12 +36,18 @@ def test_slack_notifier_sends_milestone_message(configured_paths, monkeypatch):
     assert body is not None
     text = str(body["text"])
     assert body["channel"] == "#agent-alerts"
-    assert text == "[{}] {}\n- repo: {}\n- base branch: {}".format(
+    assert text == "🧩 [{}] {}\n• Repo: {}\n• Base branch: {}".format(
         planning.metadata.task_id,
         planning.metadata.title,
         planning.metadata.target.repo_root,
         planning.metadata.target.base_branch,
     )
+    blocks = body["blocks"]
+    assert isinstance(blocks, list)
+    assert blocks[0]["type"] == "header"
+    assert blocks[0]["text"]["text"] == f"🧩 {planning.metadata.title}"
+    assert blocks[2]["type"] == "section"
+    assert len(blocks[2]["fields"]) == 4
     assert planning.metadata.slack.thread_ts is None
 
 
@@ -126,7 +132,12 @@ def test_slack_notifier_handles_plan_approving_review_milestone(configured_paths
     payload = calls[0][2]
     assert payload is not None
     assert payload["thread_ts"] == "173.456"
-    assert "Plan ready for review" in str(payload["text"])
+    assert str(payload["text"]).startswith("📝 Plan ready for review\n")
+    blocks = payload["blocks"]
+    assert isinstance(blocks, list)
+    assert blocks[0]["type"] == "section"
+    assert blocks[0]["text"]["text"] == "📝 *Plan ready for review*"
+    assert blocks[1]["fields"][1]["text"] == "*State change*\n`plan-approving` → `waiting-check-plans`"
 
 
 def test_slack_notifier_handles_reviewing_to_todos_milestone(configured_paths, monkeypatch):
@@ -155,10 +166,11 @@ def test_slack_notifier_handles_reviewing_to_todos_milestone(configured_paths, m
     payload = calls[0][2]
     assert payload is not None
     assert payload["thread_ts"] == "173.456"
-    assert "Review requested changes" in str(payload["text"])
+    assert str(payload["text"]).startswith("🔁 Review requested changes\n")
     blocks = payload["blocks"]
     assert isinstance(blocks, list)
-    elements = blocks[0]["elements"]
+    assert blocks[0]["text"]["text"] == "🔁 *Review requested changes*"
+    elements = blocks[-1]["elements"]
     assert isinstance(elements, list)
     assert len(elements) == 1
     assert elements[0]["action_id"] == "resume_review_loop"
@@ -195,7 +207,11 @@ def test_slack_notifier_creates_parent_message_and_persists_thread(configured_pa
     payload = calls[0][2]
     assert payload is not None
     assert "thread_ts" not in payload
-    assert str(payload["text"]).startswith(f"[{waiting.metadata.task_id}] {waiting.metadata.title}")
+    assert str(payload["text"]).startswith(f"🧩 [{waiting.metadata.task_id}] {waiting.metadata.title}")
+    blocks = payload["blocks"]
+    assert isinstance(blocks, list)
+    assert blocks[0]["type"] == "header"
+    assert blocks[1]["text"]["text"].startswith("*Task opened in Slack thread*")
     assert uploads
     assert uploads[0][1] == "C123"
     assert uploads[0][2] == "173.456"
@@ -234,6 +250,10 @@ def test_slack_notifier_reuses_existing_thread(configured_paths, monkeypatch):
     assert payload is not None
     assert payload["thread_ts"] == "173.456"
     assert payload["channel"] == "C123"
+    blocks = payload["blocks"]
+    assert isinstance(blocks, list)
+    assert blocks[0]["text"]["text"] == "🔍 *AI review passed*"
+    assert blocks[-1]["type"] == "actions"
     assert completed.metadata.slack.thread_ts == "173.456"
 
 
@@ -361,7 +381,7 @@ def test_slack_notifier_adds_human_verification_action_buttons(configured_paths,
     assert payload is not None
     blocks = payload["blocks"]
     assert isinstance(blocks, list)
-    first_block = blocks[0]
+    first_block = blocks[-1]
     assert first_block["type"] == "actions"
     elements = first_block["elements"]
     assert isinstance(elements, list)
@@ -396,10 +416,46 @@ def test_slack_notifier_adds_start_verification_button(configured_paths, monkeyp
     assert payload is not None
     blocks = payload["blocks"]
     assert isinstance(blocks, list)
-    elements = blocks[0]["elements"]
+    assert blocks[0]["text"]["text"] == "🔍 *AI review passed*"
+    elements = blocks[-1]["elements"]
     assert isinstance(elements, list)
     assert len(elements) == 1
     assert elements[0]["action_id"] == "start_verification"
+
+
+def test_slack_notifier_clears_start_verification_buttons_when_human_verification_starts(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-clear-start-button-task")
+    task = KanbanScanner(config).scan()[0]
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    task.metadata.slack.action_message_ts["start_verification"] = "173.400"
+    task.metadata.slack.action_message_text["start_verification"] = "🔍 AI review passed"
+    MetadataStore().save(task.task_dir, task.metadata)
+    verifying = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.HUMAN_VERIFYING)
+    verifying.metadata.state = TaskState.HUMAN_VERIFYING
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        if method == "chat.postMessage":
+            return {"ok": True, "ts": "173.789", "channel": "C123"}
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
+
+    assert len(calls) >= 2
+    assert calls[0][0] == "chat.postMessage"
+    assert calls[1][0] == "chat.update"
+    update_payload = calls[1][2]
+    assert update_payload is not None
+    assert update_payload["ts"] == "173.400"
+    assert update_payload["blocks"] == []
 
 
 def test_slack_notifier_leaves_thread_empty_when_parent_ts_missing(configured_paths, monkeypatch):

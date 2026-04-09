@@ -29,6 +29,17 @@ MILESTONE_TRANSITIONS: dict[tuple[TaskState, TaskState], str] = {
     (TaskState.HUMAN_VERIFYING, TaskState.DONE): "Task completed",
 }
 
+MILESTONE_EMOJIS: dict[str, str] = {
+    "Plan ready for review": "📝",
+    "Plan approved": "✅",
+    "Implementation ready for review": "🛠️",
+    "Review requested changes": "🔁",
+    "AI review passed": "🔍",
+    "Human verification started": "👀",
+    "Human requested changes": "✏️",
+    "Task completed": "🎉",
+}
+
 
 class SlackMilestoneNotifier:
     def __init__(self, config: AppConfig, metadata_store: MetadataStore | None = None) -> None:
@@ -54,23 +65,30 @@ class SlackMilestoneNotifier:
                 is_parent_message=context.metadata.slack.thread_ts is None,
             ),
         }
-        blocks = self._build_blocks(context, milestone=milestone)
-        if blocks is not None:
-            payload["blocks"] = blocks
+        payload["blocks"] = self._build_blocks(
+            context,
+            milestone=milestone,
+            previous_state=previous_state,
+            by=by,
+            note=note,
+            is_parent_message=context.metadata.slack.thread_ts is None,
+        )
         if context.metadata.slack.thread_ts:
             payload["thread_ts"] = context.metadata.slack.thread_ts
         response = slack_api_call("chat.postMessage", token=token, body=payload)
         if response.get("ok"):
             self._record_thread_identity(context, fallback_channel=channel, response=response)
+            self._record_action_message(context, milestone=milestone, response=response, text=str(payload["text"]))
+            self._clear_obsolete_action_buttons(context, milestone=milestone, token=token)
             self._upload_markdown_artifact(context, milestone=milestone, token=token)
             return
         logger.warning(
-            "slack milestone notification failed",
+            "slack milestone notification failed: %s",
+            slack_error_message(response, fallback="Slack chat.postMessage failed."),
             extra={
                 "task_id": context.metadata.task_id,
-                "from_state": previous_state.value,
-                "to_state": context.state.value,
-                "error": slack_error_message(response, fallback="Slack chat.postMessage failed."),
+                "from_state": self._state_value(previous_state),
+                "to_state": self._state_value(context.state),
             },
         )
 
@@ -86,80 +104,181 @@ class SlackMilestoneNotifier:
     ) -> str:
         if is_parent_message:
             lines = [
-                f"[{context.metadata.task_id}] {context.metadata.title}",
-                f"- repo: {context.metadata.target.repo_root}",
-                f"- base branch: {context.metadata.target.base_branch}",
+                f"🧩 [{context.metadata.task_id}] {context.metadata.title}",
             ]
+            if context.metadata.target.repo_root:
+                lines.append(f"• Repo: {context.metadata.target.repo_root}")
+            if context.metadata.target.base_branch:
+                lines.append(f"• Base branch: {context.metadata.target.base_branch}")
             return "\n".join(lines)
+        emoji = MILESTONE_EMOJIS.get(milestone, "🔔")
         lines = [
-            f"🔔 {milestone}",
-            f"Task: {context.metadata.task_id} — {context.metadata.title}",
-            f"State: {previous_state.value} → {context.state.value}",
-            f"Actor: {by}",
+            f"{emoji} {milestone}",
+            f"[{context.metadata.task_id}] {context.metadata.title}",
+            f"• State: {self._state_value(previous_state)} → {self._state_value(context.state)}",
         ]
+        if by:
+            lines.append(f"• Actor: {by}")
         if context.metadata.target.repo_root:
-            lines.append(f"Repo: {context.metadata.target.repo_root}")
+            lines.append(f"• Repo: {context.metadata.target.repo_root}")
         if context.metadata.target.base_branch:
-            lines.append(f"Base branch: {context.metadata.target.base_branch}")
+            lines.append(f"• Base branch: {context.metadata.target.base_branch}")
         if note:
-            lines.append(f"Note: {note}")
+            lines.append(f"• Note: {note}")
         return "\n".join(lines)
 
-    def _build_blocks(self, context: TaskContext, *, milestone: str) -> list[dict[str, object]] | None:
+    def _build_blocks(
+        self,
+        context: TaskContext,
+        *,
+        milestone: str,
+        previous_state: TaskState,
+        by: str,
+        note: str | None,
+        is_parent_message: bool,
+    ) -> list[dict[str, object]]:
+        if is_parent_message:
+            return self._build_parent_blocks(context, milestone=milestone)
+        return self._build_thread_blocks(
+            context,
+            milestone=milestone,
+            previous_state=previous_state,
+            by=by,
+            note=note,
+        )
+
+    def _build_parent_blocks(self, context: TaskContext, *, milestone: str) -> list[dict[str, object]]:
+        title = context.metadata.title
         task_id = context.metadata.task_id
-        if milestone == "AI review passed":
-            return [
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "Start verification"},
-                            "style": "primary",
-                            "action_id": "start_verification",
-                            "value": json.dumps({"task_id": task_id, "action": "start_verification"}),
-                        }
-                    ],
-                }
-            ]
-        if milestone == "Review requested changes":
-            return [
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "Resume review loop"},
-                            "style": "primary",
-                            "action_id": "resume_review_loop",
-                            "value": json.dumps({"task_id": task_id, "action": "resume_review_loop"}),
-                        }
-                    ],
-                }
-            ]
-        if milestone != "Human verification started":
-            return None
+        repo_root = context.metadata.target.repo_root
+        base_branch = context.metadata.target.base_branch
+        fields: list[dict[str, str]] = [
+            {"type": "mrkdwn", "text": f"*Task ID*\n`{task_id}`"},
+            {"type": "mrkdwn", "text": f"*Milestone*\n{MILESTONE_EMOJIS.get(milestone, '🔔')} {milestone}"},
+        ]
+        if repo_root:
+            fields.append({"type": "mrkdwn", "text": f"*Repo*\n`{repo_root}`"})
+        if base_branch:
+            fields.append({"type": "mrkdwn", "text": f"*Base branch*\n`{base_branch}`"})
         return [
             {
+                "type": "header",
+                "text": {"type": "plain_text", "text": f"🧩 {title}"},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Task opened in Slack thread*",
+                },
+            },
+            {"type": "section", "fields": fields},
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": "Replies in this thread will track status changes and review actions."}
+                ],
+            },
+        ]
+
+    def _build_thread_blocks(
+        self,
+        context: TaskContext,
+        *,
+        milestone: str,
+        previous_state: TaskState,
+        by: str,
+        note: str | None,
+    ) -> list[dict[str, object]]:
+        emoji = MILESTONE_EMOJIS.get(milestone, "🔔")
+        blocks: list[dict[str, object]] = [
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"{emoji} *{milestone}*"},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Task*\n`{context.metadata.task_id}` {context.metadata.title}"},
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*State change*\n`{self._state_value(previous_state)}` → `{self._state_value(context.state)}`",
+                    },
+                ],
+            },
+        ]
+        detail_fields: list[dict[str, str]] = []
+        if by:
+            detail_fields.append({"type": "mrkdwn", "text": f"*Actor*\n{by}"})
+        if context.metadata.target.repo_root:
+            detail_fields.append({"type": "mrkdwn", "text": f"*Repo*\n`{context.metadata.target.repo_root}`"})
+        if context.metadata.target.base_branch:
+            detail_fields.append({"type": "mrkdwn", "text": f"*Base branch*\n`{context.metadata.target.base_branch}`"})
+        if detail_fields:
+            blocks.append({"type": "section", "fields": detail_fields})
+        if note:
+            blocks.append(
+                {
+                    "type": "context",
+                    "elements": [
+                        {"type": "mrkdwn", "text": f"*Note:* {note}"},
+                    ],
+                }
+            )
+        action_block = self._build_action_block(context, milestone=milestone)
+        if action_block is not None:
+            blocks.append(action_block)
+        return blocks
+
+    def _build_action_block(self, context: TaskContext, *, milestone: str) -> dict[str, object] | None:
+        task_id = context.metadata.task_id
+        if milestone == "AI review passed":
+            return {
                 "type": "actions",
                 "elements": [
                     {
                         "type": "button",
-                        "text": {"type": "plain_text", "text": "Approve"},
+                        "text": {"type": "plain_text", "text": "Start verification"},
                         "style": "primary",
-                        "action_id": "approve_verification",
-                        "value": json.dumps({"task_id": task_id, "action": "approve_verification"}),
-                    },
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "Request changes"},
-                        "style": "danger",
-                        "action_id": "reject_verification",
-                        "value": json.dumps({"task_id": task_id, "action": "reject_verification"}),
-                    },
+                        "action_id": "start_verification",
+                        "value": json.dumps({"task_id": task_id, "action": "start_verification"}),
+                    }
                 ],
             }
-        ]
+        if milestone == "Review requested changes":
+            return {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Resume review loop"},
+                        "style": "primary",
+                        "action_id": "resume_review_loop",
+                        "value": json.dumps({"task_id": task_id, "action": "resume_review_loop"}),
+                    }
+                ],
+            }
+        if milestone != "Human verification started":
+            return None
+        return {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Approve"},
+                    "style": "primary",
+                    "action_id": "approve_verification",
+                    "value": json.dumps({"task_id": task_id, "action": "approve_verification"}),
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Request changes"},
+                    "style": "danger",
+                    "action_id": "reject_verification",
+                    "value": json.dumps({"task_id": task_id, "action": "reject_verification"}),
+                },
+            ],
+        }
 
     def _record_thread_identity(self, context: TaskContext, *, fallback_channel: str, response: dict[str, object]) -> None:
         if context.metadata.slack.thread_ts:
@@ -179,6 +298,53 @@ class SlackMilestoneNotifier:
         context.metadata.slack.thread_ts = response_ts
         context.metadata.slack.channel = response_channel if isinstance(response_channel, str) else fallback_channel
         self.metadata_store.save(context.task_dir, context.metadata)
+
+    def _record_action_message(self, context: TaskContext, *, milestone: str, response: dict[str, object], text: str) -> None:
+        action_key = self._action_key_for_milestone(milestone)
+        if action_key is None:
+            return
+        response_ts = response.get("ts")
+        if not isinstance(response_ts, str) or not response_ts:
+            return
+        context.metadata.slack.action_message_ts[action_key] = response_ts
+        context.metadata.slack.action_message_text[action_key] = text
+        self.metadata_store.save(context.task_dir, context.metadata)
+
+    def _clear_obsolete_action_buttons(self, context: TaskContext, *, milestone: str, token: str) -> None:
+        if milestone == "Human verification started":
+            self._clear_action_message(context, action_key="start_verification", token=token)
+
+    def _clear_action_message(self, context: TaskContext, *, action_key: str, token: str) -> None:
+        channel = context.metadata.slack.channel
+        message_ts = context.metadata.slack.action_message_ts.get(action_key)
+        text = context.metadata.slack.action_message_text.get(action_key)
+        if not channel or not message_ts:
+            return
+        slack_api_call(
+            "chat.update",
+            token=token,
+            body={
+                "channel": channel,
+                "ts": message_ts,
+                "text": text or "",
+                "blocks": [],
+            },
+        )
+        context.metadata.slack.action_message_ts.pop(action_key, None)
+        context.metadata.slack.action_message_text.pop(action_key, None)
+        self.metadata_store.save(context.task_dir, context.metadata)
+
+    def _action_key_for_milestone(self, milestone: str) -> str | None:
+        if milestone == "AI review passed":
+            return "start_verification"
+        if milestone == "Review requested changes":
+            return "resume_review_loop"
+        if milestone == "Human verification started":
+            return "verification_decision"
+        return None
+
+    def _state_value(self, state: TaskState | str) -> str:
+        return state.value if isinstance(state, TaskState) else str(state)
 
     def _upload_markdown_artifact(self, context: TaskContext, *, milestone: str, token: str) -> None:
         channel = context.metadata.slack.channel
@@ -234,12 +400,12 @@ class SlackMilestoneNotifier:
         )
         if not upload.get("ok"):
             logger.warning(
-                "slack markdown upload failed",
+                "slack markdown upload failed: %s",
+                slack_error_message(upload, fallback="Slack file upload failed."),
                 extra={
                     "task_id": context.metadata.task_id,
                     "milestone": milestone,
                     "artifact": artifact_path.name,
-                    "error": slack_error_message(upload, fallback="Slack file upload failed."),
                 },
             )
             return
