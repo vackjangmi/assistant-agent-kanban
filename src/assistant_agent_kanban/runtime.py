@@ -20,6 +20,8 @@ from .services.task_deletion_service import TaskDeletionService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
 from .assistant_adapter import AssistantAdapter, AssistantBackendManager, build_backend_manager
+from .slack_notifications import SlackMilestoneNotifier
+from .slack_runtime import SlackRuntime
 from .workers.committer import CommitWorker
 from .workers.implementer import ImplementerWorker
 from .workers.plan_approval import PlanApprovalWorker
@@ -97,6 +99,7 @@ class RuntimeSupervisor:
         }
         self._inflight_task_ids: set[str] = set()
         self._task_adapters = [adapter for adapter in self._collect_task_adapters() if adapter is not None]
+        self.slack_runtime: SlackRuntime | None = None
 
     async def start(self) -> None:
         self._stop_event.clear()
@@ -111,6 +114,8 @@ class RuntimeSupervisor:
 
     async def stop(self) -> None:
         self._stop_event.set()
+        if self.slack_runtime is not None:
+            await self.slack_runtime.stop()
         tasks = list(self._background_tasks)
         self._background_tasks.clear()
         for role_tasks in self._role_tasks.values():
@@ -298,7 +303,8 @@ def build_runtime(
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
-    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    slack_notifier = SlackMilestoneNotifier(config)
+    transitions = TransitionManager(config, metadata_store, scanner, locks, slack_notifier=slack_notifier)
     events = EventBus()
     from .workspace_manager import WorkspaceManager
     from .commit_manager import CommitManager
@@ -356,4 +362,5 @@ def build_runtime(
         model_registry,
     )
     runtime.adapter_registry = registry
+    runtime.slack_runtime = SlackRuntime(config, events)
     return runtime
