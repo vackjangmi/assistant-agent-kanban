@@ -156,6 +156,12 @@ def test_slack_notifier_handles_reviewing_to_todos_milestone(configured_paths, m
     assert payload is not None
     assert payload["thread_ts"] == "173.456"
     assert "Review requested changes" in str(payload["text"])
+    blocks = payload["blocks"]
+    assert isinstance(blocks, list)
+    elements = blocks[0]["elements"]
+    assert isinstance(elements, list)
+    assert len(elements) == 1
+    assert elements[0]["action_id"] == "resume_review_loop"
 
 
 def test_slack_notifier_creates_parent_message_and_persists_thread(configured_paths, monkeypatch):

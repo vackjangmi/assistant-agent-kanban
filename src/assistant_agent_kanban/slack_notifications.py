@@ -122,6 +122,21 @@ class SlackMilestoneNotifier:
                     ],
                 }
             ]
+        if milestone == "Review requested changes":
+            return [
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Resume review loop"},
+                            "style": "primary",
+                            "action_id": "resume_review_loop",
+                            "value": json.dumps({"task_id": task_id, "action": "resume_review_loop"}),
+                        }
+                    ],
+                }
+            ]
         if milestone != "Human verification started":
             return None
         return [
