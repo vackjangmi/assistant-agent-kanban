@@ -303,7 +303,7 @@ def build_runtime(
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
-    slack_notifier = SlackMilestoneNotifier(config)
+    slack_notifier = SlackMilestoneNotifier(config, metadata_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks, slack_notifier=slack_notifier)
     events = EventBus()
     from .workspace_manager import WorkspaceManager

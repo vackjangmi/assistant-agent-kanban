@@ -5,6 +5,7 @@ from typing import Protocol
 
 from .config import AppConfig
 from .enums import TaskState
+from .metadata_store import MetadataStore
 from .models import TaskContext
 from .slack_api import slack_api_call, slack_error_message
 
@@ -26,14 +27,15 @@ MILESTONE_TRANSITIONS: dict[tuple[TaskState, TaskState], str] = {
 
 
 class SlackMilestoneNotifier:
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: AppConfig, metadata_store: MetadataStore | None = None) -> None:
         self.config = config
+        self.metadata_store = metadata_store or MetadataStore()
 
     def notify_transition(self, context: TaskContext, *, previous_state: TaskState, by: str, note: str | None = None) -> None:
         milestone = MILESTONE_TRANSITIONS.get((previous_state, context.state))
         if milestone is None:
             return
-        channel = self.config.slack.default_channel
+        channel = context.metadata.slack.channel or self.config.slack.default_channel
         token = self.config.slack.bot_token
         if not self.config.slack.enabled or not channel or not token:
             return
@@ -41,8 +43,11 @@ class SlackMilestoneNotifier:
             "channel": channel,
             "text": self._build_message(context, milestone=milestone, previous_state=previous_state, by=by, note=note),
         }
+        if context.metadata.slack.thread_ts:
+            payload["thread_ts"] = context.metadata.slack.thread_ts
         response = slack_api_call("chat.postMessage", token=token, body=payload)
         if response.get("ok"):
+            self._record_thread_identity(context, fallback_channel=channel, response=response)
             return
         logger.warning(
             "slack milestone notification failed",
@@ -68,6 +73,25 @@ class SlackMilestoneNotifier:
         if note:
             lines.append(f"Note: {note}")
         return "\n".join(lines)
+
+    def _record_thread_identity(self, context: TaskContext, *, fallback_channel: str, response: dict[str, object]) -> None:
+        if context.metadata.slack.thread_ts:
+            if context.metadata.slack.channel is None:
+                response_channel = response.get("channel")
+                context.metadata.slack.channel = response_channel if isinstance(response_channel, str) else fallback_channel
+                self.metadata_store.save(context.task_dir, context.metadata)
+            return
+        response_ts = response.get("ts")
+        if not isinstance(response_ts, str) or not response_ts:
+            logger.warning(
+                "slack parent message did not return a thread ts",
+                extra={"task_id": context.metadata.task_id, "channel": fallback_channel},
+            )
+            return
+        response_channel = response.get("channel")
+        context.metadata.slack.thread_ts = response_ts
+        context.metadata.slack.channel = response_channel if isinstance(response_channel, str) else fallback_channel
+        self.metadata_store.save(context.task_dir, context.metadata)
 
 
 class SlackTransitionNotifier(Protocol):

@@ -189,6 +189,11 @@ class CommitInfo(BaseModel):
     prepared_message: str | None = None
 
 
+class SlackThreadInfo(BaseModel):
+    channel: str | None = None
+    thread_ts: str | None = None
+
+
 class RequestInfo(BaseModel):
     path: str = "REQUEST.md"
     language: str | None = None
@@ -250,6 +255,7 @@ class TaskMetadata(BaseModel):
     review: ReviewInfo = Field(default_factory=ReviewInfo)
     integration: IntegrationInfo = Field(default_factory=IntegrationInfo)
     commit: CommitInfo = Field(default_factory=CommitInfo)
+    slack: SlackThreadInfo = Field(default_factory=SlackThreadInfo)
     retry_gate: RetryGateInfo = Field(default_factory=RetryGateInfo)
     lease: WorkerLease = Field(default_factory=WorkerLease)
     history: list[HistoryEntry] = Field(default_factory=list)
