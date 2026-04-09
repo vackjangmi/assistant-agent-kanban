@@ -103,9 +103,24 @@ class SlackMilestoneNotifier:
         return "\n".join(lines)
 
     def _build_blocks(self, context: TaskContext, *, milestone: str) -> list[dict[str, object]] | None:
+        task_id = context.metadata.task_id
+        if milestone == "AI review passed":
+            return [
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Start verification"},
+                            "style": "primary",
+                            "action_id": "start_verification",
+                            "value": json.dumps({"task_id": task_id, "action": "start_verification"}),
+                        }
+                    ],
+                }
+            ]
         if milestone != "Human verification started":
             return None
-        task_id = context.metadata.task_id
         return [
             {
                 "type": "actions",
