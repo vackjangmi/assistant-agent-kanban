@@ -1872,6 +1872,65 @@ def test_runtime_handles_slack_resume_review_loop_modal_submission(configured_pa
     assert modal_calls[0][0] == "chat.update"
 
 
+def test_runtime_rejects_blank_slack_resume_review_loop_modal_submission(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    create_request_task(config, "slack-interactive-resume-review-blank-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    reviewing.metadata.review.human_rework_required = True
+    metadata_store.save(reviewing.task_dir, reviewing.metadata)
+    todos = transitions.move(reviewing, TaskState.TODOS, by="reviewer", note="needs rework")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(todos.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        result = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "view_submission",
+                    "user": {"id": "U123"},
+                    "view": {
+                        "callback_id": "resume_review_loop_modal",
+                        "private_metadata": json.dumps(
+                            {
+                                "task_id": todos.metadata.task_id,
+                                "channel_id": "C123",
+                                "thread_ts": "173.456",
+                                "message_ts": "173.789",
+                                "message_text": "🔁 Review requested changes",
+                            }
+                        ),
+                        "state": {
+                            "values": {
+                                "resume_review_loop_input": {
+                                    "message_input": {"value": "   "}
+                                }
+                            }
+                        },
+                    },
+                }
+            )
+        )
+
+    assert result == {"status": "error", "message": "Resume message is required."}
+    resumed = app.state.runtime.scanner.find_task(todos.metadata.task_id)
+    assert resumed.metadata.review.human_rework_required is True
+
+
 def test_runtime_start_auto_starts_slack_listener_when_configured(configured_paths):
     config, _, _ = configured_paths
     config.slack.enabled = True
