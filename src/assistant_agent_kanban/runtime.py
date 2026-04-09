@@ -142,7 +142,7 @@ class RuntimeSupervisor:
         if not isinstance(action, dict):
             return None
         action_id = action.get("action_id")
-        if action_id not in {"approve_verification", "reject_verification"}:
+        if action_id not in {"start_verification", "approve_verification", "reject_verification"}:
             return None
         raw_value = action.get("value")
         if not isinstance(raw_value, str) or not raw_value:
@@ -178,7 +178,9 @@ class RuntimeSupervisor:
         user_id = user.get("id") if isinstance(user, dict) else None
         by = f"slack:{user_id}" if isinstance(user_id, str) and user_id else "slack"
         try:
-            if action_id == "approve_verification":
+            if action_id == "start_verification":
+                await asyncio.to_thread(self.verification_service.start, task_id, by=by)
+            elif action_id == "approve_verification":
                 await asyncio.to_thread(self.verification_service.approve, task_id, by=by, completion_mode="new-branch")
             else:
                 await asyncio.to_thread(

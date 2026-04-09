@@ -1669,6 +1669,70 @@ def test_runtime_handles_slack_interactive_approve_action(configured_paths):
     assert app.state.runtime.scanner.find_task(completed.metadata.task_id).state == TaskState.DONE
 
 
+def test_runtime_handles_slack_interactive_start_verification_action(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "slack-interactive-start-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "slack-interactive-start-task")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(completed.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        error = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "user": {"id": "U123"},
+                    "channel": {"id": "C123"},
+                    "message": {"thread_ts": "173.456", "ts": "173.789"},
+                    "actions": [
+                        {
+                            "action_id": "start_verification",
+                            "value": json.dumps({"task_id": completed.metadata.task_id, "action": "start_verification"}),
+                        }
+                    ],
+                }
+            )
+        )
+
+    assert error is None
+    assert app.state.runtime.scanner.find_task(completed.metadata.task_id).state == TaskState.HUMAN_VERIFYING
+
+
+def test_runtime_rejects_slack_start_verification_from_wrong_thread(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "slack-interactive-start-wrong-thread-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    _, completed = _task_ready_for_completed_reviews(config, "slack-interactive-start-wrong-thread-task")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(completed.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        error = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "user": {"id": "U123"},
+                    "channel": {"id": "C123"},
+                    "message": {"thread_ts": "wrong-thread", "ts": "173.789"},
+                    "actions": [
+                        {
+                            "action_id": "start_verification",
+                            "value": json.dumps({"task_id": completed.metadata.task_id, "action": "start_verification"}),
+                        }
+                    ],
+                }
+            )
+        )
+
+    assert error == "This Slack action no longer matches the current task thread."
+    assert app.state.runtime.scanner.find_task(completed.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
+
+
 def test_api_creates_and_reads_retrospective(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
