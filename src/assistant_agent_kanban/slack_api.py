@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from urllib import parse
 from urllib import error, request
 
 
@@ -60,15 +61,49 @@ def slack_upload_file_to_thread(
     upload_result = _slack_upload_binary(upload_url=upload_url, filename=filename, content=content)
     if not upload_result.get("ok"):
         return upload_result
-    return slack_api_call(
-        "files.completeUploadExternal",
+    return _slack_complete_upload_external(
         token=token,
-        body={
-            "files": [{"id": file_id, "title": title}],
+        file_id=file_id,
+        title=title,
+        channel_id=channel_id,
+        thread_ts=thread_ts,
+    )
+
+
+def _slack_complete_upload_external(
+    *,
+    token: str,
+    file_id: str,
+    title: str,
+    channel_id: str,
+    thread_ts: str,
+) -> dict[str, object]:
+    form_body = parse.urlencode(
+        {
+            "files": json.dumps([{"id": file_id, "title": title}]),
             "channel_id": channel_id,
             "thread_ts": thread_ts,
-        },
+        }
     )
+    req = request.Request(
+        f"{SLACK_API_BASE_URL}/files.completeUploadExternal",
+        data=form_body.encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=SLACK_API_TIMEOUT_SECONDS) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        try:
+            return json.loads(exc.read().decode("utf-8"))
+        except json.JSONDecodeError:
+            return {"ok": False, "error": f"http_error:{exc.code}"}
+    except error.URLError as exc:
+        return {"ok": False, "error": f"network_error:{exc.reason}"}
 
 
 def _slack_upload_binary(*, upload_url: str, filename: str, content: bytes) -> dict[str, object]:
