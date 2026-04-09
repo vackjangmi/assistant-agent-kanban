@@ -22,6 +22,7 @@ from .services.task_service import TaskService
 from .transitions import TransitionManager
 from .assistant_adapter import AssistantAdapter, AssistantBackendManager, build_backend_manager
 from .exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
+from .slack_api import slack_api_call, slack_error_message
 from .slack_notifications import SlackMilestoneNotifier
 from .slack_runtime import SlackRuntime
 from .workers.committer import CommitWorker
@@ -136,32 +137,35 @@ class RuntimeSupervisor:
         board = refresh() if callable(refresh) else self.board_service.get_board()
         await self.events.publish(board_to_event(board))
 
-    async def handle_slack_interactive_action(self, payload: dict[str, Any]) -> str | None:
+    async def handle_slack_interactive_action(self, payload: dict[str, Any]) -> dict[str, object] | None:
+        payload_type = payload.get("type")
+        if payload_type == "view_submission":
+            return await self._handle_slack_view_submission(payload)
         actions = payload.get("actions")
         if not isinstance(actions, list) or not actions:
-            return None
+            return {"status": "noop"}
         action = actions[0]
         if not isinstance(action, dict):
-            return None
+            return {"status": "noop"}
         action_id = action.get("action_id")
         if action_id not in {"start_verification", "approve_verification", "reject_verification", "resume_review_loop"}:
-            return None
+            return {"status": "noop"}
         raw_value = action.get("value")
         if not isinstance(raw_value, str) or not raw_value:
-            return "Slack action payload is missing task context."
+            return {"status": "error", "message": "Slack action payload is missing task context."}
         try:
             value = json.loads(raw_value)
         except json.JSONDecodeError:
-            return "Slack action payload is invalid."
+            return {"status": "error", "message": "Slack action payload is invalid."}
         if not isinstance(value, dict):
-            return "Slack action payload is invalid."
+            return {"status": "error", "message": "Slack action payload is invalid."}
         task_id = value.get("task_id")
         if not isinstance(task_id, str) or not task_id:
-            return "Slack action payload is missing task id."
+            return {"status": "error", "message": "Slack action payload is missing task id."}
         try:
             task = self.scanner.find_task(task_id)
         except FileNotFoundError:
-            return f"Task {task_id} no longer exists."
+            return {"status": "error", "message": f"Task {task_id} no longer exists."}
         expected_thread_ts = task.metadata.slack.thread_ts
         expected_channel = task.metadata.slack.channel
         message = payload.get("message")
@@ -173,19 +177,19 @@ class RuntimeSupervisor:
         channel = payload.get("channel")
         current_channel = channel.get("id") if isinstance(channel, dict) else None
         if expected_thread_ts and current_thread_ts and expected_thread_ts != current_thread_ts:
-            return "This Slack action no longer matches the current task thread."
+            return {"status": "error", "message": "This Slack action no longer matches the current task thread."}
         if expected_channel and isinstance(current_channel, str) and expected_channel != current_channel:
-            return "This Slack action was clicked from the wrong Slack channel."
+            return {"status": "error", "message": "This Slack action was clicked from the wrong Slack channel."}
         user = payload.get("user")
         user_id = user.get("id") if isinstance(user, dict) else None
         by = f"slack:{user_id}" if isinstance(user_id, str) and user_id else "slack"
+        if action_id == "resume_review_loop":
+            return await asyncio.to_thread(self._open_slack_resume_review_loop_modal, payload, task_id, by)
         try:
             if action_id == "start_verification":
                 await asyncio.to_thread(self.verification_service.start, task_id, by=by)
             elif action_id == "approve_verification":
                 await asyncio.to_thread(self.verification_service.approve, task_id, by=by, completion_mode="new-branch")
-            elif action_id == "resume_review_loop":
-                await asyncio.to_thread(self.task_service.resume_review_loop, task_id, by=by, message=f"requested via Slack by {by}")
             else:
                 await asyncio.to_thread(
                     self.verification_service.reject,
@@ -194,9 +198,150 @@ class RuntimeSupervisor:
                     note=f"requested via Slack by {by}",
                 )
         except (TransitionError, TaskNotFoundError, CommitError, IntegrationError) as exc:
-            return str(exc)
+            return {"status": "error", "message": str(exc)}
         await self.rescan_and_publish()
-        return None
+        return {"status": "success", "clear_buttons": True}
+
+    async def _handle_slack_view_submission(self, payload: dict[str, Any]) -> dict[str, object]:
+        view = payload.get("view")
+        if not isinstance(view, dict):
+            return {"status": "error", "message": "Slack modal payload is invalid."}
+        callback_id = view.get("callback_id")
+        if callback_id != "resume_review_loop_modal":
+            return {"status": "noop"}
+        raw_metadata = view.get("private_metadata")
+        if not isinstance(raw_metadata, str) or not raw_metadata:
+            return {"status": "error", "message": "Slack modal is missing task context."}
+        try:
+            metadata = json.loads(raw_metadata)
+        except json.JSONDecodeError:
+            return {"status": "error", "message": "Slack modal context is invalid."}
+        if not isinstance(metadata, dict):
+            return {"status": "error", "message": "Slack modal context is invalid."}
+        task_id = metadata.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            return {"status": "error", "message": "Slack modal is missing task id."}
+        try:
+            task = self.scanner.find_task(task_id)
+        except FileNotFoundError:
+            return {"status": "error", "message": f"Task {task_id} no longer exists."}
+        expected_thread_ts = task.metadata.slack.thread_ts
+        expected_channel = task.metadata.slack.channel
+        modal_thread_ts = metadata.get("thread_ts")
+        modal_channel = metadata.get("channel_id")
+        if isinstance(expected_thread_ts, str) and isinstance(modal_thread_ts, str) and expected_thread_ts != modal_thread_ts:
+            return {"status": "error", "message": "This Slack action no longer matches the current task thread."}
+        if isinstance(expected_channel, str) and isinstance(modal_channel, str) and expected_channel != modal_channel:
+            return {"status": "error", "message": "This Slack action was submitted from the wrong Slack channel."}
+        state = view.get("state")
+        message_text = self._extract_slack_modal_input(state, block_id="resume_review_loop_input", action_id="message_input")
+        if not message_text:
+            return {"status": "error", "message": "Resume message is required."}
+        user = payload.get("user")
+        user_id = user.get("id") if isinstance(user, dict) else None
+        by = f"slack:{user_id}" if isinstance(user_id, str) and user_id else "slack"
+        try:
+            await asyncio.to_thread(self.task_service.resume_review_loop, task_id, by=by, message=message_text)
+        except (TransitionError, TaskNotFoundError, CommitError, IntegrationError) as exc:
+            return {"status": "error", "message": str(exc)}
+        await self.rescan_and_publish()
+        await asyncio.to_thread(
+            self._clear_slack_action_message,
+            metadata.get("channel_id"),
+            metadata.get("message_ts"),
+            metadata.get("message_text") or "",
+        )
+        return {"status": "success"}
+
+    def _open_slack_resume_review_loop_modal(self, payload: dict[str, Any], task_id: str, by: str) -> dict[str, object]:
+        trigger_id = payload.get("trigger_id")
+        if not isinstance(trigger_id, str) or not trigger_id:
+            return {"status": "error", "message": "Slack did not provide a trigger id for opening the modal."}
+        token = self.config.slack.bot_token
+        if not token:
+            return {"status": "error", "message": "Slack bot token is missing."}
+        channel = payload.get("channel")
+        channel_id = channel.get("id") if isinstance(channel, dict) else None
+        message = payload.get("message")
+        message_ts = message.get("ts") if isinstance(message, dict) else None
+        message_text = message.get("text") if isinstance(message, dict) else ""
+        thread_ts = None
+        if isinstance(message, dict):
+            raw_thread_ts = message.get("thread_ts") or message.get("ts")
+            if isinstance(raw_thread_ts, str) and raw_thread_ts:
+                thread_ts = raw_thread_ts
+        response = slack_api_call(
+            "views.open",
+            token=token,
+            body={
+                "trigger_id": trigger_id,
+                "view": {
+                    "type": "modal",
+                    "callback_id": "resume_review_loop_modal",
+                    "private_metadata": json.dumps(
+                        {
+                            "task_id": task_id,
+                            "channel_id": channel_id,
+                            "thread_ts": thread_ts,
+                            "message_ts": message_ts,
+                            "message_text": message_text,
+                        }
+                    ),
+                    "title": {"type": "plain_text", "text": "Resume review"},
+                    "submit": {"type": "plain_text", "text": "Resume"},
+                    "close": {"type": "plain_text", "text": "Cancel"},
+                    "blocks": [
+                        {
+                            "type": "input",
+                            "block_id": "resume_review_loop_input",
+                            "label": {"type": "plain_text", "text": "Message"},
+                            "element": {
+                                "type": "plain_text_input",
+                                "action_id": "message_input",
+                                "multiline": True,
+                                "initial_value": f"requested via Slack by {by}",
+                            },
+                        }
+                    ],
+                },
+            },
+        )
+        if not response.get("ok"):
+            return {"status": "error", "message": slack_error_message(response, fallback="Slack modal open failed.")}
+        return {"status": "opened_modal", "clear_buttons": False}
+
+    def _clear_slack_action_message(self, channel_id: object, message_ts: object, text: object) -> None:
+        token = self.config.slack.bot_token
+        if not token or not isinstance(channel_id, str) or not isinstance(message_ts, str):
+            return
+        slack_api_call(
+            "chat.update",
+            token=token,
+            body={
+                "channel": channel_id,
+                "ts": message_ts,
+                "text": text if isinstance(text, str) else "",
+                "blocks": [],
+            },
+        )
+
+    def _extract_slack_modal_input(self, state: object, *, block_id: str, action_id: str) -> str | None:
+        if not isinstance(state, dict):
+            return None
+        values = state.get("values")
+        if not isinstance(values, dict):
+            return None
+        block = values.get(block_id)
+        if not isinstance(block, dict):
+            return None
+        action = block.get(action_id)
+        if not isinstance(action, dict):
+            return None
+        value = action.get("value")
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        return normalized or None
 
     async def force_delete(self, task_id: str, *, by: str) -> None:
         await self.cancel_task(task_id)

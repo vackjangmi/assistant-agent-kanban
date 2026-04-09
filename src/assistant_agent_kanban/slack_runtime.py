@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
@@ -13,6 +14,9 @@ from .config import AppConfig
 from .events import EventBus
 from .models import WorkerEvent, utc_now
 from .slack_api import slack_api_call, slack_error_message
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -38,7 +42,7 @@ class SlackRuntime:
         self,
         config: AppConfig,
         events: EventBus,
-        action_handler: Callable[[dict[str, Any]], Awaitable[str | None]] | None = None,
+        action_handler: Callable[[dict[str, Any]], Awaitable[dict[str, object] | None]] | None = None,
     ) -> None:
         self.config = config
         self.events = events
@@ -183,6 +187,8 @@ class SlackRuntime:
             inner_payload = payload.get("payload") or {}
             if inner_payload.get("type") == "block_actions":
                 await self._handle_block_actions(inner_payload)
+            elif inner_payload.get("type") == "view_submission":
+                await self._handle_view_submission(inner_payload)
             return
         if payload_type != "events_api":
             return
@@ -202,14 +208,35 @@ class SlackRuntime:
         if self.action_handler is None:
             return
         try:
-            error = await self.action_handler(payload)
+            result = await self.action_handler(payload)
         except Exception as exc:
             await asyncio.to_thread(self._post_interaction_status, payload, f"⚠️ Slack action failed unexpectedly: {exc}")
             return
-        if error:
-            await asyncio.to_thread(self._post_interaction_status, payload, f"⚠️ {error}")
+        if not isinstance(result, dict):
             return
-        await asyncio.to_thread(self._clear_interaction_buttons, payload)
+        status = result.get("status")
+        if status == "error":
+            message = result.get("message")
+            await asyncio.to_thread(self._post_interaction_status, payload, f"⚠️ {message or 'Slack action failed.'}")
+            return
+        if result.get("clear_buttons"):
+            await asyncio.to_thread(self._clear_interaction_buttons, payload)
+
+    async def _handle_view_submission(self, payload: dict[str, Any]) -> None:
+        if self.action_handler is None:
+            return
+        try:
+            result = await self.action_handler(payload)
+        except Exception as exc:
+            view = payload.get("view")
+            callback_id = view.get("callback_id") if isinstance(view, dict) else None
+            logger.warning("slack modal submission failed unexpectedly: %s", exc, extra={"callback_id": callback_id})
+            return
+        if isinstance(result, dict) and result.get("status") == "error":
+            message = result.get("message")
+            view = payload.get("view")
+            callback_id = view.get("callback_id") if isinstance(view, dict) else None
+            logger.warning("slack modal submission failed: %s", message, extra={"callback_id": callback_id})
 
     def _post_interaction_status(self, payload: dict[str, Any], text: str) -> None:
         token = self.config.slack.bot_token

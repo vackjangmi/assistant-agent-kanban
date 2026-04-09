@@ -112,8 +112,8 @@ def test_slack_runtime_posts_error_for_failed_block_action(tmp_path, monkeypatch
     config.slack.bot_token = "xoxb-test"
     calls: list[tuple[str, str, dict[str, object] | None]] = []
 
-    async def fake_handler(payload: dict[str, Any]) -> str | None:
-        return "approval is blocked"
+    async def fake_handler(payload: dict[str, Any]) -> dict[str, object] | None:
+        return {"status": "error", "message": "approval is blocked"}
 
     def fake_call(method: str, *, token: str, body=None):
         calls.append((method, token, body))
@@ -151,8 +151,8 @@ def test_slack_runtime_clears_buttons_after_successful_block_action(tmp_path, mo
     config.slack.bot_token = "xoxb-test"
     calls: list[tuple[str, str, dict[str, object] | None]] = []
 
-    async def fake_handler(payload: dict[str, Any]) -> str | None:
-        return None
+    async def fake_handler(payload: dict[str, Any]) -> dict[str, object] | None:
+        return {"status": "success", "clear_buttons": True}
 
     def fake_call(method: str, *, token: str, body=None):
         calls.append((method, token, body))
