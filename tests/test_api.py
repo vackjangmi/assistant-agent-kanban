@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
 import json
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from assistant_agent_kanban.api.app import create_app
+from assistant_agent_kanban.api.routes import _resolve_settings_snapshots
 from assistant_agent_kanban.api.ui import TEMPLATE_PATH
 from assistant_agent_kanban import config as config_module
 from assistant_agent_kanban.config import PROJECT_ROOT, load_config
@@ -2571,6 +2573,14 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["commit_session_token_budget"] == 250
         assert get_response.json()["repo_discovery_root"] == str(config.repo_discovery.root)
         assert get_response.json()["repo_discovery_max_depth"] == config.repo_discovery.max_depth
+        assert get_response.json()["slack_enabled"] is False
+        assert get_response.json()["slack_socket_mode_enabled"] is True
+        assert get_response.json()["slack_default_channel"] is None
+        assert get_response.json()["slack_app_mention_enabled"] is False
+        assert get_response.json()["slack_bot_token_configured"] is False
+        assert get_response.json()["slack_bot_token_masked"] is None
+        assert get_response.json()["slack_app_token_configured"] is False
+        assert get_response.json()["slack_app_token_masked"] is None
         assert get_response.json()["config_path"] == str(local_config_path.resolve())
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
@@ -2611,6 +2621,12 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
                 "commit_session_token_budget": 250,
                 "repo_discovery_root": "../",
                 "repo_discovery_max_depth": 4,
+                "slack_enabled": True,
+                "slack_socket_mode_enabled": True,
+                "slack_bot_token": "xoxb-test-12345678",
+                "slack_app_token": "xapp-test-87654321",
+                "slack_default_channel": "#agent-alerts",
+                "slack_app_mention_enabled": True,
             },
         )
 
@@ -2650,6 +2666,14 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["commit_session_token_budget"] == 250
     assert payload["repo_discovery_root"] == "../"
     assert payload["repo_discovery_max_depth"] == 4
+    assert payload["slack_enabled"] is True
+    assert payload["slack_socket_mode_enabled"] is True
+    assert payload["slack_default_channel"] == "#agent-alerts"
+    assert payload["slack_app_mention_enabled"] is True
+    assert payload["slack_bot_token_configured"] is True
+    assert payload["slack_bot_token_masked"] == "••••••••••••••5678"
+    assert payload["slack_app_token_configured"] is True
+    assert payload["slack_app_token_masked"] == "••••••••••••••4321"
     assert app.state.runtime.config.opencode.planner_model == "gpt-5"
     assert app.state.runtime.config.runtime.language == "KO"
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
@@ -2668,12 +2692,186 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.runtime.reviewer_agent_count == 4
     assert app.state.runtime.config.repo_discovery.root == "../"
     assert app.state.runtime.config.repo_discovery.max_depth == 4
+    assert app.state.runtime.config.slack.enabled is True
+    assert app.state.runtime.config.slack.socket_mode_enabled is True
+    assert app.state.runtime.config.slack.bot_token == "xoxb-test-12345678"
+    assert app.state.runtime.config.slack.app_token == "xapp-test-87654321"
+    assert app.state.runtime.config.slack.default_channel == "#agent-alerts"
+    assert app.state.runtime.config.slack.app_mention_enabled is True
     assert load_config(config_path).codex.commit_model == "gpt-5"
     assert load_config(config_path).codex.commit_session_token_budget == 250000
     assert load_config(config_path).runtime.role_backends.implementer == "codex"
     assert load_config(config_path).runtime.role_backends.commit == "codex"
     assert load_config(config_path).repo_discovery.root == "../"
     assert load_config(config_path).repo_discovery.max_depth == 4
+    assert load_config(config_path).slack.bot_token == "xoxb-test-12345678"
+    assert load_config(config_path).slack.app_token == "xapp-test-87654321"
+
+
+def test_api_settings_can_clear_slack_tokens(configured_paths):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-existing-1234"
+    config.slack.app_token = "xapp-existing-5678"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "slack_bot_token": "",
+                "slack_app_token": "",
+                "slack_enabled": True,
+                "slack_socket_mode_enabled": True,
+                "slack_app_mention_enabled": False,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["slack_bot_token_configured"] is False
+    assert response.json()["slack_bot_token_masked"] is None
+    assert response.json()["slack_app_token_configured"] is False
+    assert response.json()["slack_app_token_masked"] is None
+    assert app.state.runtime.config.slack.bot_token is None
+    assert app.state.runtime.config.slack.app_token is None
+
+
+def test_api_runs_slack_settings_test_with_posted_values(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    monkeypatch.setattr(
+        "assistant_agent_kanban.api.routes.run_slack_settings_test",
+        lambda slack_config, *, uses_posted_values: type(
+            "SlackResult",
+            (),
+            {
+                "to_payload": lambda self: {
+                    "ok": True,
+                    "summary": f"tested {slack_config.default_channel}",
+                    "checks": [
+                        {"name": "enabled", "ok": slack_config.enabled, "message": "enabled"},
+                        {"name": "bot_token", "ok": slack_config.bot_token == "xoxb-posted", "message": "bot"},
+                    ],
+                    "uses_posted_values": uses_posted_values,
+                    "receive_verification_mode": "readiness",
+                }
+            },
+        )(),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/settings/slack-test",
+            json={
+                "slack_enabled": True,
+                "slack_socket_mode_enabled": True,
+                "slack_bot_token": "xoxb-posted",
+                "slack_app_token": "xapp-posted",
+                "slack_default_channel": "#agent-alerts",
+                "slack_app_mention_enabled": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["summary"] == "tested #agent-alerts"
+    assert response.json()["uses_posted_values"] is True
+    assert config.slack.enabled is False
+
+
+def test_api_preserves_saved_slack_tokens_when_put_payload_omits_them(configured_paths):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-existing-1234"
+    config.slack.app_token = "xapp-existing-5678"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "slack_enabled": True,
+                "slack_socket_mode_enabled": True,
+                "slack_default_channel": "#agent-alerts",
+                "slack_app_mention_enabled": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert app.state.runtime.config.slack.bot_token == "xoxb-existing-1234"
+    assert app.state.runtime.config.slack.app_token == "xapp-existing-5678"
+
+
+def test_api_slack_settings_test_reports_failure(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    monkeypatch.setattr(
+        "assistant_agent_kanban.api.routes.run_slack_settings_test",
+        lambda slack_config, *, uses_posted_values: type(
+            "SlackResult",
+            (),
+            {
+                "to_payload": lambda self: {
+                    "ok": False,
+                    "summary": "missing channel",
+                    "checks": [{"name": "send_test", "ok": False, "message": "channel required"}],
+                    "uses_posted_values": uses_posted_values,
+                    "receive_verification_mode": "readiness",
+                }
+            },
+        )(),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/api/settings/slack-test", json={"slack_enabled": True, "slack_bot_token": "xoxb-posted"})
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert response.json()["checks"][0]["message"] == "channel required"
+
+
+def test_api_starts_and_reads_slack_receive_test(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    async def fake_start_receive_test():
+        return {"listener_enabled": True, "listener_connected": False, "listener_last_error": None, "receive_test": {"status": "pending", "token": "abc123"}}
+
+    app.state.runtime.slack_runtime.start_receive_test = fake_start_receive_test  # type: ignore[method-assign]
+    app.state.runtime.slack_runtime.snapshot = lambda: {"listener_enabled": True, "listener_connected": True, "listener_last_error": None, "receive_test": {"status": "received", "token": "abc123"}}  # type: ignore[method-assign]
+
+    with TestClient(app) as client:
+        start_response = client.post("/api/settings/slack-receive-test/start", json={})
+        status_response = client.get("/api/settings/slack-receive-test")
+
+    assert start_response.status_code == 200
+    assert start_response.json()["receive_test"]["token"] == "abc123"
+    assert status_response.status_code == 200
+    assert status_response.json()["receive_test"]["status"] == "received"
+
+
+def test_settings_snapshot_refreshes_only_selected_backend(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    calls: list[tuple[str, bool]] = []
+
+    class Snapshot:
+        def __init__(self, backend: str):
+            self.backend = backend
+
+    def fake_get(backend, *, refresh=False):
+        calls.append((backend, refresh))
+        return Snapshot(backend)
+
+    app.state.runtime.model_registry.get = fake_get  # type: ignore[method-assign]
+
+    asyncio.run(_resolve_settings_snapshots(app.state.runtime, refresh=True, assistant="opencode"))
+
+    assert ("opencode", True) in calls
+    assert all(refresh is False for backend, refresh in calls if backend != "opencode")
 
 
 def test_api_exposes_captured_stage_models_in_board_and_task_detail(configured_paths):
@@ -2832,6 +3030,12 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
                 "commit_session_token_budget": 250,
                 "repo_discovery_root": "/tmp/scan-root",
                 "repo_discovery_max_depth": 3,
+                "slack_enabled": True,
+                "slack_socket_mode_enabled": True,
+                "slack_bot_token": "xoxb-local-persist",
+                "slack_app_token": "xapp-local-persist",
+                "slack_default_channel": "C123",
+                "slack_app_mention_enabled": True,
             },
         )
 
@@ -2850,6 +3054,12 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         assert persisted.runtime.reviewer_agent_count == 3
         assert persisted.repo_discovery.root == "/tmp/scan-root"
         assert persisted.repo_discovery.max_depth == 3
+        assert persisted.slack.enabled is True
+        assert persisted.slack.socket_mode_enabled is True
+        assert persisted.slack.bot_token == "xoxb-local-persist"
+        assert persisted.slack.app_token == "xapp-local-persist"
+        assert persisted.slack.default_channel == "C123"
+        assert persisted.slack.app_mention_enabled is True
         assert response.json()["config_path"] == str(default_local_path.resolve())
     finally:
         config_module.DEFAULT_CONFIG_PATH = original_default_config_path
@@ -3324,6 +3534,24 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_theme" in response.text
     assert "runtime_coding_assistant" in response.text
     assert "worker_live_logs_enabled" in response.text
+    assert "slack_enabled" in response.text
+    assert "slack_socket_mode_enabled" in response.text
+    assert "slack_bot_token" in response.text
+    assert "slack_app_token" in response.text
+    assert "slack_default_channel" in response.text
+    assert "slack_app_mention_enabled" in response.text
+    assert "test-slack-settings" in response.text
+    assert "start-slack-receive-test" in response.text
+    assert "copy-slack-receive-test" in response.text
+    assert "clear-slack-bot-token" in response.text
+    assert "clear-slack-app-token" in response.text
+    assert "settings-slack-test-status" in response.text
+    assert "settings-slack-receive-test-status" in response.text
+    assert "slack_enabled: slackEnabledInput.checked" in response.text
+    assert "slack_socket_mode_enabled: slackSocketModeEnabledInput.checked" in response.text
+    assert "slack_app_mention_enabled: slackAppMentionEnabledInput.checked" in response.text
+    assert "await loadModelSettings(false);" in response.text
+    assert "await navigator.clipboard.writeText(lastSlackReceiveInstruction);" in response.text
     assert "THINK LOG" in response.text
     assert "DEFAULT LOG" in response.text
     assert "OpenCode LogMode" not in response.text
@@ -3392,8 +3620,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "backendInput.value = roleOptions.some((item) => item.value === nextValue) ? nextValue : 'default';" in response.text
     assert "Refresh models" in response.text
     assert "Save settings" in response.text
+    assert "Slack credentials" in response.text
+    assert "Test Slack" in response.text
+    assert "Start receive test" in response.text
+    assert "/api/settings/slack-test" in response.text
+    assert "/api/settings/slack-receive-test/start" in response.text
     assert "window.location.reload();" in response.text
-    assert "await loadModelSettings(true);" in response.text
+    assert "await loadModelSettings(true);" not in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
     assert "OpenCode LogMode" not in response.text

@@ -1035,12 +1035,41 @@
     .settings-grid-basic-top { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; }
     .settings-grid-basic-bottom { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 14px; }
     .settings-card { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: 0 10px 22px rgba(24,32,38,0.06); }
+    .settings-card-span-2 { grid-column: 1 / -1; }
     .settings-card strong { font-size: 1rem; }
     .settings-card span { color: var(--muted); font-size: 0.95rem; }
     .settings-card input, .settings-card select { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
     .settings-card small { color: var(--muted); font-size: 0.88rem; }
+    .settings-slack-top-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 12px; align-items: stretch; }
+    .settings-toggle-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .settings-toggle { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,242,232,0.92)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
+    .settings-toggle-copy { display: grid; gap: 4px; min-width: 0; }
+    .settings-toggle-copy label { font-size: 0.8rem; font-weight: 700; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
+    .settings-toggle-copy span { color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+    .settings-switch { position: relative; display: inline-grid; align-items: center; justify-items: center; width: 54px; height: 32px; cursor: pointer; }
+    .settings-switch input[type="checkbox"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .settings-switch-ui { position: relative; display: block; width: 54px; height: 32px; border: 1px solid rgba(24,32,38,0.16); border-radius: 999px; background: linear-gradient(180deg, rgba(213,220,227,0.9), rgba(183,193,202,0.92)); box-shadow: inset 0 1px 2px rgba(24,32,38,0.14), 0 6px 14px rgba(24,32,38,0.12); transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+    .settings-switch-ui::before { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(180deg, #ffffff, #f0e7de); box-shadow: 0 2px 6px rgba(24,32,38,0.2); transition: transform 180ms ease, background 180ms ease; }
+    .settings-switch-ui::after { content: 'OFF'; position: absolute; top: 50%; right: 9px; transform: translateY(-50%); color: rgba(24,32,38,0.62); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.08em; }
+    .settings-switch input[type="checkbox"]:checked + .settings-switch-ui { border-color: rgba(124,79,44,0.36); background: linear-gradient(180deg, var(--accent), var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 8px 18px rgba(124,79,44,0.22); }
+    .settings-switch input[type="checkbox"]:checked + .settings-switch-ui::before { transform: translateX(22px); background: linear-gradient(180deg, #fffdf9, #f2ddd0); }
+    .settings-switch input[type="checkbox"]:checked + .settings-switch-ui::after { content: 'ON'; right: auto; left: 9px; color: rgba(255,249,239,0.92); }
+    .settings-switch input[type="checkbox"]:focus-visible + .settings-switch-ui { outline: 3px solid rgba(124,79,44,0.24); outline-offset: 3px; }
+    .settings-slack-channel-field { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,242,232,0.92)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
+    .settings-slack-token-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    body[data-theme="dark"] .settings-toggle { background: linear-gradient(180deg, rgba(38,50,62,0.98), rgba(28,39,50,0.96)); border-color: rgba(186, 200, 214, 0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.18); }
+    body[data-theme="dark"] .settings-toggle-copy label { color: #f2cfaa; }
+    body[data-theme="dark"] .settings-switch-ui { border-color: rgba(186, 200, 214, 0.16); background: linear-gradient(180deg, rgba(91,107,121,0.98), rgba(67,81,94,0.98)); box-shadow: inset 0 1px 2px rgba(0,0,0,0.28), 0 6px 16px rgba(0,0,0,0.26); }
+    body[data-theme="dark"] .settings-switch-ui::before { background: linear-gradient(180deg, #f9f3eb, #e0c4a6); }
+    body[data-theme="dark"] .settings-switch-ui::after { color: rgba(238,244,248,0.68); }
+    body[data-theme="dark"] .settings-switch input[type="checkbox"]:checked + .settings-switch-ui { border-color: rgba(242, 198, 147, 0.42); background: linear-gradient(180deg, #dfb482, #cf9d66); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 10px 22px rgba(0,0,0,0.3); }
+    body[data-theme="dark"] .settings-switch input[type="checkbox"]:checked + .settings-switch-ui::after { color: #1a232c; }
+    body[data-theme="dark"] .settings-switch input[type="checkbox"]:focus-visible + .settings-switch-ui { outline-color: rgba(242, 198, 147, 0.28); }
+    body[data-theme="dark"] .settings-slack-channel-field { background: linear-gradient(180deg, rgba(38,50,62,0.98), rgba(28,39,50,0.96)); border-color: rgba(186, 200, 214, 0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.18); }
     @media (max-width: 960px) {
       .settings-toolbar-actions { justify-content: flex-start; margin-left: 0; }
+      .settings-slack-top-grid, .settings-slack-token-grid { grid-template-columns: 1fr; }
+      .settings-toggle-group { grid-template-columns: 1fr; }
     }
     .settings-role-inline { display: grid; grid-template-columns: 64px 132px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
     .settings-role-inline-no-agents { grid-template-columns: 132px minmax(0, 1fr) 110px; }
@@ -1513,7 +1542,7 @@
           <section class="settings-section">
             <div class="settings-section-head">
               <strong id="settings-basics-heading">Basics</strong>
-              <span id="settings-basics-description">Language, theme, log mode, and repository defaults.</span>
+              <span id="settings-basics-description">Language, theme, repository defaults, and local Slack settings.</span>
             </div>
             <div class="settings-grid-basic">
               <div class="settings-grid-basic-top">
@@ -1549,6 +1578,72 @@
                 <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
                 <small id="settings-repo-depth-note">Increase only for nested repos.</small>
                 </label>
+                <div class="settings-card settings-card-span-2">
+                <strong id="settings-slack-title">Slack</strong>
+                <span id="settings-slack-description">Local Slack app defaults for notifications and interactions.</span>
+                <div class="settings-slack-top-grid">
+                  <div class="settings-toggle-group">
+                    <div class="settings-toggle">
+                      <div class="settings-toggle-copy">
+                        <label id="settings-slack-enabled-label" for="slack_enabled">Slack Enabled</label>
+                      </div>
+                      <label class="settings-switch" for="slack_enabled">
+                        <input id="slack_enabled" name="slack_enabled" type="checkbox" role="switch">
+                        <span class="settings-switch-ui" aria-hidden="true"></span>
+                      </label>
+                    </div>
+                    <div class="settings-toggle">
+                      <div class="settings-toggle-copy">
+                        <label id="settings-slack-socket-mode-label" for="slack_socket_mode_enabled">Socket Mode</label>
+                      </div>
+                      <label class="settings-switch" for="slack_socket_mode_enabled">
+                        <input id="slack_socket_mode_enabled" name="slack_socket_mode_enabled" type="checkbox" role="switch">
+                        <span class="settings-switch-ui" aria-hidden="true"></span>
+                      </label>
+                    </div>
+                    <div class="settings-toggle">
+                      <div class="settings-toggle-copy">
+                        <label id="settings-slack-mention-label" for="slack_app_mention_enabled">App mentions</label>
+                      </div>
+                      <label class="settings-switch" for="slack_app_mention_enabled">
+                        <input id="slack_app_mention_enabled" name="slack_app_mention_enabled" type="checkbox" role="switch">
+                        <span class="settings-switch-ui" aria-hidden="true"></span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="settings-slack-channel-field">
+                    <label id="settings-slack-channel-label" for="slack_default_channel">Default channel</label>
+                    <input id="slack_default_channel" name="slack_default_channel" placeholder="#agent-alerts" spellcheck="false">
+                  </div>
+                </div>
+                <small id="settings-slack-note">Slack values stay in your local config file and are never written into task metadata.</small>
+                <strong id="settings-slack-auth-title">Slack credentials</strong>
+                <span id="settings-slack-auth-description">Leave token fields blank to keep the saved value. Use the clear button if you want to remove a saved token.</span>
+                <div class="settings-slack-token-grid">
+                  <div class="settings-field">
+                    <label id="settings-slack-bot-token-label" for="slack_bot_token">Bot token</label>
+                    <input id="slack_bot_token" name="slack_bot_token" type="text" placeholder="xoxb-..." autocomplete="off" spellcheck="false">
+                    <small id="settings-slack-bot-token-status">Not configured.</small>
+                    <button type="button" id="clear-slack-bot-token" class="ghost-button">Clear saved token</button>
+                  </div>
+                  <div class="settings-field">
+                    <label id="settings-slack-app-token-label" for="slack_app_token">App token</label>
+                    <input id="slack_app_token" name="slack_app_token" type="text" placeholder="xapp-..." autocomplete="off" spellcheck="false">
+                    <small id="settings-slack-app-token-status">Not configured.</small>
+                    <button type="button" id="clear-slack-app-token" class="ghost-button">Clear saved token</button>
+                  </div>
+                </div>
+                <div class="settings-toolbar settings-toolbar-actions">
+                  <div class="settings-toolbar-cluster settings-toolbar-actions">
+                    <p id="settings-slack-test-description">Send a real test message from the current form values. The receive test uses saved Slack settings, so save first if you changed listener-related fields.</p>
+                    <button type="button" id="test-slack-settings" class="ghost-button">Test Slack</button>
+                    <button type="button" id="start-slack-receive-test" class="ghost-button">Start receive test</button>
+                    <button type="button" id="copy-slack-receive-test" class="ghost-button">Copy message</button>
+                  </div>
+                </div>
+                <div id="settings-slack-test-status" class="approval-choice-status" hidden></div>
+                <div id="settings-slack-receive-test-status" class="approval-choice-status" hidden></div>
+                </div>
               </div>
             </div>
           </section>
@@ -2121,6 +2216,22 @@
     const sendRequestDraftButton = document.getElementById('send-request-draft');
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
+    const slackEnabledInput = document.getElementById('slack_enabled');
+    const slackSocketModeEnabledInput = document.getElementById('slack_socket_mode_enabled');
+    const slackAppMentionEnabledInput = document.getElementById('slack_app_mention_enabled');
+    const slackBotTokenInput = document.getElementById('slack_bot_token');
+    const slackAppTokenInput = document.getElementById('slack_app_token');
+    const slackDefaultChannelInput = document.getElementById('slack_default_channel');
+    const slackBotTokenStatus = document.getElementById('settings-slack-bot-token-status');
+    const slackAppTokenStatus = document.getElementById('settings-slack-app-token-status');
+    const clearSlackBotTokenButton = document.getElementById('clear-slack-bot-token');
+    const clearSlackAppTokenButton = document.getElementById('clear-slack-app-token');
+    const slackSettingsTestDescription = document.getElementById('settings-slack-test-description');
+    const testSlackSettingsButton = document.getElementById('test-slack-settings');
+    const startSlackReceiveTestButton = document.getElementById('start-slack-receive-test');
+    const copySlackReceiveTestButton = document.getElementById('copy-slack-receive-test');
+    const slackSettingsTestStatus = document.getElementById('settings-slack-test-status');
+    const slackReceiveTestStatus = document.getElementById('settings-slack-receive-test-status');
     const runtimeLanguageInput = document.getElementById('runtime_language');
     const runtimeThemeInput = document.getElementById('runtime_theme');
     const runtimeCodingAssistantInput = document.getElementById('runtime_coding_assistant');
@@ -2348,6 +2459,11 @@
     let cachedAssistantOptions = null;
     let boardTaskSnapshots = new Map();
     let lastLoadedSettingsState = null;
+    let targetRepoOptionsLoaded = false;
+    let slackBotTokenClearRequested = false;
+    let slackAppTokenClearRequested = false;
+    let slackReceiveTestPollTimer = null;
+    let lastSlackReceiveInstruction = '';
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
     let approvalSubmissionInFlight = false;
@@ -2375,7 +2491,7 @@
         discoveryIdle: 'Open the panel to load current model options.',
         refreshModels: 'Refresh models',
         basicsHeading: 'Basics',
-        basicsDescription: 'Language, theme, and repository defaults.',
+        basicsDescription: 'Language, theme, repository defaults, and local Slack settings.',
         agentsHeading: 'Runtime roles',
         agentsDescription: 'Assistants, models, token budgets, and parallel slots.',
         codingAssistantLabel: 'Default assistant',
@@ -2399,6 +2515,35 @@
         repoDepthTitle: 'Repo discovery depth',
         repoDepthDescription: 'How deep discovery scans.',
         repoDepthNote: 'Increase only for nested repos.',
+        slackTitle: 'Slack',
+        slackDescription: 'Local Slack app defaults for notifications and interactions.',
+        slackEnabledLabel: 'Enabled',
+        slackSocketModeLabel: 'Socket Mode',
+        slackMentionLabel: 'App mentions',
+        slackNote: 'Slack values stay in your local config file and are never written into task metadata.',
+        slackAuthTitle: 'Slack credentials',
+        slackAuthDescription: 'Leave token fields blank to keep the saved value. Use the clear button if you want to remove a saved token.',
+        slackBotTokenLabel: 'Bot token',
+        slackAppTokenLabel: 'App token',
+        slackChannelLabel: 'Default channel',
+        slackChannelNote: 'Optional channel or channel ID for default notifications.',
+        slackClearToken: 'Clear saved token',
+        slackTestDescription: 'Send a real test message from the current form values. The receive test uses saved Slack settings, so save first if you changed listener-related fields.',
+        slackTestButton: 'Test Slack',
+        slackReceiveTestButton: 'Start receive test',
+        slackReceiveCopyButton: 'Copy message',
+        slackReceiveCopyUnavailable: 'Start a receive test first so there is something to copy.',
+        slackReceiveCopySuccess: 'Slack receive-test message copied.',
+        slackReceiveCopyFailed: 'Copy failed. Copy the instruction text manually.',
+        slackTestRunning: 'Running Slack test...',
+        slackTokenConfigured: 'Configured: {masked}',
+        slackTokenWillReplace: 'A new token is queued and will replace the saved value when you save.',
+        slackTokenWillClear: 'The saved token will be cleared when you save.',
+        slackTokenNotConfigured: 'Not configured.',
+        slackReceiveWaiting: 'Waiting for a matching Slack mention...',
+        slackReceiveInstruction: 'Send this in Slack: {instruction}',
+        slackReceiveMatched: 'Slack receive test matched a real inbound mention.',
+        slackReceiveSaveFirst: 'Save settings before starting a receive test when you changed Slack listener fields or queued token clears.',
         plannerTitle: 'Planner runtime',
         plannerDescription: 'Planning runs.',
         requestDraftTitle: 'Request drafting runtime',
@@ -2449,7 +2594,7 @@
         discoveryIdle: '패널을 열면 현재 모델 옵션을 불러옵니다.',
         refreshModels: '모델 새로고침',
         basicsHeading: '기본값',
-        basicsDescription: '언어, 테마, 저장소 기본 설정입니다.',
+        basicsDescription: '언어, 테마, 저장소 기본 설정과 로컬 Slack 설정입니다.',
         agentsHeading: '런타임 역할',
         agentsDescription: '어시스턴트, 모델, 토큰 예산, 병렬 수를 정합니다.',
         codingAssistantLabel: '기본 어시스턴트',
@@ -2473,6 +2618,35 @@
         repoDepthTitle: '저장소 탐색 깊이',
         repoDepthDescription: '탐색 깊이를 정합니다.',
         repoDepthNote: '중첩 저장소가 필요할 때만 늘리세요.',
+        slackTitle: 'Slack',
+        slackDescription: '알림과 인터랙션용 로컬 Slack 앱 기본값입니다.',
+        slackEnabledLabel: '활성화',
+        slackSocketModeLabel: 'Socket Mode',
+        slackMentionLabel: '앱 멘션',
+        slackNote: 'Slack 값은 로컬 설정 파일에만 저장되며 task metadata에는 기록되지 않습니다.',
+        slackAuthTitle: 'Slack 자격 정보',
+        slackAuthDescription: '토큰 입력을 비워두면 저장된 값을 유지합니다. 저장된 토큰을 지우려면 삭제 버튼을 사용하세요.',
+        slackBotTokenLabel: 'Bot 토큰',
+        slackAppTokenLabel: 'App 토큰',
+        slackChannelLabel: '기본 채널',
+        slackChannelNote: '기본 알림 대상 채널명 또는 채널 ID입니다.',
+        slackClearToken: '저장된 토큰 삭제',
+        slackTestDescription: '현재 폼 값으로 실제 테스트 메시지를 보냅니다. 수신 테스트는 저장된 Slack 설정을 사용하므로 listener 관련 값을 바꿨다면 먼저 저장하세요.',
+        slackTestButton: 'Slack 테스트',
+        slackReceiveTestButton: '수신 테스트 시작',
+        slackReceiveCopyButton: '메시지 복사',
+        slackReceiveCopyUnavailable: '복사할 내용이 없으니 먼저 수신 테스트를 시작하세요.',
+        slackReceiveCopySuccess: 'Slack 수신 테스트 메시지를 복사했습니다.',
+        slackReceiveCopyFailed: '복사하지 못했습니다. 안내 문구를 직접 복사해 주세요.',
+        slackTestRunning: 'Slack 테스트를 실행하는 중...',
+        slackTokenConfigured: '설정됨: {masked}',
+        slackTokenWillReplace: '새 토큰이 입력되었습니다. 저장하면 기존 값을 교체합니다.',
+        slackTokenWillClear: '저장하면 저장된 토큰이 삭제됩니다.',
+        slackTokenNotConfigured: '설정되지 않았습니다.',
+        slackReceiveWaiting: '일치하는 Slack 멘션을 기다리는 중...',
+        slackReceiveInstruction: 'Slack에 이렇게 보내세요: {instruction}',
+        slackReceiveMatched: '실제 Slack 수신 이벤트가 확인되었습니다.',
+        slackReceiveSaveFirst: 'Slack listener 관련 값을 바꾸었거나 토큰 삭제를 예약했다면 먼저 설정을 저장한 뒤 수신 테스트를 시작하세요.',
         plannerTitle: 'Planner 런타임',
         plannerDescription: '계획 실행용입니다.',
         requestDraftTitle: '요청 초안 런타임',
@@ -3496,6 +3670,24 @@
       setSettingsText('settings-repo-depth-title', 'repoDepthTitle');
       setSettingsText('settings-repo-depth-description', 'repoDepthDescription');
       setSettingsHtml('settings-repo-depth-note', 'repoDepthNote');
+      setSettingsText('settings-slack-title', 'slackTitle');
+      setSettingsText('settings-slack-description', 'slackDescription');
+      setSettingsText('settings-slack-enabled-label', 'slackEnabledLabel');
+      setSettingsText('settings-slack-socket-mode-label', 'slackSocketModeLabel');
+      setSettingsText('settings-slack-mention-label', 'slackMentionLabel');
+      setSettingsHtml('settings-slack-note', 'slackNote');
+      setSettingsText('settings-slack-auth-title', 'slackAuthTitle');
+      setSettingsText('settings-slack-auth-description', 'slackAuthDescription');
+      setSettingsText('settings-slack-bot-token-label', 'slackBotTokenLabel');
+      setSettingsText('settings-slack-app-token-label', 'slackAppTokenLabel');
+      setSettingsText('settings-slack-channel-label', 'slackChannelLabel');
+      setSettingsHtml('settings-slack-channel-note', 'slackChannelNote');
+      setSettingsText('settings-slack-test-description', 'slackTestDescription');
+      clearSlackBotTokenButton.textContent = translateSettings('slackClearToken');
+      clearSlackAppTokenButton.textContent = translateSettings('slackClearToken');
+      testSlackSettingsButton.textContent = translateSettings('slackTestButton');
+      startSlackReceiveTestButton.textContent = translateSettings('slackReceiveTestButton');
+      copySlackReceiveTestButton.textContent = translateSettings('slackReceiveCopyButton');
       setSettingsText('settings-planner-title', 'plannerTitle');
       setSettingsText('settings-planner-description', 'plannerDescription');
       setSettingsText('settings-request-draft-title', 'requestDraftTitle');
@@ -3528,6 +3720,13 @@
       renderAssistantOptions(cachedAssistantOptions, runtimeCodingAssistantInput.value || 'opencode');
       cancelSettingsButton.textContent = translateSettings('cancel');
       saveSettingsButton.textContent = translateSettings('saveSettings');
+      if (lastSettingsPayload) {
+        applySlackSettingsData(lastSettingsPayload, { preserveInputs: true });
+      } else {
+        updateSlackTokenStatus(slackBotTokenStatus, null, false);
+        updateSlackTokenStatus(slackAppTokenStatus, null, false);
+        setSlackSettingsTestStatus(null);
+      }
       if (lastSettingsPayload) {
         updateModelDiscoverySummary(lastSettingsPayload);
       } else {
@@ -3674,6 +3873,12 @@
         language: runtimeLanguageInput.value || 'EN',
         theme: runtimeThemeInput.value || 'light',
         coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
+        slack_enabled: slackEnabledInput.checked,
+        slack_socket_mode_enabled: slackSocketModeEnabledInput.checked,
+        slack_app_mention_enabled: slackAppMentionEnabledInput.checked,
+        slack_bot_token: slackBotTokenInput.value || '',
+        slack_app_token: slackAppTokenInput.value || '',
+        slack_default_channel: slackDefaultChannelInput.value || '',
         role_backends: {
           planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
           request_draft: requestDraftBackendInput.value === 'default' ? null : requestDraftBackendInput.value,
@@ -3702,12 +3907,194 @@
       };
     }
 
+    function updateSlackTokenStatus(element, maskedValue, configured) {
+      if (!element) return;
+      const input = element === slackBotTokenStatus ? slackBotTokenInput : slackAppTokenInput;
+      const clearRequested = element === slackBotTokenStatus ? slackBotTokenClearRequested : slackAppTokenClearRequested;
+      if (clearRequested) {
+        element.textContent = translateSettings('slackTokenWillClear');
+        return;
+      }
+      if (input && input.value) {
+        element.textContent = translateSettings('slackTokenWillReplace');
+        return;
+      }
+      if (configured && maskedValue) {
+        element.textContent = translateSettings('slackTokenConfigured', { masked: maskedValue });
+        return;
+      }
+      element.textContent = translateSettings('slackTokenNotConfigured');
+    }
+
+    function setSlackSettingsTestStatus(result, tone = 'neutral') {
+      if (!slackSettingsTestStatus) return;
+      if (!result) {
+        slackSettingsTestStatus.hidden = true;
+        slackSettingsTestStatus.textContent = '';
+        slackSettingsTestStatus.removeAttribute('data-tone');
+        return;
+      }
+      const lines = [];
+      if (result.summary) lines.push(result.summary);
+      if (Array.isArray(result.checks)) {
+        result.checks.forEach((check) => {
+          const prefix = check.ok ? '✓' : '✗';
+          lines.push(`${prefix} ${check.message}`);
+        });
+      }
+      slackSettingsTestStatus.textContent = lines.join('\n');
+      slackSettingsTestStatus.hidden = false;
+      if (tone === 'neutral') {
+        slackSettingsTestStatus.removeAttribute('data-tone');
+      } else {
+        slackSettingsTestStatus.dataset.tone = tone;
+      }
+    }
+
+    function updateSlackReceiveTestStatus(snapshot) {
+      if (!slackReceiveTestStatus) return;
+      if (!snapshot) {
+        lastSlackReceiveInstruction = '';
+        slackReceiveTestStatus.hidden = true;
+        slackReceiveTestStatus.textContent = '';
+        slackReceiveTestStatus.removeAttribute('data-tone');
+        return;
+      }
+      const lines = [];
+      if (snapshot.listener_connected) {
+        lines.push('Slack Socket Mode listener is connected.');
+      } else if (snapshot.listener_enabled) {
+        lines.push('Slack Socket Mode listener is starting or reconnecting.');
+      } else {
+        lines.push('Slack Socket Mode listener is idle.');
+      }
+      if (snapshot.listener_last_error) lines.push(`Last listener error: ${snapshot.listener_last_error}`);
+      const receiveTest = snapshot.receive_test;
+      let tone = 'neutral';
+      if (receiveTest) {
+        if (receiveTest.status === 'pending') {
+          tone = 'neutral';
+          lines.push(translateSettings('slackReceiveWaiting'));
+          lines.push(translateSettings('slackReceiveInstruction', { instruction: receiveTest.instruction }));
+          lastSlackReceiveInstruction = receiveTest.instruction && !receiveTest.instruction.startsWith('Preparing') ? receiveTest.instruction : '';
+        } else if (receiveTest.status === 'received') {
+          tone = 'success';
+          lines.push(translateSettings('slackReceiveMatched'));
+          lastSlackReceiveInstruction = receiveTest.instruction || lastSlackReceiveInstruction;
+          if (receiveTest.channel) lines.push(`Channel: ${receiveTest.channel}`);
+          if (receiveTest.user) lines.push(`User: ${receiveTest.user}`);
+        } else {
+          tone = 'error';
+          lastSlackReceiveInstruction = receiveTest.instruction || '';
+          lines.push(receiveTest.error || 'Slack receive test expired without a matching mention.');
+        }
+      }
+      slackReceiveTestStatus.textContent = lines.join('\n');
+      slackReceiveTestStatus.hidden = false;
+      if (tone === 'neutral') {
+        slackReceiveTestStatus.removeAttribute('data-tone');
+      } else {
+        slackReceiveTestStatus.dataset.tone = tone;
+      }
+    }
+
+    function buildSlackSettingsPayload() {
+      const payload = {
+        slack_enabled: slackEnabledInput.checked,
+        slack_socket_mode_enabled: slackSocketModeEnabledInput.checked,
+        slack_default_channel: slackDefaultChannelInput.value,
+        slack_app_mention_enabled: slackAppMentionEnabledInput.checked,
+      };
+      if (slackBotTokenClearRequested || slackBotTokenInput.value) {
+        payload.slack_bot_token = slackBotTokenClearRequested ? '' : slackBotTokenInput.value;
+      }
+      if (slackAppTokenClearRequested || slackAppTokenInput.value) {
+        payload.slack_app_token = slackAppTokenClearRequested ? '' : slackAppTokenInput.value;
+      }
+      return payload;
+    }
+
+    function hasUnsavedSlackReceiveSettings() {
+      if (!lastSettingsPayload) return false;
+      if (slackBotTokenInput.value || slackAppTokenInput.value) return true;
+      if (slackBotTokenClearRequested || slackAppTokenClearRequested) return true;
+      return (
+        slackEnabledInput.checked !== Boolean(lastSettingsPayload.slack_enabled)
+        || slackSocketModeEnabledInput.checked !== (lastSettingsPayload.slack_socket_mode_enabled !== false)
+        || slackAppMentionEnabledInput.checked !== Boolean(lastSettingsPayload.slack_app_mention_enabled)
+        || (slackDefaultChannelInput.value || '') !== (lastSettingsPayload.slack_default_channel || '')
+      );
+    }
+
+    async function pollSlackReceiveTestStatus() {
+      if (slackReceiveTestPollTimer) {
+        clearTimeout(slackReceiveTestPollTimer);
+        slackReceiveTestPollTimer = null;
+      }
+      if (settingsModal.hidden) return;
+      try {
+        const response = await fetch('/api/settings/slack-receive-test');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Failed to load Slack receive test status.');
+        updateSlackReceiveTestStatus(data);
+        const status = data.receive_test?.status;
+        if (status === 'pending') {
+          slackReceiveTestPollTimer = setTimeout(() => { pollSlackReceiveTestStatus().catch(() => {}); }, 2000);
+        }
+      } catch (error) {
+        updateSlackReceiveTestStatus({ listener_enabled: false, listener_connected: false, listener_last_error: error.message, receive_test: null });
+      }
+    }
+
+    async function copySlackReceiveTestInstruction() {
+      if (!lastSlackReceiveInstruction) {
+        updateSlackReceiveTestStatus({ listener_enabled: false, listener_connected: false, listener_last_error: translateSettings('slackReceiveCopyUnavailable'), receive_test: null });
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(lastSlackReceiveInstruction);
+        updateSlackReceiveTestStatus({ listener_enabled: true, listener_connected: true, listener_last_error: null, receive_test: { status: 'pending', instruction: lastSlackReceiveInstruction, error: null } });
+        slackReceiveTestStatus.dataset.tone = 'success';
+        slackReceiveTestStatus.textContent = `${translateSettings('slackReceiveCopySuccess')}\n${translateSettings('slackReceiveInstruction', { instruction: lastSlackReceiveInstruction })}`;
+      } catch (_error) {
+        slackReceiveTestStatus.hidden = false;
+        slackReceiveTestStatus.dataset.tone = 'error';
+        slackReceiveTestStatus.textContent = `${translateSettings('slackReceiveCopyFailed')}\n${translateSettings('slackReceiveInstruction', { instruction: lastSlackReceiveInstruction })}`;
+      }
+    }
+
+    function applySlackSettingsData(data, { preserveInputs = false } = {}) {
+      slackEnabledInput.checked = Boolean(data.slack_enabled);
+      slackSocketModeEnabledInput.checked = data.slack_socket_mode_enabled !== false;
+      slackAppMentionEnabledInput.checked = Boolean(data.slack_app_mention_enabled);
+      slackDefaultChannelInput.value = data.slack_default_channel || '';
+      if (!preserveInputs) {
+        slackBotTokenClearRequested = false;
+        slackAppTokenClearRequested = false;
+      }
+      updateSlackTokenStatus(slackBotTokenStatus, data.slack_bot_token_masked, data.slack_bot_token_configured);
+      updateSlackTokenStatus(slackAppTokenStatus, data.slack_app_token_masked, data.slack_app_token_configured);
+      if (!preserveInputs) {
+        slackBotTokenInput.value = '';
+        slackAppTokenInput.value = '';
+      }
+      updateSlackReceiveTestStatus(data.slack_runtime || null);
+    }
+
     function restoreSettingsState(state) {
       if (!state) return;
       runtimeLanguageInput.value = state.language || initialRuntimeLanguage;
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions(cachedAssistantOptions, state.coding_assistant || 'opencode');
+      slackEnabledInput.checked = Boolean(state.slack_enabled);
+      slackSocketModeEnabledInput.checked = state.slack_socket_mode_enabled !== false;
+      slackAppMentionEnabledInput.checked = Boolean(state.slack_app_mention_enabled);
+      slackBotTokenInput.value = state.slack_bot_token || '';
+      slackAppTokenInput.value = state.slack_app_token || '';
+      slackBotTokenClearRequested = false;
+      slackAppTokenClearRequested = false;
+      slackDefaultChannelInput.value = state.slack_default_channel || '';
       plannerBackendInput.value = state.role_backends?.planner || 'default';
       requestDraftBackendInput.value = state.role_backends?.request_draft || 'default';
       planApprovalBackendInput.value = state.role_backends?.plan_approval || 'default';
@@ -4434,6 +4821,7 @@
       const data = await response.json();
       targetRepoOptions.innerHTML = data.items.map((item) => `<option value="${item}"></option>`).join('');
       applyTargetRepoAutofill(data.items || []);
+      targetRepoOptionsLoaded = true;
     }
 
     function updateBaseBranchHelp(message) {
@@ -4874,6 +5262,10 @@
       settingsModal.hidden = !isOpen;
       settingsModal.setAttribute('aria-hidden', String(!isOpen));
       syncBodyModalState();
+      if (!isOpen && slackReceiveTestPollTimer) {
+        clearTimeout(slackReceiveTestPollTimer);
+        slackReceiveTestPollTimer = null;
+      }
       if (isOpen) plannerModelInput.focus();
     }
 
@@ -4945,6 +5337,7 @@
         applyRuntimeTheme(runtimeThemeInput.value);
         cachedAssistantOptions = resolveAssistantOptions(data);
         renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
+        applySlackSettingsData(data);
         plannerBackendInput.value = data.role_backends?.planner || 'default';
         requestDraftBackendInput.value = data.role_backends?.request_draft || 'default';
         planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
@@ -4971,7 +5364,10 @@
         commitModelInput.value = data.commit_model || '';
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
         renderAllRoleModelOptions();
-        await loadTargetRepoOptions();
+        if (!targetRepoOptionsLoaded) {
+          await loadTargetRepoOptions();
+          targetRepoOptionsLoaded = true;
+        }
         updateModelDiscoverySummary(data);
         lastLoadedSettingsState = captureSettingsState();
       } finally {
@@ -4982,9 +5378,54 @@
     async function openSettingsModal() {
       setSettingsModalOpen(true);
       try {
-        await loadModelSettings(true);
+        await loadModelSettings(false);
+        await pollSlackReceiveTestStatus();
       } catch (error) {
         setSettingsStatus(error.message, 'error');
+      }
+    }
+
+    async function runSlackSettingsTest() {
+      testSlackSettingsButton.disabled = true;
+      setSlackSettingsTestStatus({ summary: translateSettings('slackTestRunning'), checks: [] });
+      try {
+        const response = await fetch('/api/settings/slack-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildSlackSettingsPayload()),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Slack test failed.');
+        setSlackSettingsTestStatus(data, data.ok ? 'success' : 'error');
+      } catch (error) {
+        setSlackSettingsTestStatus({ summary: error.message || 'Slack test failed.', checks: [] }, 'error');
+      } finally {
+        testSlackSettingsButton.disabled = false;
+      }
+    }
+
+    async function startSlackReceiveTest() {
+      startSlackReceiveTestButton.disabled = true;
+      if (hasUnsavedSlackReceiveSettings()) {
+        updateSlackReceiveTestStatus({ listener_enabled: false, listener_connected: false, listener_last_error: translateSettings('slackReceiveSaveFirst'), receive_test: null });
+        startSlackReceiveTestButton.disabled = false;
+        return;
+      }
+      updateSlackReceiveTestStatus({ listener_enabled: true, listener_connected: false, listener_last_error: null, receive_test: { status: 'pending', instruction: 'Preparing Slack receive test...' } });
+      try {
+        const response = await fetch('/api/settings/slack-receive-test/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Slack receive test failed to start.');
+        updateSlackReceiveTestStatus(data);
+        await pollSlackReceiveTestStatus();
+      } catch (error) {
+        updateSlackReceiveTestStatus({ listener_enabled: false, listener_connected: false, listener_last_error: error.message || 'Slack receive test failed to start.', receive_test: null });
+      } finally {
+        startSlackReceiveTestButton.disabled = false;
       }
     }
 
@@ -4993,6 +5434,7 @@
       saveSettingsButton.disabled = true;
       setSettingsStatus(translateSettings('statusSaving'));
       try {
+        const slackPayload = buildSlackSettingsPayload();
         const response = await fetch('/api/settings/models', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -5025,6 +5467,7 @@
             reviewer_agent_count: readNumericSettingInput(reviewerAgentCountInput, 1),
             commit_model: commitModelInput.value,
             commit_session_token_budget: readNumericSettingInput(commitSessionTokenBudgetInput, 250),
+            ...slackPayload,
           }),
         });
         const data = await response.json();
@@ -5034,6 +5477,7 @@
         applyRuntimeTheme(runtimeThemeInput.value);
         cachedAssistantOptions = resolveAssistantOptions(data);
         renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
+        applySlackSettingsData(data);
         plannerBackendInput.value = data.role_backends?.planner || 'default';
         requestDraftBackendInput.value = data.role_backends?.request_draft || 'default';
         planApprovalBackendInput.value = data.role_backends?.plan_approval || 'default';
@@ -5060,7 +5504,9 @@
         commitModelInput.value = data.commit_model || '';
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
         renderAllRoleModelOptions();
-        await loadTargetRepoOptions();
+        if (!targetRepoOptionsLoaded) {
+          await loadTargetRepoOptions();
+        }
         setSettingsStatus(translateSettings('statusSaved'), 'success');
         lastLoadedSettingsState = captureSettingsState();
         setSettingsModalOpen(false);
@@ -8448,6 +8894,27 @@
     });
     settingsForm.addEventListener('submit', saveModelSettings);
     refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
+    testSlackSettingsButton.addEventListener('click', () => runSlackSettingsTest());
+    startSlackReceiveTestButton.addEventListener('click', () => startSlackReceiveTest());
+    copySlackReceiveTestButton.addEventListener('click', () => copySlackReceiveTestInstruction());
+    clearSlackBotTokenButton.addEventListener('click', () => {
+      slackBotTokenInput.value = '';
+      slackBotTokenClearRequested = true;
+      updateSlackTokenStatus(slackBotTokenStatus, lastSettingsPayload?.slack_bot_token_masked, lastSettingsPayload?.slack_bot_token_configured);
+    });
+    clearSlackAppTokenButton.addEventListener('click', () => {
+      slackAppTokenInput.value = '';
+      slackAppTokenClearRequested = true;
+      updateSlackTokenStatus(slackAppTokenStatus, lastSettingsPayload?.slack_app_token_masked, lastSettingsPayload?.slack_app_token_configured);
+    });
+    slackBotTokenInput.addEventListener('input', () => {
+      slackBotTokenClearRequested = false;
+      updateSlackTokenStatus(slackBotTokenStatus, lastSettingsPayload?.slack_bot_token_masked, lastSettingsPayload?.slack_bot_token_configured);
+    });
+    slackAppTokenInput.addEventListener('input', () => {
+      slackAppTokenClearRequested = false;
+      updateSlackTokenStatus(slackAppTokenStatus, lastSettingsPayload?.slack_app_token_masked, lastSettingsPayload?.slack_app_token_configured);
+    });
     function handleAssistantModeVisibilityChange() {
       updateWorkerLiveLogsControlVisibility();
     }
