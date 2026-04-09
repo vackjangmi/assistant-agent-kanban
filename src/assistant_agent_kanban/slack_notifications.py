@@ -184,9 +184,21 @@ class SlackMilestoneNotifier:
         channel = context.metadata.slack.channel
         thread_ts = context.metadata.slack.thread_ts
         if not channel or not thread_ts:
+            logger.info(
+                "slack markdown upload skipped: missing thread identity",
+                extra={"task_id": context.metadata.task_id, "milestone": milestone},
+            )
             return
         artifact_path = self._artifact_path_for_milestone(context, milestone=milestone)
         if artifact_path is None or not artifact_path.exists() or artifact_path.suffix.lower() != ".md":
+            logger.info(
+                "slack markdown upload skipped: no eligible artifact",
+                extra={
+                    "task_id": context.metadata.task_id,
+                    "milestone": milestone,
+                    "artifact": str(artifact_path) if artifact_path is not None else None,
+                },
+            )
             return
         try:
             content = artifact_path.read_bytes()
@@ -203,6 +215,14 @@ class SlackMilestoneNotifier:
             return
         digest = hashlib.sha256(content).hexdigest()
         if context.metadata.slack.uploaded_markdown.get(artifact_path.name) == digest:
+            logger.info(
+                "slack markdown upload skipped: unchanged artifact",
+                extra={
+                    "task_id": context.metadata.task_id,
+                    "milestone": milestone,
+                    "artifact": artifact_path.name,
+                },
+            )
             return
         upload = slack_upload_file_to_thread(
             token=token,
