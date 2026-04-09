@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+from pathlib import Path
 from typing import Protocol
 
 from .config import AppConfig
 from .enums import TaskState
 from .metadata_store import MetadataStore
 from .models import TaskContext
-from .slack_api import slack_api_call, slack_error_message
+from .slack_api import slack_api_call, slack_error_message, slack_upload_file_to_thread
 
 
 logger = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ class SlackMilestoneNotifier:
         response = slack_api_call("chat.postMessage", token=token, body=payload)
         if response.get("ok"):
             self._record_thread_identity(context, fallback_channel=channel, response=response)
+            self._upload_markdown_artifact(context, milestone=milestone, token=token)
             return
         logger.warning(
             "slack milestone notification failed",
@@ -161,6 +164,68 @@ class SlackMilestoneNotifier:
         context.metadata.slack.thread_ts = response_ts
         context.metadata.slack.channel = response_channel if isinstance(response_channel, str) else fallback_channel
         self.metadata_store.save(context.task_dir, context.metadata)
+
+    def _upload_markdown_artifact(self, context: TaskContext, *, milestone: str, token: str) -> None:
+        channel = context.metadata.slack.channel
+        thread_ts = context.metadata.slack.thread_ts
+        if not channel or not thread_ts:
+            return
+        artifact_path = self._artifact_path_for_milestone(context, milestone=milestone)
+        if artifact_path is None or not artifact_path.exists() or artifact_path.suffix.lower() != ".md":
+            return
+        try:
+            content = artifact_path.read_bytes()
+        except OSError as exc:
+            logger.warning(
+                "slack markdown artifact read failed",
+                extra={
+                    "task_id": context.metadata.task_id,
+                    "milestone": milestone,
+                    "artifact": str(artifact_path),
+                    "error": str(exc),
+                },
+            )
+            return
+        digest = hashlib.sha256(content).hexdigest()
+        if context.metadata.slack.uploaded_markdown.get(artifact_path.name) == digest:
+            return
+        upload = slack_upload_file_to_thread(
+            token=token,
+            channel_id=channel,
+            thread_ts=thread_ts,
+            filename=artifact_path.name,
+            title=artifact_path.name,
+            content=content,
+        )
+        if not upload.get("ok"):
+            logger.warning(
+                "slack markdown upload failed",
+                extra={
+                    "task_id": context.metadata.task_id,
+                    "milestone": milestone,
+                    "artifact": artifact_path.name,
+                    "error": slack_error_message(upload, fallback="Slack file upload failed."),
+                },
+            )
+            return
+        context.metadata.slack.uploaded_markdown[artifact_path.name] = digest
+        self.metadata_store.save(context.task_dir, context.metadata)
+
+    def _artifact_path_for_milestone(self, context: TaskContext, *, milestone: str) -> Path | None:
+        task_dir = context.task_dir
+        cycle = context.metadata.cycle
+        if milestone == "Plan ready for review":
+            return task_dir / (context.metadata.plan.path or "PLAN.md")
+        if milestone == "Implementation ready for review":
+            return task_dir / f"WORK-{cycle:03d}.md"
+        if milestone in {"Review requested changes", "AI review passed"}:
+            return task_dir / f"REVIEW-{cycle:03d}.md"
+        if milestone in {"Human verification started", "Human requested changes", "Task completed"}:
+            note_path = context.metadata.human_verification.note_path or f"HUMAN-VERIFY-{cycle:03d}.md"
+            candidate = task_dir / note_path
+            if candidate.exists():
+                return candidate
+        return None
 
 
 class SlackTransitionNotifier(Protocol):

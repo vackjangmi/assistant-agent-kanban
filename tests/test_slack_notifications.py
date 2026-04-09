@@ -45,6 +45,39 @@ def test_slack_notifier_sends_milestone_message(configured_paths, monkeypatch):
     assert planning.metadata.slack.thread_ts is None
 
 
+def test_slack_notifier_uploads_plan_artifact_when_plan_is_ready(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-plan-upload-task")
+    task = KanbanScanner(config).scan()[0]
+    (task.task_dir / "PLAN.md").write_text("# Plan\n\nShip it\n")
+    task.metadata.plan.path = "PLAN.md"
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
+    waiting = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.WAITING_CHECK_PLANS)
+    waiting.metadata.state = TaskState.WAITING_CHECK_PLANS
+    uploads: list[tuple[str, str, str, str, bytes]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append((token, channel_id, thread_ts, filename, content))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(waiting, previous_state=TaskState.PLANNING, by="planner")
+
+    assert uploads
+    assert uploads[0][3] == "PLAN.md"
+    assert uploads[0][4] == b"# Plan\n\nShip it\n"
+
+
 def test_slack_notifier_skips_non_milestone_transition(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     config.slack.enabled = True
@@ -133,15 +166,22 @@ def test_slack_notifier_creates_parent_message_and_persists_thread(configured_pa
     create_request_task(config, "slack-thread-parent-task")
     scanner = KanbanScanner(config)
     task = scanner.scan()[0]
+    (task.task_dir / "WORK-000.md").write_text("# Work\n\nImplemented\n")
     waiting = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.WAITING_REVIEWS)
     waiting.metadata.state = TaskState.WAITING_REVIEWS
     calls: list[tuple[str, str, dict[str, object] | None]] = []
+    uploads: list[tuple[str, str, str, str, bytes]] = []
 
     def fake_call(method: str, *, token: str, body=None):
         calls.append((method, token, body))
         return {"ok": True, "ts": "173.456", "channel": "C123"}
 
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append((token, channel_id, thread_ts, filename, content))
+        return {"ok": True}
+
     monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
 
     SlackMilestoneNotifier(config, MetadataStore()).notify_transition(waiting, previous_state=TaskState.IMPLEMENTING, by="implementer")
 
@@ -150,10 +190,15 @@ def test_slack_notifier_creates_parent_message_and_persists_thread(configured_pa
     assert payload is not None
     assert "thread_ts" not in payload
     assert str(payload["text"]).startswith(f"[{waiting.metadata.task_id}] {waiting.metadata.title}")
+    assert uploads
+    assert uploads[0][1] == "C123"
+    assert uploads[0][2] == "173.456"
+    assert uploads[0][3] == "WORK-000.md"
     assert waiting.metadata.slack.thread_ts == "173.456"
     assert waiting.metadata.slack.channel == "C123"
     persisted = MetadataStore().load(waiting.task_dir)
     assert persisted.slack.thread_ts == "173.456"
+    assert persisted.slack.uploaded_markdown["WORK-000.md"]
 
 
 def test_slack_notifier_reuses_existing_thread(configured_paths, monkeypatch):
@@ -184,6 +229,103 @@ def test_slack_notifier_reuses_existing_thread(configured_paths, monkeypatch):
     assert payload["thread_ts"] == "173.456"
     assert payload["channel"] == "C123"
     assert completed.metadata.slack.thread_ts == "173.456"
+
+
+def test_slack_notifier_skips_duplicate_markdown_upload_when_content_unchanged(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-duplicate-upload-task")
+    task = KanbanScanner(config).scan()[0]
+    review_path = task.task_dir / "REVIEW-000.md"
+    review_path.write_text("# Review\n\nLooks good\n")
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
+    completed = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.COMPLETED_REVIEWS)
+    completed.metadata.state = TaskState.COMPLETED_REVIEWS
+    uploads: list[str] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append(filename)
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    notifier = SlackMilestoneNotifier(config, MetadataStore())
+    notifier.notify_transition(completed, previous_state=TaskState.REVIEWING, by="reviewer")
+    notifier.notify_transition(completed, previous_state=TaskState.REVIEWING, by="reviewer")
+
+    assert uploads == ["REVIEW-000.md"]
+
+
+def test_slack_notifier_reuploads_markdown_when_content_changes(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-reupload-task")
+    task = KanbanScanner(config).scan()[0]
+    review_path = task.task_dir / "REVIEW-000.md"
+    review_path.write_text("# Review\n\nInitial\n")
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
+    completed = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.COMPLETED_REVIEWS)
+    completed.metadata.state = TaskState.COMPLETED_REVIEWS
+    uploads: list[str] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append(content.decode("utf-8"))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    notifier = SlackMilestoneNotifier(config, MetadataStore())
+    notifier.notify_transition(completed, previous_state=TaskState.REVIEWING, by="reviewer")
+    review_path.write_text("# Review\n\nUpdated\n")
+    notifier.notify_transition(completed, previous_state=TaskState.REVIEWING, by="reviewer")
+
+    assert uploads == ["# Review\n\nInitial\n", "# Review\n\nUpdated\n"]
+
+
+def test_slack_notifier_does_not_persist_digest_when_upload_fails(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-upload-fail-task")
+    task = KanbanScanner(config).scan()[0]
+    review_path = task.task_dir / "REVIEW-000.md"
+    review_path.write_text("# Review\n\nInitial\n")
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
+    completed = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.COMPLETED_REVIEWS)
+    completed.metadata.state = TaskState.COMPLETED_REVIEWS
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        return {"ok": False, "error": "missing_scope"}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(completed, previous_state=TaskState.REVIEWING, by="reviewer")
+
+    persisted = MetadataStore().load(completed.task_dir)
+    assert "REVIEW-000.md" not in persisted.slack.uploaded_markdown
 
 
 def test_slack_notifier_adds_human_verification_action_buttons(configured_paths, monkeypatch):
