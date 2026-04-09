@@ -137,8 +137,50 @@ def test_slack_runtime_posts_error_for_failed_block_action(tmp_path, monkeypatch
 
     asyncio.run(scenario())
     assert calls
-    payload = calls[0][2]
+    method, _, payload = calls[0]
+    assert method == "chat.postMessage"
+    assert len(calls) == 1
     assert payload is not None
     assert payload["channel"] == "C123"
     assert payload["thread_ts"] == "173.456"
     assert "approval is blocked" in str(payload["text"])
+
+
+def test_slack_runtime_clears_buttons_after_successful_block_action(tmp_path, monkeypatch):
+    config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
+    config.slack.bot_token = "xoxb-test"
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    async def fake_handler(payload: dict[str, Any]) -> str | None:
+        return None
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_runtime.slack_api_call", fake_call)
+    runtime = SlackRuntime(config, EventBus(), action_handler=fake_handler)
+
+    async def scenario():
+        await runtime._handle_socket_payload(
+            {
+                "type": "interactive",
+                "payload": {
+                    "type": "block_actions",
+                    "channel": {"id": "C123"},
+                    "message": {"ts": "173.789", "text": "Original message", "blocks": [{"type": "actions"}]},
+                    "actions": [{"action_id": "approve_verification", "value": '{"task_id":"task-1"}'}],
+                },
+            }
+        )
+
+    asyncio.run(scenario())
+    assert calls
+    method, _, payload = calls[0]
+    assert method == "chat.update"
+    assert len(calls) == 1
+    assert payload is not None
+    assert payload["channel"] == "C123"
+    assert payload["ts"] == "173.789"
+    assert payload["text"] == "Original message"
+    assert payload["blocks"] == []

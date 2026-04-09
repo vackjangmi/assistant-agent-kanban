@@ -209,6 +209,7 @@ class SlackRuntime:
         if error:
             await asyncio.to_thread(self._post_interaction_status, payload, f"⚠️ {error}")
             return
+        await asyncio.to_thread(self._clear_interaction_buttons, payload)
 
     def _post_interaction_status(self, payload: dict[str, Any], text: str) -> None:
         token = self.config.slack.bot_token
@@ -238,6 +239,38 @@ class SlackRuntime:
         if thread_ts:
             response_payload["thread_ts"] = thread_ts
         slack_api_call("chat.postMessage", token=token, body=response_payload)
+
+    def _clear_interaction_buttons(self, payload: dict[str, Any]) -> None:
+        token = self.config.slack.bot_token
+        if not token:
+            return
+        channel_id = None
+        channel = payload.get("channel")
+        if isinstance(channel, dict):
+            raw_channel_id = channel.get("id")
+            if isinstance(raw_channel_id, str) and raw_channel_id:
+                channel_id = raw_channel_id
+        if not channel_id:
+            return
+        message = payload.get("message")
+        if not isinstance(message, dict):
+            return
+        message_ts = message.get("ts")
+        text = message.get("text")
+        if not isinstance(message_ts, str) or not message_ts:
+            return
+        if not isinstance(text, str):
+            text = ""
+        slack_api_call(
+            "chat.update",
+            token=token,
+            body={
+                "channel": channel_id,
+                "ts": message_ts,
+                "text": text,
+                "blocks": [],
+            },
+        )
 
 
     async def _maybe_match_receive_test(self, inner_payload: dict[str, Any], event: dict[str, Any]) -> None:
