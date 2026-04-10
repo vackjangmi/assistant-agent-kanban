@@ -185,18 +185,13 @@ class RuntimeSupervisor:
         by = f"slack:{user_id}" if isinstance(user_id, str) and user_id else "slack"
         if action_id == "resume_review_loop":
             return await asyncio.to_thread(self._open_slack_resume_review_loop_modal, payload, task_id, by)
+        if action_id == "reject_verification":
+            return await asyncio.to_thread(self._open_slack_reject_verification_modal, payload, task_id, by)
         try:
             if action_id == "start_verification":
                 await asyncio.to_thread(self.verification_service.start, task_id, by=by)
             elif action_id == "approve_verification":
                 await asyncio.to_thread(self.verification_service.approve, task_id, by=by, completion_mode="new-branch")
-            else:
-                await asyncio.to_thread(
-                    self.verification_service.reject,
-                    task_id,
-                    by=by,
-                    note=f"requested via Slack by {by}",
-                )
         except (TransitionError, TaskNotFoundError, CommitError, IntegrationError) as exc:
             return {"status": "error", "message": str(exc)}
         await self.rescan_and_publish()
@@ -207,8 +202,15 @@ class RuntimeSupervisor:
         if not isinstance(view, dict):
             return {"status": "error", "message": "Slack modal payload is invalid."}
         callback_id = view.get("callback_id")
-        if callback_id != "resume_review_loop_modal":
-            return {"status": "noop"}
+        if callback_id == "resume_review_loop_modal":
+            return await self._handle_slack_resume_review_loop_submission(payload, view)
+        if callback_id == "reject_verification_modal":
+            return await self._handle_slack_reject_verification_submission(payload, view)
+        return {"status": "noop"}
+
+    async def _handle_slack_resume_review_loop_submission(
+        self, payload: dict[str, Any], view: dict[str, Any]
+    ) -> dict[str, object]:
         raw_metadata = view.get("private_metadata")
         if not isinstance(raw_metadata, str) or not raw_metadata:
             return {"status": "error", "message": "Slack modal is missing task context."}
@@ -253,7 +255,86 @@ class RuntimeSupervisor:
         )
         return {"status": "success"}
 
+    async def _handle_slack_reject_verification_submission(
+        self, payload: dict[str, Any], view: dict[str, Any]
+    ) -> dict[str, object]:
+        raw_metadata = view.get("private_metadata")
+        if not isinstance(raw_metadata, str) or not raw_metadata:
+            return {"status": "error", "message": "Slack modal is missing task context."}
+        try:
+            metadata = json.loads(raw_metadata)
+        except json.JSONDecodeError:
+            return {"status": "error", "message": "Slack modal context is invalid."}
+        if not isinstance(metadata, dict):
+            return {"status": "error", "message": "Slack modal context is invalid."}
+        task_id = metadata.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            return {"status": "error", "message": "Slack modal is missing task id."}
+        try:
+            task = self.scanner.find_task(task_id)
+        except FileNotFoundError:
+            return {"status": "error", "message": f"Task {task_id} no longer exists."}
+        expected_thread_ts = task.metadata.slack.thread_ts
+        expected_channel = task.metadata.slack.channel
+        modal_thread_ts = metadata.get("thread_ts")
+        modal_channel = metadata.get("channel_id")
+        if isinstance(expected_thread_ts, str) and isinstance(modal_thread_ts, str) and expected_thread_ts != modal_thread_ts:
+            return {"status": "error", "message": "This Slack action no longer matches the current task thread."}
+        if isinstance(expected_channel, str) and isinstance(modal_channel, str) and expected_channel != modal_channel:
+            return {"status": "error", "message": "This Slack action was submitted from the wrong Slack channel."}
+        state = view.get("state")
+        message_text = self._extract_slack_modal_input(state, block_id="reject_verification_input", action_id="message_input")
+        if not message_text:
+            return {"status": "error", "message": "Request changes message is required."}
+        user = payload.get("user")
+        user_id = user.get("id") if isinstance(user, dict) else None
+        by = f"slack:{user_id}" if isinstance(user_id, str) and user_id else "slack"
+        try:
+            await asyncio.to_thread(self.verification_service.reject, task_id, by=by, note=message_text)
+        except (TransitionError, TaskNotFoundError, CommitError, IntegrationError) as exc:
+            return {"status": "error", "message": str(exc)}
+        await self.rescan_and_publish()
+        await asyncio.to_thread(
+            self._clear_slack_action_message,
+            metadata.get("channel_id"),
+            metadata.get("message_ts"),
+            metadata.get("message_text") or "",
+        )
+        return {"status": "success"}
+
     def _open_slack_resume_review_loop_modal(self, payload: dict[str, Any], task_id: str, by: str) -> dict[str, object]:
+        return self._open_slack_message_modal(
+            payload,
+            task_id,
+            callback_id="resume_review_loop_modal",
+            title="Resume review",
+            submit="Resume",
+            block_id="resume_review_loop_input",
+            initial_value=f"requested via Slack by {by}",
+        )
+
+    def _open_slack_reject_verification_modal(self, payload: dict[str, Any], task_id: str, by: str) -> dict[str, object]:
+        return self._open_slack_message_modal(
+            payload,
+            task_id,
+            callback_id="reject_verification_modal",
+            title="Request changes",
+            submit="Request changes",
+            block_id="reject_verification_input",
+            initial_value=f"requested via Slack by {by}",
+        )
+
+    def _open_slack_message_modal(
+        self,
+        payload: dict[str, Any],
+        task_id: str,
+        *,
+        callback_id: str,
+        title: str,
+        submit: str,
+        block_id: str,
+        initial_value: str,
+    ) -> dict[str, object]:
         trigger_id = payload.get("trigger_id")
         if not isinstance(trigger_id, str) or not trigger_id:
             return {"status": "error", "message": "Slack did not provide a trigger id for opening the modal."}
@@ -277,7 +358,7 @@ class RuntimeSupervisor:
                 "trigger_id": trigger_id,
                 "view": {
                     "type": "modal",
-                    "callback_id": "resume_review_loop_modal",
+                    "callback_id": callback_id,
                     "private_metadata": json.dumps(
                         {
                             "task_id": task_id,
@@ -287,19 +368,19 @@ class RuntimeSupervisor:
                             "message_text": message_text,
                         }
                     ),
-                    "title": {"type": "plain_text", "text": "Resume review"},
-                    "submit": {"type": "plain_text", "text": "Resume"},
+                    "title": {"type": "plain_text", "text": title},
+                    "submit": {"type": "plain_text", "text": submit},
                     "close": {"type": "plain_text", "text": "Cancel"},
                     "blocks": [
                         {
                             "type": "input",
-                            "block_id": "resume_review_loop_input",
+                            "block_id": block_id,
                             "label": {"type": "plain_text", "text": "Message"},
                             "element": {
                                 "type": "plain_text_input",
                                 "action_id": "message_input",
                                 "multiline": True,
-                                "initial_value": f"requested via Slack by {by}",
+                                "initial_value": initial_value,
                             },
                         }
                     ],

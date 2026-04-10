@@ -1931,6 +1931,316 @@ def test_runtime_rejects_blank_slack_resume_review_loop_modal_submission(configu
     assert resumed.metadata.review.human_rework_required is True
 
 
+def test_runtime_handles_slack_interactive_request_changes_action(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    create_request_task(config, "slack-interactive-request-changes-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    verifying = transitions.move(completed, TaskState.HUMAN_VERIFYING, by="human")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        modal_calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+        def fake_call(method: str, *, token: str, body=None):
+            modal_calls.append((method, token, body))
+            return {"ok": True}
+
+        monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+        result = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "block_actions",
+                    "user": {"id": "U123"},
+                    "trigger_id": "trigger-123",
+                    "channel": {"id": "C123"},
+                    "message": {"thread_ts": "173.456", "ts": "173.789", "text": "Human verification started"},
+                    "actions": [
+                        {
+                            "action_id": "reject_verification",
+                            "value": json.dumps({"task_id": verifying.metadata.task_id, "action": "reject_verification"}),
+                        }
+                    ],
+                }
+            )
+        )
+
+    assert result == {"status": "opened_modal", "clear_buttons": False}
+    assert modal_calls
+    assert modal_calls[0][0] == "views.open"
+    modal_body = modal_calls[0][2]
+    assert modal_body is not None
+    assert modal_body["trigger_id"] == "trigger-123"
+    view = modal_body["view"]
+    assert isinstance(view, dict)
+    assert view["callback_id"] == "reject_verification_modal"
+    blocks = view["blocks"]
+    assert isinstance(blocks, list)
+    input_block = blocks[0]
+    assert input_block["block_id"] == "reject_verification_input"
+    assert input_block["element"]["action_id"] == "message_input"
+    persisted = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+    assert persisted.state == TaskState.HUMAN_VERIFYING
+
+
+def test_runtime_handles_slack_request_changes_modal_submission(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    create_request_task(config, "slack-interactive-request-changes-submit-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    verifying = transitions.move(completed, TaskState.HUMAN_VERIFYING, by="human")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        modal_calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+        def fake_call(method: str, *, token: str, body=None):
+            modal_calls.append((method, token, body))
+            return {"ok": True}
+
+        monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+        result = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "view_submission",
+                    "user": {"id": "U123"},
+                    "view": {
+                        "callback_id": "reject_verification_modal",
+                        "private_metadata": json.dumps(
+                            {
+                                "task_id": verifying.metadata.task_id,
+                                "channel_id": "C123",
+                                "thread_ts": "173.456",
+                                "message_ts": "173.789",
+                                "message_text": "🧪 Human verification started",
+                            }
+                        ),
+                        "state": {
+                            "values": {
+                                "reject_verification_input": {
+                                    "message_input": {"value": "Please fix the failing verification comments."}
+                                }
+                            }
+                        },
+                    },
+                }
+            )
+        )
+
+    assert result == {"status": "success"}
+    rejected = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+    assert rejected.state == TaskState.TODOS
+    assert rejected.metadata.human_verification.note_markdown == "Please fix the failing verification comments."
+    assert modal_calls
+    assert modal_calls[0][0] == "chat.update"
+
+
+def test_runtime_rejects_blank_slack_request_changes_modal_submission(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    create_request_task(config, "slack-interactive-request-changes-blank-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    verifying = transitions.move(completed, TaskState.HUMAN_VERIFYING, by="human")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        result = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "view_submission",
+                    "user": {"id": "U123"},
+                    "view": {
+                        "callback_id": "reject_verification_modal",
+                        "private_metadata": json.dumps(
+                            {
+                                "task_id": verifying.metadata.task_id,
+                                "channel_id": "C123",
+                                "thread_ts": "173.456",
+                                "message_ts": "173.789",
+                                "message_text": "🧪 Human verification started",
+                            }
+                        ),
+                        "state": {
+                            "values": {
+                                "reject_verification_input": {
+                                    "message_input": {"value": "   "}
+                                }
+                            }
+                        },
+                    },
+                }
+            )
+        )
+
+    assert result == {"status": "error", "message": "Request changes message is required."}
+    persisted = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+    assert persisted.state == TaskState.HUMAN_VERIFYING
+
+
+def test_runtime_rejects_slack_request_changes_modal_submission_for_wrong_thread(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    create_request_task(config, "slack-interactive-request-changes-wrong-thread-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    verifying = transitions.move(completed, TaskState.HUMAN_VERIFYING, by="human")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        result = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "view_submission",
+                    "user": {"id": "U123"},
+                    "view": {
+                        "callback_id": "reject_verification_modal",
+                        "private_metadata": json.dumps(
+                            {
+                                "task_id": verifying.metadata.task_id,
+                                "channel_id": "C123",
+                                "thread_ts": "wrong-thread",
+                                "message_ts": "173.789",
+                                "message_text": "🧪 Human verification started",
+                            }
+                        ),
+                        "state": {
+                            "values": {
+                                "reject_verification_input": {
+                                    "message_input": {"value": "Please address the verification note."}
+                                }
+                            }
+                        },
+                    },
+                }
+            )
+        )
+
+    assert result == {"status": "error", "message": "This Slack action no longer matches the current task thread."}
+    persisted = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+    assert persisted.state == TaskState.HUMAN_VERIFYING
+
+
+def test_runtime_rejects_slack_request_changes_modal_submission_for_wrong_channel(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    create_request_task(config, "slack-interactive-request-changes-wrong-channel-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.move(waiting, TaskState.TODOS, by="human")
+    implementing = transitions.move(todo, TaskState.IMPLEMENTING, by="implementer")
+    waiting_reviews = transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    verifying = transitions.move(completed, TaskState.HUMAN_VERIFYING, by="human")
+
+    with TestClient(app):
+        task = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+        task.metadata.slack.thread_ts = "173.456"
+        task.metadata.slack.channel = "C123"
+        app.state.runtime.scanner.metadata_store.save(task.task_dir, task.metadata)
+        result = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "view_submission",
+                    "user": {"id": "U123"},
+                    "view": {
+                        "callback_id": "reject_verification_modal",
+                        "private_metadata": json.dumps(
+                            {
+                                "task_id": verifying.metadata.task_id,
+                                "channel_id": "C999",
+                                "thread_ts": "173.456",
+                                "message_ts": "173.789",
+                                "message_text": "🧪 Human verification started",
+                            }
+                        ),
+                        "state": {
+                            "values": {
+                                "reject_verification_input": {
+                                    "message_input": {"value": "Please address the verification note."}
+                                }
+                            }
+                        },
+                    },
+                }
+            )
+        )
+
+    assert result == {"status": "error", "message": "This Slack action was submitted from the wrong Slack channel."}
+    persisted = app.state.runtime.scanner.find_task(verifying.metadata.task_id)
+    assert persisted.state == TaskState.HUMAN_VERIFYING
+
+
 def test_runtime_start_auto_starts_slack_listener_when_configured(configured_paths):
     config, _, _ = configured_paths
     config.slack.enabled = True
