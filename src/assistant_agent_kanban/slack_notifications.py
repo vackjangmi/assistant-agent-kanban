@@ -114,15 +114,10 @@ class SlackMilestoneNotifier:
         emoji = MILESTONE_EMOJIS.get(milestone, "🔔")
         lines = [
             f"{emoji} {milestone}",
-            f"[{context.metadata.task_id}] {context.metadata.title}",
             f"• State: {self._state_value(previous_state)} → {self._state_value(context.state)}",
         ]
         if by:
             lines.append(f"• Actor: {by}")
-        if context.metadata.target.repo_root:
-            lines.append(f"• Repo: {context.metadata.target.repo_root}")
-        if context.metadata.target.base_branch:
-            lines.append(f"• Base branch: {context.metadata.target.base_branch}")
         if note:
             lines.append(f"• Note: {note}")
         return "\n".join(lines)
@@ -199,7 +194,6 @@ class SlackMilestoneNotifier:
             {
                 "type": "section",
                 "fields": [
-                    {"type": "mrkdwn", "text": f"*Task*\n`{context.metadata.task_id}` {context.metadata.title}"},
                     {
                         "type": "mrkdwn",
                         "text": f"*State change*\n`{self._state_value(previous_state)}` → `{self._state_value(context.state)}`",
@@ -210,10 +204,6 @@ class SlackMilestoneNotifier:
         detail_fields: list[dict[str, str]] = []
         if by:
             detail_fields.append({"type": "mrkdwn", "text": f"*Actor*\n{by}"})
-        if context.metadata.target.repo_root:
-            detail_fields.append({"type": "mrkdwn", "text": f"*Repo*\n`{context.metadata.target.repo_root}`"})
-        if context.metadata.target.base_branch:
-            detail_fields.append({"type": "mrkdwn", "text": f"*Base branch*\n`{context.metadata.target.base_branch}`"})
         if detail_fields:
             blocks.append({"type": "section", "fields": detail_fields})
         if note:

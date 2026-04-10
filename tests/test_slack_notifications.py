@@ -133,11 +133,15 @@ def test_slack_notifier_handles_plan_approving_review_milestone(configured_paths
     assert payload is not None
     assert payload["thread_ts"] == "173.456"
     assert str(payload["text"]).startswith("📝 Plan ready for review\n")
+    assert "slack-plan-approval-task" not in str(payload["text"])
+    assert "Repo:" not in str(payload["text"])
+    assert "Base branch:" not in str(payload["text"])
     blocks = payload["blocks"]
     assert isinstance(blocks, list)
     assert blocks[0]["type"] == "section"
     assert blocks[0]["text"]["text"] == "📝 *Plan ready for review*"
-    assert blocks[1]["fields"][1]["text"] == "*State change*\n`plan-approving` → `waiting-check-plans`"
+    assert len(blocks[1]["fields"]) == 1
+    assert blocks[1]["fields"][0]["text"] == "*State change*\n`plan-approving` → `waiting-check-plans`"
 
 
 def test_slack_notifier_handles_reviewing_to_todos_milestone(configured_paths, monkeypatch):
@@ -167,6 +171,9 @@ def test_slack_notifier_handles_reviewing_to_todos_milestone(configured_paths, m
     assert payload is not None
     assert payload["thread_ts"] == "173.456"
     assert str(payload["text"]).startswith("🔁 Review requested changes\n")
+    assert "slack-review-changes-task" not in str(payload["text"])
+    assert "Repo:" not in str(payload["text"])
+    assert "Base branch:" not in str(payload["text"])
     blocks = payload["blocks"]
     assert isinstance(blocks, list)
     assert blocks[0]["text"]["text"] == "🔁 *Review requested changes*"
