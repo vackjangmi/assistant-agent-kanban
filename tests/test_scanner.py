@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.enums import TaskState
@@ -481,3 +482,44 @@ def test_scanner_ignores_runtime_metadata_when_collecting_task_ids(configured_pa
 
     assert len(tasks) == 1
     assert tasks[0].metadata.task_id != "runtime1"
+
+
+def test_scanner_skips_vanished_metadata_during_existing_id_scan(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    task_dir = create_request_task(config, "scanner-vanished-metadata")
+    metadata_path = task_dir / "metadata.json"
+    original_read_text = Path.read_text
+    seen = {"deleted": False}
+
+    def flaky_read_text(path: Path, *args, **kwargs):
+        if path == metadata_path and not seen["deleted"]:
+            seen["deleted"] = True
+            metadata_path.unlink(missing_ok=True)
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", flaky_read_text)
+
+    tasks = KanbanScanner(config, MetadataStore()).scan()
+
+    assert len(tasks) == 1
+    assert tasks[0].metadata.title == "scanner-vanished-metadata"
+
+
+def test_scanner_skips_task_when_metadata_disappears_during_load(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    create_request_task(config, "scanner-vanished-during-load")
+    scanner = KanbanScanner(config, MetadataStore())
+    task = scanner.scan()[0]
+    task_dir = task.task_dir
+    original_load = scanner.metadata_store.load
+
+    def flaky_load(path: Path):
+        if path == task_dir:
+            raise FileNotFoundError(path / "metadata.json")
+        return original_load(path)
+
+    monkeypatch.setattr(scanner.metadata_store, "load", flaky_load)
+
+    tasks = scanner.scan()
+
+    assert tasks == []

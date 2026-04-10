@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 import re
 import secrets
 from pathlib import Path
@@ -79,6 +80,8 @@ class TaskIdSequence:
 
 TASK_KEY_PATTERN = re.compile(r"^[0-9a-f]{7}$")
 
+logger = logging.getLogger(__name__)
+
 
 class KanbanScanner:
     def __init__(self, config: AppConfig, metadata_store: MetadataStore | None = None) -> None:
@@ -91,7 +94,11 @@ class KanbanScanner:
         existing_ids = self._existing_task_ids()
         for state in STATE_ORDER:
             for task_dir in self._task_dirs_for_state(state):
-                metadata, task_dir = self._ensure_metadata(task_dir, state, existing_ids)
+                try:
+                    metadata, task_dir = self._ensure_metadata(task_dir, state, existing_ids)
+                except FileNotFoundError:
+                    logger.info("scanner skipped vanished task directory", extra={"state": state.value, "task_dir": str(task_dir)})
+                    continue
                 existing_ids.add(metadata.task_id)
                 should_save = False
                 if metadata.state != state:
@@ -136,7 +143,11 @@ class KanbanScanner:
                     metadata.integration.base_branch = metadata.target.base_branch
                     should_save = True
                 if should_save:
-                    self.metadata_store.save(task_dir, metadata)
+                    try:
+                        self.metadata_store.save(task_dir, metadata)
+                    except FileNotFoundError:
+                        logger.info("scanner skipped vanished task directory during save", extra={"state": state.value, "task_dir": str(task_dir)})
+                        continue
                 tasks.append(TaskContext(metadata=metadata, task_dir=task_dir, state=state))
         return tasks
 
@@ -197,7 +208,10 @@ class KanbanScanner:
     def _existing_task_ids(self) -> set[str]:
         existing: set[str] = set()
         for metadata_path in self._metadata_paths_for_states():
-            existing.add(TaskMetadata.model_validate_json(metadata_path.read_text()).task_id)
+            try:
+                existing.add(TaskMetadata.model_validate_json(metadata_path.read_text()).task_id)
+            except FileNotFoundError:
+                logger.info("scanner skipped vanished metadata file", extra={"metadata_path": str(metadata_path)})
         return existing
 
     def _metadata_paths_for_states(self) -> list[Path]:
