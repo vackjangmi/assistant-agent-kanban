@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import subprocess
 import uuid
@@ -98,6 +99,51 @@ class WorkerBase:
             return int(result.stdout.strip() or "0") > 0
         except ValueError:
             return False
+
+    def workspace_patch_fingerprint(self, workspace_repo: Path, base_branch: str) -> str | None:
+        base_ref = self._resolve_workspace_base_ref(workspace_repo, base_branch)
+        if base_ref is None:
+            return None
+        diff = subprocess.run(
+            ["git", "-C", str(workspace_repo), "diff", "--binary", base_ref, "--"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if diff.returncode != 0:
+            return None
+        tracked_patch = diff.stdout
+        untracked = subprocess.run(
+            ["git", "-C", str(workspace_repo), "ls-files", "--others", "--exclude-standard", "-z"],
+            capture_output=True,
+            check=False,
+        )
+        if untracked.returncode != 0:
+            return None
+        digest = hashlib.sha256()
+        digest.update(tracked_patch.encode("utf-8"))
+        for raw_path in [part for part in untracked.stdout.split(b"\x00") if part]:
+            relative_path = raw_path.decode("utf-8", errors="replace")
+            digest.update(b"\0untracked\0")
+            digest.update(relative_path.encode("utf-8", errors="replace"))
+            file_path = workspace_repo / relative_path
+            if file_path.is_file():
+                digest.update(b"\0")
+                digest.update(file_path.read_bytes())
+        return digest.hexdigest()
+
+    def _resolve_workspace_base_ref(self, workspace_repo: Path, base_branch: str) -> str | None:
+        candidates = [base_branch, f"origin/{base_branch}"]
+        for candidate in candidates:
+            probe = subprocess.run(
+                ["git", "-C", str(workspace_repo), "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                return candidate
+        return None
 
     def make_log_callback(self, loop: asyncio.AbstractEventLoop, task_id: str, log_name: str):
         content = ""

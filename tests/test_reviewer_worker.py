@@ -131,7 +131,7 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert scanner.scan()[0].metadata.retry_gate.reason is None
 
 
-def test_reviewer_worker_requires_human_review_after_third_rework_loop(configured_paths):
+def test_reviewer_worker_allows_same_blocker_loop_to_continue_when_patch_changes(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "review-loop-cap-task")
     metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
@@ -184,7 +184,7 @@ def test_reviewer_worker_requires_human_review_after_third_rework_loop(configure
     assert asyncio.run(reviewer.run_once()) is True
     after_second = scanner.scan()[0]
     assert after_second.state == TaskState.TODOS
-    assert after_second.metadata.review.consecutive_rework_loops == 2
+    assert after_second.metadata.review.consecutive_rework_loops == 1
     assert after_second.metadata.review.total_rework_loops == 2
     assert after_second.metadata.review.human_rework_required is False
 
@@ -192,11 +192,105 @@ def test_reviewer_worker_requires_human_review_after_third_rework_loop(configure
     assert asyncio.run(reviewer.run_once()) is True
     after_third = scanner.scan()[0]
     assert after_third.state == TaskState.TODOS
-    assert after_third.metadata.review.consecutive_rework_loops == 3
+    assert after_third.metadata.review.consecutive_rework_loops == 1
     assert after_third.metadata.review.total_rework_loops == 3
-    assert after_third.metadata.review.human_rework_required is True
-    assert "human review required after 3 repeated rework loops for blocker 'same-issue'" == after_third.metadata.review.human_rework_reason
+    assert after_third.metadata.review.human_rework_required is False
+    assert after_third.metadata.review.human_rework_reason is None
+
+
+def test_reviewer_worker_requires_human_review_after_third_rework_loop_without_patch_progress(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-loop-no-progress-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+
+    reviewer = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(
+            reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="same-issue", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 1")
+            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="same-issue", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 2")
+            + reviewer_cycle_responses(verdict="NEEDS_CHANGES", primary_blocker="same-issue", markdown="Verdict: NEEDS_CHANGES\n\n- fix issue 3")
+        ),
+        integration_manager=IntegrationManager(config),
+    )
+
+    def keep_workspace_patch_identical(cwd):
+        (cwd / "app.txt").write_text("review me 2\n")
+
+    implementer = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(
+            ["hello", "implemented live", "## Summary\nimplemented again"]
+            + ["hello", "implemented live", "## Summary\nimplemented once more"],
+            side_effect=keep_workspace_patch_identical,
+            side_effect_output_formats={"default"},
+        ),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(reviewer.run_once()) is True
+    first = scanner.scan()[0]
+    assert first.metadata.review.consecutive_rework_loops == 1
+
+    assert asyncio.run(implementer.run_once()) is True
+    assert asyncio.run(reviewer.run_once()) is True
+    second = scanner.scan()[0]
+    assert second.metadata.review.consecutive_rework_loops == 1
+
+    assert asyncio.run(implementer.run_once()) is True
+    assert asyncio.run(reviewer.run_once()) is True
+    third = scanner.scan()[0]
+    assert third.metadata.review.consecutive_rework_loops == 2
+    assert third.metadata.review.human_rework_required is False
+
+    assert asyncio.run(implementer.run_once()) is True
+    assert asyncio.run(reviewer.run_once()) is True
+    fourth = scanner.scan()[0]
+    assert fourth.state == TaskState.TODOS
+    assert fourth.metadata.review.consecutive_rework_loops == 3
+    assert fourth.metadata.review.total_rework_loops == 4
+    assert fourth.metadata.review.human_rework_required is True
+    assert fourth.metadata.review.human_rework_reason == "human review required after 3 repeated rework loops for blocker 'same-issue'"
     assert implementer.candidate_tasks() == []
+
+
+def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-gated-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- still broken")),
+        integration_manager=IntegrationManager(config),
+    )
+
+    task = scanner.scan()[0]
+    task.metadata.retry_gate.reason = "review-needs-changes"
+    task.metadata.retry_gate.consecutive_count = 1
+    note = worker._handle_needs_changes(
+        task.metadata,
+        primary_blocker="same-issue",
+        blocker_patch_fingerprint="fingerprint-1",
+    )
+
+    assert note == "review needs changes"
+    assert task.metadata.retry_gate.reason == "review-needs-changes"
+    assert task.metadata.retry_gate.consecutive_count == 2
+    assert task.metadata.retry_gate.not_before is not None
 
 
 def test_reviewer_worker_resets_same_blocker_streak_when_blocker_changes(configured_paths):
@@ -676,32 +770,6 @@ def test_reviewer_worker_uses_single_json_run_when_live_logs_disabled(configured
     review_json = json.loads((updated.task_dir / "REVIEW-001.json").read_text())
     assert review_json["session_id"] == "ses_review_single"
     assert review_json["total_tokens"] == 33
-
-
-def test_reviewer_needs_changes_gates_on_second_consecutive_loop(configured_paths):
-    config, _, _ = configured_paths
-    create_request_task(config, "review-gated-task")
-    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
-    task = scanner.scan()[0]
-    task.metadata.retry_gate.reason = "review-needs-changes"
-    task.metadata.retry_gate.consecutive_count = 1
-    metadata_store.save(task.task_dir, task.metadata)
-    worker = ReviewerWorker(
-        config,
-        scanner,
-        metadata_store,
-        locks,
-        transitions,
-        EventBus(),
-        adapter=FakeAdapter(reviewer_cycle_responses(verdict="NEEDS_CHANGES", markdown="Verdict: NEEDS_CHANGES\n\n- still broken")),
-        integration_manager=IntegrationManager(config),
-    )
-
-    assert asyncio.run(worker.run_once()) is True
-    updated = scanner.scan()[0]
-    assert updated.metadata.retry_gate.reason == "review-needs-changes"
-    assert updated.metadata.retry_gate.consecutive_count == 2
-    assert updated.metadata.retry_gate.not_before is not None
 
 
 def test_reviewer_worker_localizes_review_source_for_korean_requests(configured_paths):

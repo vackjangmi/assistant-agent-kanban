@@ -143,6 +143,7 @@ class ReviewInfo(BaseModel):
     total_rework_loops: int = 0
     rework_loop_plan_revision: int = 0
     primary_blocker: str | None = None
+    last_blocker_patch_fingerprint: str | None = None
     last_backstop_pause_total_rework_loops: int = 0
     human_rework_required: bool = False
     human_rework_reason: str | None = None
@@ -158,6 +159,7 @@ def reset_review_loop_tracking(review: ReviewInfo) -> None:
     review.total_rework_loops = 0
     review.rework_loop_plan_revision = 0
     review.primary_blocker = None
+    review.last_blocker_patch_fingerprint = None
     review.last_backstop_pause_total_rework_loops = 0
     review.human_rework_required = False
     review.human_rework_reason = None

@@ -170,7 +170,13 @@ class ReviewerWorker(WorkerBase):
                 (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 if verdict != "PASS":
-                    note = self._handle_needs_changes(reviewing.metadata, primary_blocker=cast(str, artifact["primary_blocker"]))
+                    note = self._handle_needs_changes(
+                        reviewing.metadata,
+                        primary_blocker=cast(str, artifact["primary_blocker"]),
+                        blocker_patch_fingerprint=self.workspace_patch_fingerprint(
+                            workspace_path, reviewing.metadata.target.base_branch
+                        ),
+                    )
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                     done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
                 else:
@@ -298,7 +304,13 @@ class ReviewerWorker(WorkerBase):
             (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
             self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
             if verdict != "PASS":
-                note = self._handle_needs_changes(reviewing.metadata, primary_blocker=cast(str, artifact["primary_blocker"]))
+                note = self._handle_needs_changes(
+                    reviewing.metadata,
+                    primary_blocker=cast(str, artifact["primary_blocker"]),
+                    blocker_patch_fingerprint=self.workspace_patch_fingerprint(
+                        workspace_path, reviewing.metadata.target.base_branch
+                    ),
+                )
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
             else:
@@ -613,18 +625,23 @@ class ReviewerWorker(WorkerBase):
         adapter = self.adapter_registry.get(backend)
         return adapter or self.adapter
 
-    def _handle_needs_changes(self, metadata, *, primary_blocker: str) -> str:
+    def _handle_needs_changes(self, metadata, *, primary_blocker: str, blocker_patch_fingerprint: str | None) -> str:
         review = metadata.review
         plan_revision = metadata.plan.revision
         if review.rework_loop_plan_revision != plan_revision:
             reset_review_loop_tracking(review)
             review.rework_loop_plan_revision = plan_revision
         review.total_rework_loops += 1
-        if review.primary_blocker == primary_blocker:
+        fingerprint_unchanged = (
+            blocker_patch_fingerprint is None
+            or review.last_blocker_patch_fingerprint == blocker_patch_fingerprint
+        )
+        if review.primary_blocker == primary_blocker and fingerprint_unchanged:
             review.consecutive_rework_loops += 1
         else:
             review.primary_blocker = primary_blocker
             review.consecutive_rework_loops = 1
+        review.last_blocker_patch_fingerprint = blocker_patch_fingerprint
         if review.consecutive_rework_loops >= self.review_loop_escalation_threshold:
             review.human_rework_required = True
             review.human_rework_reason = (
