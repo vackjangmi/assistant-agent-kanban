@@ -2241,6 +2241,232 @@ def test_runtime_rejects_slack_request_changes_modal_submission_for_wrong_channe
     assert persisted.state == TaskState.HUMAN_VERIFYING
 
 
+def test_runtime_posts_slack_request_intake_button_on_app_mention(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+
+    with TestClient(app):
+        asyncio.run(
+            app.state.runtime.handle_slack_app_mention(
+                {"team_id": "T123"},
+                {"channel": "C123", "ts": "173.456", "text": "<@U1> create request"},
+            )
+        )
+
+    assert calls
+    assert calls[0][0] == "chat.postMessage"
+    payload = calls[0][2]
+    assert payload is not None
+    assert payload["channel"] == "C123"
+    assert payload["thread_ts"] == "173.456"
+    blocks = payload["blocks"]
+    assert isinstance(blocks, list)
+    assert blocks[1]["elements"][0]["action_id"] == "open_request_intake"
+
+
+def test_runtime_opens_slack_request_intake_modal_without_creating_task(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    create_request_task(config, "previous-project-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+
+    with TestClient(app):
+        before = len(app.state.runtime.scanner.scan())
+        result = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "block_actions",
+                    "team": {"id": "T123"},
+                    "user": {"id": "U123"},
+                    "trigger_id": "trigger-123",
+                    "channel": {"id": "C123"},
+                    "message": {"thread_ts": "173.456", "ts": "173.789", "text": "Create request"},
+                    "actions": [{"action_id": "open_request_intake", "value": json.dumps({"action": "open_request_intake"})}],
+                }
+            )
+        )
+        after = len(app.state.runtime.scanner.scan())
+
+    assert result == {"status": "opened_modal", "clear_buttons": False}
+    assert before == after
+    assert len(list(config.request_drafts_dir.glob("*.json"))) == 1
+    assert calls
+    assert calls[0][0] == "views.open"
+    view = calls[0][2]["view"]
+    assert isinstance(view, dict)
+    assert view["callback_id"] == "request_intake_modal"
+    blocks = view["blocks"]
+    assert isinstance(blocks, list)
+    assert blocks[0]["block_id"] == "request_intake_intro"
+    assert view["title"]["text"] == "Draft request"
+    assert view["submit"]["text"] == "Submit final request"
+    project_block = blocks[1]
+    assert project_block["block_id"] == "request_intake_project"
+    assert project_block["element"]["action_id"] == "project_select"
+    assert project_block["element"]["options"][0]["value"] == str(config.repo_root)
+    assert blocks[2]["element"]["initial_value"] == "main"
+    assert blocks[6]["elements"][0]["text"]["text"] == "Post draft to thread"
+
+
+def test_runtime_slack_request_intake_requires_assistant_then_creates_task(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    config.runtime.role_backends.request_draft = "codex"
+    create_request_task(config, "previous-project-task")
+    draft_adapter = FakeAdapter(
+        [
+            json.dumps(
+                {
+                    "reply": "I tightened the request.",
+                    "field_updates": {"title": "Slack drafted title", "goal": "Slack drafted goal"},
+                }
+            )
+        ]
+    )
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": draft_adapter},
+    )
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+
+    with TestClient(app):
+        opened = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "block_actions",
+                    "team": {"id": "T123"},
+                    "user": {"id": "U123"},
+                    "trigger_id": "trigger-123",
+                    "channel": {"id": "C123"},
+                    "message": {"thread_ts": "173.456", "ts": "173.789", "text": "Create request"},
+                    "actions": [{"action_id": "open_request_intake", "value": json.dumps({"action": "open_request_intake"})}],
+                }
+            )
+        )
+        assert opened == {"status": "opened_modal", "clear_buttons": False}
+        opened_view = calls[-1][2]["view"]
+        draft_id = json.loads(opened_view["private_metadata"])["draft_id"]
+
+        blocked = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "view_submission",
+                    "user": {"id": "U123"},
+                    "view": {
+                        "callback_id": "request_intake_modal",
+                        "private_metadata": json.dumps({"draft_id": draft_id}),
+                        "state": {
+                            "values": {
+                                "request_intake_project": {"project_select": {"selected_option": {"value": str(config.repo_root)}}},
+                                "request_intake_base_branch": {"base_branch_input": {"value": "main"}},
+                                "request_intake_title": {"title_input": {"value": "Slack title"}},
+                                "request_intake_goal": {"goal_input": {"value": "Slack goal"}},
+                                "request_intake_assistant_prompt": {"assistant_prompt_input": {"value": "   "}},
+                            }
+                        },
+                    },
+                }
+            )
+        )
+        assert blocked == {
+            "response_action": "errors",
+            "errors": {
+                "request_intake_assistant_prompt": "Ask the assistant for at least one draft before submitting the final request.",
+            },
+        }
+
+        generated = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "block_actions",
+                    "user": {"id": "U123"},
+                    "channel": {"id": "C123"},
+                    "view": {
+                        "id": "V123",
+                        "hash": "hash-1",
+                        "private_metadata": json.dumps({"draft_id": draft_id}),
+                        "state": {
+                            "values": {
+                                "request_intake_project": {"project_select": {"selected_option": {"value": str(config.repo_root)}}},
+                                "request_intake_base_branch": {"base_branch_input": {"value": "main"}},
+                                "request_intake_title": {"title_input": {"value": "Slack title"}},
+                                "request_intake_goal": {"goal_input": {"value": "Slack goal"}},
+                                "request_intake_assistant_prompt": {"assistant_prompt_input": {"value": "Please tighten this request."}},
+                            }
+                        },
+                    },
+                    "actions": [{"action_id": "request_intake_generate_draft", "value": json.dumps({"draft_id": draft_id})}],
+                }
+            )
+        )
+        assert generated == {"status": "success", "clear_buttons": False}
+        from assistant_agent_kanban.request_draft_store import RequestDraftStore
+
+        draft = RequestDraftStore(config).load(draft_id)
+        assert any(entry.role == "assistant" for entry in draft.transcript)
+        assert draft.title == "Slack drafted title"
+        assert draft.goal == "Slack drafted goal"
+
+        submitted = asyncio.run(
+            app.state.runtime.handle_slack_interactive_action(
+                {
+                    "type": "view_submission",
+                    "user": {"id": "U123"},
+                    "view": {
+                        "callback_id": "request_intake_modal",
+                        "private_metadata": json.dumps({"draft_id": draft_id}),
+                        "state": {
+                            "values": {
+                                "request_intake_project": {"project_select": {"selected_option": {"value": str(config.repo_root)}}},
+                                "request_intake_base_branch": {"base_branch_input": {"value": draft.base_branch}},
+                                "request_intake_title": {"title_input": {"value": draft.title}},
+                                "request_intake_goal": {"goal_input": {"value": draft.goal}},
+                                "request_intake_assistant_prompt": {"assistant_prompt_input": {"value": ""}},
+                            }
+                        },
+                    },
+                }
+            )
+        )
+
+    assert submitted == {"status": "success"}
+    tasks = KanbanScanner(config).scan()
+    created = next(task for task in tasks if task.metadata.title == "Slack drafted title")
+    assert created.metadata.slack.channel == "C123"
+    assert created.metadata.slack.thread_ts == "173.456"
+    assert (created.task_dir / "REQUEST-DRAFT.md").exists()
+    assert not (config.request_drafts_dir / f"{draft_id}.json").exists()
+    assert any(call[0] == "views.update" for call in calls)
+    assert any(call[0] == "chat.postMessage" and call[2] and call[2].get("thread_ts") == "173.456" for call in calls)
+
+
 def test_runtime_start_auto_starts_slack_listener_when_configured(configured_paths):
     config, _, _ = configured_paths
     config.slack.enabled = True

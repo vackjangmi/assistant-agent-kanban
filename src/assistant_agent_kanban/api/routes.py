@@ -911,48 +911,28 @@ def build_router() -> APIRouter:
     @router.post("/api/requests")
     async def create_request_task(payload: CreateRequestPayload, request: Request):
         runtime = request.app.state.runtime
-        normalized_base_branch = payload.base_branch.strip() if payload.base_branch else runtime.config.base_branch
-        request_language = runtime_language_code_to_request_language(runtime.config.runtime.language)
-        request_draft_store = _request_draft_store(request)
-        stored_draft = None
-        if payload.request_draft_id:
-            try:
-                stored_draft = request_draft_store.load(payload.request_draft_id)
-            except FileNotFoundError as exc:
-                raise HTTPException(status_code=404, detail="request draft not found") from exc
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-        draft_markdown = payload.request_draft_markdown
-        if stored_draft is not None:
-            draft_markdown = serialize_request_draft_transcript_markdown(stored_draft, language_code=request_language)
         try:
-            default_scope, default_out_of_scope = build_default_scope_sections_for_language(
-                payload.target_repo,
-                language_code=request_language,
-                managed_docs_root=runtime.config.target_repo_docs_root_value(),
-            )
-            task_dir = create_request(
-                runtime.config,
-                template=RequestTemplateData(
-                    title=payload.title.strip(),
-                    goal=payload.goal.strip(),
-                    background=payload.background.strip() if payload.background else None,
-                    plan_auto_approve=payload.plan_auto_approve,
-                    scope=split_lines(payload.scope) or default_scope,
-                    out_of_scope=split_lines(payload.out_of_scope) or default_out_of_scope,
-                    constraints=split_lines(payload.constraints),
-                    references=split_lines(payload.references),
-                    acceptance_criteria=split_lines(payload.acceptance_criteria),
-                ),
-                target_repo_root=Path(payload.target_repo),
-                base_branch=normalized_base_branch,
+            task_dir = await asyncio.to_thread(
+                runtime.create_request_from_submission,
+                title=payload.title,
+                goal=payload.goal,
+                background=payload.background,
+                plan_auto_approve=payload.plan_auto_approve,
+                scope=payload.scope,
+                out_of_scope=payload.out_of_scope,
+                constraints=payload.constraints,
+                references=payload.references,
+                acceptance_criteria=payload.acceptance_criteria,
+                target_repo=payload.target_repo,
+                base_branch=payload.base_branch,
                 request_upload_token=payload.request_upload_token,
-                request_draft_markdown=draft_markdown,
+                request_draft_id=payload.request_draft_id,
+                request_draft_markdown=payload.request_draft_markdown,
             )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="request draft not found") from exc
         except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if stored_draft is not None:
-            request_draft_store.delete(stored_draft.draft_id)
         await runtime.rescan_and_publish()
         return {"task_path": str(task_dir), "created": True}
 
