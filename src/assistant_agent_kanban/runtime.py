@@ -40,6 +40,9 @@ from watchfiles import awatch
 
 logger = logging.getLogger(__name__)
 
+SLACK_SECTION_TEXT_LIMIT = 3000
+SLACK_FIELD_TEXT_LIMIT = 2000
+
 
 class DispatchWorker(Protocol):
     def candidate_tasks(self) -> list[TaskContext]: ...
@@ -833,6 +836,17 @@ class RuntimeSupervisor:
         )
         if response.get("ok"):
             return
+        logger.warning(
+            "slack request draft placeholder update failed: %s",
+            slack_error_message(response, fallback="Slack chat.update failed."),
+            extra={
+                "draft_id": draft.draft_id,
+                "channel": channel_id,
+                "thread_ts": draft.slack_thread_ts or message_ts,
+                "message_ts": message_ts,
+                "draft_number": draft_number,
+            },
+        )
         self._post_slack_request_review_message(
             channel_id=channel_id,
             thread_ts=draft.slack_thread_ts or message_ts,
@@ -991,7 +1005,7 @@ class RuntimeSupervisor:
         token = self.config.slack.bot_token
         if not token:
             return
-        slack_api_call(
+        response = slack_api_call(
             "chat.postMessage",
             token=token,
             body={
@@ -1006,6 +1020,18 @@ class RuntimeSupervisor:
                     draft_filename=draft_filename,
                     upload_ok=upload_ok,
                 ),
+            },
+        )
+        if response.get("ok"):
+            return
+        logger.warning(
+            "slack request draft review post failed: %s",
+            slack_error_message(response, fallback="Slack chat.postMessage failed."),
+            extra={
+                "draft_id": draft.draft_id,
+                "channel": channel_id,
+                "thread_ts": thread_ts,
+                "draft_number": draft_number,
             },
         )
 
@@ -1034,10 +1060,11 @@ class RuntimeSupervisor:
             blocks.append({"type": "section", "fields": summary_fields})
         update_lines = self._format_slack_field_updates(field_updates)
         if update_lines:
+            update_text = self._clamp_slack_text("*Suggested updates*\n" + "\n".join(update_lines), limit=SLACK_SECTION_TEXT_LIMIT)
             blocks.append(
                 {
                     "type": "section",
-                    "text": {"type": "mrkdwn", "text": "*Suggested updates*\n" + "\n".join(update_lines)},
+                    "text": {"type": "mrkdwn", "text": update_text},
                 }
             )
         attachment_line = f"Attached markdown draft: `{draft_filename}`" if upload_ok else f"Draft markdown upload failed for `{draft_filename}`."
@@ -1072,13 +1099,13 @@ class RuntimeSupervisor:
     def _slack_request_summary_fields(self, draft: StoredRequestDraft) -> list[dict[str, str]]:
         fields: list[dict[str, str]] = []
         if draft.title.strip():
-            fields.append({"type": "mrkdwn", "text": f"*Title*\n{draft.title.strip()}"})
+            fields.append({"type": "mrkdwn", "text": self._clamp_slack_text(f"*Title*\n{draft.title.strip()}", limit=SLACK_FIELD_TEXT_LIMIT)})
         if draft.goal.strip():
-            fields.append({"type": "mrkdwn", "text": f"*Goal*\n{draft.goal.strip()[:1200]}"})
+            fields.append({"type": "mrkdwn", "text": self._clamp_slack_text(f"*Goal*\n{draft.goal.strip()}", limit=SLACK_FIELD_TEXT_LIMIT)})
         if draft.target_repo.strip():
-            fields.append({"type": "mrkdwn", "text": f"*Project*\n`{draft.target_repo.strip()}`"})
+            fields.append({"type": "mrkdwn", "text": self._clamp_slack_text(f"*Project*\n`{draft.target_repo.strip()}`", limit=SLACK_FIELD_TEXT_LIMIT)})
         if draft.base_branch.strip():
-            fields.append({"type": "mrkdwn", "text": f"*Base branch*\n`{draft.base_branch.strip()}`"})
+            fields.append({"type": "mrkdwn", "text": self._clamp_slack_text(f"*Base branch*\n`{draft.base_branch.strip()}`", limit=SLACK_FIELD_TEXT_LIMIT)})
         return fields[:10]
 
     def _format_slack_field_updates(self, field_updates: Mapping[str, object]) -> list[str]:
@@ -1112,6 +1139,14 @@ class RuntimeSupervisor:
             return "(clear field)"
         normalized = str(value).strip()
         return normalized[:1200] if normalized else "(clear field)"
+
+    def _clamp_slack_text(self, text: str, *, limit: int) -> str:
+        normalized = text.strip()
+        if len(normalized) <= limit:
+            return normalized
+        if limit <= 1:
+            return normalized[:limit]
+        return normalized[: limit - 1].rstrip() + "…"
 
     async def _submit_slack_request_from_thread_action(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
         if not any(entry.role == "assistant" and (entry.content or "").strip() for entry in draft.transcript):

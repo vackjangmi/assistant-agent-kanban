@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any, cast
 
 import assistant_agent_kanban.runtime as runtime_module
@@ -491,6 +492,92 @@ def test_slack_request_draft_flow_posts_review_message_when_placeholder_update_f
     assert fallback_review_post["thread_ts"] == "173.456"
     assert fallback_review_post["blocks"][-1]["elements"][0]["text"]["text"] == "Submit final request"
     assert fallback_review_post["blocks"][-1]["elements"][1]["text"]["text"] == "Request another draft"
+
+
+def test_slack_request_draft_flow_logs_when_review_fallback_post_fails(configured_paths, monkeypatch, caplog):
+    config, _, _ = configured_paths
+    create_request_task(config, "seed-task")
+    runtime, calls = _build_slack_request_runtime(
+        config,
+        monkeypatch,
+        draft_replies=[
+            {
+                "reply": "Draft fallback is ready.",
+                "field_updates": {
+                    "title": "Slack fallback draft",
+                    "goal": "Fallback review message goal.",
+                },
+            }
+        ],
+    )
+
+    original_call = runtime_module.slack_api_call
+
+    def fail_update_and_post(method: str, *, token: str, body=None):
+        if method == "chat.update" and isinstance(body, dict) and body.get("text") == "Assistant draft 1 ready for review.":
+            return {"ok": False, "error": "cant_update_message"}
+        if method == "chat.postMessage" and isinstance(body, dict) and body.get("text") == "Assistant draft 1 ready for review.":
+            return {"ok": False, "error": "missing_scope"}
+        return original_call(method, token=token, body=body)
+
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fail_update_and_post)
+
+    draft_id = _open_slack_request_modal(runtime, calls)
+    with caplog.at_level(logging.WARNING):
+        result = _generate_slack_request_draft(
+            runtime,
+            draft_id,
+            prompt="Please draft this request.",
+            target_repo=str(config.repo_root),
+        )
+
+    assert result == {"status": "success"}
+    assert "slack request draft placeholder update failed" in caplog.text
+    assert "slack request draft review post failed" in caplog.text
+
+
+def test_slack_request_draft_review_blocks_clamp_oversized_text(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    runtime, _calls = _build_slack_request_runtime(
+        config,
+        monkeypatch,
+        draft_replies=[
+            {
+                "reply": "unused",
+                "field_updates": {},
+            }
+        ],
+    )
+    draft = RequestDraftStore(config).create(
+        {
+            "title": "T" * 5000,
+            "goal": "G" * 5000,
+            "target_repo": "/tmp/" + ("p" * 5000),
+            "base_branch": "b" * 5000,
+        }
+    )
+    field_updates = {
+        "title": "x" * 5000,
+        "goal": "y" * 5000,
+        "background": "z" * 5000,
+        "scope": ["a" * 2000, "b" * 2000, "c" * 2000],
+    }
+
+    blocks = runtime._build_slack_request_draft_review_blocks(
+        draft,
+        draft_number=1,
+        reply="r" * 5000,
+        field_updates=field_updates,
+        draft_filename="REQUEST-DRAFT-001.md",
+        upload_ok=True,
+    )
+
+    for block in blocks:
+        if block.get("type") == "section" and isinstance(block.get("text"), dict):
+            assert len(block["text"]["text"]) <= 3000
+        if block.get("type") == "section" and isinstance(block.get("fields"), list):
+            for field in block["fields"]:
+                assert len(field["text"]) <= 2000
 
 
 def _build_slack_request_runtime(config, monkeypatch, *, draft_replies, update_parent_ok=True):
