@@ -48,11 +48,15 @@ class SlackMilestoneNotifier:
 
     def notify_transition(self, context: TaskContext, *, previous_state: TaskState, by: str, note: str | None = None) -> None:
         milestone = MILESTONE_TRANSITIONS.get((previous_state, context.state))
+        token = self.config.slack.bot_token
+        if not self.config.slack.enabled or not token:
+            return
+        if context.state == TaskState.IMPLEMENTING:
+            self._clear_action_message(context, action_key="resume_review_loop", token=token)
         if milestone is None:
             return
         channel = context.metadata.slack.channel or self.config.slack.default_channel
-        token = self.config.slack.bot_token
-        if not self.config.slack.enabled or not channel or not token:
+        if not channel:
             return
         payload: dict[str, object] = {
             "channel": channel,

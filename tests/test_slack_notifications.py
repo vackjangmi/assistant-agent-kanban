@@ -183,6 +183,52 @@ def test_slack_notifier_handles_reviewing_to_todos_milestone(configured_paths, m
     assert elements[0]["action_id"] == "resume_review_loop"
 
 
+def test_slack_notifier_clears_resume_review_loop_when_task_reenters_implementing(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-resume-clear-task")
+    scanner = KanbanScanner(config)
+    task = scanner.scan()[0]
+    task.metadata.slack.channel = "C123"
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.action_message_ts["resume_review_loop"] = "173.789"
+    task.metadata.slack.action_message_text["resume_review_loop"] = "🔁 Review requested changes"
+    MetadataStore().save(task.task_dir, task.metadata)
+    implementing = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.IMPLEMENTING)
+    implementing.metadata.state = TaskState.IMPLEMENTING
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(
+        implementing,
+        previous_state=TaskState.TODOS,
+        by="implementer",
+    )
+
+    assert calls == [
+        (
+            "chat.update",
+            "xoxb-test",
+            {
+                "channel": "C123",
+                "ts": "173.789",
+                "text": "🔁 Review requested changes",
+                "blocks": [],
+            },
+        )
+    ]
+    persisted = MetadataStore().load(task.task_dir)
+    assert "resume_review_loop" not in persisted.slack.action_message_ts
+    assert "resume_review_loop" not in persisted.slack.action_message_text
+
+
 def test_slack_notifier_creates_parent_message_and_persists_thread(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     config.slack.enabled = True
