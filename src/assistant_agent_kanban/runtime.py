@@ -27,7 +27,7 @@ from .language import runtime_language_code_to_request_language
 from .request_creator import RequestTemplateData, build_default_scope_sections_for_language, create_request, split_lines
 from .request_draft_store import RequestDraftStore, StoredRequestDraft, serialize_request_draft_transcript_markdown
 from .request_drafting import draft_request
-from .slack_api import slack_api_call, slack_error_message
+from .slack_api import slack_api_call, slack_error_message, slack_upload_file_to_thread
 from .slack_notifications import SlackMilestoneNotifier
 from .slack_runtime import SlackRuntime
 from .workers.committer import CommitWorker
@@ -157,7 +157,7 @@ class RuntimeSupervisor:
         if not isinstance(action, dict):
             return {"status": "noop"}
         action_id = action.get("action_id")
-        if action_id in {"open_request_intake", "request_intake_project_select", "request_intake_generate_draft"}:
+        if action_id in {"open_request_intake", "request_intake_project_select", "request_intake_generate_draft", "request_intake_revise", "request_intake_submit"}:
             return await self._handle_slack_request_intake_action(payload, action)
         if action_id not in {"start_verification", "approve_verification", "reject_verification", "resume_review_loop"}:
             return {"status": "noop"}
@@ -359,6 +359,33 @@ class RuntimeSupervisor:
             return {"status": "noop"}
         if action_id == "open_request_intake":
             return await asyncio.to_thread(self._open_slack_request_intake_modal, payload)
+        action_value = action.get("value") if isinstance(action, dict) else None
+        parsed_value = None
+        if isinstance(action_value, str) and action_value:
+            try:
+                parsed_value = json.loads(action_value)
+            except json.JSONDecodeError:
+                parsed_value = None
+        draft_id = parsed_value.get("draft_id") if isinstance(parsed_value, dict) else None
+        if action_id in {"request_intake_revise", "request_intake_submit"}:
+            if not isinstance(draft_id, str) or not draft_id:
+                return {"status": "error", "message": "Slack request draft action is missing draft context."}
+            store = RequestDraftStore(self.config)
+            try:
+                draft = store.load(draft_id)
+            except FileNotFoundError:
+                return {"status": "error", "message": "Request draft no longer exists."}
+            except ValueError as exc:
+                return {"status": "error", "message": str(exc)}
+            if action_id == "request_intake_revise":
+                result = await asyncio.to_thread(self._open_existing_slack_request_intake_modal, payload, draft)
+                if result.get("status") == "opened_modal":
+                    await asyncio.to_thread(self._clear_slack_message_actions_from_payload, payload)
+                return result
+            result = await self._submit_slack_request_from_thread_action(payload, draft)
+            if result.get("status") == "success":
+                await asyncio.to_thread(self._clear_slack_message_actions_from_payload, payload)
+            return result
         view = payload.get("view")
         if not isinstance(view, dict):
             return {"status": "error", "message": "Slack modal payload is invalid."}
@@ -395,63 +422,12 @@ class RuntimeSupervisor:
         return {"status": "noop"}
 
     async def _handle_slack_request_intake_submission(self, payload: dict[str, Any], view: dict[str, Any]) -> dict[str, object]:
-        metadata = self._load_slack_modal_metadata(view)
-        draft_id = metadata.get("draft_id") if isinstance(metadata, dict) else None
-        if not isinstance(draft_id, str) or not draft_id:
-            return {"status": "error", "message": "Slack modal is missing request draft context."}
-        store = RequestDraftStore(self.config)
-        try:
-            draft = store.load(draft_id)
-        except FileNotFoundError:
-            return {"status": "error", "message": "Request draft no longer exists."}
-        draft = self._update_slack_request_intake_draft_from_view(store, draft, view)
-        if not any(entry.role == "assistant" and (entry.content or "").strip() for entry in draft.transcript):
-            return {
-                "response_action": "errors",
-                "errors": {
-                    "request_intake_assistant_prompt": "Ask the assistant for at least one draft before submitting the final request."
-                },
-            }
-        if not draft.title.strip() or not draft.goal.strip() or not draft.target_repo.strip() or not draft.base_branch.strip():
-            return {
-                "response_action": "errors",
-                "errors": {
-                    "request_intake_title": "Title, goal, project, and base branch are required before submitting."
-                },
-            }
-        try:
-            task_dir = await asyncio.to_thread(
-                self.create_request_from_submission,
-                title=draft.title,
-                goal=draft.goal,
-                background=draft.background,
-                plan_auto_approve=draft.plan_auto_approve,
-                scope=draft.scope,
-                out_of_scope=draft.out_of_scope,
-                constraints=draft.constraints,
-                references=draft.references,
-                acceptance_criteria=draft.acceptance_criteria,
-                target_repo=draft.target_repo,
-                base_branch=draft.base_branch,
-                request_upload_token=draft.request_upload_token or None,
-                request_draft_id=draft.draft_id,
-                request_draft_markdown=None,
-                slack_channel_id=draft.slack_channel_id or None,
-                slack_thread_ts=draft.slack_thread_ts or None,
-            )
-        except (ValueError, AdapterRunError) as exc:
-            return {
-                "response_action": "errors",
-                "errors": {"request_intake_title": str(exc)},
-            }
-        await self.rescan_and_publish()
-        await asyncio.to_thread(
-            self._publish_slack_request_created_summary,
-            draft.slack_channel_id,
-            draft.slack_thread_ts,
-            task_dir.name,
-        )
-        return {"status": "success"}
+        return {
+            "response_action": "errors",
+            "errors": {
+                "request_intake_assistant_prompt": "Use the thread review message to request another draft or submit the final request."
+            },
+        }
 
     def _open_slack_request_intake_modal(self, payload: dict[str, Any]) -> dict[str, object]:
         trigger_id = payload.get("trigger_id")
@@ -492,6 +468,25 @@ class RuntimeSupervisor:
                             "base_branch": self._suggested_base_branch(first_project),
                         },
                     )
+        response = slack_api_call(
+            "views.open",
+            token=token,
+            body={
+                "trigger_id": trigger_id,
+                "view": self._build_slack_request_intake_view(draft),
+            },
+        )
+        if not response.get("ok"):
+            return {"status": "error", "message": slack_error_message(response, fallback="Slack modal open failed.")}
+        return {"status": "opened_modal", "clear_buttons": False}
+
+    def _open_existing_slack_request_intake_modal(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
+        trigger_id = payload.get("trigger_id")
+        if not isinstance(trigger_id, str) or not trigger_id:
+            return {"status": "error", "message": "Slack did not provide a trigger id for opening the modal."}
+        token = self.config.slack.bot_token
+        if not token:
+            return {"status": "error", "message": "Slack bot token is missing."}
         response = slack_api_call(
             "views.open",
             token=token,
@@ -590,27 +585,6 @@ class RuntimeSupervisor:
             },
             {
                 "type": "input",
-                "block_id": "request_intake_title",
-                "label": {"type": "plain_text", "text": "Title"},
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": "title_input",
-                    "initial_value": draft.title,
-                },
-            },
-            {
-                "type": "input",
-                "block_id": "request_intake_goal",
-                "label": {"type": "plain_text", "text": "Goal"},
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": "goal_input",
-                    "multiline": True,
-                    "initial_value": draft.goal,
-                },
-            },
-            {
-                "type": "input",
                 "block_id": "request_intake_assistant_prompt",
                 "label": {"type": "plain_text", "text": "Ask the request-writing assistant"},
                 "element": {
@@ -648,28 +622,32 @@ class RuntimeSupervisor:
                     ],
                 }
             )
+        summary_fields = self._slack_request_summary_fields(draft)
+        if summary_fields:
+            blocks.append(
+                {
+                    "type": "section",
+                    "block_id": "request_intake_current_summary",
+                    "fields": summary_fields,
+                }
+            )
         return {
             "type": "modal",
             "callback_id": "request_intake_modal",
             "private_metadata": metadata,
             "title": {"type": "plain_text", "text": "Draft request"},
-            "submit": {"type": "plain_text", "text": "Submit final request"},
             "close": {"type": "plain_text", "text": "Cancel"},
             "blocks": blocks,
         }
 
     def _update_slack_request_intake_draft_from_view(self, store: RequestDraftStore, draft: StoredRequestDraft, view: dict[str, Any]) -> StoredRequestDraft:
         state = view.get("state")
-        title = self._extract_slack_modal_input(state, block_id="request_intake_title", action_id="title_input") or ""
-        goal = self._extract_slack_modal_input(state, block_id="request_intake_goal", action_id="goal_input") or ""
         base_branch = self._extract_slack_modal_input(state, block_id="request_intake_base_branch", action_id="base_branch_input") or self.config.base_branch
         assistant_prompt = self._extract_slack_modal_input(state, block_id="request_intake_assistant_prompt", action_id="assistant_prompt_input") or ""
         selected_project = self._extract_slack_static_select_value(state, block_id="request_intake_project", action_id="project_select")
         return store.update(
             draft.draft_id,
             {
-                "title": title,
-                "goal": goal,
                 "target_repo": selected_project or draft.target_repo,
                 "base_branch": base_branch,
                 "request_draft_input": assistant_prompt,
@@ -773,6 +751,16 @@ class RuntimeSupervisor:
         if not token or not channel_id or not thread_ts:
             return
         draft_number = sum(1 for entry in draft.transcript if entry.role == "assistant")
+        filename = f"REQUEST-DRAFT-{draft_number:03d}.md"
+        draft_markdown = self._render_slack_request_preview_markdown(draft)
+        upload_result = slack_upload_file_to_thread(
+            token=token,
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            filename=filename,
+            title=filename,
+            content=draft_markdown.encode("utf-8"),
+        )
         slack_api_call(
             "chat.postMessage",
             token=token,
@@ -785,6 +773,8 @@ class RuntimeSupervisor:
                     draft_number=draft_number,
                     reply=reply,
                     field_updates=field_updates,
+                    draft_filename=filename,
+                    upload_ok=bool(upload_result.get("ok")),
                 ),
             },
         )
@@ -796,6 +786,8 @@ class RuntimeSupervisor:
         draft_number: int,
         reply: str,
         field_updates: Mapping[str, object],
+        draft_filename: str,
+        upload_ok: bool,
     ) -> list[dict[str, object]]:
         blocks: list[dict[str, object]] = [
             {
@@ -818,14 +810,30 @@ class RuntimeSupervisor:
                     "text": {"type": "mrkdwn", "text": "*Suggested updates*\n" + "\n".join(update_lines)},
                 }
             )
+        attachment_line = f"Attached markdown draft: `{draft_filename}`" if upload_ok else f"Draft markdown upload failed for `{draft_filename}`."
         blocks.append(
             {
-                "type": "context",
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": attachment_line},
+            }
+        )
+        blocks.append(
+            {
+                "type": "actions",
                 "elements": [
                     {
-                        "type": "mrkdwn",
-                        "text": "Revise in the modal as needed, then use *Submit final request* only when the thread review is done.",
-                    }
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Submit final request"},
+                        "style": "primary",
+                        "action_id": "request_intake_submit",
+                        "value": json.dumps({"draft_id": draft.draft_id}),
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Request another draft"},
+                        "action_id": "request_intake_revise",
+                        "value": json.dumps({"draft_id": draft.draft_id}),
+                    },
                 ],
             }
         )
@@ -874,6 +882,106 @@ class RuntimeSupervisor:
             return "(clear field)"
         normalized = str(value).strip()
         return normalized[:1200] if normalized else "(clear field)"
+
+    async def _submit_slack_request_from_thread_action(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
+        if not any(entry.role == "assistant" and (entry.content or "").strip() for entry in draft.transcript):
+            return {"status": "error", "message": "Ask the assistant for at least one draft before submitting the final request."}
+        if not draft.title.strip() or not draft.goal.strip() or not draft.target_repo.strip() or not draft.base_branch.strip():
+            return {"status": "error", "message": "The assistant draft is still missing title, goal, project, or base branch."}
+        try:
+            task_dir = await asyncio.to_thread(
+                self.create_request_from_submission,
+                title=draft.title,
+                goal=draft.goal,
+                background=draft.background,
+                plan_auto_approve=draft.plan_auto_approve,
+                scope=draft.scope,
+                out_of_scope=draft.out_of_scope,
+                constraints=draft.constraints,
+                references=draft.references,
+                acceptance_criteria=draft.acceptance_criteria,
+                target_repo=draft.target_repo,
+                base_branch=draft.base_branch,
+                request_upload_token=draft.request_upload_token or None,
+                request_draft_id=draft.draft_id,
+                request_draft_markdown=None,
+                slack_channel_id=draft.slack_channel_id or None,
+                slack_thread_ts=draft.slack_thread_ts or None,
+            )
+        except (ValueError, AdapterRunError) as exc:
+            return {"status": "error", "message": str(exc)}
+        await self.rescan_and_publish()
+        await asyncio.to_thread(
+            self._publish_slack_request_created_summary,
+            draft.slack_channel_id,
+            draft.slack_thread_ts,
+            task_dir.name,
+        )
+        return {"status": "success"}
+
+    def _clear_slack_message_actions_from_payload(self, payload: dict[str, Any]) -> None:
+        token = self.config.slack.bot_token
+        if not token:
+            return
+        channel = payload.get("channel")
+        message = payload.get("message")
+        channel_id = channel.get("id") if isinstance(channel, dict) else None
+        message_ts = message.get("ts") if isinstance(message, dict) else None
+        text = message.get("text") if isinstance(message, dict) else ""
+        blocks = message.get("blocks") if isinstance(message, dict) else None
+        if not isinstance(channel_id, str) or not isinstance(message_ts, str):
+            return
+        next_blocks = [block for block in blocks if not (isinstance(block, dict) and block.get("type") == "actions")] if isinstance(blocks, list) else []
+        slack_api_call(
+            "chat.update",
+            token=token,
+            body={
+                "channel": channel_id,
+                "ts": message_ts,
+                "text": text if isinstance(text, str) else "",
+                "blocks": next_blocks,
+            },
+        )
+
+    def _render_slack_request_preview_markdown(self, draft: StoredRequestDraft) -> str:
+        lines = [
+            "---",
+            f"title: {draft.title.strip() or 'Untitled request draft'}",
+            f"language: {runtime_language_code_to_request_language(self.config.runtime.language)}",
+            f"plan_auto_approve: {'true' if draft.plan_auto_approve else 'false'}",
+            "target:",
+            f"  repo_root: {draft.target_repo.strip() or '(unset)'}",
+            f"  base_branch: {draft.base_branch.strip() or self.config.base_branch}",
+            "---",
+            "",
+            f"# {draft.title.strip() or 'Untitled request draft'}",
+            "",
+        ]
+        sections: list[tuple[str, str | list[str] | None]] = [
+            ("Goal", draft.goal),
+            ("Background", draft.background),
+            ("Scope", draft.scope),
+            ("Out of Scope", draft.out_of_scope),
+            ("Constraints", draft.constraints),
+            ("References", draft.references),
+            ("Acceptance Criteria", draft.acceptance_criteria),
+        ]
+        for heading, value in sections:
+            rendered = self._render_slack_request_section_value(value)
+            if not rendered:
+                continue
+            lines.append(f"## {heading}")
+            lines.append(rendered)
+            lines.append("")
+        return "\n".join(lines).strip() + "\n"
+
+    def _render_slack_request_section_value(self, value: str | list[str] | None) -> str:
+        if isinstance(value, list):
+            normalized = [item.strip() for item in value if item.strip()]
+            return "\n".join(f"- {item}" for item in normalized)
+        if isinstance(value, str):
+            return value.strip()
+        return ""
 
     def create_request_from_submission(
         self,

@@ -270,8 +270,6 @@ def test_slack_request_draft_flow_posts_thread_review_without_creating_task_befo
     generate_result = _generate_slack_request_draft(
         runtime,
         draft_id,
-        title="Slack drafted request",
-        goal="Original goal",
         prompt="Please tighten this request.",
         target_repo=str(config.repo_root),
     )
@@ -279,6 +277,14 @@ def test_slack_request_draft_flow_posts_thread_review_without_creating_task_befo
     assert generate_result == {"status": "success", "clear_buttons": False}
     after = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
     assert after == before
+
+    upload_call = cast(
+        dict[str, Any],
+        next(body for method, _token, body in calls if method == "slack_upload_file_to_thread"),
+    )
+    assert upload_call["thread_ts"] == "173.456"
+    assert upload_call["filename"] == "REQUEST-DRAFT-001.md"
+    assert "Slack drafted request" in upload_call["content"]
 
     review_post = cast(
         dict[str, Any],
@@ -291,7 +297,8 @@ def test_slack_request_draft_flow_posts_thread_review_without_creating_task_befo
     assert review_post["channel"] == "C123"
     assert review_post["thread_ts"] == "173.456"
     assert review_post["blocks"][0]["text"]["text"] == "📝 *Assistant draft 1 ready for review*"
-    assert "Submit final request" in review_post["blocks"][-1]["elements"][0]["text"]
+    assert review_post["blocks"][-1]["elements"][0]["text"]["text"] == "Submit final request"
+    assert review_post["blocks"][-1]["elements"][1]["text"]["text"] == "Request another draft"
 
     draft = RequestDraftStore(config).load(draft_id)
     assert [entry.role for entry in draft.transcript] == ["user", "assistant"]
@@ -325,16 +332,14 @@ def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update
     _generate_slack_request_draft(
         runtime,
         draft_id,
-        title="Slack drafted request",
-        goal="Original goal",
         prompt="Please draft this request.",
         target_repo=str(config.repo_root),
     )
+    revise_result = _request_another_draft(runtime, draft_id)
+    assert revise_result == {"status": "opened_modal", "clear_buttons": False}
     _generate_slack_request_draft(
         runtime,
         draft_id,
-        title="Slack drafted request",
-        goal="Revised goal for the final submission.",
         prompt="Revise it to be more specific.",
         target_repo=str(config.repo_root),
     )
@@ -344,7 +349,13 @@ def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update
     assert sum(1 for entry in draft.transcript if entry.role == "assistant") == 2
     assert len([body for method, _token, body in calls if method == "chat.postMessage" and body and str(body.get("text", "")).startswith("Assistant draft")]) == 2
 
-    submit_result = _submit_slack_request(runtime, draft_id, title="Slack drafted request", goal="Revised goal for the final submission.", target_repo=str(config.repo_root))
+    cleared_revise_message = cast(
+        dict[str, Any],
+        next(body for method, _token, body in calls if method == "chat.update" and body is not None and body.get("ts") == "msg-revise"),
+    )
+    assert cleared_revise_message["blocks"] == [{"type": "section", "text": {"type": "mrkdwn", "text": "draft"}}]
+
+    submit_result = _submit_slack_request(runtime, draft_id)
     assert submit_result == {"status": "success"}
     assert not RequestDraftStore(config).exists(draft_id)
 
@@ -364,6 +375,12 @@ def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update
     assert parent_update["channel"] == "C123"
     assert parent_update["blocks"][0]["text"]["text"] == "🧩 Slack drafted request"
     assert "Task opened in Slack thread" in parent_update["blocks"][1]["text"]["text"]
+
+    cleared_submit_message = cast(
+        dict[str, Any],
+        next(body for method, _token, body in calls if method == "chat.update" and body is not None and body.get("ts") == "msg-submit"),
+    )
+    assert cleared_submit_message["blocks"] == [{"type": "section", "text": {"type": "mrkdwn", "text": "draft"}}]
 
 
 def test_slack_request_draft_flow_posts_summary_in_thread_when_parent_update_fails(configured_paths, monkeypatch):
@@ -388,13 +405,11 @@ def test_slack_request_draft_flow_posts_summary_in_thread_when_parent_update_fai
     _generate_slack_request_draft(
         runtime,
         draft_id,
-        title="Slack fallback request",
-        goal="Fallback goal.",
         prompt="Please draft this request.",
         target_repo=str(config.repo_root),
     )
 
-    submit_result = _submit_slack_request(runtime, draft_id, title="Slack fallback request", goal="Fallback goal.", target_repo=str(config.repo_root))
+    submit_result = _submit_slack_request(runtime, draft_id)
     assert submit_result == {"status": "success"}
 
     assert any(method == "chat.update" and body is not None and body.get("ts") == "173.456" for method, _token, body in calls)
@@ -441,8 +456,13 @@ def _build_slack_request_runtime(config, monkeypatch, *, draft_replies, update_p
             return {"ok": True, "channel": body.get("channel") if isinstance(body, dict) else None, "ts": f"msg-{post_counter['value']}"}
         return {"ok": True}
 
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        calls.append(("slack_upload_file_to_thread", token, {"channel": channel_id, "thread_ts": thread_ts, "filename": filename, "title": title, "content": content.decode("utf-8")}))
+        return {"ok": True, "file": {"id": f"F{post_counter['value'] + 1}"}}
+
     monkeypatch.setattr("assistant_agent_kanban.runtime.draft_request", fake_draft_request)
     monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_upload_file_to_thread", fake_upload)
     return runtime, calls
 
 
@@ -464,12 +484,12 @@ def _open_slack_request_modal(runtime, calls):
     open_call = cast(dict[str, Any], next(body for method, _token, body in calls if method == "views.open"))
     assert open_call is not None
     assert open_call["view"]["title"]["text"] == "Draft request"
-    assert open_call["view"]["submit"]["text"] == "Submit final request"
-    assert open_call["view"]["blocks"][6]["elements"][0]["text"]["text"] == "Post draft to thread"
+    assert "submit" not in open_call["view"]
+    assert open_call["view"]["blocks"][4]["elements"][0]["text"]["text"] == "Post draft to thread"
     return json.loads(open_call["view"]["private_metadata"])["draft_id"]
 
 
-def _generate_slack_request_draft(runtime, draft_id, *, title, goal, prompt, target_repo):
+def _generate_slack_request_draft(runtime, draft_id, *, prompt, target_repo):
     return asyncio.run(
         runtime.handle_slack_interactive_action(
             {
@@ -479,30 +499,58 @@ def _generate_slack_request_draft(runtime, draft_id, *, title, goal, prompt, tar
                     "id": "V123",
                     "hash": "hash-1",
                     "private_metadata": json.dumps({"draft_id": draft_id}),
-                    "state": _slack_request_intake_state(title=title, goal=goal, prompt=prompt, target_repo=target_repo),
+                    "state": _slack_request_intake_state(prompt=prompt, target_repo=target_repo),
                 },
             }
         )
     )
 
 
-def _submit_slack_request(runtime, draft_id, *, title, goal, target_repo):
+def _request_another_draft(runtime, draft_id):
     return asyncio.run(
         runtime.handle_slack_interactive_action(
             {
-                "type": "view_submission",
+                "type": "block_actions",
+                "trigger_id": "trigger-revise",
                 "user": {"id": "U123"},
-                "view": {
-                    "callback_id": "request_intake_modal",
-                    "private_metadata": json.dumps({"draft_id": draft_id}),
-                    "state": _slack_request_intake_state(title=title, goal=goal, prompt="", target_repo=target_repo),
+                "team": {"id": "T123"},
+                "channel": {"id": "C123"},
+                "message": {
+                    "ts": "msg-revise",
+                    "text": "Assistant draft 1 ready for review.",
+                    "blocks": [
+                        {"type": "section", "text": {"type": "mrkdwn", "text": "draft"}},
+                        {"type": "actions", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Request another draft"}}]},
+                    ],
                 },
+                "actions": [{"action_id": "request_intake_revise", "value": json.dumps({"draft_id": draft_id})}],
             }
         )
     )
 
 
-def _slack_request_intake_state(*, title, goal, prompt, target_repo):
+def _submit_slack_request(runtime, draft_id):
+    return asyncio.run(
+        runtime.handle_slack_interactive_action(
+            {
+                "type": "block_actions",
+                "user": {"id": "U123"},
+                "channel": {"id": "C123"},
+                "message": {
+                    "ts": "msg-submit",
+                    "text": "Assistant draft ready for review.",
+                    "blocks": [
+                        {"type": "section", "text": {"type": "mrkdwn", "text": "draft"}},
+                        {"type": "actions", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Submit final request"}}]},
+                    ],
+                },
+                "actions": [{"action_id": "request_intake_submit", "value": json.dumps({"draft_id": draft_id})}],
+            }
+        )
+    )
+
+
+def _slack_request_intake_state(*, prompt, target_repo):
     return {
         "values": {
             "request_intake_project": {
@@ -510,12 +558,6 @@ def _slack_request_intake_state(*, title, goal, prompt, target_repo):
             },
             "request_intake_base_branch": {
                 "base_branch_input": {"value": "main"},
-            },
-            "request_intake_title": {
-                "title_input": {"value": title},
-            },
-            "request_intake_goal": {
-                "goal_input": {"value": goal},
             },
             "request_intake_assistant_prompt": {
                 "assistant_prompt_input": {"value": prompt},
