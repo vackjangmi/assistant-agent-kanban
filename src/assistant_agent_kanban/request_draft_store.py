@@ -15,7 +15,7 @@ from .request_drafting import RequestDraftPayload, RequestDraftTranscriptEntry
 class StoredRequestDraftTranscriptEntry(BaseModel):
     role: Literal["user", "assistant"]
     content: str = ""
-    field_updates: dict[str, str] = Field(default_factory=dict)
+    field_updates: dict[str, str | list[str]] = Field(default_factory=dict)
 
 
 class StoredRequestDraft(BaseModel):
@@ -37,6 +37,10 @@ class StoredRequestDraft(BaseModel):
     active_tab: Literal["assistant", "fields"] = "assistant"
     request_draft_input: str = ""
     transcript: list[StoredRequestDraftTranscriptEntry] = Field(default_factory=list)
+    slack_team_id: str = ""
+    slack_user_id: str = ""
+    slack_channel_id: str = ""
+    slack_thread_ts: str = ""
 
     def to_drafting_payload(self, *, message: str) -> RequestDraftPayload:
         return RequestDraftPayload(
@@ -69,6 +73,61 @@ class RequestDraftStore:
             draft = _merge_draft(draft, data)
         self.save(draft)
         return draft
+
+    def find_by_slack_context(
+        self,
+        *,
+        team_id: str | None,
+        user_id: str | None,
+        channel_id: str | None,
+        thread_ts: str | None,
+    ) -> StoredRequestDraft | None:
+        normalized_team_id = (team_id or "").strip()
+        normalized_user_id = (user_id or "").strip()
+        normalized_channel_id = (channel_id or "").strip()
+        normalized_thread_ts = (thread_ts or "").strip()
+        if not normalized_user_id or not normalized_channel_id or not normalized_thread_ts:
+            return None
+        for draft in self.list():
+            if draft.slack_user_id != normalized_user_id:
+                continue
+            if draft.slack_channel_id != normalized_channel_id:
+                continue
+            if draft.slack_thread_ts != normalized_thread_ts:
+                continue
+            if normalized_team_id and draft.slack_team_id != normalized_team_id:
+                continue
+            return draft
+        return None
+
+    def load_or_create_for_slack_context(
+        self,
+        *,
+        team_id: str | None,
+        user_id: str | None,
+        channel_id: str | None,
+        thread_ts: str | None,
+        data: dict[str, object] | None = None,
+    ) -> StoredRequestDraft:
+        draft = self.find_by_slack_context(
+            team_id=team_id,
+            user_id=user_id,
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+        )
+        if draft is not None:
+            if data:
+                return self.update(draft.draft_id, data)
+            return draft
+        return self.create(
+            {
+                **(data or {}),
+                "slack_team_id": (team_id or "").strip(),
+                "slack_user_id": (user_id or "").strip(),
+                "slack_channel_id": (channel_id or "").strip(),
+                "slack_thread_ts": (thread_ts or "").strip(),
+            }
+        )
 
     def load(self, draft_id: str) -> StoredRequestDraft:
         return StoredRequestDraft.model_validate_json(self._path(draft_id).read_text())
@@ -137,7 +196,13 @@ def serialize_request_draft_transcript_markdown(draft: StoredRequestDraft, *, la
             sections.append(f"### {suggested_updates_label}")
             sections.append("")
             for field_name, value in entry.field_updates.items():
-                sections.append(f"- **{_field_label(field_name, language_code=language_code)}**: {value if value != '' else clear_field_label}")
+                formatted_value = value
+                if isinstance(value, list):
+                    normalized_items = [item.strip() for item in value if item.strip()]
+                    formatted_value = "; ".join(normalized_items) if normalized_items else ""
+                sections.append(
+                    f"- **{_field_label(field_name, language_code=language_code)}**: {formatted_value if formatted_value != '' else clear_field_label}"
+                )
         sections.append("")
     return "\n".join(sections).strip()
 
