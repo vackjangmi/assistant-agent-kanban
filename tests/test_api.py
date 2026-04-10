@@ -2252,7 +2252,12 @@ def test_runtime_posts_slack_request_intake_button_on_app_mention(configured_pat
         calls.append((method, token, body))
         return {"ok": True}
 
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        calls.append(("slack_upload_file_to_thread", token, {"channel": channel_id, "thread_ts": thread_ts, "filename": filename, "content": content.decode("utf-8")}))
+        return {"ok": True}
+
     monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_upload_file_to_thread", fake_upload)
 
     with TestClient(app):
         asyncio.run(
@@ -2316,13 +2321,13 @@ def test_runtime_opens_slack_request_intake_modal_without_creating_task(configur
     assert isinstance(blocks, list)
     assert blocks[0]["block_id"] == "request_intake_intro"
     assert view["title"]["text"] == "Draft request"
-    assert view["submit"]["text"] == "Submit final request"
+    assert "submit" not in view
     project_block = blocks[1]
     assert project_block["block_id"] == "request_intake_project"
     assert project_block["element"]["action_id"] == "project_select"
     assert project_block["element"]["options"][0]["value"] == str(config.repo_root)
     assert blocks[2]["element"]["initial_value"] == "main"
-    assert blocks[6]["elements"][0]["text"]["text"] == "Post draft to thread"
+    assert blocks[4]["elements"][0]["text"]["text"] == "Post draft to thread"
 
 
 def test_runtime_slack_request_intake_requires_assistant_then_creates_task(configured_paths, monkeypatch):
@@ -2354,7 +2359,12 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
         calls.append((method, token, body))
         return {"ok": True}
 
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        calls.append(("slack_upload_file_to_thread", token, {"channel": channel_id, "thread_ts": thread_ts, "filename": filename, "content": content.decode("utf-8")}))
+        return {"ok": True}
+
     monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_upload_file_to_thread", fake_upload)
 
     with TestClient(app):
         opened = asyncio.run(
@@ -2386,8 +2396,6 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
                             "values": {
                                 "request_intake_project": {"project_select": {"selected_option": {"value": str(config.repo_root)}}},
                                 "request_intake_base_branch": {"base_branch_input": {"value": "main"}},
-                                "request_intake_title": {"title_input": {"value": "Slack title"}},
-                                "request_intake_goal": {"goal_input": {"value": "Slack goal"}},
                                 "request_intake_assistant_prompt": {"assistant_prompt_input": {"value": "   "}},
                             }
                         },
@@ -2398,7 +2406,7 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
         assert blocked == {
             "response_action": "errors",
             "errors": {
-                "request_intake_assistant_prompt": "Ask the assistant for at least one draft before submitting the final request.",
+                "request_intake_assistant_prompt": "Use the thread review message to request another draft or submit the final request.",
             },
         }
 
@@ -2416,8 +2424,6 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
                             "values": {
                                 "request_intake_project": {"project_select": {"selected_option": {"value": str(config.repo_root)}}},
                                 "request_intake_base_branch": {"base_branch_input": {"value": "main"}},
-                                "request_intake_title": {"title_input": {"value": "Slack title"}},
-                                "request_intake_goal": {"goal_input": {"value": "Slack goal"}},
                                 "request_intake_assistant_prompt": {"assistant_prompt_input": {"value": "Please tighten this request."}},
                             }
                         },
@@ -2437,21 +2443,18 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
         submitted = asyncio.run(
             app.state.runtime.handle_slack_interactive_action(
                 {
-                    "type": "view_submission",
+                    "type": "block_actions",
                     "user": {"id": "U123"},
-                    "view": {
-                        "callback_id": "request_intake_modal",
-                        "private_metadata": json.dumps({"draft_id": draft_id}),
-                        "state": {
-                            "values": {
-                                "request_intake_project": {"project_select": {"selected_option": {"value": str(config.repo_root)}}},
-                                "request_intake_base_branch": {"base_branch_input": {"value": draft.base_branch}},
-                                "request_intake_title": {"title_input": {"value": draft.title}},
-                                "request_intake_goal": {"goal_input": {"value": draft.goal}},
-                                "request_intake_assistant_prompt": {"assistant_prompt_input": {"value": ""}},
-                            }
-                        },
+                    "channel": {"id": "C123"},
+                    "message": {
+                        "ts": "msg-submit",
+                        "text": "Assistant draft ready for review.",
+                        "blocks": [
+                            {"type": "section", "text": {"type": "mrkdwn", "text": "draft"}},
+                            {"type": "actions", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Submit final request"}}]},
+                        ],
                     },
+                    "actions": [{"action_id": "request_intake_submit", "value": json.dumps({"draft_id": draft_id})}],
                 }
             )
         )
