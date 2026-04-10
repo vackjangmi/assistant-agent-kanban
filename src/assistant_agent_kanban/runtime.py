@@ -501,6 +501,7 @@ class RuntimeSupervisor:
         )
         if not response.get("ok"):
             return {"status": "error", "message": slack_error_message(response, fallback="Slack modal open failed.")}
+        self._ensure_slack_request_reopen_message(draft)
         return {"status": "opened_modal", "clear_buttons": False}
 
     def _open_existing_slack_request_intake_modal(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
@@ -520,6 +521,7 @@ class RuntimeSupervisor:
         )
         if not response.get("ok"):
             return {"status": "error", "message": slack_error_message(response, fallback="Slack modal open failed.")}
+        self._ensure_slack_request_reopen_message(draft)
         return {"status": "opened_modal", "clear_buttons": False}
 
     def _update_slack_request_intake_view(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
@@ -540,6 +542,71 @@ class RuntimeSupervisor:
         if not response.get("ok"):
             return {"status": "error", "message": slack_error_message(response, fallback="Slack modal update failed.")}
         return {"status": "success", "clear_buttons": False}
+
+    def _ensure_slack_request_reopen_message(self, draft: StoredRequestDraft) -> None:
+        token = self.config.slack.bot_token
+        channel_id = draft.slack_channel_id or None
+        thread_ts = draft.slack_thread_ts or None
+        if not token or not channel_id or not thread_ts:
+            return
+        store = RequestDraftStore(self.config)
+        existing_ts = draft.slack_reopen_message_ts.strip()
+        existing_text = draft.slack_reopen_message_text.strip() or "Reopen the request draft modal if you closed it by mistake."
+        if existing_ts:
+            slack_api_call(
+                "chat.update",
+                token=token,
+                body={
+                    "channel": channel_id,
+                    "ts": existing_ts,
+                    "text": existing_text,
+                    "blocks": self._build_slack_request_reopen_blocks(draft.draft_id),
+                },
+            )
+            return
+        text = "Reopen the request draft modal if you closed it by mistake."
+        response = slack_api_call(
+            "chat.postMessage",
+            token=token,
+            body={
+                "channel": channel_id,
+                "thread_ts": thread_ts,
+                "text": text,
+                "blocks": self._build_slack_request_reopen_blocks(draft.draft_id),
+            },
+        )
+        message_ts = response.get("ts")
+        if isinstance(message_ts, str) and message_ts:
+            store.update(
+                draft.draft_id,
+                {
+                    "slack_reopen_message_ts": message_ts,
+                    "slack_reopen_message_text": text,
+                },
+            )
+
+    def _build_slack_request_reopen_blocks(self, draft_id: str) -> list[dict[str, object]]:
+        return [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "Need to continue later? Reopen the draft modal from this thread message.",
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Draft request with assistant"},
+                        "style": "primary",
+                        "action_id": "open_request_intake",
+                        "value": json.dumps({"action": "open_request_intake", "draft_id": draft_id}),
+                    }
+                ],
+            },
+        ]
 
     def _generate_slack_request_draft(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
         try:
@@ -1043,6 +1110,12 @@ class RuntimeSupervisor:
             draft.slack_channel_id,
             draft.slack_thread_ts,
             task_dir.name,
+        )
+        await asyncio.to_thread(
+            self._clear_slack_action_message,
+            draft.slack_channel_id,
+            draft.slack_reopen_message_ts or None,
+            draft.slack_reopen_message_text or None,
         )
         return {"status": "success"}
 

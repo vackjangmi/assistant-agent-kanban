@@ -41,6 +41,8 @@ class StoredRequestDraft(BaseModel):
     slack_user_id: str = ""
     slack_channel_id: str = ""
     slack_thread_ts: str = ""
+    slack_reopen_message_ts: str = ""
+    slack_reopen_message_text: str = ""
 
     def to_drafting_payload(self, *, message: str) -> RequestDraftPayload:
         return RequestDraftPayload(
