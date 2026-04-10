@@ -2380,7 +2380,7 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
             )
         )
         assert opened == {"status": "opened_modal", "clear_buttons": False}
-        opened_view = calls[-1][2]["view"]
+        opened_view = next(body for method, _token, body in calls if method == "views.open")["view"]
         draft_id = json.loads(opened_view["private_metadata"])["draft_id"]
 
         blocked = asyncio.run(
