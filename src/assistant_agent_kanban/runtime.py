@@ -816,7 +816,7 @@ class RuntimeSupervisor:
             title=filename,
             content=draft_markdown.encode("utf-8"),
         )
-        slack_api_call(
+        response = slack_api_call(
             "chat.update",
             token=token,
             body={
@@ -833,6 +833,9 @@ class RuntimeSupervisor:
                 ),
             },
         )
+        if response.get("ok"):
+            return
+        self._post_slack_request_draft_review(draft, reply=reply, field_updates=field_updates)
 
     def _update_slack_request_intake_draft_from_view(self, store: RequestDraftStore, draft: StoredRequestDraft, view: dict[str, Any]) -> StoredRequestDraft:
         state = view.get("state")

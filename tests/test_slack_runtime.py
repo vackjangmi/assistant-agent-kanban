@@ -4,6 +4,7 @@ import asyncio
 import json
 from typing import Any, cast
 
+import assistant_agent_kanban.runtime as runtime_module
 from assistant_agent_kanban.api.app import create_app
 from assistant_agent_kanban.config import AppConfig
 from assistant_agent_kanban.enums import TaskState
@@ -454,6 +455,54 @@ def test_slack_request_draft_flow_posts_summary_in_thread_when_parent_update_fai
         ),
     )
     assert fallback_post["blocks"][0]["text"]["text"] == "🧩 Slack fallback request"
+
+
+def test_slack_request_draft_flow_posts_review_message_when_placeholder_update_fails(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    create_request_task(config, "seed-task")
+    runtime, calls = _build_slack_request_runtime(
+        config,
+        monkeypatch,
+        draft_replies=[
+            {
+                "reply": "Draft fallback is ready.",
+                "field_updates": {
+                    "title": "Slack fallback draft",
+                    "goal": "Fallback review message goal.",
+                },
+            }
+        ],
+    )
+
+    original_call = runtime_module.slack_api_call
+
+    def fail_placeholder_update(method: str, *, token: str, body=None):
+        if method == "chat.update" and isinstance(body, dict) and body.get("text") == "Assistant draft 1 ready for review.":
+            return {"ok": False, "error": "cant_update_message"}
+        return original_call(method, token=token, body=body)
+
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fail_placeholder_update)
+
+    draft_id = _open_slack_request_modal(runtime, calls)
+    result = _generate_slack_request_draft(
+        runtime,
+        draft_id,
+        prompt="Please draft this request.",
+        target_repo=str(config.repo_root),
+    )
+
+    assert result == {"status": "success"}
+    fallback_review_post = cast(
+        dict[str, Any],
+        next(
+            body
+            for method, _token, body in calls
+            if method == "chat.postMessage" and body is not None and body.get("text") == "Assistant draft 1 ready for review."
+        ),
+    )
+    assert fallback_review_post["thread_ts"] == "173.456"
+    assert fallback_review_post["blocks"][-1]["elements"][0]["text"]["text"] == "Submit final request"
+    assert fallback_review_post["blocks"][-1]["elements"][1]["text"]["text"] == "Request another draft"
 
 
 def _build_slack_request_runtime(config, monkeypatch, *, draft_replies, update_parent_ok=True):
