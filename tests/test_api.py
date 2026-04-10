@@ -2321,13 +2321,12 @@ def test_runtime_opens_slack_request_intake_modal_without_creating_task(configur
     assert isinstance(blocks, list)
     assert blocks[0]["block_id"] == "request_intake_intro"
     assert view["title"]["text"] == "Draft request"
-    assert "submit" not in view
+    assert view["submit"]["text"] == "Post draft to thread"
     project_block = blocks[1]
     assert project_block["block_id"] == "request_intake_project"
     assert project_block["element"]["action_id"] == "project_select"
     assert project_block["element"]["options"][0]["value"] == str(config.repo_root)
     assert blocks[2]["element"]["initial_value"] == "main"
-    assert blocks[4]["elements"][0]["text"]["text"] == "Post draft to thread"
 
 
 def test_runtime_slack_request_intake_requires_assistant_then_creates_task(configured_paths, monkeypatch):
@@ -2406,19 +2405,17 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
         assert blocked == {
             "response_action": "errors",
             "errors": {
-                "request_intake_assistant_prompt": "Use the thread review message to request another draft or submit the final request.",
+                "request_intake_assistant_prompt": "Assistant request is required before posting a draft to the thread.",
             },
         }
 
         generated = asyncio.run(
             app.state.runtime.handle_slack_interactive_action(
                 {
-                    "type": "block_actions",
+                    "type": "view_submission",
                     "user": {"id": "U123"},
-                    "channel": {"id": "C123"},
                     "view": {
-                        "id": "V123",
-                        "hash": "hash-1",
+                        "callback_id": "request_intake_modal",
                         "private_metadata": json.dumps({"draft_id": draft_id}),
                         "state": {
                             "values": {
@@ -2428,11 +2425,10 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
                             }
                         },
                     },
-                    "actions": [{"action_id": "request_intake_generate_draft", "value": json.dumps({"draft_id": draft_id})}],
                 }
             )
         )
-        assert generated == {"status": "success", "clear_buttons": False}
+        assert generated == {"status": "success"}
         from assistant_agent_kanban.request_draft_store import RequestDraftStore
 
         draft = RequestDraftStore(config).load(draft_id)
@@ -2466,7 +2462,7 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
     assert created.metadata.slack.thread_ts == "173.456"
     assert (created.task_dir / "REQUEST-DRAFT.md").exists()
     assert not (config.request_drafts_dir / f"{draft_id}.json").exists()
-    assert any(call[0] == "views.update" for call in calls)
+    assert any(call[0] == "slack_upload_file_to_thread" for call in calls)
     assert any(call[0] == "chat.postMessage" and call[2] and call[2].get("thread_ts") == "173.456" for call in calls)
 
 

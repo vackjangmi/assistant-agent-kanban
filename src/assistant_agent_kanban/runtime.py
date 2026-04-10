@@ -422,12 +422,35 @@ class RuntimeSupervisor:
         return {"status": "noop"}
 
     async def _handle_slack_request_intake_submission(self, payload: dict[str, Any], view: dict[str, Any]) -> dict[str, object]:
-        return {
-            "response_action": "errors",
-            "errors": {
-                "request_intake_assistant_prompt": "Use the thread review message to request another draft or submit the final request."
-            },
-        }
+        metadata = self._load_slack_modal_metadata(view)
+        draft_id = metadata.get("draft_id") if isinstance(metadata, dict) else None
+        if not isinstance(draft_id, str) or not draft_id:
+            return {"status": "error", "message": "Slack modal is missing request draft context."}
+        store = RequestDraftStore(self.config)
+        try:
+            draft = store.load(draft_id)
+        except FileNotFoundError:
+            return {"status": "error", "message": "Request draft no longer exists."}
+        except ValueError as exc:
+            return {"status": "error", "message": str(exc)}
+        draft = self._update_slack_request_intake_draft_from_view(store, draft, view)
+        message = (draft.request_draft_input or "").strip()
+        if not message:
+            return {
+                "response_action": "errors",
+                "errors": {
+                    "request_intake_assistant_prompt": "Assistant request is required before posting a draft to the thread."
+                },
+            }
+        result = await asyncio.to_thread(self._generate_slack_request_draft, payload, draft)
+        if result.get("status") == "error":
+            return {
+                "response_action": "errors",
+                "errors": {
+                    "request_intake_assistant_prompt": str(result.get("message") or "Failed to post draft to thread.")
+                },
+            }
+        return {"status": "success"}
 
     def _open_slack_request_intake_modal(self, payload: dict[str, Any]) -> dict[str, object]:
         trigger_id = payload.get("trigger_id")
@@ -546,6 +569,9 @@ class RuntimeSupervisor:
             },
         )
         self._post_slack_request_draft_review(updated, reply=result.reply, field_updates=result.field_updates)
+        view = payload.get("view")
+        if not isinstance(view, dict) or not isinstance(view.get("id"), str) or not view.get("id"):
+            return {"status": "success"}
         return self._update_slack_request_intake_view(payload, updated)
 
     def _build_slack_request_intake_view(self, draft: StoredRequestDraft) -> dict[str, object]:
@@ -594,19 +620,6 @@ class RuntimeSupervisor:
                     "initial_value": draft.request_draft_input,
                 },
             },
-            {
-                "type": "actions",
-                "block_id": "request_intake_actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "Post draft to thread"},
-                        "style": "primary",
-                        "action_id": "request_intake_generate_draft",
-                        "value": json.dumps({"draft_id": draft.draft_id}),
-                    }
-                ],
-            },
         ]
         if draft.transcript:
             draft_count = sum(1 for entry in draft.transcript if entry.role == "assistant")
@@ -636,6 +649,7 @@ class RuntimeSupervisor:
             "callback_id": "request_intake_modal",
             "private_metadata": metadata,
             "title": {"type": "plain_text", "text": "Draft request"},
+            "submit": {"type": "plain_text", "text": "Post draft to thread"},
             "close": {"type": "plain_text", "text": "Cancel"},
             "blocks": blocks,
         }

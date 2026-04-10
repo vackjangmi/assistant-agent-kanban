@@ -274,7 +274,7 @@ def test_slack_request_draft_flow_posts_thread_review_without_creating_task_befo
         target_repo=str(config.repo_root),
     )
 
-    assert generate_result == {"status": "success", "clear_buttons": False}
+    assert generate_result == {"status": "success"}
     after = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
     assert after == before
 
@@ -484,8 +484,7 @@ def _open_slack_request_modal(runtime, calls):
     open_call = cast(dict[str, Any], next(body for method, _token, body in calls if method == "views.open"))
     assert open_call is not None
     assert open_call["view"]["title"]["text"] == "Draft request"
-    assert "submit" not in open_call["view"]
-    assert open_call["view"]["blocks"][4]["elements"][0]["text"]["text"] == "Post draft to thread"
+    assert open_call["view"]["submit"]["text"] == "Post draft to thread"
     return json.loads(open_call["view"]["private_metadata"])["draft_id"]
 
 
@@ -493,11 +492,10 @@ def _generate_slack_request_draft(runtime, draft_id, *, prompt, target_repo):
     return asyncio.run(
         runtime.handle_slack_interactive_action(
             {
-                "type": "block_actions",
-                "actions": [{"action_id": "request_intake_generate_draft", "value": json.dumps({"draft_id": draft_id})}],
+                "type": "view_submission",
+                "user": {"id": "U123"},
                 "view": {
-                    "id": "V123",
-                    "hash": "hash-1",
+                    "callback_id": "request_intake_modal",
                     "private_metadata": json.dumps({"draft_id": draft_id}),
                     "state": _slack_request_intake_state(prompt=prompt, target_repo=target_repo),
                 },
