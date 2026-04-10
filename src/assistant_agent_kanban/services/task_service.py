@@ -110,6 +110,39 @@ class TaskService:
             agent_status=derive_agent_status(task.metadata, task.state),
         )
 
+    def build_persisted_changed_files_markdown_artifact(self, task: TaskContext) -> tuple[str, bytes] | None:
+        patch_path = self._resolve_patch_path(task.metadata.task_id, task.metadata.integration.patch_path)
+        if patch_path is None or not patch_path.exists():
+            return None
+        patch_text = patch_path.read_text()
+        changed_files = self._parse_patch(patch_text)
+        lines = [
+            f"# Changed Files ({len(changed_files)})",
+            "",
+            f"Patch source: `{patch_path.name}`",
+            "",
+        ]
+        if not changed_files:
+            lines.append("No changed files found.")
+        else:
+            for entry in changed_files:
+                summary = entry.summary
+                stats = f"+{summary.additions} / -{summary.deletions}, hunks={summary.hunk_count}"
+                if summary.is_binary:
+                    stats += ", binary"
+                lines.append(f"- `{summary.display_path}` — {summary.change_type} ({stats})")
+                if summary.previous_path and summary.previous_path != summary.path:
+                    lines.append(f"  - previous: `{summary.previous_path}`")
+        lines.append("")
+        filename = f"CHANGED-FILES-{task.metadata.cycle:03d}.md"
+        return filename, "\n".join(lines).encode("utf-8")
+
+    def build_persisted_patch_artifact(self, task: TaskContext) -> tuple[str, bytes] | None:
+        patch_path = self._resolve_patch_path(task.metadata.task_id, task.metadata.integration.patch_path)
+        if patch_path is None or not patch_path.exists():
+            return None
+        return patch_path.name, patch_path.read_bytes()
+
     def get_logs(self, task_id: str) -> TaskLogs:
         try:
             task = self.scanner.find_task(task_id)

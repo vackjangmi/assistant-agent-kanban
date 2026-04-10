@@ -10,6 +10,7 @@ from .config import AppConfig
 from .enums import TaskState
 from .metadata_store import MetadataStore
 from .models import TaskContext
+from .scanner import KanbanScanner
 from .slack_api import slack_api_call, slack_error_message, slack_upload_file_to_thread
 
 
@@ -349,62 +350,88 @@ class SlackMilestoneNotifier:
                 extra={"task_id": context.metadata.task_id, "milestone": milestone},
             )
             return
-        artifact_path = self._artifact_path_for_milestone(context, milestone=milestone)
-        if artifact_path is None or not artifact_path.exists() or artifact_path.suffix.lower() != ".md":
+        uploads = self._artifact_uploads_for_milestone(context, milestone=milestone)
+        if not uploads:
             logger.info(
                 "slack markdown upload skipped: no eligible artifact",
                 extra={
                     "task_id": context.metadata.task_id,
                     "milestone": milestone,
-                    "artifact": str(artifact_path) if artifact_path is not None else None,
+                    "artifact": None,
                 },
             )
             return
-        try:
-            content = artifact_path.read_bytes()
-        except OSError as exc:
-            logger.warning(
-                "slack markdown artifact read failed",
-                extra={
-                    "task_id": context.metadata.task_id,
-                    "milestone": milestone,
-                    "artifact": str(artifact_path),
-                    "error": str(exc),
-                },
+        changed = False
+        for filename, content in uploads:
+            digest = hashlib.sha256(content).hexdigest()
+            if context.metadata.slack.uploaded_markdown.get(filename) == digest:
+                logger.info(
+                    "slack markdown upload skipped: unchanged artifact",
+                    extra={
+                        "task_id": context.metadata.task_id,
+                        "milestone": milestone,
+                        "artifact": filename,
+                    },
+                )
+                continue
+            upload = slack_upload_file_to_thread(
+                token=token,
+                channel_id=channel,
+                thread_ts=thread_ts,
+                filename=filename,
+                title=filename,
+                content=content,
             )
-            return
-        digest = hashlib.sha256(content).hexdigest()
-        if context.metadata.slack.uploaded_markdown.get(artifact_path.name) == digest:
-            logger.info(
-                "slack markdown upload skipped: unchanged artifact",
-                extra={
-                    "task_id": context.metadata.task_id,
-                    "milestone": milestone,
-                    "artifact": artifact_path.name,
-                },
-            )
-            return
-        upload = slack_upload_file_to_thread(
-            token=token,
-            channel_id=channel,
-            thread_ts=thread_ts,
-            filename=artifact_path.name,
-            title=artifact_path.name,
-            content=content,
+            if not upload.get("ok"):
+                logger.warning(
+                    "slack markdown upload failed: %s",
+                    slack_error_message(upload, fallback="Slack file upload failed."),
+                    extra={
+                        "task_id": context.metadata.task_id,
+                        "milestone": milestone,
+                        "artifact": filename,
+                    },
+                )
+                continue
+            context.metadata.slack.uploaded_markdown[filename] = digest
+            changed = True
+        if changed:
+            self.metadata_store.save(context.task_dir, context.metadata)
+
+    def _artifact_uploads_for_milestone(self, context: TaskContext, *, milestone: str) -> list[tuple[str, bytes]]:
+        uploads: list[tuple[str, bytes]] = []
+        artifact_path = self._artifact_path_for_milestone(context, milestone=milestone)
+        if artifact_path is not None and artifact_path.exists() and artifact_path.is_file():
+            try:
+                uploads.append((artifact_path.name, artifact_path.read_bytes()))
+            except OSError as exc:
+                logger.warning(
+                    "slack markdown artifact read failed",
+                    extra={
+                        "task_id": context.metadata.task_id,
+                        "milestone": milestone,
+                        "artifact": str(artifact_path),
+                        "error": str(exc),
+                    },
+                )
+        if milestone != "Human verification started":
+            return uploads
+        from .services.task_service import TaskService
+
+        task_service = TaskService(
+            KanbanScanner(self.config, self.metadata_store),
+            self.config.runs_dir,
+            self.config.kanban_root,
+            self.config.archive_runs_dir,
+            metadata_store=self.metadata_store,
         )
-        if not upload.get("ok"):
-            logger.warning(
-                "slack markdown upload failed: %s",
-                slack_error_message(upload, fallback="Slack file upload failed."),
-                extra={
-                    "task_id": context.metadata.task_id,
-                    "milestone": milestone,
-                    "artifact": artifact_path.name,
-                },
-            )
-            return
-        context.metadata.slack.uploaded_markdown[artifact_path.name] = digest
-        self.metadata_store.save(context.task_dir, context.metadata)
+        changed_files_artifact = task_service.build_persisted_changed_files_markdown_artifact(context)
+        if changed_files_artifact is not None:
+            uploads.append(changed_files_artifact)
+        patch_artifact = task_service.build_persisted_patch_artifact(context)
+        if patch_artifact is not None:
+            uploads.append(patch_artifact)
+        return uploads
 
     def _artifact_path_for_milestone(self, context: TaskContext, *, milestone: str) -> Path | None:
         task_dir = context.task_dir

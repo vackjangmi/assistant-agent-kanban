@@ -442,6 +442,115 @@ def test_slack_notifier_adds_human_verification_action_buttons(configured_paths,
     assert elements[1]["action_id"] == "reject_verification"
 
 
+def test_slack_notifier_uploads_verification_note_changed_files_and_patch(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-human-artifact-task")
+    scanner = KanbanScanner(config)
+    task = scanner.scan()[0]
+    task.metadata.cycle = 1
+    task.metadata.state = TaskState.HUMAN_VERIFYING
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    note_path = task.task_dir / "HUMAN-VERIFY-001.md"
+    note_path.write_text("# Human Verification\n\nVerdict: IN_PROGRESS\n")
+    task.metadata.human_verification.note_path = "HUMAN-VERIFY-001.md"
+    runs_dir = config.runs_dir / task.metadata.task_id
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    patch_path = runs_dir / "review-001.patch"
+    patch_path.write_text(
+        "diff --git a/app.txt b/app.txt\n"
+        "index ce01362..2ee250a 100644\n"
+        "--- a/app.txt\n"
+        "+++ b/app.txt\n"
+        "@@ -1 +1 @@\n"
+        "-hello\n"
+        "+review me\n"
+    )
+    task.metadata.integration.patch_path = str(patch_path)
+    MetadataStore().save(task.task_dir, task.metadata)
+    verifying = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.HUMAN_VERIFYING)
+    verifying.metadata.state = TaskState.HUMAN_VERIFYING
+    uploads: list[tuple[str, bytes]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append((filename, content))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
+
+    assert [name for name, _content in uploads] == [
+        "HUMAN-VERIFY-001.md",
+        "CHANGED-FILES-001.md",
+        "review-001.patch",
+    ]
+    changed_files_content = dict(uploads)["CHANGED-FILES-001.md"].decode("utf-8")
+    assert "# Changed Files (1)" in changed_files_content
+    assert "`app.txt` — modified (+1 / -1, hunks=1)" in changed_files_content
+    assert dict(uploads)["review-001.patch"].decode("utf-8").startswith("diff --git a/app.txt b/app.txt")
+
+
+def test_slack_notifier_deduplicates_verification_bundle_uploads(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-human-dedupe-task")
+    scanner = KanbanScanner(config)
+    task = scanner.scan()[0]
+    task.metadata.cycle = 1
+    task.metadata.state = TaskState.HUMAN_VERIFYING
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    (task.task_dir / "HUMAN-VERIFY-001.md").write_text("# Human Verification\n")
+    task.metadata.human_verification.note_path = "HUMAN-VERIFY-001.md"
+    runs_dir = config.runs_dir / task.metadata.task_id
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    patch_path = runs_dir / "review-001.patch"
+    patch_path.write_text(
+        "diff --git a/app.txt b/app.txt\n"
+        "index ce01362..2ee250a 100644\n"
+        "--- a/app.txt\n"
+        "+++ b/app.txt\n"
+        "@@ -1 +1 @@\n"
+        "-hello\n"
+        "+review me\n"
+    )
+    task.metadata.integration.patch_path = str(patch_path)
+    MetadataStore().save(task.task_dir, task.metadata)
+    verifying = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.HUMAN_VERIFYING)
+    verifying.metadata.state = TaskState.HUMAN_VERIFYING
+    uploads: list[str] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append(filename)
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    notifier = SlackMilestoneNotifier(config, MetadataStore())
+    notifier.notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
+    notifier.notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
+
+    assert uploads == [
+        "HUMAN-VERIFY-001.md",
+        "CHANGED-FILES-001.md",
+        "review-001.patch",
+    ]
+
+
 def test_slack_notifier_adds_start_verification_button(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     config.slack.enabled = True
