@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any, cast
 
+from assistant_agent_kanban.api.app import create_app
 from assistant_agent_kanban.config import AppConfig
+from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.request_draft_store import RequestDraftStore
 from assistant_agent_kanban.slack_runtime import SlackRuntime
+
+from .conftest import FakeAdapter, create_request_task
 
 
 def test_slack_runtime_start_receive_test_requires_mentions(tmp_path):
@@ -85,7 +91,7 @@ def test_slack_runtime_handles_block_actions(tmp_path):
     config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
     seen: list[dict[str, Any]] = []
 
-    async def fake_handler(payload: dict[str, Any]) -> str | None:
+    async def fake_handler(payload: dict[str, Any]) -> dict[str, object] | None:
         seen.append(payload)
         return None
 
@@ -184,3 +190,347 @@ def test_slack_runtime_clears_buttons_after_successful_block_action(tmp_path, mo
     assert payload["ts"] == "173.789"
     assert payload["text"] == "Original message"
     assert payload["blocks"] == []
+
+
+def test_slack_runtime_routes_app_mentions_to_handler(tmp_path):
+    config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
+    seen: list[tuple[dict[str, Any], dict[str, Any]]] = []
+
+    async def fake_mention_handler(inner_payload: dict[str, Any], event: dict[str, Any]) -> None:
+        seen.append((inner_payload, event))
+
+    runtime = SlackRuntime(config, EventBus(), mention_handler=fake_mention_handler)
+
+    async def scenario():
+        await runtime._handle_socket_payload(
+            {
+                "type": "events_api",
+                "payload": {
+                    "team_id": "T123",
+                    "event": {"type": "app_mention", "channel": "C123", "ts": "173.456", "text": "<@U1> hi"},
+                },
+            }
+        )
+
+    asyncio.run(scenario())
+
+    assert seen
+    assert seen[0][0]["team_id"] == "T123"
+    assert seen[0][1]["channel"] == "C123"
+
+
+def test_slack_runtime_returns_modal_error_ack_payload(tmp_path):
+    config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
+
+    async def fake_handler(payload: dict[str, Any]) -> dict[str, object] | None:
+        return {"response_action": "errors", "errors": {"request_intake_assistant_prompt": "Generate a draft first."}}
+
+    runtime = SlackRuntime(config, EventBus(), action_handler=fake_handler)
+
+    result = asyncio.run(
+        runtime._handle_socket_payload(
+            {
+                "type": "interactive",
+                "payload": {
+                    "type": "view_submission",
+                    "view": {"callback_id": "request_intake_modal"},
+                },
+            }
+        )
+    )
+
+    assert result == {"response_action": "errors", "errors": {"request_intake_assistant_prompt": "Generate a draft first."}}
+
+
+def test_slack_request_draft_flow_posts_thread_review_without_creating_task_before_submit(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    create_request_task(config, "seed-task")
+    runtime, calls = _build_slack_request_runtime(
+        config,
+        monkeypatch,
+        draft_replies=[
+            {
+                "reply": "Here is a tighter request draft for review.",
+                "field_updates": {
+                    "title": "Slack drafted request",
+                    "goal": "Keep drafting in the Slack thread until final submit.",
+                },
+            }
+        ],
+    )
+
+    asyncio.run(runtime.handle_slack_app_mention({"team_id": "T123"}, {"channel": "C123", "ts": "173.456", "text": "<@U1> help"}))
+    intro_message = cast(dict[str, Any], _latest_call_body(calls, "chat.postMessage"))
+    assert intro_message is not None
+    assert intro_message["text"] == "Ask the request-writing assistant to draft a request in this Slack thread."
+    assert intro_message["blocks"][1]["elements"][0]["text"]["text"] == "Draft request with assistant"
+
+    draft_id = _open_slack_request_modal(runtime, calls)
+    before = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
+    generate_result = _generate_slack_request_draft(
+        runtime,
+        draft_id,
+        title="Slack drafted request",
+        goal="Original goal",
+        prompt="Please tighten this request.",
+        target_repo=str(config.repo_root),
+    )
+
+    assert generate_result == {"status": "success", "clear_buttons": False}
+    after = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
+    assert after == before
+
+    review_post = cast(
+        dict[str, Any],
+        next(
+            body
+            for method, _token, body in calls
+            if method == "chat.postMessage" and body is not None and body.get("text") == "Assistant draft 1 ready for review."
+        ),
+    )
+    assert review_post["channel"] == "C123"
+    assert review_post["thread_ts"] == "173.456"
+    assert review_post["blocks"][0]["text"]["text"] == "📝 *Assistant draft 1 ready for review*"
+    assert "Submit final request" in review_post["blocks"][-1]["elements"][0]["text"]
+
+    draft = RequestDraftStore(config).load(draft_id)
+    assert [entry.role for entry in draft.transcript] == ["user", "assistant"]
+
+
+def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    create_request_task(config, "seed-task")
+    runtime, calls = _build_slack_request_runtime(
+        config,
+        monkeypatch,
+        draft_replies=[
+            {
+                "reply": "Draft 1 is ready.",
+                "field_updates": {
+                    "title": "Slack drafted request",
+                    "goal": "First draft goal.",
+                },
+            },
+            {
+                "reply": "Draft 2 reflects the revision.",
+                "field_updates": {
+                    "goal": "Revised goal for the final submission.",
+                    "base_branch": "main",
+                },
+            },
+        ],
+    )
+
+    draft_id = _open_slack_request_modal(runtime, calls)
+    _generate_slack_request_draft(
+        runtime,
+        draft_id,
+        title="Slack drafted request",
+        goal="Original goal",
+        prompt="Please draft this request.",
+        target_repo=str(config.repo_root),
+    )
+    _generate_slack_request_draft(
+        runtime,
+        draft_id,
+        title="Slack drafted request",
+        goal="Revised goal for the final submission.",
+        prompt="Revise it to be more specific.",
+        target_repo=str(config.repo_root),
+    )
+
+    draft = RequestDraftStore(config).load(draft_id)
+    assert len(draft.transcript) == 4
+    assert sum(1 for entry in draft.transcript if entry.role == "assistant") == 2
+    assert len([body for method, _token, body in calls if method == "chat.postMessage" and body and str(body.get("text", "")).startswith("Assistant draft")]) == 2
+
+    submit_result = _submit_slack_request(runtime, draft_id, title="Slack drafted request", goal="Revised goal for the final submission.", target_repo=str(config.repo_root))
+    assert submit_result == {"status": "success"}
+    assert not RequestDraftStore(config).exists(draft_id)
+
+    tasks = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
+    assert len(tasks) == 2
+    request_markdowns = [(path / "REQUEST.md").read_text() for path in config.state_dir(TaskState.REQUESTS).iterdir()]
+    assert any("Revised goal for the final submission." in markdown for markdown in request_markdowns)
+
+    parent_update = cast(
+        dict[str, Any],
+        next(
+            body
+            for method, _token, body in calls
+            if method == "chat.update" and body is not None and body.get("ts") == "173.456"
+        ),
+    )
+    assert parent_update["channel"] == "C123"
+    assert parent_update["blocks"][0]["text"]["text"] == "🧩 Slack drafted request"
+    assert "Task opened in Slack thread" in parent_update["blocks"][1]["text"]["text"]
+
+
+def test_slack_request_draft_flow_posts_summary_in_thread_when_parent_update_fails(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    create_request_task(config, "seed-task")
+    runtime, calls = _build_slack_request_runtime(
+        config,
+        monkeypatch,
+        draft_replies=[
+            {
+                "reply": "Fallback draft is ready.",
+                "field_updates": {
+                    "title": "Slack fallback request",
+                    "goal": "Fallback goal.",
+                },
+            }
+        ],
+        update_parent_ok=False,
+    )
+
+    draft_id = _open_slack_request_modal(runtime, calls)
+    _generate_slack_request_draft(
+        runtime,
+        draft_id,
+        title="Slack fallback request",
+        goal="Fallback goal.",
+        prompt="Please draft this request.",
+        target_repo=str(config.repo_root),
+    )
+
+    submit_result = _submit_slack_request(runtime, draft_id, title="Slack fallback request", goal="Fallback goal.", target_repo=str(config.repo_root))
+    assert submit_result == {"status": "success"}
+
+    assert any(method == "chat.update" and body is not None and body.get("ts") == "173.456" for method, _token, body in calls)
+    fallback_post = cast(
+        dict[str, Any],
+        next(
+            body
+            for method, _token, body in calls
+            if method == "chat.postMessage"
+            and body is not None
+            and body.get("thread_ts") == "173.456"
+            and _is_parent_summary_post(body)
+        ),
+    )
+    assert fallback_post["blocks"][0]["text"]["text"] == "🧩 Slack fallback request"
+
+
+def _build_slack_request_runtime(config, monkeypatch, *, draft_replies, update_parent_ok=True):
+    config.runtime.auto_dispatch = False
+    config.slack.bot_token = "xoxb-test"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+    replies = list(draft_replies)
+    post_counter = {"value": 0}
+
+    class FakeDraftResult:
+        def __init__(self, reply, field_updates):
+            self.reply = reply
+            self.field_updates = field_updates
+
+    def fake_draft_request(*, config, adapter_registry, payload):
+        response = replies.pop(0)
+        return FakeDraftResult(response["reply"], response["field_updates"])
+
+    def fake_call(method: str, *, token: str, body=None):
+        calls.append((method, token, body))
+        if method in {"views.open", "views.update"}:
+            return {"ok": True}
+        if method == "chat.update":
+            return {"ok": update_parent_ok}
+        if method == "chat.postMessage":
+            post_counter["value"] += 1
+            return {"ok": True, "channel": body.get("channel") if isinstance(body, dict) else None, "ts": f"msg-{post_counter['value']}"}
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.runtime.draft_request", fake_draft_request)
+    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+    return runtime, calls
+
+
+def _open_slack_request_modal(runtime, calls):
+    result = asyncio.run(
+        runtime.handle_slack_interactive_action(
+            {
+                "type": "block_actions",
+                "trigger_id": "trigger-1",
+                "user": {"id": "U123"},
+                "team": {"id": "T123"},
+                "channel": {"id": "C123"},
+                "message": {"ts": "173.456", "thread_ts": "173.456"},
+                "actions": [{"action_id": "open_request_intake", "value": '{"action":"open_request_intake"}'}],
+            }
+        )
+    )
+    assert result == {"status": "opened_modal", "clear_buttons": False}
+    open_call = cast(dict[str, Any], next(body for method, _token, body in calls if method == "views.open"))
+    assert open_call is not None
+    assert open_call["view"]["title"]["text"] == "Draft request"
+    assert open_call["view"]["submit"]["text"] == "Submit final request"
+    assert open_call["view"]["blocks"][6]["elements"][0]["text"]["text"] == "Post draft to thread"
+    return json.loads(open_call["view"]["private_metadata"])["draft_id"]
+
+
+def _generate_slack_request_draft(runtime, draft_id, *, title, goal, prompt, target_repo):
+    return asyncio.run(
+        runtime.handle_slack_interactive_action(
+            {
+                "type": "block_actions",
+                "actions": [{"action_id": "request_intake_generate_draft", "value": json.dumps({"draft_id": draft_id})}],
+                "view": {
+                    "id": "V123",
+                    "hash": "hash-1",
+                    "private_metadata": json.dumps({"draft_id": draft_id}),
+                    "state": _slack_request_intake_state(title=title, goal=goal, prompt=prompt, target_repo=target_repo),
+                },
+            }
+        )
+    )
+
+
+def _submit_slack_request(runtime, draft_id, *, title, goal, target_repo):
+    return asyncio.run(
+        runtime.handle_slack_interactive_action(
+            {
+                "type": "view_submission",
+                "user": {"id": "U123"},
+                "view": {
+                    "callback_id": "request_intake_modal",
+                    "private_metadata": json.dumps({"draft_id": draft_id}),
+                    "state": _slack_request_intake_state(title=title, goal=goal, prompt="", target_repo=target_repo),
+                },
+            }
+        )
+    )
+
+
+def _slack_request_intake_state(*, title, goal, prompt, target_repo):
+    return {
+        "values": {
+            "request_intake_project": {
+                "project_select": {"selected_option": {"value": target_repo}},
+            },
+            "request_intake_base_branch": {
+                "base_branch_input": {"value": "main"},
+            },
+            "request_intake_title": {
+                "title_input": {"value": title},
+            },
+            "request_intake_goal": {
+                "goal_input": {"value": goal},
+            },
+            "request_intake_assistant_prompt": {
+                "assistant_prompt_input": {"value": prompt},
+            },
+        }
+    }
+
+
+def _latest_call_body(calls, method_name):
+    for method, _token, body in reversed(calls):
+        if method == method_name:
+            return body
+    return None
+
+
+def _is_parent_summary_post(body: dict[str, object]) -> bool:
+    blocks = body.get("blocks")
+    return isinstance(blocks, list) and bool(blocks) and isinstance(blocks[0], dict) and blocks[0].get("type") == "header"

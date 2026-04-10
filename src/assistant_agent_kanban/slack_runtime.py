@@ -43,10 +43,12 @@ class SlackRuntime:
         config: AppConfig,
         events: EventBus,
         action_handler: Callable[[dict[str, Any]], Awaitable[dict[str, object] | None]] | None = None,
+        mention_handler: Callable[[dict[str, Any], dict[str, Any]], Awaitable[None]] | None = None,
     ) -> None:
         self.config = config
         self.events = events
         self.action_handler = action_handler
+        self.mention_handler = mention_handler
         self._listener_task: asyncio.Task[None] | None = None
         self._listener_stop = asyncio.Event()
         self._lock = asyncio.Lock()
@@ -170,39 +172,45 @@ class SlackRuntime:
                 if isinstance(raw_message, bytes):
                     raw_message = raw_message.decode("utf-8")
                 payload = json.loads(raw_message)
-                await self._ack_envelope(websocket, payload)
-                await self._handle_socket_payload(payload)
+                ack_payload = await self._handle_socket_payload(payload)
+                await self._ack_envelope(websocket, payload, ack_payload)
         self._listener_connected = False
         await self._publish_status_event()
 
-    async def _ack_envelope(self, websocket: Any, payload: dict[str, Any]) -> None:
+    async def _ack_envelope(self, websocket: Any, payload: dict[str, Any], ack_payload: dict[str, object] | None = None) -> None:
         envelope_id = payload.get("envelope_id")
         if not envelope_id:
             return
-        await websocket.send(json.dumps({"envelope_id": envelope_id}))
+        response: dict[str, object] = {"envelope_id": envelope_id}
+        if isinstance(ack_payload, dict):
+            response.update(ack_payload)
+        await websocket.send(json.dumps(response))
 
-    async def _handle_socket_payload(self, payload: dict[str, Any]) -> None:
+    async def _handle_socket_payload(self, payload: dict[str, Any]) -> dict[str, object] | None:
         payload_type = payload.get("type")
         if payload_type == "interactive":
             inner_payload = payload.get("payload") or {}
             if inner_payload.get("type") == "block_actions":
                 await self._handle_block_actions(inner_payload)
             elif inner_payload.get("type") == "view_submission":
-                await self._handle_view_submission(inner_payload)
-            return
+                return await self._handle_view_submission(inner_payload)
+            return None
         if payload_type != "events_api":
-            return
+            return None
         inner_payload = payload.get("payload") or {}
         event = inner_payload.get("event") or {}
         event_type = event.get("type")
         if not isinstance(event_type, str):
-            return
+            return None
         self._last_event_type = event_type
         self._last_event_at = utc_now().isoformat()
         self._last_event_channel = event.get("channel") if isinstance(event.get("channel"), str) else None
         if event_type == "app_mention":
             await self._maybe_match_receive_test(inner_payload, event)
+            if self.mention_handler is not None:
+                await self.mention_handler(inner_payload, event)
         await self._publish_status_event()
+        return None
 
     async def _handle_block_actions(self, payload: dict[str, Any]) -> None:
         if self.action_handler is None:
@@ -222,21 +230,24 @@ class SlackRuntime:
         if result.get("clear_buttons"):
             await asyncio.to_thread(self._clear_interaction_buttons, payload)
 
-    async def _handle_view_submission(self, payload: dict[str, Any]) -> None:
+    async def _handle_view_submission(self, payload: dict[str, Any]) -> dict[str, object] | None:
         if self.action_handler is None:
-            return
+            return None
         try:
             result = await self.action_handler(payload)
         except Exception as exc:
             view = payload.get("view")
             callback_id = view.get("callback_id") if isinstance(view, dict) else None
             logger.warning("slack modal submission failed unexpectedly: %s", exc, extra={"callback_id": callback_id})
-            return
+            return None
+        if isinstance(result, dict) and result.get("response_action"):
+            return result
         if isinstance(result, dict) and result.get("status") == "error":
             message = result.get("message")
             view = payload.get("view")
             callback_id = view.get("callback_id") if isinstance(view, dict) else None
             logger.warning("slack modal submission failed: %s", message, extra={"callback_id": callback_id})
+        return None
 
     def _post_interaction_status(self, payload: dict[str, Any], text: str) -> None:
         token = self.config.slack.bot_token
