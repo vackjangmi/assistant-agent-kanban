@@ -130,7 +130,12 @@ class RuntimeSupervisor:
         self._stop_event.set()
         if self.slack_runtime is not None:
             await self.slack_runtime.stop()
-        tasks = list(self._background_tasks)
+        current_loop = asyncio.get_running_loop()
+        tasks = [
+            task
+            for task in self._background_tasks
+            if not task.done() and getattr(task, "get_loop", lambda: current_loop)() is current_loop
+        ]
         self._background_tasks.clear()
         for role_tasks in self._role_tasks.values():
             tasks.extend(role_tasks)
@@ -442,14 +447,9 @@ class RuntimeSupervisor:
                     "request_intake_assistant_prompt": "Assistant request is required before posting a draft to the thread."
                 },
             }
-        result = await asyncio.to_thread(self._generate_slack_request_draft, payload, draft)
-        if result.get("status") == "error":
-            return {
-                "response_action": "errors",
-                "errors": {
-                    "request_intake_assistant_prompt": str(result.get("message") or "Failed to post draft to thread.")
-                },
-            }
+        self._background_tasks.append(
+            asyncio.create_task(self._run_slack_request_draft_submission(draft.draft_id), name=f"fs-kanban-slack-request-draft-{draft.draft_id}")
+        )
         return {"status": "success"}
 
     def _open_slack_request_intake_modal(self, payload: dict[str, Any]) -> dict[str, object]:
@@ -542,9 +542,20 @@ class RuntimeSupervisor:
         return {"status": "success", "clear_buttons": False}
 
     def _generate_slack_request_draft(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
+        try:
+            updated, result = self._generate_slack_request_draft_core(draft)
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+        self._post_slack_request_draft_review(updated, reply=result.reply, field_updates=cast(Mapping[str, object], result.field_updates))
+        view = payload.get("view")
+        if not isinstance(view, dict) or not isinstance(view.get("id"), str) or not view.get("id"):
+            return {"status": "success"}
+        return self._update_slack_request_intake_view(payload, updated)
+
+    def _generate_slack_request_draft_core(self, draft: StoredRequestDraft) -> tuple[StoredRequestDraft, object]:
         message = (draft.request_draft_input or "").strip()
         if not message:
-            return {"status": "error", "message": "Draft prompt is required before generating a request draft."}
+            raise ValueError("Draft prompt is required before generating a request draft.")
         result = draft_request(
             config=self.config,
             adapter_registry=cast(dict[str, AssistantAdapter], self.adapter_registry),
@@ -568,11 +579,7 @@ class RuntimeSupervisor:
                 ],
             },
         )
-        self._post_slack_request_draft_review(updated, reply=result.reply, field_updates=result.field_updates)
-        view = payload.get("view")
-        if not isinstance(view, dict) or not isinstance(view.get("id"), str) or not view.get("id"):
-            return {"status": "success"}
-        return self._update_slack_request_intake_view(payload, updated)
+        return updated, result
 
     def _build_slack_request_intake_view(self, draft: StoredRequestDraft) -> dict[str, object]:
         project_options = self._slack_recent_projects()
@@ -653,6 +660,112 @@ class RuntimeSupervisor:
             "close": {"type": "plain_text", "text": "Cancel"},
             "blocks": blocks,
         }
+
+    async def _run_slack_request_draft_submission(self, draft_id: str) -> None:
+        store = RequestDraftStore(self.config)
+        try:
+            draft = store.load(draft_id)
+        except (FileNotFoundError, ValueError):
+            return
+        placeholder_ts = await asyncio.to_thread(self._post_slack_request_draft_placeholder, draft)
+        try:
+            updated, result = await asyncio.to_thread(self._generate_slack_request_draft_core, draft)
+        except Exception as exc:
+            await asyncio.to_thread(self._update_slack_request_draft_placeholder_error, draft, placeholder_ts, str(exc))
+            return
+        await asyncio.to_thread(
+            self._finalize_slack_request_draft_placeholder,
+            updated,
+            placeholder_ts,
+            result.reply,
+            cast(Mapping[str, object], result.field_updates),
+        )
+
+    def _post_slack_request_draft_placeholder(self, draft: StoredRequestDraft) -> str | None:
+        token = self.config.slack.bot_token
+        channel_id = draft.slack_channel_id or None
+        thread_ts = draft.slack_thread_ts or None
+        if not token or not channel_id or not thread_ts:
+            return None
+        response = slack_api_call(
+            "chat.postMessage",
+            token=token,
+            body={
+                "channel": channel_id,
+                "thread_ts": thread_ts,
+                "text": "Writing request draft…",
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "✍️ *응답 작성중…*\nThe request-writing assistant is preparing a draft for this thread."},
+                    }
+                ],
+            },
+        )
+        ts = response.get("ts")
+        return ts if isinstance(ts, str) and ts else None
+
+    def _update_slack_request_draft_placeholder_error(self, draft: StoredRequestDraft, message_ts: str | None, error: str) -> None:
+        token = self.config.slack.bot_token
+        channel_id = draft.slack_channel_id or None
+        if not token or not channel_id or not isinstance(message_ts, str) or not message_ts:
+            return
+        slack_api_call(
+            "chat.update",
+            token=token,
+            body={
+                "channel": channel_id,
+                "ts": message_ts,
+                "text": "Request draft failed.",
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": f"⚠️ *Draft generation failed*\n{error}"[:2900]},
+                    }
+                ],
+            },
+        )
+
+    def _finalize_slack_request_draft_placeholder(
+        self,
+        draft: StoredRequestDraft,
+        message_ts: str | None,
+        reply: str,
+        field_updates: Mapping[str, object],
+    ) -> None:
+        token = self.config.slack.bot_token
+        channel_id = draft.slack_channel_id or None
+        if not token or not channel_id or not isinstance(message_ts, str) or not message_ts:
+            self._post_slack_request_draft_review(draft, reply=reply, field_updates=field_updates)
+            return
+        draft_number = sum(1 for entry in draft.transcript if entry.role == "assistant")
+        filename = f"REQUEST-DRAFT-{draft_number:03d}.md"
+        draft_markdown = self._render_slack_request_preview_markdown(draft)
+        upload_result = slack_upload_file_to_thread(
+            token=token,
+            channel_id=channel_id,
+            thread_ts=draft.slack_thread_ts or message_ts,
+            filename=filename,
+            title=filename,
+            content=draft_markdown.encode("utf-8"),
+        )
+        slack_api_call(
+            "chat.update",
+            token=token,
+            body={
+                "channel": channel_id,
+                "ts": message_ts,
+                "text": f"Assistant draft {draft_number} ready for review.",
+                "blocks": self._build_slack_request_draft_review_blocks(
+                    draft,
+                    draft_number=draft_number,
+                    reply=reply,
+                    field_updates=field_updates,
+                    draft_filename=filename,
+                    upload_ok=bool(upload_result.get("ok")),
+                ),
+            },
+        )
 
     def _update_slack_request_intake_draft_from_view(self, store: RequestDraftStore, draft: StoredRequestDraft, view: dict[str, Any]) -> StoredRequestDraft:
         state = view.get("state")

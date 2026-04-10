@@ -278,6 +278,13 @@ def test_slack_request_draft_flow_posts_thread_review_without_creating_task_befo
     after = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
     assert after == before
 
+    placeholder_post = cast(
+        dict[str, Any],
+        next(body for method, _token, body in calls if method == "chat.postMessage" and body is not None and body.get("text") == "Writing request draft…"),
+    )
+    assert placeholder_post["thread_ts"] == "173.456"
+    assert "응답 작성중" in placeholder_post["blocks"][0]["text"]["text"]
+
     upload_call = cast(
         dict[str, Any],
         next(body for method, _token, body in calls if method == "slack_upload_file_to_thread"),
@@ -286,19 +293,18 @@ def test_slack_request_draft_flow_posts_thread_review_without_creating_task_befo
     assert upload_call["filename"] == "REQUEST-DRAFT-001.md"
     assert "Slack drafted request" in upload_call["content"]
 
-    review_post = cast(
+    review_update = cast(
         dict[str, Any],
         next(
             body
             for method, _token, body in calls
-            if method == "chat.postMessage" and body is not None and body.get("text") == "Assistant draft 1 ready for review."
+            if method == "chat.update" and body is not None and body.get("text") == "Assistant draft 1 ready for review."
         ),
     )
-    assert review_post["channel"] == "C123"
-    assert review_post["thread_ts"] == "173.456"
-    assert review_post["blocks"][0]["text"]["text"] == "📝 *Assistant draft 1 ready for review*"
-    assert review_post["blocks"][-1]["elements"][0]["text"]["text"] == "Submit final request"
-    assert review_post["blocks"][-1]["elements"][1]["text"]["text"] == "Request another draft"
+    assert review_update["channel"] == "C123"
+    assert review_update["blocks"][0]["text"]["text"] == "📝 *Assistant draft 1 ready for review*"
+    assert review_update["blocks"][-1]["elements"][0]["text"]["text"] == "Submit final request"
+    assert review_update["blocks"][-1]["elements"][1]["text"]["text"] == "Request another draft"
 
     draft = RequestDraftStore(config).load(draft_id)
     assert [entry.role for entry in draft.transcript] == ["user", "assistant"]
@@ -347,7 +353,17 @@ def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update
     draft = RequestDraftStore(config).load(draft_id)
     assert len(draft.transcript) == 4
     assert sum(1 for entry in draft.transcript if entry.role == "assistant") == 2
-    assert len([body for method, _token, body in calls if method == "chat.postMessage" and body and str(body.get("text", "")).startswith("Assistant draft")]) == 2
+    assert len([
+        body
+        for method, _token, body in calls
+        if method == "chat.update"
+        and body
+        and str(body.get("text", "")).startswith("Assistant draft")
+        and isinstance(body.get("blocks"), list)
+        and body["blocks"]
+        and isinstance(body["blocks"][-1], dict)
+        and body["blocks"][-1].get("type") == "actions"
+    ]) == 2
 
     cleared_revise_message = cast(
         dict[str, Any],
@@ -489,8 +505,8 @@ def _open_slack_request_modal(runtime, calls):
 
 
 def _generate_slack_request_draft(runtime, draft_id, *, prompt, target_repo):
-    return asyncio.run(
-        runtime.handle_slack_interactive_action(
+    async def scenario():
+        result = await runtime.handle_slack_interactive_action(
             {
                 "type": "view_submission",
                 "user": {"id": "U123"},
@@ -501,7 +517,17 @@ def _generate_slack_request_draft(runtime, draft_id, *, prompt, target_repo):
                 },
             }
         )
-    )
+        current_loop = asyncio.get_running_loop()
+        detached = [
+            task
+            for task in runtime._background_tasks
+            if task.get_name().startswith("fs-kanban-slack-request-draft-") and not task.done() and task.get_loop() is current_loop
+        ]
+        if detached:
+            await asyncio.gather(*detached)
+        return result
+
+    return asyncio.run(scenario())
 
 
 def _request_another_draft(runtime, draft_id):

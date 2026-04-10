@@ -2409,8 +2409,8 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
             },
         }
 
-        generated = asyncio.run(
-            app.state.runtime.handle_slack_interactive_action(
+        async def generate_scenario():
+            result = await app.state.runtime.handle_slack_interactive_action(
                 {
                     "type": "view_submission",
                     "user": {"id": "U123"},
@@ -2427,7 +2427,17 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
                     },
                 }
             )
-        )
+            current_loop = asyncio.get_running_loop()
+            detached = [
+                task
+                for task in app.state.runtime._background_tasks
+                if task.get_name().startswith("fs-kanban-slack-request-draft-") and not task.done() and task.get_loop() is current_loop
+            ]
+            if detached:
+                await asyncio.gather(*detached)
+            return result
+
+        generated = asyncio.run(generate_scenario())
         assert generated == {"status": "success"}
         from assistant_agent_kanban.request_draft_store import RequestDraftStore
 
