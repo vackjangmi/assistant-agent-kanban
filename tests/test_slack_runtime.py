@@ -399,19 +399,6 @@ def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update
     )
     assert cleared_submit_message["blocks"] == [{"type": "section", "text": {"type": "mrkdwn", "text": "draft"}}]
 
-    cleared_reopen_message = cast(
-        dict[str, Any],
-        next(
-            body
-            for method, _token, body in calls
-            if method == "chat.update"
-            and body is not None
-            and body.get("text") == "Reopen the request draft modal if you closed it by mistake."
-            and body.get("blocks") == []
-        ),
-    )
-    assert cleared_reopen_message["blocks"] == []
-
 
 def test_slack_request_draft_flow_posts_summary_in_thread_when_parent_update_fails(configured_paths, monkeypatch):
     config, _, _ = configured_paths
@@ -500,6 +487,7 @@ def test_slack_request_draft_flow_posts_review_message_when_placeholder_update_f
             if method == "chat.postMessage" and body is not None and body.get("text") == "Assistant draft 1 ready for review."
         ),
     )
+    assert len([body for method, _token, body in calls if method == "slack_upload_file_to_thread"]) == 1
     assert fallback_review_post["thread_ts"] == "173.456"
     assert fallback_review_post["blocks"][-1]["elements"][0]["text"]["text"] == "Submit final request"
     assert fallback_review_post["blocks"][-1]["elements"][1]["text"]["text"] == "Request another draft"
@@ -563,17 +551,6 @@ def _open_slack_request_modal(runtime, calls):
     assert open_call is not None
     assert open_call["view"]["title"]["text"] == "Draft request"
     assert open_call["view"]["submit"]["text"] == "Post draft to thread"
-    reopen_post = cast(
-        dict[str, Any],
-        next(
-            body
-            for method, _token, body in calls
-            if method == "chat.postMessage"
-            and body is not None
-            and body.get("text") == "Reopen the request draft modal if you closed it by mistake."
-        ),
-    )
-    assert reopen_post["blocks"][1]["elements"][0]["text"]["text"] == "Draft request with assistant"
     return json.loads(open_call["view"]["private_metadata"])["draft_id"]
 
 

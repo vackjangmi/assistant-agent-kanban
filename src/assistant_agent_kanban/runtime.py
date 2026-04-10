@@ -501,7 +501,6 @@ class RuntimeSupervisor:
         )
         if not response.get("ok"):
             return {"status": "error", "message": slack_error_message(response, fallback="Slack modal open failed.")}
-        self._ensure_slack_request_reopen_message(draft)
         return {"status": "opened_modal", "clear_buttons": False}
 
     def _open_existing_slack_request_intake_modal(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
@@ -521,7 +520,6 @@ class RuntimeSupervisor:
         )
         if not response.get("ok"):
             return {"status": "error", "message": slack_error_message(response, fallback="Slack modal open failed.")}
-        self._ensure_slack_request_reopen_message(draft)
         return {"status": "opened_modal", "clear_buttons": False}
 
     def _update_slack_request_intake_view(self, payload: dict[str, Any], draft: StoredRequestDraft) -> dict[str, object]:
@@ -835,7 +833,16 @@ class RuntimeSupervisor:
         )
         if response.get("ok"):
             return
-        self._post_slack_request_draft_review(draft, reply=reply, field_updates=field_updates)
+        self._post_slack_request_review_message(
+            channel_id=channel_id,
+            thread_ts=draft.slack_thread_ts or message_ts,
+            draft=draft,
+            draft_number=draft_number,
+            reply=reply,
+            field_updates=field_updates,
+            draft_filename=filename,
+            upload_ok=bool(upload_result.get("ok")),
+        )
 
     def _update_slack_request_intake_draft_from_view(self, store: RequestDraftStore, draft: StoredRequestDraft, view: dict[str, Any]) -> StoredRequestDraft:
         state = view.get("state")
@@ -958,6 +965,32 @@ class RuntimeSupervisor:
             title=filename,
             content=draft_markdown.encode("utf-8"),
         )
+        self._post_slack_request_review_message(
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            draft=draft,
+            draft_number=draft_number,
+            reply=reply,
+            field_updates=field_updates,
+            draft_filename=filename,
+            upload_ok=bool(upload_result.get("ok")),
+        )
+
+    def _post_slack_request_review_message(
+        self,
+        *,
+        channel_id: str,
+        thread_ts: str,
+        draft: StoredRequestDraft,
+        draft_number: int,
+        reply: str,
+        field_updates: Mapping[str, object],
+        draft_filename: str,
+        upload_ok: bool,
+    ) -> None:
+        token = self.config.slack.bot_token
+        if not token:
+            return
         slack_api_call(
             "chat.postMessage",
             token=token,
@@ -970,8 +1003,8 @@ class RuntimeSupervisor:
                     draft_number=draft_number,
                     reply=reply,
                     field_updates=field_updates,
-                    draft_filename=filename,
-                    upload_ok=bool(upload_result.get("ok")),
+                    draft_filename=draft_filename,
+                    upload_ok=upload_ok,
                 ),
             },
         )
