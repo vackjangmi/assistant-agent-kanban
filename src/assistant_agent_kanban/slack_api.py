@@ -61,7 +61,16 @@ def slack_upload_file_to_thread(
     upload_result = _slack_upload_binary(upload_url=upload_url, filename=filename, content=content)
     if not upload_result.get("ok"):
         return upload_result
-    return _slack_complete_upload_external(
+    result = _slack_complete_upload_external_form(
+        token=token,
+        file_id=file_id,
+        title=title,
+        channel_id=channel_id,
+        thread_ts=thread_ts,
+    )
+    if result.get("ok") or result.get("error") != "invalid_arguments":
+        return result
+    return _slack_complete_upload_external_json(
         token=token,
         file_id=file_id,
         title=title,
@@ -70,7 +79,7 @@ def slack_upload_file_to_thread(
     )
 
 
-def _slack_complete_upload_external(
+def _slack_complete_upload_external_form(
     *,
     token: str,
     file_id: str,
@@ -104,6 +113,25 @@ def _slack_complete_upload_external(
             return {"ok": False, "error": f"http_error:{exc.code}"}
     except error.URLError as exc:
         return {"ok": False, "error": f"network_error:{exc.reason}"}
+
+
+def _slack_complete_upload_external_json(
+    *,
+    token: str,
+    file_id: str,
+    title: str,
+    channel_id: str,
+    thread_ts: str,
+) -> dict[str, object]:
+    return slack_api_call(
+        "files.completeUploadExternal",
+        token=token,
+        body={
+            "files": [{"id": file_id, "title": title}],
+            "channel_id": channel_id,
+            "thread_ts": thread_ts,
+        },
+    )
 
 
 def _slack_upload_binary(*, upload_url: str, filename: str, content: bytes) -> dict[str, object]:
