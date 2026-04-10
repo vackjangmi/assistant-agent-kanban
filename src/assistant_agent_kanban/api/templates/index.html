@@ -1199,15 +1199,29 @@
     .request-goal-editor-shell .editor-textarea { min-height: 320px; height: 320px; }
     .request-goal-editor-shell .editor-textarea { resize: vertical; }
     .human-review-footer { display: grid; gap: 8px; }
-    .reviewer-qa-log, .request-draft-log { min-height: 0; height: 100%; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; display: grid; align-content: start; gap: 10px; }
+    .reviewer-qa-log, .request-draft-log { min-height: 0; height: 100%; overflow: auto; border: 1px solid var(--border); background: rgba(248,246,240,0.95); padding: 14px; display: grid; align-content: start; gap: 16px; }
     .reviewer-qa-empty, .request-draft-empty { margin: 0; color: var(--muted); }
-    .reviewer-qa-entry, .request-draft-entry { display: grid; gap: 6px; justify-items: start; }
-    .reviewer-qa-entry[data-role="question"], .request-draft-entry[data-role="user"] { justify-items: end; }
-    .reviewer-qa-role, .request-draft-role { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-    .reviewer-qa-bubble, .request-draft-bubble { max-width: min(100%, 720px); padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.92); white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; line-height: 1.5; }
-    .reviewer-qa-entry[data-role="question"] .reviewer-qa-bubble, .request-draft-entry[data-role="user"] .request-draft-bubble { background: var(--accent-soft); border-color: rgba(124,79,44,0.2); }
-    .reviewer-qa-entry[data-role="answer"] .reviewer-qa-bubble, .request-draft-entry[data-role="assistant"] .request-draft-bubble { background: rgba(255,255,255,0.94); }
-    .reviewer-qa-entry[data-role="transcript"] .reviewer-qa-bubble { max-width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.94rem; }
+    .reviewer-qa-entry, .request-draft-entry { display: grid; gap: 8px; justify-items: start; width: 100%; }
+    .reviewer-qa-entry[data-side="current"], .request-draft-entry[data-side="current"] { justify-items: end; }
+    .reviewer-qa-entry[data-side="system"] { justify-items: stretch; }
+    .reviewer-qa-shell, .request-draft-shell { display: grid; gap: 10px; width: min(100%, 720px); padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); box-shadow: inset 0 1px 0 rgba(255,255,255,0.55); }
+    .reviewer-qa-shell::after, .request-draft-shell::after { content: ''; display: block; width: 100%; height: 1px; margin-top: 2px; background: rgba(24,32,38,0.08); }
+    .reviewer-qa-entry[data-side="system"] .reviewer-qa-shell { width: 100%; background: rgba(247,242,232,0.82); }
+    .reviewer-qa-entry[data-side="current"] .reviewer-qa-shell, .request-draft-entry[data-side="current"] .request-draft-shell { background: linear-gradient(135deg, rgba(255,249,239,0.96), rgba(247,242,232,0.84)); border-color: rgba(124,79,44,0.2); }
+    .reviewer-qa-meta, .request-draft-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid rgba(124,79,44,0.12); background: rgba(124,79,44,0.06); }
+    .reviewer-qa-meta-badges, .request-draft-meta-badges { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .reviewer-qa-role, .request-draft-role, .transcript-live-badge { display: inline-flex; align-items: center; padding: 4px 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); color: var(--accent-strong); font-size: 0.68rem; font-weight: 700; line-height: 1.2; letter-spacing: 0.06em; text-transform: uppercase; }
+    .transcript-live-badge { border-color: rgba(124,79,44,0.18); background: rgba(255,249,239,0.94); color: var(--accent-strong); }
+    .reviewer-qa-bubble, .request-draft-bubble { max-width: 100%; padding: 2px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; line-height: 1.55; }
+    .reviewer-qa-entry[data-role="transcript"] .reviewer-qa-bubble { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.94rem; }
+    body[data-theme="dark"] .reviewer-qa-log, body[data-theme="dark"] .request-draft-log { border-color: var(--review-border); background: linear-gradient(180deg, rgba(24, 35, 45, 0.98), rgba(17, 25, 33, 0.97)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
+    body[data-theme="dark"] .reviewer-qa-shell, body[data-theme="dark"] .request-draft-shell { border-color: var(--review-border); background: linear-gradient(180deg, rgba(31, 43, 54, 0.98), rgba(23, 32, 41, 0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
+    body[data-theme="dark"] .reviewer-qa-shell::after, body[data-theme="dark"] .request-draft-shell::after { background: rgba(186, 200, 214, 0.12); }
+    body[data-theme="dark"] .reviewer-qa-entry[data-side="system"] .reviewer-qa-shell { background: linear-gradient(180deg, rgba(35, 46, 57, 0.98), rgba(26, 36, 46, 0.96)); }
+    body[data-theme="dark"] .reviewer-qa-entry[data-side="current"] .reviewer-qa-shell, body[data-theme="dark"] .request-draft-entry[data-side="current"] .request-draft-shell { border-color: rgba(214, 171, 120, 0.24); background: linear-gradient(180deg, rgba(56, 47, 38, 0.96), rgba(39, 33, 28, 0.94)); }
+    body[data-theme="dark"] .reviewer-qa-meta, body[data-theme="dark"] .request-draft-meta { border-color: rgba(214, 171, 120, 0.16); background: rgba(214, 171, 120, 0.1); }
+    body[data-theme="dark"] .reviewer-qa-role, body[data-theme="dark"] .request-draft-role, body[data-theme="dark"] .transcript-live-badge { border-color: rgba(186, 200, 214, 0.14); background: rgba(37, 49, 62, 0.88); color: #f2cfaa; }
+    body[data-theme="dark"] .transcript-live-badge { border-color: rgba(214, 171, 120, 0.22); background: rgba(214, 171, 120, 0.14); }
     .reviewer-qa-composer, .request-draft-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
     .request-draft-composer-main { display: grid; gap: 8px; min-width: 0; }
     .request-draft-composer-actions { display: grid; gap: 10px; align-self: stretch; }
@@ -1228,6 +1242,8 @@
     .request-draft-suggestion-copy { display: grid; gap: 4px; min-width: 0; }
     .request-draft-suggestion-copy strong { color: var(--accent-strong); font-size: 0.85rem; }
     .request-draft-suggestion-copy span { color: var(--muted); font-size: 0.85rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+    body[data-theme="dark"] .request-draft-suggestions-title { color: #f2cfaa; }
+    body[data-theme="dark"] .request-draft-suggestion { border-color: var(--review-border); background: linear-gradient(180deg, rgba(31, 43, 54, 0.98), rgba(23, 32, 41, 0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -4792,13 +4808,19 @@
       return entries;
     }
 
+    function formatTranscriptLiveBadge(label) {
+      return String(label || 'live').replace(/^[\s·•\-–—]+/, '').trim() || 'live';
+    }
+
     function renderReviewerQaTranscript(entries) {
       if (!entries.length) {
         return '<p class="reviewer-qa-empty">No reviewer Q&amp;A recorded yet.</p>';
       }
       return entries.map((entry) => {
         const label = entry.role === 'question' ? 'You' : (entry.role === 'answer' ? 'Reviewer' : 'Transcript');
-        return `<article class="reviewer-qa-entry" data-role="${escapeHtml(entry.role)}"${entry.pending ? ' data-pending="true"' : ''}><span class="reviewer-qa-role">${escapeHtml(label)}${entry.pending ? ' · live' : ''}</span><div class="reviewer-qa-bubble">${escapeHtml(entry.text)}</div></article>`;
+        const side = entry.role === 'question' ? 'current' : (entry.role === 'answer' ? 'other' : 'system');
+        const liveBadge = entry.pending && entry.role === 'answer' ? `<span class="transcript-live-badge">${escapeHtml(formatTranscriptLiveBadge('live'))}</span>` : '';
+        return `<article class="reviewer-qa-entry" data-role="${escapeHtml(entry.role)}" data-side="${side}"${entry.pending ? ' data-pending="true"' : ''}><div class="reviewer-qa-shell"><div class="reviewer-qa-meta"><span class="reviewer-qa-role">${escapeHtml(label)}</span><div class="reviewer-qa-meta-badges">${liveBadge}</div></div><div class="reviewer-qa-bubble">${escapeHtml(entry.text)}</div></div></article>`;
       }).join('');
     }
 
@@ -6800,7 +6822,9 @@
         const suggestions = entry.role === 'assistant' && entry.field_updates && Object.keys(entry.field_updates).length
           ? `<div class="request-draft-suggestions"><div class="request-draft-suggestions-title">${escapeHtml(translateRequest('draftSuggestedUpdates'))}</div><div class="request-draft-suggestion-list">${Object.entries(entry.field_updates).filter(([, value]) => value != null).map(([fieldName, value]) => `<div class="request-draft-suggestion"><div class="request-draft-suggestion-meta"><strong>${escapeHtml(requestDraftFieldLabel(fieldName))}</strong><span class="diff-badge">${escapeHtml(translateRequest('draftAutoAppliedBadge'))}</span></div><div class="request-draft-suggestion-copy"><span>${escapeHtml(value === '' ? translateRequest('draftClearField') : value)}</span></div></div>`).join('')}</div></div>`
           : '';
-        return `<article class="request-draft-entry" data-role="${escapeHtml(entry.role)}"${entry.pending ? ' data-pending="true"' : ''}><span class="request-draft-role">${escapeHtml(entry.role === 'user' ? translateRequest('draftUserLabel') : translateRequest('draftTitle'))}${entry.pending ? escapeHtml(translateRequest('draftLiveSuffix')) : ''}</span><div class="request-draft-bubble">${escapeHtml(entry.text)}</div>${suggestions}</article>`;
+        const side = entry.role === 'user' ? 'current' : 'other';
+        const liveBadge = entry.pending ? `<span class="transcript-live-badge">${escapeHtml(formatTranscriptLiveBadge(translateRequest('draftLiveSuffix')))}</span>` : '';
+        return `<article class="request-draft-entry" data-role="${escapeHtml(entry.role)}" data-side="${side}"${entry.pending ? ' data-pending="true"' : ''}><div class="request-draft-shell"><div class="request-draft-meta"><span class="request-draft-role">${escapeHtml(entry.role === 'user' ? translateRequest('draftUserLabel') : translateRequest('draftTitle'))}</span><div class="request-draft-meta-badges">${liveBadge}</div></div><div class="request-draft-bubble">${escapeHtml(entry.text)}</div>${suggestions}</div></article>`;
       });
       return entries.length ? entries.join('') : `<p class="request-draft-empty">${escapeHtml(translateRequest('draftEmpty'))}</p>`;
     }
