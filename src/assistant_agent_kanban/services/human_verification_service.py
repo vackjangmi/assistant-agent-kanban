@@ -170,6 +170,10 @@ class HumanVerificationService:
             context.metadata.commit.status = "pending"
             context.metadata.commit.sha = None
             context.metadata.commit.review_sha = None
+            self._reset_implementation_context(context.metadata)
+            context.metadata.review.human_rework_required = True
+            context.metadata.review.human_rework_reason = "human verification requested changes"
+            clear_retry_gate(context.metadata)
             summary = self._human_review_summary(context.metadata)
             context.metadata.errors.append(TaskErrorInfo(code="human-verification-rejected", message=summary or "human verification requested changes"))
             if recapture_error:

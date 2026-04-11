@@ -158,6 +158,39 @@ def test_human_verification_reject_rolls_back_and_records_note(configured_paths)
     artifact = rejected.task_dir / "HUMAN-VERIFY-001.md"
     assert artifact.exists()
     assert "Please keep the old behavior." in artifact.read_text()
+    assert rejected.metadata.review.human_rework_required is True
+    assert rejected.metadata.review.human_rework_reason == "human verification requested changes"
+
+
+def test_human_verification_reject_resets_implementation_resume_context(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-reject-reset-implementation-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    in_progress = scanner.find_task(completed.metadata.task_id)
+    in_progress.metadata.implementation.last_result = "previous result"
+    in_progress.metadata.implementation.resolved_model = "gpt-test"
+    in_progress.metadata.implementation.session_id = "ses_previous"
+    in_progress.metadata.implementation.last_run_tokens = 123
+    in_progress.metadata.implementation.session_tokens = 456
+    in_progress.metadata.retry_gate.reason = "review-needs-changes"
+    in_progress.metadata.retry_gate.consecutive_count = 2
+    in_progress.metadata.retry_gate.not_before = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    service.metadata_store.save(in_progress.task_dir, in_progress.metadata)
+
+    moved = service.reject(completed.metadata.task_id, by="human", note="Please revise this.")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.implementation.last_result is None
+    assert refreshed.metadata.implementation.resolved_model is None
+    assert refreshed.metadata.implementation.session_id is None
+    assert refreshed.metadata.implementation.last_run_tokens == 0
+    assert refreshed.metadata.implementation.session_tokens == 0
+    assert refreshed.metadata.retry_gate.reason is None
+    assert refreshed.metadata.retry_gate.consecutive_count == 0
+    assert refreshed.metadata.retry_gate.not_before is None
+    assert refreshed.metadata.review.human_rework_required is True
 
 
 def test_human_verification_reject_discards_review_branch_even_when_patch_file_is_missing(configured_paths):
