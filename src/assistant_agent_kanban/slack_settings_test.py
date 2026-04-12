@@ -20,6 +20,8 @@ class SlackSettingsTestResult:
     checks: list[SlackSettingsTestCheck]
     uses_posted_values: bool = True
     receive_verification_mode: str = "readiness"
+    resolved_channel_id: str | None = None
+    resolved_channel_display: str | None = None
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -31,6 +33,8 @@ class SlackSettingsTestResult:
             ],
             "uses_posted_values": self.uses_posted_values,
             "receive_verification_mode": self.receive_verification_mode,
+            "resolved_channel_id": self.resolved_channel_id,
+            "resolved_channel_display": self.resolved_channel_display,
         }
 
 
@@ -113,6 +117,9 @@ def run_slack_settings_test(slack: SlackConfig, *, uses_posted_values: bool = Tr
             uses_posted_values=uses_posted_values,
         )
 
+    post_channel = post_payload.get("channel")
+    resolved_channel_id = post_channel if isinstance(post_channel, str) else None
+    resolved_channel_display = _normalize_channel_display(slack.default_channel, resolved_channel_id)
     checks.append(
         SlackSettingsTestCheck(
             "send_test",
@@ -145,6 +152,8 @@ def run_slack_settings_test(slack: SlackConfig, *, uses_posted_values: bool = Tr
             summary="Slack test message was sent and Socket Mode readiness was verified. Actual inbound delivery remains a runtime readiness check until a real event is observed.",
             checks=checks,
             uses_posted_values=uses_posted_values,
+            resolved_channel_id=resolved_channel_id,
+            resolved_channel_display=resolved_channel_display,
         )
 
     if slack.socket_mode_enabled and not slack.app_token:
@@ -160,6 +169,8 @@ def run_slack_settings_test(slack: SlackConfig, *, uses_posted_values: bool = Tr
             summary="Slack test message was sent, but Socket Mode readiness could not be verified without an app token.",
             checks=checks,
             uses_posted_values=uses_posted_values,
+            resolved_channel_id=resolved_channel_id,
+            resolved_channel_display=resolved_channel_display,
         )
 
     checks.append(
@@ -174,6 +185,8 @@ def run_slack_settings_test(slack: SlackConfig, *, uses_posted_values: bool = Tr
         summary="Slack test message was sent successfully.",
         checks=checks,
         uses_posted_values=uses_posted_values,
+        resolved_channel_id=resolved_channel_id,
+        resolved_channel_display=resolved_channel_display,
     )
 
 
@@ -186,3 +199,12 @@ def _is_plausible_channel(value: str | None) -> bool:
     if normalized.startswith("#") and len(normalized) > 1:
         return True
     return normalized[:1] in {"C", "G", "D"} and len(normalized) >= 3
+
+
+def _normalize_channel_display(input_value: str | None, resolved_channel_id: str | None) -> str | None:
+    normalized = (input_value or "").strip()
+    if not normalized:
+        return resolved_channel_id
+    if normalized[:1] in {"C", "G", "D"} and len(normalized) >= 3:
+        return normalized
+    return normalized if normalized.startswith("#") else f"#{normalized}"

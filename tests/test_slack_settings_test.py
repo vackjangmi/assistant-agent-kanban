@@ -60,6 +60,8 @@ def test_slack_settings_test_posts_message_and_checks_socket_mode(monkeypatch):
 
     assert result.ok is True
     assert "Socket Mode readiness was verified" in result.summary
+    assert result.resolved_channel_id == "#agent-alerts"
+    assert result.resolved_channel_display == "#agent-alerts"
     assert [call[0] for call in calls] == ["auth.test", "chat.postMessage", "apps.connections.open"]
 
 
@@ -112,5 +114,6 @@ def test_slack_settings_test_still_verifies_send_without_app_token(monkeypatch):
 
     assert result.ok is False
     assert "message was sent" in result.summary
+    assert result.resolved_channel_display == "#agent-alerts"
     assert calls == ["auth.test", "chat.postMessage"]
     assert result.checks[-1].name == "receive_ready"
