@@ -361,6 +361,7 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
         "slack_enabled": active_config.slack.enabled,
         "slack_socket_mode_enabled": active_config.slack.socket_mode_enabled,
         "slack_default_channel": active_config.slack.default_channel,
+        "slack_default_channel_display": active_config.slack.default_channel_display or active_config.slack.default_channel,
         "slack_app_mention_enabled": active_config.slack.app_mention_enabled,
         "slack_bot_token_configured": active_config.slack.bot_token is not None,
         "slack_bot_token_masked": _mask_secret(active_config.slack.bot_token),
@@ -574,7 +575,7 @@ def build_router() -> APIRouter:
         if "slack_app_token" in fields_set:
             next_config.slack.app_token = _normalize_optional_text(payload.slack_app_token)
         if "slack_default_channel" in fields_set:
-            next_config.slack.default_channel = _normalize_optional_text(payload.slack_default_channel)
+            _ = payload.slack_default_channel
         if "slack_app_mention_enabled" in fields_set and payload.slack_app_mention_enabled is not None:
             next_config.slack.app_mention_enabled = payload.slack_app_mention_enabled
         _view_config, validation_snapshots = await _resolve_settings_snapshots(runtime, refresh=True, assistant=next_config.active_backend())
@@ -615,7 +616,23 @@ def build_router() -> APIRouter:
         if "slack_app_mention_enabled" in fields_set and payload.slack_app_mention_enabled is not None:
             slack_config.app_mention_enabled = payload.slack_app_mention_enabled
         result = await asyncio.to_thread(run_slack_settings_test, slack_config, uses_posted_values=bool(fields_set))
-        return result.to_payload()
+        result_payload = result.to_payload()
+        resolved_channel_id = getattr(result, "resolved_channel_id", None)
+        if not isinstance(resolved_channel_id, str):
+            resolved_channel_id = result_payload.get("resolved_channel_id") if isinstance(result_payload.get("resolved_channel_id"), str) else None
+        resolved_channel_display = getattr(result, "resolved_channel_display", None)
+        if not isinstance(resolved_channel_display, str):
+            resolved_channel_display = result_payload.get("resolved_channel_display") if isinstance(result_payload.get("resolved_channel_display"), str) else None
+        if result_payload.get("ok") and resolved_channel_id:
+            next_config = runtime.config.model_copy(deep=True)
+            next_config.slack.default_channel = resolved_channel_id
+            next_config.slack.default_channel_display = _normalize_optional_text(payload.slack_default_channel) or resolved_channel_display or resolved_channel_id
+            next_config.persist()
+            _apply_config_update(runtime.config, next_config)
+            if getattr(runtime, "slack_runtime", None) is not None:
+                await runtime.slack_runtime.restart_if_running()
+            result_payload["summary"] = f"{result_payload.get('summary', '')} Effective channel updated to {next_config.slack.default_channel_display or next_config.slack.default_channel}.".strip()
+        return result_payload
 
     @router.post("/api/settings/slack-receive-test/start")
     async def start_slack_receive_test(_payload: SlackReceiveTestStartPayload, request: Request) -> Mapping[str, object]:

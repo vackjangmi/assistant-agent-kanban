@@ -3528,7 +3528,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["repo_discovery_max_depth"] == 4
     assert payload["slack_enabled"] is True
     assert payload["slack_socket_mode_enabled"] is True
-    assert payload["slack_default_channel"] == "#agent-alerts"
+    assert payload["slack_default_channel"] is None
+    assert payload["slack_default_channel_display"] is None
     assert payload["slack_app_mention_enabled"] is True
     assert payload["slack_bot_token_configured"] is True
     assert payload["slack_bot_token_masked"] == "••••••••••••••5678"
@@ -3556,7 +3557,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.slack.socket_mode_enabled is True
     assert app.state.runtime.config.slack.bot_token == "xoxb-test-12345678"
     assert app.state.runtime.config.slack.app_token == "xapp-test-87654321"
-    assert app.state.runtime.config.slack.default_channel == "#agent-alerts"
+    assert app.state.runtime.config.slack.default_channel is None
+    assert app.state.runtime.config.slack.default_channel_display is None
     assert app.state.runtime.config.slack.app_mention_enabled is True
     assert load_config(config_path).codex.commit_model == "gpt-5"
     assert load_config(config_path).codex.commit_session_token_budget == 250000
@@ -3566,6 +3568,8 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert load_config(config_path).repo_discovery.max_depth == 4
     assert load_config(config_path).slack.bot_token == "xoxb-test-12345678"
     assert load_config(config_path).slack.app_token == "xapp-test-87654321"
+    assert load_config(config_path).slack.default_channel is None
+    assert load_config(config_path).slack.default_channel_display is None
 
 
 def test_api_settings_can_clear_slack_tokens(configured_paths):
@@ -3616,6 +3620,8 @@ def test_api_runs_slack_settings_test_with_posted_values(configured_paths, monke
                     ],
                     "uses_posted_values": uses_posted_values,
                     "receive_verification_mode": "readiness",
+                    "resolved_channel_id": "C123",
+                    "resolved_channel_display": "#agent-alerts",
                 }
             },
         )(),
@@ -3636,9 +3642,14 @@ def test_api_runs_slack_settings_test_with_posted_values(configured_paths, monke
 
     assert response.status_code == 200
     assert response.json()["ok"] is True
-    assert response.json()["summary"] == "tested #agent-alerts"
+    assert "Effective channel updated" in response.json()["summary"]
     assert response.json()["uses_posted_values"] is True
+    assert config.slack.default_channel == "C123"
+    assert config.slack.default_channel_display == "#agent-alerts"
     assert config.slack.enabled is False
+    reloaded = load_config(config.config_path_for_persistence())
+    assert reloaded.slack.default_channel == "C123"
+    assert reloaded.slack.default_channel_display == "#agent-alerts"
 
 
 def test_api_preserves_saved_slack_tokens_when_put_payload_omits_them(configured_paths):
