@@ -1040,8 +1040,15 @@
     .settings-card span { color: var(--muted); font-size: 0.95rem; }
     .settings-card input, .settings-card select { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
     .settings-card small { color: var(--muted); font-size: 0.88rem; }
-    .settings-slack-top-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 12px; align-items: stretch; }
+    .settings-slack-shell { display: grid; gap: 14px; }
+    .settings-slack-section { display: grid; gap: 10px; }
+    .settings-slack-section-head { display: grid; gap: 3px; }
+    .settings-slack-section-head strong { font-size: 0.95rem; }
+    .settings-slack-section-head span { color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .settings-slack-basic-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.95fr); gap: 12px; align-items: start; }
+    .settings-slack-basic-main { display: grid; gap: 12px; }
     .settings-toggle-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .settings-toggle-group.settings-toggle-group-single { grid-template-columns: 1fr; }
     .settings-toggle { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,242,232,0.92)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
     .settings-toggle-copy { display: grid; gap: 4px; min-width: 0; }
     .settings-toggle-copy label { font-size: 0.8rem; font-weight: 700; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
@@ -1065,6 +1072,22 @@
     .settings-slack-channel-meta small { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
     .settings-slack-channel-summary .settings-status { white-space: normal; }
     .settings-slack-token-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .settings-slack-callout { padding: 12px 14px; border: 1px solid rgba(124,79,44,0.18); background: rgba(124,79,44,0.07); color: var(--text); line-height: 1.5; }
+    .settings-slack-callout strong { display: block; margin-bottom: 4px; font-size: 0.86rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
+    .settings-slack-actions { display: grid; gap: 10px; align-items: start; }
+    .settings-slack-actions-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .settings-slack-actions-row .primary { min-width: 220px; }
+    .settings-slack-primary-note { color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .settings-slack-primary-note p { margin: 0; }
+    .settings-slack-advanced { border: 1px solid var(--border); background: rgba(255,255,255,0.74); }
+    .settings-slack-advanced summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; font-weight: 700; color: var(--text); list-style: none; }
+    .settings-slack-advanced summary::-webkit-details-marker { display: none; }
+    .settings-slack-advanced-summary-copy { display: grid; gap: 4px; }
+    .settings-slack-advanced-summary-copy small { color: var(--muted); font-size: 0.82rem; font-weight: 400; }
+    .settings-slack-advanced-state { color: var(--muted); font-size: 0.82rem; font-weight: 600; text-align: right; }
+    .settings-slack-advanced-body { display: grid; gap: 12px; padding: 0 14px 14px; border-top: 1px solid var(--border); }
+    .settings-slack-advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .settings-slack-advanced-note { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
     body[data-theme="dark"] .settings-toggle { background: linear-gradient(180deg, rgba(38,50,62,0.98), rgba(28,39,50,0.96)); border-color: rgba(186, 200, 214, 0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.18); }
     body[data-theme="dark"] .settings-toggle-copy label { color: #f2cfaa; }
     body[data-theme="dark"] .settings-switch-ui { border-color: rgba(186, 200, 214, 0.16); background: linear-gradient(180deg, rgba(91,107,121,0.98), rgba(67,81,94,0.98)); box-shadow: inset 0 1px 2px rgba(0,0,0,0.28), 0 6px 16px rgba(0,0,0,0.26); }
@@ -1077,9 +1100,13 @@
     body[data-theme="dark"] .settings-slack-channel-field label,
     body[data-theme="dark"] .settings-slack-channel-meta strong { color: #f2cfaa; }
     body[data-theme="dark"] .settings-slack-channel-meta { border-color: rgba(186, 200, 214, 0.14); background: rgba(17, 25, 33, 0.38); }
+    body[data-theme="dark"] .settings-slack-callout { border-color: rgba(242, 198, 147, 0.22); background: rgba(242, 198, 147, 0.08); }
+    body[data-theme="dark"] .settings-slack-callout strong { color: #f2cfaa; }
+    body[data-theme="dark"] .settings-slack-advanced { background: rgba(17, 25, 33, 0.28); border-color: rgba(186, 200, 214, 0.14); }
+    body[data-theme="dark"] .settings-slack-advanced-body { border-top-color: rgba(186, 200, 214, 0.14); }
     @media (max-width: 960px) {
       .settings-toolbar-actions { justify-content: flex-start; margin-left: 0; }
-      .settings-slack-top-grid, .settings-slack-token-grid { grid-template-columns: 1fr; }
+      .settings-slack-token-grid, .settings-slack-basic-grid, .settings-slack-advanced-grid { grid-template-columns: 1fr; }
       .settings-toggle-group { grid-template-columns: 1fr; }
     }
     .settings-role-inline { display: grid; grid-template-columns: 64px 132px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
@@ -1608,78 +1635,112 @@
                 <div class="settings-card settings-card-span-2">
                 <strong id="settings-slack-title">Slack</strong>
                 <span id="settings-slack-description">Local Slack app defaults for notifications and interactions.</span>
-                <div class="settings-slack-top-grid">
-                  <div class="settings-toggle-group">
-                    <div class="settings-toggle">
-                      <div class="settings-toggle-copy">
-                        <label id="settings-slack-enabled-label" for="slack_enabled">Slack Enabled</label>
-                      </div>
-                      <label class="settings-switch" for="slack_enabled">
-                        <input id="slack_enabled" name="slack_enabled" type="checkbox" role="switch">
-                        <span class="settings-switch-ui" aria-hidden="true"></span>
-                      </label>
+                <div class="settings-slack-shell">
+                  <section class="settings-slack-section" aria-labelledby="settings-slack-basics-title">
+                    <div class="settings-slack-section-head">
+                      <strong id="settings-slack-basics-title">Basics</strong>
+                      <span id="settings-slack-basics-description">Turn Slack on, add a bot token, choose the default channel, then run one test to activate it.</span>
                     </div>
-                    <div class="settings-toggle">
-                      <div class="settings-toggle-copy">
-                        <label id="settings-slack-socket-mode-label" for="slack_socket_mode_enabled">Socket Mode</label>
+                    <div class="settings-slack-basic-grid">
+                      <div class="settings-slack-basic-main">
+                        <div class="settings-toggle-group settings-toggle-group-single">
+                          <div class="settings-toggle">
+                            <div class="settings-toggle-copy">
+                              <label id="settings-slack-enabled-label" for="slack_enabled">Slack Enabled</label>
+                            </div>
+                            <label class="settings-switch" for="slack_enabled">
+                              <input id="slack_enabled" name="slack_enabled" type="checkbox" role="switch">
+                              <span class="settings-switch-ui" aria-hidden="true"></span>
+                            </label>
+                          </div>
+                        </div>
+                        <div class="settings-slack-section-head">
+                          <strong id="settings-slack-auth-title">Slack credentials</strong>
+                          <span id="settings-slack-auth-description">Leave token fields blank to keep the saved value. Use the clear button if you want to remove a saved token.</span>
+                        </div>
+                        <div class="settings-slack-token-grid">
+                          <div class="settings-field">
+                            <label id="settings-slack-bot-token-label" for="slack_bot_token">Bot token</label>
+                            <input id="slack_bot_token" name="slack_bot_token" type="text" placeholder="xoxb-..." autocomplete="off" spellcheck="false">
+                            <small id="settings-slack-bot-token-status">Not configured.</small>
+                            <button type="button" id="clear-slack-bot-token" class="ghost-button">Clear saved token</button>
+                          </div>
+                        </div>
+                        <div class="settings-slack-channel-field">
+                          <label id="settings-slack-channel-label" for="slack_default_channel">Default channel</label>
+                          <span id="settings-slack-channel-description">Enter a human-friendly Slack channel. A new default only becomes active after a successful Slack test resolves and saves it.</span>
+                          <input id="slack_default_channel" name="slack_default_channel" placeholder="#agent-alerts" spellcheck="false">
+                          <small id="settings-slack-channel-note">Use a channel name like <code>#agent-alerts</code>. The active channel stays unchanged until <strong>Test Slack</strong> succeeds.</small>
+                        </div>
+                        <div class="settings-slack-callout">
+                          <strong id="settings-slack-save-note-title">Activation flow</strong>
+                          <span id="settings-slack-save-note">Save stores Slack settings only. Use the Slack test to verify the bot and activate the channel shown above.</span>
+                        </div>
+                        <div class="settings-slack-actions">
+                          <div class="settings-slack-actions-row">
+                            <button type="button" id="test-slack-settings" class="primary">Test Slack &amp; activate channel</button>
+                          </div>
+                          <div class="settings-slack-primary-note">
+                            <p id="settings-slack-test-description">Send a real test message from the current form values. A successful test resolves and saves the effective default channel.</p>
+                          </div>
+                          <div id="settings-slack-test-status" class="approval-choice-status" hidden></div>
+                        </div>
                       </div>
-                      <label class="settings-switch" for="slack_socket_mode_enabled">
-                        <input id="slack_socket_mode_enabled" name="slack_socket_mode_enabled" type="checkbox" role="switch">
-                        <span class="settings-switch-ui" aria-hidden="true"></span>
-                      </label>
-                    </div>
-                    <div class="settings-toggle">
-                      <div class="settings-toggle-copy">
-                        <label id="settings-slack-mention-label" for="slack_app_mention_enabled">App mentions</label>
+                      <div class="settings-slack-channel-summary">
+                        <div class="settings-slack-channel-meta">
+                          <strong id="settings-slack-effective-channel-label">Active channel</strong>
+                          <code id="settings-slack-effective-channel-value">Not configured.</code>
+                          <small id="settings-slack-effective-channel-help">This is the saved channel currently used for default Slack messages.</small>
+                        </div>
+                        <div id="settings-slack-pending-channel-status" class="settings-status" hidden>No pending channel change.</div>
+                        <small id="settings-slack-note">Slack values stay in your local config file and are never written into task metadata.</small>
                       </div>
-                      <label class="settings-switch" for="slack_app_mention_enabled">
-                        <input id="slack_app_mention_enabled" name="slack_app_mention_enabled" type="checkbox" role="switch">
-                        <span class="settings-switch-ui" aria-hidden="true"></span>
-                      </label>
                     </div>
-                  </div>
-                  <div class="settings-slack-channel-field">
-                    <label id="settings-slack-channel-label" for="slack_default_channel">Channel to test</label>
-                    <span id="settings-slack-channel-description">Enter a human-friendly Slack channel. A new default only becomes active after a successful Slack test resolves and saves it.</span>
-                    <input id="slack_default_channel" name="slack_default_channel" placeholder="#agent-alerts" spellcheck="false">
-                    <div class="settings-slack-channel-summary">
-                      <div class="settings-slack-channel-meta">
-                        <strong id="settings-slack-effective-channel-label">Currently effective channel</strong>
-                        <code id="settings-slack-effective-channel-value">Not configured.</code>
-                        <small id="settings-slack-effective-channel-help">This is the saved channel currently used for default Slack messages.</small>
+                  </section>
+                  <details id="settings-slack-advanced" class="settings-slack-advanced">
+                    <summary>
+                      <span class="settings-slack-advanced-summary-copy">
+                        <span id="settings-slack-advanced-title">Advanced inbound controls</span>
+                        <small id="settings-slack-advanced-description">Socket Mode, app mentions, receive-test tools, and listener diagnostics.</small>
+                      </span>
+                      <span id="settings-slack-listener-status" class="settings-slack-advanced-state">Listener idle</span>
+                    </summary>
+                    <div class="settings-slack-advanced-body">
+                      <div class="settings-slack-advanced-grid">
+                        <div class="settings-toggle">
+                          <div class="settings-toggle-copy">
+                            <label id="settings-slack-socket-mode-label" for="slack_socket_mode_enabled">Socket Mode</label>
+                          </div>
+                          <label class="settings-switch" for="slack_socket_mode_enabled">
+                            <input id="slack_socket_mode_enabled" name="slack_socket_mode_enabled" type="checkbox" role="switch">
+                            <span class="settings-switch-ui" aria-hidden="true"></span>
+                          </label>
+                        </div>
+                        <div class="settings-toggle">
+                          <div class="settings-toggle-copy">
+                            <label id="settings-slack-mention-label" for="slack_app_mention_enabled">App mentions</label>
+                          </div>
+                          <label class="settings-switch" for="slack_app_mention_enabled">
+                            <input id="slack_app_mention_enabled" name="slack_app_mention_enabled" type="checkbox" role="switch">
+                            <span class="settings-switch-ui" aria-hidden="true"></span>
+                          </label>
+                        </div>
+                        <div class="settings-field">
+                          <label id="settings-slack-app-token-label" for="slack_app_token">App token</label>
+                          <input id="slack_app_token" name="slack_app_token" type="text" placeholder="xapp-..." autocomplete="off" spellcheck="false">
+                          <small id="settings-slack-app-token-status">Not configured.</small>
+                          <button type="button" id="clear-slack-app-token" class="ghost-button">Clear saved token</button>
+                        </div>
                       </div>
-                      <div id="settings-slack-pending-channel-status" class="settings-status">No pending channel change.</div>
+                      <p id="settings-slack-advanced-note" class="settings-slack-advanced-note">Receive test uses saved Slack listener settings. Save first if you changed Socket Mode, app mentions, or queued token clears.</p>
+                      <div class="settings-slack-actions-row">
+                        <button type="button" id="start-slack-receive-test" class="ghost-button">Start receive test</button>
+                        <button type="button" id="copy-slack-receive-test" class="ghost-button" hidden>Copy message</button>
+                      </div>
+                      <div id="settings-slack-receive-test-status" class="approval-choice-status" hidden></div>
                     </div>
-                    <small id="settings-slack-channel-note">Use a channel name like <code>#agent-alerts</code>. The active channel stays unchanged until <strong>Test Slack</strong> succeeds.</small>
-                  </div>
+                  </details>
                 </div>
-                <small id="settings-slack-note">Slack values stay in your local config file and are never written into task metadata.</small>
-                <strong id="settings-slack-auth-title">Slack credentials</strong>
-                <span id="settings-slack-auth-description">Leave token fields blank to keep the saved value. Use the clear button if you want to remove a saved token.</span>
-                <div class="settings-slack-token-grid">
-                  <div class="settings-field">
-                    <label id="settings-slack-bot-token-label" for="slack_bot_token">Bot token</label>
-                    <input id="slack_bot_token" name="slack_bot_token" type="text" placeholder="xoxb-..." autocomplete="off" spellcheck="false">
-                    <small id="settings-slack-bot-token-status">Not configured.</small>
-                    <button type="button" id="clear-slack-bot-token" class="ghost-button">Clear saved token</button>
-                  </div>
-                  <div class="settings-field">
-                    <label id="settings-slack-app-token-label" for="slack_app_token">App token</label>
-                    <input id="slack_app_token" name="slack_app_token" type="text" placeholder="xapp-..." autocomplete="off" spellcheck="false">
-                    <small id="settings-slack-app-token-status">Not configured.</small>
-                    <button type="button" id="clear-slack-app-token" class="ghost-button">Clear saved token</button>
-                  </div>
-                </div>
-                <div class="settings-toolbar settings-toolbar-actions">
-                  <div class="settings-toolbar-cluster settings-toolbar-actions">
-                    <p id="settings-slack-test-description">Send a real test message from the current form values. The receive test uses saved Slack settings, so save first if you changed listener-related fields.</p>
-                    <button type="button" id="test-slack-settings" class="ghost-button">Test Slack</button>
-                    <button type="button" id="start-slack-receive-test" class="ghost-button">Start receive test</button>
-                    <button type="button" id="copy-slack-receive-test" class="ghost-button">Copy message</button>
-                  </div>
-                </div>
-                <div id="settings-slack-test-status" class="approval-choice-status" hidden></div>
-                <div id="settings-slack-receive-test-status" class="approval-choice-status" hidden></div>
                 </div>
               </div>
             </div>
@@ -2271,6 +2332,8 @@
     const copySlackReceiveTestButton = document.getElementById('copy-slack-receive-test');
     const slackSettingsTestStatus = document.getElementById('settings-slack-test-status');
     const slackReceiveTestStatus = document.getElementById('settings-slack-receive-test-status');
+    const slackAdvancedDetails = document.getElementById('settings-slack-advanced');
+    const slackListenerStatus = document.getElementById('settings-slack-listener-status');
     const runtimeLanguageInput = document.getElementById('runtime_language');
     const runtimeThemeInput = document.getElementById('runtime_theme');
     const runtimeCodingAssistantInput = document.getElementById('runtime_coding_assistant');
@@ -2556,17 +2619,19 @@
         repoDepthNote: 'Increase only for nested repos.',
         slackTitle: 'Slack',
         slackDescription: 'Local Slack app defaults for notifications and interactions.',
+        slackBasicsTitle: 'Basics',
+        slackBasicsDescription: 'Turn Slack on, add a bot token, choose the default channel, then run one test to activate it.',
         slackEnabledLabel: 'Enabled',
         slackSocketModeLabel: 'Socket Mode',
         slackMentionLabel: 'App mentions',
         slackNote: 'Slack values stay in your local config file and are never written into task metadata.',
-        slackAuthTitle: 'Slack credentials',
-        slackAuthDescription: 'Leave token fields blank to keep the saved value. Use the clear button if you want to remove a saved token.',
+        slackSaveNoteTitle: 'Activation flow',
+        slackSaveNote: 'Save stores Slack settings only. Use the Slack test to verify the bot and activate the channel shown above.',
         slackBotTokenLabel: 'Bot token',
         slackAppTokenLabel: 'App token',
-        slackChannelLabel: 'Channel to test',
+        slackChannelLabel: 'Default channel',
         slackChannelDescription: 'Enter a human-friendly Slack channel. A new default only becomes active after a successful Slack test resolves and saves it.',
-        slackEffectiveChannelLabel: 'Currently effective channel',
+        slackEffectiveChannelLabel: 'Active channel',
         slackEffectiveChannelHelp: 'This is the saved channel currently used for default Slack messages.',
         slackChannelNote: 'Use a channel name like <code>#agent-alerts</code>. The active channel stays unchanged until <strong>Test Slack</strong> succeeds.',
         slackChannelUnset: 'Not configured.',
@@ -2575,18 +2640,31 @@
         slackChannelPendingChange: 'Pending channel input: <code>{channel}</code>. The effective channel will not change until <strong>Test Slack</strong> succeeds and saves the resolved Slack channel.',
         slackChannelPendingClear: 'The input is now blank, but the effective channel stays <code>{channel}</code> until a successful Slack test saves a replacement.',
         slackClearToken: 'Clear saved token',
-        slackTestDescription: 'Send a real test message from the current form values. A successful test resolves and saves the effective default channel. The receive test still uses saved Slack settings, so save first if you changed listener-related fields.',
-        slackTestButton: 'Test Slack',
+        slackTestDescription: 'Send a real test message from the current form values. A successful test resolves and saves the effective default channel.',
+        slackTestButton: 'Test Slack & activate channel',
+        slackTestSaveFirst: 'Save Slack enablement and credential changes before testing a new channel.',
+        slackAdvancedTitle: 'Advanced inbound controls',
+        slackAdvancedDescription: 'Socket Mode, app mentions, receive-test tools, and listener diagnostics.',
+        slackAdvancedNote: 'Receive test uses saved Slack listener settings. Save first if you changed Socket Mode, app mentions, or queued token clears.',
         slackReceiveTestButton: 'Start receive test',
         slackReceiveCopyButton: 'Copy message',
         slackReceiveCopyUnavailable: 'Start a receive test first so there is something to copy.',
         slackReceiveCopySuccess: 'Slack receive-test message copied.',
         slackReceiveCopyFailed: 'Copy failed. Copy the instruction text manually.',
+        slackReceivePreparing: 'Preparing Slack receive test...',
         slackTestRunning: 'Running Slack test...',
         slackTokenConfigured: 'Configured: {masked}',
         slackTokenWillReplace: 'A new token is queued and will replace the saved value when you save.',
         slackTokenWillClear: 'The saved token will be cleared when you save.',
         slackTokenNotConfigured: 'Not configured.',
+        slackListenerConnected: 'Listener connected',
+        slackListenerStarting: 'Listener starting',
+        slackListenerIdle: 'Listener idle',
+        slackListenerError: 'Listener issue',
+        slackListenerConnectedDetail: 'Slack Socket Mode listener is connected.',
+        slackListenerStartingDetail: 'Slack Socket Mode listener is starting or reconnecting.',
+        slackListenerIdleDetail: 'Slack Socket Mode listener is idle.',
+        slackListenerLastError: 'Last listener error: {error}',
         slackReceiveWaiting: 'Waiting for a matching Slack mention...',
         slackReceiveInstruction: 'Send this in Slack: {instruction}',
         slackReceiveMatched: 'Slack receive test matched a real inbound mention.',
@@ -2667,17 +2745,19 @@
         repoDepthNote: '중첩 저장소가 필요할 때만 늘리세요.',
         slackTitle: 'Slack',
         slackDescription: '알림과 인터랙션용 로컬 Slack 앱 기본값입니다.',
+        slackBasicsTitle: '기본 설정',
+        slackBasicsDescription: 'Slack을 켜고, Bot 토큰과 기본 채널을 입력한 뒤, 한 번의 테스트로 채널을 활성화하세요.',
         slackEnabledLabel: '활성화',
         slackSocketModeLabel: 'Socket Mode',
         slackMentionLabel: '앱 멘션',
         slackNote: 'Slack 값은 로컬 설정 파일에만 저장되며 task metadata에는 기록되지 않습니다.',
-        slackAuthTitle: 'Slack 자격 정보',
-        slackAuthDescription: '토큰 입력을 비워두면 저장된 값을 유지합니다. 저장된 토큰을 지우려면 삭제 버튼을 사용하세요.',
+        slackSaveNoteTitle: '활성화 흐름',
+        slackSaveNote: '저장은 Slack 설정값만 반영합니다. 위 채널을 실제로 검증하고 활성화하려면 Slack 테스트를 실행하세요.',
         slackBotTokenLabel: 'Bot 토큰',
         slackAppTokenLabel: 'App 토큰',
-        slackChannelLabel: '테스트할 채널',
+        slackChannelLabel: '기본 채널',
         slackChannelDescription: '사람이 읽기 쉬운 Slack 채널 값을 입력하세요. 새 기본 채널은 Slack 테스트가 성공하여 resolve 및 저장된 뒤에만 활성화됩니다.',
-        slackEffectiveChannelLabel: '현재 적용 중인 채널',
+        slackEffectiveChannelLabel: '활성 채널',
         slackEffectiveChannelHelp: '기본 Slack 메시지에 현재 사용 중인 저장된 채널입니다.',
         slackChannelNote: '<code>#agent-alerts</code> 같은 채널명을 사용하세요. 활성 채널은 <strong>Slack 테스트</strong>가 성공하기 전까지 바뀌지 않습니다.',
         slackChannelUnset: '설정되지 않았습니다.',
@@ -2686,18 +2766,31 @@
         slackChannelPendingChange: '대기 중인 채널 입력값: <code>{channel}</code>. <strong>Slack 테스트</strong>가 성공하여 resolve된 Slack 채널을 저장하기 전까지는 적용 채널이 바뀌지 않습니다.',
         slackChannelPendingClear: '입력값은 비어 있지만 적용 채널은 <code>{channel}</code> 상태로 유지됩니다. 성공한 Slack 테스트가 대체 채널을 저장해야 변경됩니다.',
         slackClearToken: '저장된 토큰 삭제',
-        slackTestDescription: '현재 폼 값으로 실제 테스트 메시지를 보냅니다. 테스트가 성공하면 적용 기본 채널이 resolve 및 저장됩니다. 수신 테스트는 저장된 Slack 설정을 사용하므로 listener 관련 값을 바꿨다면 먼저 저장하세요.',
-        slackTestButton: 'Slack 테스트',
+        slackTestDescription: '현재 폼 값으로 실제 테스트 메시지를 보냅니다. 테스트가 성공하면 적용 기본 채널이 resolve 및 저장됩니다.',
+        slackTestButton: 'Slack 테스트 후 채널 활성화',
+        slackTestSaveFirst: '새 채널을 테스트하기 전에 Slack 활성화 상태와 자격 정보를 먼저 저장하세요.',
+        slackAdvancedTitle: '고급 수신 설정',
+        slackAdvancedDescription: 'Socket Mode, 앱 멘션, 수신 테스트 도구, listener 진단입니다.',
+        slackAdvancedNote: '수신 테스트는 저장된 Slack listener 설정을 사용합니다. Socket Mode, 앱 멘션, 토큰 삭제 예약을 바꿨다면 먼저 저장하세요.',
         slackReceiveTestButton: '수신 테스트 시작',
         slackReceiveCopyButton: '메시지 복사',
         slackReceiveCopyUnavailable: '복사할 내용이 없으니 먼저 수신 테스트를 시작하세요.',
         slackReceiveCopySuccess: 'Slack 수신 테스트 메시지를 복사했습니다.',
         slackReceiveCopyFailed: '복사하지 못했습니다. 안내 문구를 직접 복사해 주세요.',
+        slackReceivePreparing: 'Slack 수신 테스트를 준비하는 중...',
         slackTestRunning: 'Slack 테스트를 실행하는 중...',
         slackTokenConfigured: '설정됨: {masked}',
         slackTokenWillReplace: '새 토큰이 입력되었습니다. 저장하면 기존 값을 교체합니다.',
         slackTokenWillClear: '저장하면 저장된 토큰이 삭제됩니다.',
         slackTokenNotConfigured: '설정되지 않았습니다.',
+        slackListenerConnected: '리스너 연결됨',
+        slackListenerStarting: '리스너 시작 중',
+        slackListenerIdle: '리스너 대기',
+        slackListenerError: '리스너 문제',
+        slackListenerConnectedDetail: 'Slack Socket Mode listener가 연결되어 있습니다.',
+        slackListenerStartingDetail: 'Slack Socket Mode listener가 시작 중이거나 재연결 중입니다.',
+        slackListenerIdleDetail: 'Slack Socket Mode listener가 유휴 상태입니다.',
+        slackListenerLastError: '최근 listener 오류: {error}',
         slackReceiveWaiting: '일치하는 Slack 멘션을 기다리는 중...',
         slackReceiveInstruction: 'Slack에 이렇게 보내세요: {instruction}',
         slackReceiveMatched: '실제 Slack 수신 이벤트가 확인되었습니다.',
@@ -3727,12 +3820,14 @@
       setSettingsHtml('settings-repo-depth-note', 'repoDepthNote');
       setSettingsText('settings-slack-title', 'slackTitle');
       setSettingsText('settings-slack-description', 'slackDescription');
+      setSettingsText('settings-slack-basics-title', 'slackBasicsTitle');
+      setSettingsText('settings-slack-basics-description', 'slackBasicsDescription');
       setSettingsText('settings-slack-enabled-label', 'slackEnabledLabel');
       setSettingsText('settings-slack-socket-mode-label', 'slackSocketModeLabel');
       setSettingsText('settings-slack-mention-label', 'slackMentionLabel');
       setSettingsHtml('settings-slack-note', 'slackNote');
-      setSettingsText('settings-slack-auth-title', 'slackAuthTitle');
-      setSettingsText('settings-slack-auth-description', 'slackAuthDescription');
+      setSettingsText('settings-slack-save-note-title', 'slackSaveNoteTitle');
+      setSettingsHtml('settings-slack-save-note', 'slackSaveNote');
       setSettingsText('settings-slack-bot-token-label', 'slackBotTokenLabel');
       setSettingsText('settings-slack-app-token-label', 'slackAppTokenLabel');
       setSettingsText('settings-slack-channel-label', 'slackChannelLabel');
@@ -3740,7 +3835,11 @@
       setSettingsText('settings-slack-effective-channel-label', 'slackEffectiveChannelLabel');
       setSettingsHtml('settings-slack-effective-channel-help', 'slackEffectiveChannelHelp');
       setSettingsHtml('settings-slack-channel-note', 'slackChannelNote');
+      setSettingsText('settings-slack-advanced-title', 'slackAdvancedTitle');
+      setSettingsText('settings-slack-advanced-description', 'slackAdvancedDescription');
+      setSettingsText('settings-slack-advanced-note', 'slackAdvancedNote');
       setSettingsText('settings-slack-test-description', 'slackTestDescription');
+      if (slackListenerStatus) slackListenerStatus.textContent = translateSettings('slackListenerIdle');
       clearSlackBotTokenButton.textContent = translateSettings('slackClearToken');
       clearSlackAppTokenButton.textContent = translateSettings('slackClearToken');
       testSlackSettingsButton.textContent = translateSettings('slackTestButton');
@@ -4003,6 +4102,7 @@
       const draftChannel = normalizeSlackChannelValue(slackDefaultChannelInput?.value);
       slackEffectiveChannelValue.textContent = effectiveLabel || translateSettings('slackChannelUnset');
       if (!savedChannel) {
+        slackPendingChannelStatus.hidden = false;
         slackPendingChannelStatus.removeAttribute('data-tone');
         if (draftChannel) {
           slackPendingChannelStatus.innerHTML = translateSettings('slackChannelPendingChange', { channel: escapeHtml(draftChannel) });
@@ -4012,15 +4112,18 @@
         return;
       }
       if (!draftChannel) {
+        slackPendingChannelStatus.hidden = false;
         slackPendingChannelStatus.dataset.tone = 'error';
         slackPendingChannelStatus.innerHTML = translateSettings('slackChannelPendingClear', { channel: escapeHtml(savedChannel) });
         return;
       }
       if (draftChannel === savedChannel) {
+        slackPendingChannelStatus.hidden = true;
         slackPendingChannelStatus.removeAttribute('data-tone');
         slackPendingChannelStatus.innerHTML = translateSettings('slackChannelPendingNone');
         return;
       }
+      slackPendingChannelStatus.hidden = false;
       slackPendingChannelStatus.dataset.tone = 'success';
       slackPendingChannelStatus.innerHTML = translateSettings('slackChannelPendingChange', { channel: escapeHtml(draftChannel) });
     }
@@ -4050,32 +4153,48 @@
       }
     }
 
+    function updateSlackReceiveControls() {
+      if (copySlackReceiveTestButton) copySlackReceiveTestButton.hidden = !lastSlackReceiveInstruction;
+    }
+
     function updateSlackReceiveTestStatus(snapshot) {
       if (!slackReceiveTestStatus) return;
       if (!snapshot) {
         lastSlackReceiveInstruction = '';
+        if (slackListenerStatus) slackListenerStatus.textContent = translateSettings('slackListenerIdle');
         slackReceiveTestStatus.hidden = true;
         slackReceiveTestStatus.textContent = '';
         slackReceiveTestStatus.removeAttribute('data-tone');
+        updateSlackReceiveControls();
         return;
       }
       const lines = [];
+      let listenerSummary = translateSettings('slackListenerIdle');
       if (snapshot.listener_connected) {
-        lines.push('Slack Socket Mode listener is connected.');
+        listenerSummary = translateSettings('slackListenerConnected');
+        lines.push(translateSettings('slackListenerConnectedDetail'));
       } else if (snapshot.listener_enabled) {
-        lines.push('Slack Socket Mode listener is starting or reconnecting.');
+        listenerSummary = translateSettings('slackListenerStarting');
+        lines.push(translateSettings('slackListenerStartingDetail'));
       } else {
-        lines.push('Slack Socket Mode listener is idle.');
+        listenerSummary = translateSettings('slackListenerIdle');
+        lines.push(translateSettings('slackListenerIdleDetail'));
       }
-      if (snapshot.listener_last_error) lines.push(`Last listener error: ${snapshot.listener_last_error}`);
+      if (snapshot.listener_last_error) {
+        listenerSummary = translateSettings('slackListenerError');
+        lines.push(translateSettings('slackListenerLastError', { error: snapshot.listener_last_error }));
+      }
+      if (slackListenerStatus) slackListenerStatus.textContent = listenerSummary;
       const receiveTest = snapshot.receive_test;
       let tone = 'neutral';
+      let showStatus = Boolean(snapshot.listener_last_error);
       if (receiveTest) {
+        showStatus = true;
         if (receiveTest.status === 'pending') {
           tone = 'neutral';
           lines.push(translateSettings('slackReceiveWaiting'));
           lines.push(translateSettings('slackReceiveInstruction', { instruction: receiveTest.instruction }));
-          lastSlackReceiveInstruction = receiveTest.instruction && !receiveTest.instruction.startsWith('Preparing') ? receiveTest.instruction : '';
+          lastSlackReceiveInstruction = receiveTest.instruction && receiveTest.instruction !== translateSettings('slackReceivePreparing') ? receiveTest.instruction : '';
         } else if (receiveTest.status === 'received') {
           tone = 'success';
           lines.push(translateSettings('slackReceiveMatched'));
@@ -4087,6 +4206,14 @@
           lastSlackReceiveInstruction = receiveTest.instruction || '';
           lines.push(receiveTest.error || 'Slack receive test expired without a matching mention.');
         }
+      }
+      updateSlackReceiveControls();
+      if (slackAdvancedDetails && showStatus) slackAdvancedDetails.open = true;
+      if (!showStatus) {
+        slackReceiveTestStatus.hidden = true;
+        slackReceiveTestStatus.textContent = '';
+        slackReceiveTestStatus.removeAttribute('data-tone');
+        return;
       }
       slackReceiveTestStatus.textContent = lines.join('\n');
       slackReceiveTestStatus.hidden = false;
@@ -5510,7 +5637,7 @@
       setSlackSettingsTestStatus({ summary: translateSettings('slackTestRunning'), checks: [] });
       try {
         if (hasUnsavedSlackChannelActivationDependencies()) {
-          throw new Error('Save Slack enablement and credential changes before testing a new channel.');
+          throw new Error(translateSettings('slackTestSaveFirst'));
         }
         const response = await fetch('/api/settings/slack-test', {
           method: 'POST',
@@ -5537,7 +5664,8 @@
         startSlackReceiveTestButton.disabled = false;
         return;
       }
-      updateSlackReceiveTestStatus({ listener_enabled: true, listener_connected: false, listener_last_error: null, receive_test: { status: 'pending', instruction: 'Preparing Slack receive test...' } });
+      if (slackAdvancedDetails) slackAdvancedDetails.open = true;
+      updateSlackReceiveTestStatus({ listener_enabled: true, listener_connected: false, listener_last_error: null, receive_test: { status: 'pending', instruction: translateSettings('slackReceivePreparing') } });
       try {
         const response = await fetch('/api/settings/slack-receive-test/start', {
           method: 'POST',

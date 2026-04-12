@@ -3929,7 +3929,8 @@ def test_api_persists_model_settings_to_default_local_config_when_unloaded(confi
         assert persisted.slack.socket_mode_enabled is True
         assert persisted.slack.bot_token == "xoxb-local-persist"
         assert persisted.slack.app_token == "xapp-local-persist"
-        assert persisted.slack.default_channel == "C123"
+        assert persisted.slack.default_channel is None
+        assert persisted.slack.default_channel_display is None
         assert persisted.slack.app_mention_enabled is True
         assert response.json()["config_path"] == str(default_local_path.resolve())
     finally:
@@ -4496,7 +4497,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Start receive test" in response.text
     assert "/api/settings/slack-test" in response.text
     assert "/api/settings/slack-receive-test/start" in response.text
-    assert "window.location.reload();" in response.text
+    assert "window.location.reload();" not in response.text
     assert "await loadModelSettings(true);" not in response.text
     assert "Repo discovery root" in response.text
     assert "Repo discovery depth" in response.text
