@@ -326,9 +326,12 @@ class RuntimeSupervisor:
     async def handle_slack_app_mention(self, inner_payload: dict[str, Any], event: dict[str, Any]) -> None:
         token = self.config.slack.bot_token
         channel_id = event.get("channel") if isinstance(event.get("channel"), str) else None
+        allowed_channel_id = self.config.slack.default_channel
         raw_thread_ts = event.get("thread_ts") or event.get("ts")
         thread_ts = raw_thread_ts if isinstance(raw_thread_ts, str) and raw_thread_ts else None
         if not token or not channel_id or not thread_ts:
+            return
+        if allowed_channel_id and channel_id != allowed_channel_id:
             return
         slack_api_call(
             "chat.postMessage",

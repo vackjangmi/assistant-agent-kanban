@@ -312,6 +312,28 @@ def test_slack_request_draft_flow_posts_thread_review_without_creating_task_befo
     assert [entry.role for entry in draft.transcript] == ["user", "assistant"]
 
 
+def test_handle_slack_app_mention_ignores_non_default_channel(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.default_channel = "C999"
+    runtime, calls = _build_slack_request_runtime(config, monkeypatch, draft_replies=[])
+
+    asyncio.run(runtime.handle_slack_app_mention({"team_id": "T123"}, {"channel": "C123", "ts": "173.456", "text": "<@U1> help"}))
+
+    assert not [method for method, _token, _body in calls if method == "chat.postMessage"]
+
+
+def test_handle_slack_app_mention_accepts_configured_default_channel(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.default_channel = "C123"
+    runtime, calls = _build_slack_request_runtime(config, monkeypatch, draft_replies=[])
+
+    asyncio.run(runtime.handle_slack_app_mention({"team_id": "T123"}, {"channel": "C123", "ts": "173.456", "text": "<@U1> help"}))
+
+    intro_message = cast(dict[str, Any], _latest_call_body(calls, "chat.postMessage"))
+    assert intro_message is not None
+    assert intro_message["channel"] == "C123"
+
+
 def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     create_request_task(config, "seed-task")
