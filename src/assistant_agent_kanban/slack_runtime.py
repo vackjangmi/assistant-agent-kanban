@@ -14,6 +14,7 @@ from .config import AppConfig
 from .events import EventBus
 from .models import WorkerEvent, utc_now
 from .slack_api import slack_api_call, slack_error_message
+from .slack_channel_matcher import slack_channel_matches_config
 
 
 logger = logging.getLogger(__name__)
@@ -316,7 +317,14 @@ class SlackRuntime:
         if session is None or session.status != "pending":
             return
         text = event.get("text")
+        channel_id = event.get("channel") if isinstance(event.get("channel"), str) else None
         if not isinstance(text, str) or session.token not in text:
+            return
+        if not slack_channel_matches_config(
+            token=self.config.slack.bot_token,
+            configured_channel=self.config.slack.default_channel,
+            actual_channel_id=channel_id,
+        ):
             return
         now = utc_now().isoformat()
         async with self._lock:
@@ -325,7 +333,7 @@ class SlackRuntime:
                 return
             current.status = "received"
             current.received_at = now
-            current.channel = event.get("channel") if isinstance(event.get("channel"), str) else None
+            current.channel = channel_id
             current.user = event.get("user") if isinstance(event.get("user"), str) else None
             current.text = text
             current.team_id = inner_payload.get("team_id") if isinstance(inner_payload.get("team_id"), str) else None

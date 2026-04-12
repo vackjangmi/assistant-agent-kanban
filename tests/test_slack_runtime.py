@@ -67,6 +67,52 @@ def test_slack_runtime_matches_receive_test_token(tmp_path):
     assert updated_receive_test["user"] == "U234"
 
 
+def test_slack_runtime_receive_test_ignores_other_channel_when_default_channel_name_is_configured(tmp_path, monkeypatch):
+    config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
+    config.slack.enabled = True
+    config.slack.socket_mode_enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.app_token = "xapp-test"
+    config.slack.app_mention_enabled = True
+    config.slack.default_channel = "#agent-alerts"
+    runtime = SlackRuntime(config, EventBus())
+
+    async def fake_start_listener():
+        runtime._listener_enabled = True
+        runtime._listener_connected = True
+
+    def fake_call(method: str, *, token: str, body=None):
+        assert method == "conversations.info"
+        assert body is not None
+        channel = body["channel"]
+        return {"ok": True, "channel": {"name": "agent-alerts" if channel == "C123" else "other-channel"}}
+
+    runtime.start_listener = fake_start_listener  # type: ignore[method-assign]
+    monkeypatch.setattr("assistant_agent_kanban.slack_channel_matcher.slack_api_call", fake_call)
+
+    async def scenario():
+        snapshot = await runtime.start_receive_test()
+        receive_test = cast(dict[str, Any], snapshot["receive_test"])
+        token = cast(str, receive_test["token"])
+        await runtime._maybe_match_receive_test(
+            {"team_id": "T123"},
+            {"text": f"<@U123> verify {token}", "channel": "C999", "user": "U234"},
+        )
+        pending = runtime.snapshot()
+        await runtime._maybe_match_receive_test(
+            {"team_id": "T123"},
+            {"text": f"<@U123> verify {token}", "channel": "C123", "user": "U234"},
+        )
+        return pending, runtime.snapshot()
+
+    pending, updated = asyncio.run(scenario())
+    pending_receive_test = cast(dict[str, Any], pending["receive_test"])
+    updated_receive_test = cast(dict[str, Any], updated["receive_test"])
+    assert pending_receive_test["status"] == "pending"
+    assert updated_receive_test["status"] == "received"
+    assert updated_receive_test["channel"] == "C123"
+
+
 def test_slack_runtime_restart_if_running_captures_invalid_config(tmp_path):
     config = AppConfig(kanban_root=tmp_path / ".kanban", repo_root=tmp_path / "repo")
     config.slack.enabled = True
@@ -326,6 +372,24 @@ def test_handle_slack_app_mention_accepts_configured_default_channel(configured_
     config, _, _ = configured_paths
     config.slack.default_channel = "C123"
     runtime, calls = _build_slack_request_runtime(config, monkeypatch, draft_replies=[])
+
+    asyncio.run(runtime.handle_slack_app_mention({"team_id": "T123"}, {"channel": "C123", "ts": "173.456", "text": "<@U1> help"}))
+
+    intro_message = cast(dict[str, Any], _latest_call_body(calls, "chat.postMessage"))
+    assert intro_message is not None
+    assert intro_message["channel"] == "C123"
+
+
+def test_handle_slack_app_mention_accepts_configured_default_channel_name(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.default_channel = "#agent-alerts"
+    runtime, calls = _build_slack_request_runtime(config, monkeypatch, draft_replies=[])
+
+    def fake_call(method: str, *, token: str, body=None):
+        assert method == "conversations.info"
+        return {"ok": True, "channel": {"name": "agent-alerts"}}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_channel_matcher.slack_api_call", fake_call)
 
     asyncio.run(runtime.handle_slack_app_mention({"team_id": "T123"}, {"channel": "C123", "ts": "173.456", "text": "<@U1> help"}))
 
