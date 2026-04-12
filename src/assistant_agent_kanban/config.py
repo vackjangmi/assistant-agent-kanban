@@ -150,9 +150,10 @@ class SlackConfig(BaseModel):
     bot_token: str | None = None
     app_token: str | None = None
     default_channel: str | None = None
+    default_channel_display: str | None = None
     app_mention_enabled: bool = False
 
-    @field_validator("bot_token", "app_token", "default_channel", mode="before")
+    @field_validator("bot_token", "app_token", "default_channel", "default_channel_display", mode="before")
     @classmethod
     def normalize_optional_secret(cls, value: str | None) -> str | None:
         if value is None:
