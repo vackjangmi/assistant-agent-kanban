@@ -442,11 +442,6 @@ class SlackMilestoneNotifier:
             return task_dir / f"WORK-{cycle:03d}.md"
         if milestone in {"Review requested changes", "AI review passed"}:
             return task_dir / f"REVIEW-{cycle:03d}.md"
-        if milestone in {"Human verification started", "Human requested changes", "Task completed"}:
-            note_path = context.metadata.human_verification.note_path or f"HUMAN-VERIFY-{cycle:03d}.md"
-            candidate = task_dir / note_path
-            if candidate.exists():
-                return candidate
         return None
 
 

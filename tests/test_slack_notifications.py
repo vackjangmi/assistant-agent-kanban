@@ -442,7 +442,7 @@ def test_slack_notifier_adds_human_verification_action_buttons(configured_paths,
     assert elements[1]["action_id"] == "reject_verification"
 
 
-def test_slack_notifier_uploads_verification_note_changed_files_and_patch(configured_paths, monkeypatch):
+def test_slack_notifier_uploads_changed_files_and_patch_when_human_verification_starts(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     config.slack.enabled = True
     config.slack.bot_token = "xoxb-test"
@@ -487,11 +487,7 @@ def test_slack_notifier_uploads_verification_note_changed_files_and_patch(config
 
     SlackMilestoneNotifier(config, MetadataStore()).notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
 
-    assert [name for name, _content in uploads] == [
-        "HUMAN-VERIFY-001.md",
-        "CHANGED-FILES-001.md",
-        "review-001.patch",
-    ]
+    assert [name for name, _content in uploads] == ["CHANGED-FILES-001.md", "review-001.patch"]
     changed_files_content = dict(uploads)["CHANGED-FILES-001.md"].decode("utf-8")
     assert "# Changed Files (1)" in changed_files_content
     assert "`app.txt` — modified (+1 / -1, hunks=1)" in changed_files_content
@@ -544,11 +540,7 @@ def test_slack_notifier_deduplicates_verification_bundle_uploads(configured_path
     notifier.notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
     notifier.notify_transition(verifying, previous_state=TaskState.COMPLETED_REVIEWS, by="human")
 
-    assert uploads == [
-        "HUMAN-VERIFY-001.md",
-        "CHANGED-FILES-001.md",
-        "review-001.patch",
-    ]
+    assert uploads == ["CHANGED-FILES-001.md", "review-001.patch"]
 
 
 def test_slack_notifier_adds_start_verification_button(configured_paths, monkeypatch):
