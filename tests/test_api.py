@@ -2722,11 +2722,14 @@ def test_api_runs_reviewer_qa_and_exposes_saved_transcript(configured_paths):
         assert payload["qa_path"] == "REVIEWER-QA-001.md"
         assert payload["session_id"] == "ses_reviewer_qa"
         assert "helper copy should still be updated" in payload["answer"]
+        assert "Verdict:" not in payload["answer"]
+        assert "Acceptance Criteria Check" not in payload["answer"]
 
         detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
         assert detail.status_code == 200
         assert detail.json()["human_review"]["reviewer_qa_path"] == "REVIEWER-QA-001.md"
         assert "Can we keep the existing label?" in detail.json()["human_review"]["reviewer_qa_markdown"]
+        assert "Verdict:" not in detail.json()["human_review"]["reviewer_qa_markdown"]
 
     task = KanbanScanner(config).find_task(completed.metadata.task_id)
     assert (task.task_dir / "REVIEWER-QA-001.md").exists()
@@ -4240,6 +4243,7 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert "If the prompt says this is a handshake/session-prep step, return only a short greeting." in planner_agent_path.read_text()
         assert "Do not delegate the final file edits" in implementer_agent_path.read_text()
         assert "If the prompt says this is a final review-artifact step, return only the requested strict JSON object." in reviewer_agent_path.read_text()
+        assert "If the prompt says this is human review Q&A, answer the human's question directly in markdown with a natural response." in reviewer_agent_path.read_text()
         assert "Prefer `Verdict: PASS` when only minor follow-up notes remain" in reviewer_agent_path.read_text()
 
         second_save = client.put(
