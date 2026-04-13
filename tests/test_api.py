@@ -4554,7 +4554,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "reviewNoteVisible: state === 'human-verifying'" in response.text
     assert "function parseReviewerQaTranscript(source)" in response.text
     assert "function updateReviewerQaLiveRefresh()" in response.text
-    assert "if (activeTaskTab === 'reviewer-qa' && appendReviewerQaWorkerLogPayload(payload)) return;" in response.text
+    assert "const shouldWatchReviewerQa = !taskModal.hidden && Boolean(activeTaskId) && reviewerQaQuestionInFlight;" in response.text
+    assert "const reviewerQaUpdated = appendReviewerQaWorkerLogPayload(payload);" in response.text
+    assert "if (reviewerQaUpdated) return;" in response.text
+    assert "const renderedContent = typeof payload.rendered_content === 'string' ? payload.rendered_content : '';" in response.text
+    assert "const renderedDelta = typeof payload.rendered_delta === 'string' ? payload.rendered_delta : '';" in response.text
+    assert "const nextAnswer = renderedContent ? renderedContent.trim() : `${reviewerQaPendingAnswer}${renderedDelta}`.trim();" in response.text
     assert "const previousTab = activeTaskTab;" in response.text
     assert "if (tab === 'reviewer-qa' && previousTab !== 'reviewer-qa')" in response.text
     assert 'class="diff-grid"' in response.text
