@@ -19,7 +19,7 @@ from ..markdown_attachments import attachments_dir_for_task, normalize_markdown_
 from ..metadata_store import MetadataStore
 from ..retry_policy import clear_retry_gate
 from ..assistant_adapter import AssistantAdapter
-from ..models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, TaskContext, TaskErrorInfo, utc_now
+from ..models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, TaskContext, TaskErrorInfo, reset_review_loop_tracking, utc_now
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
@@ -171,8 +171,7 @@ class HumanVerificationService:
             context.metadata.commit.sha = None
             context.metadata.commit.review_sha = None
             self._reset_implementation_context(context.metadata)
-            context.metadata.review.human_rework_required = True
-            context.metadata.review.human_rework_reason = "human verification requested changes"
+            reset_review_loop_tracking(context.metadata.review)
             clear_retry_gate(context.metadata)
             summary = self._human_review_summary(context.metadata)
             context.metadata.errors.append(TaskErrorInfo(code="human-verification-rejected", message=summary or "human verification requested changes"))

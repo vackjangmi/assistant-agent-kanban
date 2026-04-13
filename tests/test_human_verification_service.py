@@ -158,8 +158,8 @@ def test_human_verification_reject_rolls_back_and_records_note(configured_paths)
     artifact = rejected.task_dir / "HUMAN-VERIFY-001.md"
     assert artifact.exists()
     assert "Please keep the old behavior." in artifact.read_text()
-    assert rejected.metadata.review.human_rework_required is True
-    assert rejected.metadata.review.human_rework_reason == "human verification requested changes"
+    assert rejected.metadata.review.human_rework_required is False
+    assert rejected.metadata.review.human_rework_reason is None
 
 
 def test_human_verification_reject_resets_implementation_resume_context(configured_paths):
@@ -190,7 +190,60 @@ def test_human_verification_reject_resets_implementation_resume_context(configur
     assert refreshed.metadata.retry_gate.reason is None
     assert refreshed.metadata.retry_gate.consecutive_count == 0
     assert refreshed.metadata.retry_gate.not_before is None
-    assert refreshed.metadata.review.human_rework_required is True
+    assert refreshed.metadata.review.human_rework_required is False
+
+
+def test_human_verification_reject_clears_stale_review_loop_pause_fields(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-reject-clears-review-pause-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    in_progress = scanner.find_task(completed.metadata.task_id)
+    in_progress.metadata.review.consecutive_rework_loops = 3
+    in_progress.metadata.review.total_rework_loops = 5
+    in_progress.metadata.review.rework_loop_plan_revision = in_progress.metadata.plan.revision
+    in_progress.metadata.review.primary_blocker = "changed-scope-coverage"
+    in_progress.metadata.review.last_blocker_patch_fingerprint = "abc123"
+    in_progress.metadata.review.last_backstop_pause_total_rework_loops = 5
+    in_progress.metadata.review.human_rework_required = True
+    in_progress.metadata.review.human_rework_reason = "stale pause"
+    service.metadata_store.save(in_progress.task_dir, in_progress.metadata)
+
+    moved = service.reject(completed.metadata.task_id, by="human", note="Please revise this.")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.review.consecutive_rework_loops == 0
+    assert refreshed.metadata.review.total_rework_loops == 0
+    assert refreshed.metadata.review.rework_loop_plan_revision == 0
+    assert refreshed.metadata.review.primary_blocker is None
+    assert refreshed.metadata.review.last_blocker_patch_fingerprint is None
+    assert refreshed.metadata.review.last_backstop_pause_total_rework_loops == 0
+    assert refreshed.metadata.review.human_rework_required is False
+    assert refreshed.metadata.review.human_rework_reason is None
+
+
+def test_human_verification_reject_makes_task_auto_dispatchable_again(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-reject-auto-dispatch-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+
+    moved = service.reject(completed.metadata.task_id, by="human", note="Please revise this.")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        service.metadata_store,
+        service.locks,
+        service.transitions,
+        EventBus(),
+        adapter=FakeAdapter(["## Summary\nimplemented again"]),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert moved.state == TaskState.TODOS
+    assert [task.metadata.task_id for task in worker.candidate_tasks()] == [moved.metadata.task_id]
 
 
 def test_human_verification_reject_discards_review_branch_even_when_patch_file_is_missing(configured_paths):
