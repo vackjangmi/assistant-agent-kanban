@@ -615,6 +615,53 @@ def test_reviewer_human_qa_writes_artifact_and_uses_thinking_mode(configured_pat
     assert "The current implementation is acceptable" in artifact_path.read_text()
 
 
+def test_reviewer_human_qa_prompt_avoids_formal_review_template(configured_paths):
+    class PromptCapturingAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__(["The label can stay, but the helper copy should be updated."])
+            self.prompts: list[str] = []
+
+        def run(self, **kwargs):
+            self.prompts.append(kwargs["prompt"])
+            return super().run(**kwargs)
+
+    config, _, _ = configured_paths
+    create_request_task(config, "reviewer-qa-prompt-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    waiting_reviews = scanner.scan()[0]
+    reviewing = transitions.move(waiting_reviews, TaskState.REVIEWING, by="reviewer")
+    completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+    metadata_store.save(completed.task_dir, completed.metadata)
+
+    adapter = PromptCapturingAdapter()
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    result = worker.answer_human_question(completed.metadata.task_id, by="human", question="Can we keep the existing label?")
+    prompt = adapter.prompts[0]
+
+    assert "# Human Review Q&A" in prompt
+    assert "Answer the human's question directly in natural markdown." in prompt
+    assert "Do not include a `Verdict:` line." in prompt
+    assert "Do not use fixed review sections like acceptance criteria, findings, risks, integration readiness, or required follow-ups." in prompt
+    assert "Can we keep the existing label?" in prompt
+    assert "Keep one exact machine-readable line" not in prompt
+    assert "Verdict: PASS" not in prompt
+    assert "Verdict: NEEDS_CHANGES" not in prompt
+    assert "# Review Instructions" not in prompt
+    assert "Acceptance Criteria Check" not in prompt
+    assert "Required Follow-ups" not in prompt
+    assert result["answer"] == "The label can stay, but the helper copy should be updated."
+
+
 def test_reviewer_human_qa_async_emits_worker_log_events(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "reviewer-qa-live-task")

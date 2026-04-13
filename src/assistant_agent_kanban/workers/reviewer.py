@@ -410,7 +410,7 @@ class ReviewerWorker(WorkerBase):
                 "log_name": log_path.name,
             }
 
-    def _build_reviewer_source(self, task_dir: Path, metadata) -> str:
+    def _build_reviewer_source(self, task_dir: Path, metadata, *, include_review_instructions: bool = True) -> str:
         language = generation_language_code(metadata.request.language)
         implementation_iteration = metadata.cycle
         strings = REVIEWER_TEXT[language]
@@ -462,24 +462,28 @@ class ReviewerWorker(WorkerBase):
         if current_work.exists():
             sections.extend(["", f"# {strings['current_work_artifact']}", "", current_work.read_text().rstrip()])
 
-        sections.extend(
-            [
-                "",
-                f"# {strings['review_instructions']}",
-                "",
-                *strings["instructions"],
-            ]
-        )
+        if include_review_instructions:
+            sections.extend(
+                [
+                    "",
+                    f"# {strings['review_instructions']}",
+                    "",
+                    *strings["instructions"],
+                ]
+            )
         return "\n".join(section for section in sections if section is not None)
 
     def _build_reviewer_qa_prompt(self, task_dir: Path, metadata, question: str) -> str:
-        source = self._build_reviewer_source(task_dir, metadata)
+        source = self._build_reviewer_source(task_dir, metadata, include_review_instructions=False)
         instructions = "\n".join(
             [
                 source,
                 "",
                 "# Human Review Q&A",
-                "Answer the human's question directly in markdown.",
+                "Answer the human's question directly in natural markdown.",
+                "Do not include a `Verdict:` line.",
+                "Do not use fixed review sections like acceptance criteria, findings, risks, integration readiness, or required follow-ups.",
+                "Use only the amount of structure needed to answer clearly. A short paragraph or a few bullets is usually enough.",
                 "Use the existing reviewed result and prior task artifacts as the source of truth.",
                 "Do not produce the final review artifact JSON.",
                 "Do not request file edits or change task state yourself.",
@@ -489,7 +493,7 @@ class ReviewerWorker(WorkerBase):
                 question,
             ]
         )
-        return self.build_prompt(instructions, metadata, phase="reviewer")
+        return self.build_prompt(instructions, metadata, phase="reviewer_qa")
 
     def _ensure_reviewer_qa_path(self, metadata) -> str:
         expected_path = f"REVIEWER-QA-{metadata.cycle:03d}.md"
