@@ -5,6 +5,7 @@ import subprocess
 
 import pytest
 
+from assistant_agent_kanban.config import PROJECT_ROOT
 from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.exceptions import TransitionError
 from assistant_agent_kanban.integration_manager import IntegrationManager
@@ -167,3 +168,32 @@ def test_task_deletion_service_removes_docs_from_configured_target_docs_root(con
     service.delete(task.metadata.task_id, by="human")
 
     assert not docs_root.exists()
+
+
+def test_task_deletion_service_allows_delete_when_target_repo_overlaps_orchestrator(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "delete-overlapping-target-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    sentinel_docs_root = PROJECT_ROOT / "docs" / "kanban-agent" / "2099" / "12" / "31" / task.metadata.task_id
+    sentinel_docs_root.mkdir(parents=True, exist_ok=True)
+    (sentinel_docs_root / "HUMAN-VERIFY-001.md").write_text("do not delete\n")
+    task.metadata.target.repo_root = str(PROJECT_ROOT)
+    metadata_store.save(task.task_dir, task.metadata)
+
+    service = TaskDeletionService(config, scanner, TaskLockManager(config, metadata_store), IntegrationManager(config))
+    try:
+        service.delete(task.metadata.task_id, by="human")
+
+        with pytest.raises(FileNotFoundError):
+            scanner.find_task(task.metadata.task_id)
+        assert sentinel_docs_root.exists()
+    finally:
+        if sentinel_docs_root.exists():
+            for path in sorted(sentinel_docs_root.rglob("*"), reverse=True):
+                if path.is_file():
+                    path.unlink()
+                elif path.is_dir():
+                    path.rmdir()
+            sentinel_docs_root.rmdir()

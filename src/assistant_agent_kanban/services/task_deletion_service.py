@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 from ..config import AppConfig
-from ..exceptions import IntegrationError, TaskNotFoundError, TransitionError
+from ..exceptions import TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..models import TaskContext, TaskMetadata
@@ -82,8 +82,8 @@ class TaskDeletionService:
     def _delete_target_repo_docs(self, metadata: TaskMetadata) -> None:
         try:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
-        except ValueError as exc:
-            raise IntegrationError(str(exc)) from exc
+        except ValueError:
+            return
         try:
             docs_root = self.config.resolve_target_repo_docs_root(target_repo_root)
         except ValueError as exc:
