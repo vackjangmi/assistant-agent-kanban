@@ -26,8 +26,11 @@ def parse_request_markdown(content: str) -> ParsedRequest:
     if content.startswith("---\n"):
         parts = content.split("\n---\n", 1)
         if len(parts) == 2:
-            metadata = yaml.safe_load(parts[0][4:]) or {}
             body = parts[1]
+            try:
+                metadata = yaml.safe_load(parts[0][4:]) or {}
+            except yaml.YAMLError:
+                metadata = {}
     target = metadata.get("target") if isinstance(metadata, dict) else None
     raw_title = metadata.get("title") if isinstance(metadata, dict) else None
     title = raw_title if isinstance(raw_title, str) else _extract_title(body)

@@ -51,3 +51,29 @@ def test_request_parser_reads_plan_auto_approve_from_front_matter():
     )
 
     assert parsed.plan_auto_approve is True
+
+
+def test_request_parser_ignores_invalid_yaml_front_matter_and_uses_body():
+    parsed = parse_request_markdown(
+        "\n".join(
+            [
+                "---",
+                "title: `disposition` / `disposition_matrix` rename",
+                "target:",
+                "  repo_root: /tmp/repo",
+                "  base_branch: main",
+                "---",
+                "",
+                "# Rename disposition fields",
+                "",
+                "## Goal",
+                "Keep startup recovery alive even when front matter is malformed.",
+            ]
+        )
+    )
+
+    assert parsed.title == "Rename disposition fields"
+    assert parsed.target_repo_root is None
+    assert parsed.base_branch is None
+    assert parsed.body.lstrip().startswith("# Rename disposition fields")
+    assert "front matter is malformed" in parsed.body
