@@ -7276,8 +7276,17 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(currentRequestDraftPayload(message)),
         });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || translateRequest('draftReplyError'));
+        const rawResponseText = await response.text();
+        let payload = {};
+        if (rawResponseText) {
+          try {
+            payload = JSON.parse(rawResponseText);
+          } catch (_error) {
+            if (!response.ok) throw new Error(rawResponseText.trim() || translateRequest('draftReplyError'));
+            throw new Error(translateRequest('draftReplyError'));
+          }
+        }
+        if (!response.ok) throw new Error(payload.detail || rawResponseText.trim() || translateRequest('draftReplyError'));
         if (sessionToken !== requestDraftSessionToken) return;
         requestDraftId = payload.request_draft_id || requestDraftId;
         requestUploadToken = payload.request_upload_token || requestUploadToken;

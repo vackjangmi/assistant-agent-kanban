@@ -534,6 +534,37 @@ def test_api_rejects_request_draft_adapter_failures_cleanly(configured_paths):
     assert response.json()["detail"] == "request drafting backend unavailable"
 
 
+def test_api_returns_json_for_unexpected_request_draft_failures(configured_paths):
+    config, _, _ = configured_paths
+
+    class CrashingDraftAdapter(FakeAdapter):
+        def run(self, **kwargs):
+            raise RuntimeError("Internal Server Error")
+
+    crashing_adapter = CrashingDraftAdapter([])
+    config.runtime.role_backends.request_draft = "codex"
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": crashing_adapter},
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Draft unexpected failure",
+                "goal": "Show a structured API error.",
+                "message": "Please refine this.",
+            },
+        )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Internal Server Error"
+
+
 def test_api_request_creation_flow_stays_authoritative_after_draft_assistance(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -4533,6 +4564,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'id="request-draft-image-input" type="file" accept="image/*" hidden' in response.text
     assert 'id="attach-request-draft-image" class="ghost-button request-draft-attach"' in response.text
     assert 'id="request-draft-attachment-status" class="muted request-draft-attachment-status"' in response.text
+    assert "const rawResponseText = await response.text();" in response.text
+    assert "payload = JSON.parse(rawResponseText);" in response.text
+    assert "if (!response.ok) throw new Error(rawResponseText.trim() || translateRequest('draftReplyError'));" in response.text
     assert "Please help turn these notes into a crisp request. Tighten the goal, highlight missing constraints, and suggest clearer acceptance criteria." in response.text
     assert 'class="editor-textarea reviewer-qa-input"' in response.text
     assert 'class="reviewer-qa-send"' in response.text

@@ -828,6 +828,9 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
         except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            detail = str(exc).strip() or "request drafting failed"
+            raise HTTPException(status_code=500, detail=detail) from exc
         response = result.model_dump(mode="json")
         response.update(
             {
