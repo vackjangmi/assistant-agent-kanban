@@ -436,7 +436,7 @@ class SlackMilestoneNotifier:
     def _artifact_path_for_milestone(self, context: TaskContext, *, milestone: str) -> Path | None:
         task_dir = context.task_dir
         cycle = context.metadata.cycle
-        if milestone == "Plan ready for review":
+        if milestone in {"Plan ready for review", "Plan approved"}:
             return task_dir / (context.metadata.plan.path or "PLAN.md")
         if milestone == "Implementation ready for review":
             return task_dir / f"WORK-{cycle:03d}.md"

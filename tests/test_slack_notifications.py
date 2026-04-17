@@ -84,6 +84,39 @@ def test_slack_notifier_uploads_plan_artifact_when_plan_is_ready(configured_path
     assert uploads[0][4] == b"# Plan\n\nShip it\n"
 
 
+def test_slack_notifier_uploads_plan_artifact_when_plan_is_auto_approved(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-plan-auto-approved-task")
+    task = KanbanScanner(config).scan()[0]
+    (task.task_dir / "PLAN.md").write_text("# Plan\n\nAuto approve it\n")
+    task.metadata.plan.path = "PLAN.md"
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    MetadataStore().save(task.task_dir, task.metadata)
+    todo = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.TODOS)
+    todo.metadata.state = TaskState.TODOS
+    uploads: list[tuple[str, str, str, str, bytes]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append((token, channel_id, thread_ts, filename, content))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    SlackMilestoneNotifier(config, MetadataStore()).notify_transition(todo, previous_state=TaskState.PLAN_APPROVING, by="plan_approval")
+
+    assert uploads
+    assert uploads[0][3] == "PLAN.md"
+    assert uploads[0][4] == b"# Plan\n\nAuto approve it\n"
+
+
 def test_slack_notifier_skips_non_milestone_transition(configured_paths, monkeypatch):
     config, _, _ = configured_paths
     config.slack.enabled = True
