@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -180,6 +181,18 @@ class HumanVerificationService:
             self.metadata_store.save(context.task_dir, context.metadata)
             return self.transitions.move(context, TaskState.TODOS, by=by, note=summary or "human verification requested changes")
 
+    def rerequest_from_reviewer_qa(self, task_id: str, *, by: str) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state not in {TaskState.COMPLETED_REVIEWS, TaskState.HUMAN_VERIFYING}:
+            raise TransitionError("reviewer Q&A re-request is only allowed from completed-reviews or human-verifying")
+        note = self._build_reviewer_qa_rerequest_note(context)
+        if not note:
+            raise TransitionError("reviewer Q&A re-request requires at least one completed reviewer answer")
+        if context.state == TaskState.COMPLETED_REVIEWS:
+            self.start(task_id, by=by)
+        self.save_note(task_id, by=by, content=note)
+        return self.reject(task_id, by=by, note="")
+
     def approve(self, task_id: str, *, by: str, completion_mode: str = "new-branch") -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
@@ -231,6 +244,86 @@ class HumanVerificationService:
             return self.scanner.find_task(task_id)
         except FileNotFoundError as exc:
             raise TaskNotFoundError(task_id) from exc
+
+    def _build_reviewer_qa_rerequest_note(self, context: TaskContext) -> str:
+        latest_exchange = self._latest_reviewer_qa_exchange(context)
+        if latest_exchange is None:
+            return ""
+        question, answer = latest_exchange
+        sections = [
+            "## Re-request Note",
+            "",
+            "Generated from the latest reviewer Q&A exchange.",
+            "",
+            "### Reviewer Question",
+            question or "No reviewer question recorded.",
+            "",
+            "### Reviewer Answer",
+            answer,
+            "",
+            "### Requested Follow-up",
+            "Please address the reviewer feedback above in the next implementation pass.",
+        ]
+        return "\n".join(sections).strip()
+
+    def _latest_reviewer_qa_exchange(self, context: TaskContext) -> tuple[str, str] | None:
+        artifact_path = self._latest_reviewer_qa_path(context)
+        if artifact_path is None or not artifact_path.exists() or not artifact_path.is_file():
+            return None
+        entries = self._parse_reviewer_qa_entries(artifact_path.read_text())
+        for index in range(len(entries) - 1, -1, -1):
+            role, text = entries[index]
+            if role != "answer" or not text:
+                continue
+            question = ""
+            if index > 0 and entries[index - 1][0] == "question":
+                question = entries[index - 1][1]
+            return question, text
+        return None
+
+    def _latest_reviewer_qa_path(self, context: TaskContext) -> Path | None:
+        reviewer_qa_files = sorted(context.task_dir.glob("REVIEWER-QA-*.md"))
+        if reviewer_qa_files:
+            return reviewer_qa_files[-1]
+        if context.metadata.review.qa_path:
+            candidate = context.task_dir / context.metadata.review.qa_path
+            return candidate
+        return None
+
+    def _parse_reviewer_qa_entries(self, markdown: str) -> list[tuple[str, str]]:
+        entries: list[tuple[str, str]] = []
+        role: str | None = None
+        lines: list[str] = []
+        heading_pattern = re.compile(r"^##\s+(Question|Answer)\b.*$", re.IGNORECASE)
+        for raw_line in markdown.replace("\r\n", "\n").split("\n"):
+            match = heading_pattern.match(raw_line.strip())
+            if match:
+                if role is not None:
+                    text = self._normalize_reviewer_qa_entry_text(lines)
+                    if text:
+                        entries.append((role, text))
+                role = "question" if match.group(1).lower() == "question" else "answer"
+                lines = []
+                continue
+            if role is not None:
+                lines.append(raw_line)
+        if role is not None:
+            text = self._normalize_reviewer_qa_entry_text(lines)
+            if text:
+                entries.append((role, text))
+        return entries
+
+    def _normalize_reviewer_qa_entry_text(self, lines: list[str]) -> str:
+        trimmed = list(lines)
+        while trimmed and not trimmed[0].strip():
+            trimmed.pop(0)
+        while trimmed and trimmed[0].lstrip().startswith("- "):
+            trimmed.pop(0)
+        while trimmed and not trimmed[0].strip():
+            trimmed.pop(0)
+        while trimmed and not trimmed[-1].strip():
+            trimmed.pop()
+        return "\n".join(trimmed).strip()
 
     def _ensure_human_verification_note(self, task_dir: Path, metadata, *, verdict: str) -> None:
         expected_note_path = f"HUMAN-VERIFY-{metadata.cycle:03d}.md"

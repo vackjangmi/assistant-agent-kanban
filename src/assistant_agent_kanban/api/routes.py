@@ -1069,6 +1069,17 @@ def build_router() -> APIRouter:
         await runtime.rescan_and_publish()
         return result
 
+    @router.post("/api/tasks/{task_id}/reviewer-qa-rerequest")
+    async def rerequest_from_reviewer_qa(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            moved = await asyncio.to_thread(runtime.verification_service.rerequest_from_reviewer_qa, task_id, by="human")
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
     @router.post("/api/tasks/{task_id}/reject-verification")
     async def reject_verification(task_id: str, payload: HumanVerificationPayload, request: Request):
         runtime = request.app.state.runtime

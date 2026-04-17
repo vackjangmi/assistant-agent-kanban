@@ -162,6 +162,109 @@ def test_human_verification_reject_rolls_back_and_records_note(configured_paths)
     assert rejected.metadata.review.human_rework_reason is None
 
 
+def test_human_verification_rerequest_from_reviewer_qa_moves_completed_reviews_back_to_todos(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-rerequest-from-qa-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    qa_path = completed.task_dir / "REVIEWER-QA-001.md"
+    qa_path.write_text(
+        "\n".join(
+            [
+                "# Reviewer Q&A",
+                "",
+                "## Question 1",
+                "- Asked by: human",
+                "- Asked at: 2026-01-01T00:00:00+00:00",
+                "",
+                "Can we keep the existing label?",
+                "",
+                "## Answer 1",
+                "- Answered by: reviewer",
+                "- Answered at: 2026-01-01T00:00:05+00:00",
+                "",
+                "The label can stay, but the helper copy still needs to change.",
+                "",
+            ]
+        )
+    )
+    completed.metadata.review.qa_path = qa_path.name
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+
+    moved = service.rerequest_from_reviewer_qa(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.TODOS
+    assert refreshed.metadata.human_verification.note_markdown.startswith("## Re-request Note")
+    assert "Can we keep the existing label?" in refreshed.metadata.human_verification.note_markdown
+    assert "The label can stay, but the helper copy still needs to change." in refreshed.metadata.human_verification.note_markdown
+    assert (repo_root / "app.txt").read_text() == "hello\n"
+
+
+def test_human_verification_rerequest_from_reviewer_qa_requires_completed_answer(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-rerequest-no-answer-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    qa_path = completed.task_dir / "REVIEWER-QA-001.md"
+    qa_path.write_text(
+        "\n".join(
+            [
+                "# Reviewer Q&A",
+                "",
+                "## Question 1",
+                "- Asked by: human",
+                "- Asked at: 2026-01-01T00:00:00+00:00",
+                "",
+                "Can we keep the existing label?",
+                "",
+            ]
+        )
+    )
+    completed.metadata.review.qa_path = qa_path.name
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+
+    with pytest.raises(TransitionError, match="reviewer Q&A re-request requires at least one completed reviewer answer"):
+        service.rerequest_from_reviewer_qa(completed.metadata.task_id, by="human")
+
+
+def test_human_verification_rerequest_from_reviewer_qa_works_during_human_verifying(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-rerequest-human-verifying-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    qa_path = completed.task_dir / "REVIEWER-QA-001.md"
+    qa_path.write_text(
+        "\n".join(
+            [
+                "# Reviewer Q&A",
+                "",
+                "## Question 1",
+                "- Asked by: human",
+                "- Asked at: 2026-01-01T00:00:00+00:00",
+                "",
+                "What should change next?",
+                "",
+                "## Answer 1",
+                "- Answered by: reviewer",
+                "- Answered at: 2026-01-01T00:00:05+00:00",
+                "",
+                "Please revise the helper copy before approval.",
+                "",
+            ]
+        )
+    )
+    completed.metadata.review.qa_path = qa_path.name
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+    service.start(completed.metadata.task_id, by="human")
+
+    moved = service.rerequest_from_reviewer_qa(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.human_verification.note_markdown.startswith("## Re-request Note")
+    assert "Please revise the helper copy before approval." in refreshed.metadata.human_verification.note_markdown
+    assert (repo_root / "app.txt").read_text() == "hello\n"
+
+
 def test_human_verification_reject_resets_implementation_resume_context(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-reject-reset-implementation-task")

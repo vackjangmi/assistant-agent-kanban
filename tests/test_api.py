@@ -2767,6 +2767,49 @@ def test_api_runs_reviewer_qa_and_exposes_saved_transcript(configured_paths):
     assert reviewer_adapter.run_calls[0]["show_thinking"] is True
 
 
+def test_api_rerequests_from_latest_reviewer_qa_answer(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "reviewer-qa-rerequest-api-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "reviewer-qa-rerequest-api-task")
+    task = scanner.find_task(completed.metadata.task_id)
+    (task.task_dir / "REVIEWER-QA-001.md").write_text(
+        "\n".join(
+            [
+                "# Reviewer Q&A",
+                "",
+                "## Question 1",
+                "- Asked by: human",
+                "- Asked at: 2026-01-01T00:00:00+00:00",
+                "",
+                "Can we keep the existing label?",
+                "",
+                "## Answer 1",
+                "- Answered by: reviewer",
+                "- Answered at: 2026-01-01T00:00:05+00:00",
+                "",
+                "The label can stay, but the helper copy still needs to change.",
+                "",
+            ]
+        )
+    )
+    task.metadata.review.qa_path = "REVIEWER-QA-001.md"
+    scanner.metadata_store.save(task.task_dir, task.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{completed.metadata.task_id}/reviewer-qa-rerequest")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["state"] == "todos"
+
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.status_code == 200
+        assert detail.json()["metadata"]["state"] == "todos"
+        assert "## Re-request Note" in detail.json()["human_review"]["note_markdown"]
+        assert "helper copy still needs to change" in detail.json()["human_review"]["note_markdown"]
+
+
 def test_api_prefers_existing_reviewer_qa_artifact_over_stale_metadata_path(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
