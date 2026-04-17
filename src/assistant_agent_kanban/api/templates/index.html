@@ -1251,6 +1251,10 @@
     .reviewer-qa-role, .request-draft-role, .transcript-live-badge { display: inline-flex; align-items: center; padding: 4px 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); color: var(--accent-strong); font-size: 0.68rem; font-weight: 700; line-height: 1.2; letter-spacing: 0.06em; text-transform: uppercase; }
     .transcript-live-badge { border-color: rgba(124,79,44,0.18); background: rgba(255,249,239,0.94); color: var(--accent-strong); }
     .reviewer-qa-bubble, .request-draft-bubble { max-width: 100%; padding: 2px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; line-height: 1.55; }
+    .reviewer-qa-entry-actions { display: grid; gap: 6px; justify-items: start; margin-top: -2px; }
+    .reviewer-qa-entry-action-status { min-height: 1.1em; font-size: 0.88rem; line-height: 1.4; color: var(--muted); }
+    .reviewer-qa-entry[data-side="current"] .reviewer-qa-entry-actions { justify-items: end; }
+    .reviewer-qa-rerequest { min-height: 36px; }
     .reviewer-qa-entry[data-role="transcript"] .reviewer-qa-bubble { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.94rem; }
     body[data-theme="dark"] .reviewer-qa-log, body[data-theme="dark"] .request-draft-log { border-color: var(--review-border); background: linear-gradient(180deg, rgba(24, 35, 45, 0.98), rgba(17, 25, 33, 0.97)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
     body[data-theme="dark"] .reviewer-qa-shell, body[data-theme="dark"] .request-draft-shell { border-color: var(--review-border); background: linear-gradient(180deg, rgba(31, 43, 54, 0.98), rgba(23, 32, 41, 0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
@@ -1260,6 +1264,7 @@
     body[data-theme="dark"] .reviewer-qa-meta, body[data-theme="dark"] .request-draft-meta { border-color: rgba(214, 171, 120, 0.16); background: rgba(214, 171, 120, 0.1); }
     body[data-theme="dark"] .reviewer-qa-role, body[data-theme="dark"] .request-draft-role, body[data-theme="dark"] .transcript-live-badge { border-color: rgba(186, 200, 214, 0.14); background: rgba(37, 49, 62, 0.88); color: #f2cfaa; }
     body[data-theme="dark"] .transcript-live-badge { border-color: rgba(214, 171, 120, 0.22); background: rgba(214, 171, 120, 0.14); }
+    body[data-theme="dark"] .reviewer-qa-entry-action-status { color: #b8c7d3; }
     .reviewer-qa-composer, .request-draft-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
     .request-draft-composer-main { display: grid; gap: 8px; min-width: 0; }
     .request-draft-composer-actions { display: grid; gap: 10px; align-self: stretch; }
@@ -2520,6 +2525,7 @@
     let reviewerQaPendingAnswer = '';
     let reviewerQaQuestionInFlight = false;
     let reviewerQaDraftBackup = '';
+    let reviewerQaRerequestInFlight = false;
     let reviewerQaLastRenderedSignature = '';
     let activeRetrospectiveTargetRepoRoot = '';
     let activeRetrospectiveBaseBranch = '';
@@ -5037,15 +5043,32 @@
       return String(label || 'live').replace(/^[\s·•\-–—]+/, '').trim() || 'live';
     }
 
+    function canShowReviewerQaRerequestAction() {
+      const state = activeTaskDetail?.metadata?.state;
+      return state === 'completed-reviews' || state === 'human-verifying';
+    }
+
     function renderReviewerQaTranscript(entries) {
       if (!entries.length) {
         return '<p class="reviewer-qa-empty">No reviewer Q&amp;A recorded yet.</p>';
       }
-      return entries.map((entry) => {
+      const lastAnsweredIndex = entries.reduce((latestIndex, entry, index) => {
+        if (entry.role === 'answer' && !entry.pending) return index;
+        return latestIndex;
+      }, -1);
+      const allowRerequest = canShowReviewerQaRerequestAction();
+      const rerequestDisabled = taskDetailStale || reviewerQaRerequestInFlight;
+      const rerequestActionStatus = reviewerQaRerequestInFlight
+        ? '<div class="reviewer-qa-entry-action-status">재요청 중...</div>'
+        : '';
+      return entries.map((entry, index) => {
         const label = entry.role === 'question' ? 'You' : (entry.role === 'answer' ? 'Reviewer' : 'Transcript');
         const side = entry.role === 'question' ? 'current' : (entry.role === 'answer' ? 'other' : 'system');
         const liveBadge = entry.pending && entry.role === 'answer' ? `<span class="transcript-live-badge">${escapeHtml(formatTranscriptLiveBadge('live'))}</span>` : '';
-        return `<article class="reviewer-qa-entry" data-role="${escapeHtml(entry.role)}" data-side="${side}"${entry.pending ? ' data-pending="true"' : ''}><div class="reviewer-qa-shell"><div class="reviewer-qa-meta"><span class="reviewer-qa-role">${escapeHtml(label)}</span><div class="reviewer-qa-meta-badges">${liveBadge}</div></div><div class="reviewer-qa-bubble">${escapeHtml(entry.text)}</div></div></article>`;
+        const rerequestAction = allowRerequest && entry.role === 'answer' && !entry.pending && lastAnsweredIndex === index
+          ? `<div class="reviewer-qa-entry-actions"><button type="button" class="ghost-button reviewer-qa-rerequest" data-reviewer-qa-rerequest="true"${rerequestDisabled ? ' disabled' : ''}>재요청하기</button>${rerequestActionStatus}</div>`
+          : '';
+        return `<article class="reviewer-qa-entry" data-role="${escapeHtml(entry.role)}" data-side="${side}"${entry.pending ? ' data-pending="true"' : ''}><div class="reviewer-qa-shell"><div class="reviewer-qa-meta"><span class="reviewer-qa-role">${escapeHtml(label)}</span><div class="reviewer-qa-meta-badges">${liveBadge}</div></div><div class="reviewer-qa-bubble">${escapeHtml(entry.text)}</div>${rerequestAction}</div></article>`;
       }).join('');
     }
 
@@ -5060,6 +5083,7 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
+      updateReviewerQaPanel();
     }
 
     async function loadTargetRepoOptions() {
@@ -7614,7 +7638,7 @@
       reviewerQaSourceMarkdown = value || '';
       const entries = buildReviewerQaEntries();
       const nextMarkup = renderReviewerQaTranscript(entries);
-      const nextSignature = JSON.stringify({ source: reviewerQaSourceMarkdown, pendingQuestion: reviewerQaPendingQuestion, pendingAnswer: reviewerQaPendingAnswer, inFlight: reviewerQaQuestionInFlight });
+      const nextSignature = JSON.stringify({ source: reviewerQaSourceMarkdown, pendingQuestion: reviewerQaPendingQuestion, pendingAnswer: reviewerQaPendingAnswer, inFlight: reviewerQaQuestionInFlight, rerequestInFlight: reviewerQaRerequestInFlight, state: activeTaskDetail?.metadata?.state || '', stale: taskDetailStale });
       if (reviewerQaLastRenderedSignature === nextSignature && taskReviewerQaTranscript.innerHTML === nextMarkup) return;
       const scrollState = preserveScroll ? captureReviewerQaScrollState() : { pinnedToBottom: true, offsetFromBottom: 0 };
       reviewerQaLastRenderedSignature = nextSignature;
@@ -7626,10 +7650,15 @@
       const state = activeTaskDetail?.metadata?.state;
       const canAskReviewer = state === 'completed-reviews' || state === 'human-verifying';
       taskReviewerQaPanel.hidden = !canAskReviewer;
+      setReviewerQaTranscript(reviewerQaSourceMarkdown);
       if (!canAskReviewer) return;
-      askReviewerQuestionButton.disabled = taskDetailStale || reviewerQaQuestionInFlight || !(taskReviewerQaInput.value || '').trim();
+      askReviewerQuestionButton.disabled = taskDetailStale || reviewerQaQuestionInFlight || reviewerQaRerequestInFlight || !(taskReviewerQaInput.value || '').trim();
       if (taskDetailStale) {
         taskReviewerQaStatus.textContent = 'Refresh task details before asking another reviewer question.';
+        return;
+      }
+      if (reviewerQaRerequestInFlight) {
+        taskReviewerQaStatus.textContent = '재요청을 보내는 중...';
         return;
       }
       if (reviewerQaQuestionInFlight) {
@@ -7643,8 +7672,32 @@
         : 'Ask the reviewer follow-up questions. OpenCode reviewer runs use Thinking Mode when available, and the runtime log is saved as reviewer-qa.jsonl.';
     }
 
+    async function rerequestReviewerQa() {
+      if (!activeTaskId || taskDetailStale || reviewerQaRerequestInFlight || !canShowReviewerQaRerequestAction()) return;
+      reviewerQaRerequestInFlight = true;
+      taskModalError.hidden = true;
+      taskModalError.textContent = '';
+      updateReviewerQaPanel();
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/reviewer-qa-rerequest`, {
+          method: 'POST',
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Failed to re-request reviewer follow-up.');
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false });
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskReviewerQaStatus.textContent = error.message;
+      } finally {
+        reviewerQaRerequestInFlight = false;
+        updateReviewerQaPanel();
+      }
+    }
+
     async function askReviewerQuestion() {
-      if (!activeTaskId || taskDetailStale) return;
+      if (!activeTaskId || taskDetailStale || reviewerQaRerequestInFlight) return;
       const question = (taskReviewerQaInput.value || '').trim();
       let reviewerQaRequestCommitted = false;
       if (!question) {
@@ -9277,6 +9330,14 @@
     });
     taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);
     taskReviewerQaTranscript.addEventListener('scroll', updateReviewerQaTranscriptPinnedToBottom);
+    taskReviewerQaTranscript.addEventListener('click', (event) => {
+      if (!event.target.closest('[data-reviewer-qa-rerequest]')) return;
+      rerequestReviewerQa().catch((error) => {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        updateReviewerQaPanel();
+      });
+    });
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
     async function handleChangedFileViewedToggleChange(event) {
       const toggle = event.target.closest('[data-viewed-changed-file-id]');
