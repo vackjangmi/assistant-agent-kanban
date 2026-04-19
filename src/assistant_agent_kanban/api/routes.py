@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import cast
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
@@ -13,7 +13,8 @@ from fastapi.responses import FileResponse
 
 from ..assistant_factory import build_role_adapters
 from ..agent_materializer import ensure_runtime_agents
-from ..assistant_adapter import AssistantBackendStatusSnapshot
+from ..assistant_adapter import AssistantBackendStatusSnapshot, AssistantModelSnapshot
+from ..claude_adapter import CLAUDE_MODEL_ALIASES
 from ..config import ASSISTANT_ROLES, DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, AssistantBackend, normalize_runtime_assistant
 from ..enums import TaskState
 from ..exceptions import AdapterRunError, CommitError, IntegrationError, TaskNotFoundError, TransitionError
@@ -164,7 +165,7 @@ class ModelSettingsPayload(BaseModel):
                 return None
             normalized = normalize_runtime_assistant(value)
             if normalized is None:
-                raise ValueError("role assistant must be OpenCode, Codex CLI, or Gemini CLI")
+                raise ValueError("role assistant must be OpenCode, Codex CLI, Gemini CLI, or Claude Code")
             return normalized
 
     language: str | None = None
@@ -212,7 +213,7 @@ class ModelSettingsPayload(BaseModel):
             return None
         normalized = normalize_runtime_assistant(value)
         if normalized is None:
-            raise ValueError("coding assistant must be OpenCode, Codex CLI, or Gemini CLI")
+            raise ValueError("coding assistant must be OpenCode, Codex CLI, Gemini CLI, or Claude Code")
         return normalized
 
 
@@ -292,7 +293,7 @@ def _normalize_runtime_language(value: str | None) -> str:
 def _normalize_runtime_coding_assistant(value: str | None) -> str:
     normalized = normalize_runtime_assistant(value)
     if normalized is None:
-            raise ValueError("coding assistant must be OpenCode, Codex CLI, or Gemini CLI")
+            raise ValueError("coding assistant must be OpenCode, Codex CLI, Gemini CLI, or Claude Code")
     return normalized
 
 
@@ -303,6 +304,7 @@ def _apply_config_update(target, updated) -> None:
     target.opencode = updated.opencode
     target.codex = updated.codex
     target.gemini = updated.gemini
+    target.claude = updated.claude
     target.workspace = updated.workspace
     target.locks = updated.locks
     target.runtime = updated.runtime
@@ -333,6 +335,10 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
     }
     active_backend = active_config.active_backend()
     snapshot = snapshots_by_backend[active_backend]
+    available_models_by_backend = {
+        backend: _settings_model_candidates(backend=backend, snapshot_models=backend_snapshot.models, config=active_config)
+        for backend, backend_snapshot in snapshots_by_backend.items()
+    }
     omo_snapshot = read_omo_delegation_snapshot() if active_backend == "opencode" else None
     availability_map = _resolve_availability_map(runtime, snapshots_by_backend)
     response = {
@@ -374,10 +380,7 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
             for value, label in SUPPORTED_RUNTIME_ASSISTANTS.items()
             if availability_map.get(value) and availability_map[value].available
         ],
-        "available_models_by_backend": {
-            backend: backend_snapshot.models
-            for backend, backend_snapshot in snapshots_by_backend.items()
-        },
+        "available_models_by_backend": available_models_by_backend,
         "backend_availability_by_backend": {
             backend: {
                 "available": backend_status.available,
@@ -386,7 +389,7 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
             }
             for backend, backend_status in availability_map.items()
         },
-        "available_models": snapshot.models,
+        "available_models": available_models_by_backend[active_backend],
         "discovery_status": snapshot.status,
         "discovered_at": snapshot.discovered_at,
         "discovery_error": snapshot.error,
@@ -424,8 +427,38 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
     return response
 
 
-def _validate_model_selection(model_name: str | None, *, field_name: str, available_models: set[str]) -> None:
+def _settings_model_candidates(*, backend: str, snapshot_models: list[str], config) -> list[str]:
+    candidates = list(CLAUDE_MODEL_ALIASES) if backend == "claude" else list(snapshot_models)
+    if backend == "claude":
+        candidates.extend(_configured_claude_models(config))
+    return _deduplicate_models(candidates)
+
+
+def _configured_claude_models(config) -> list[str]:
+    return _deduplicate_models([
+        getattr(config.claude, f"{role}_model")
+        for role in ASSISTANT_ROLES
+    ])
+
+
+def _deduplicate_models(values: Sequence[str | None]) -> list[str]:
+    models: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if value is None:
+            continue
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        models.append(normalized)
+    return models
+
+
+def _validate_model_selection(model_name: str | None, *, backend: str, field_name: str, available_models: set[str]) -> None:
     if model_name is None:
+        return
+    if backend == "claude":
         return
     if not available_models:
         return
@@ -458,7 +491,7 @@ def _resolve_availability_map(runtime, snapshots_by_backend) -> dict[str, Assist
     if isinstance(availability, dict):
         return availability
     return {
-        backend: runtime.model_registry.availability(backend)
+        backend: runtime.model_registry.peek_availability(backend)
         for backend in snapshots_by_backend
     }
 
@@ -486,11 +519,26 @@ async def _resolve_settings_snapshots(runtime, *, refresh: bool, assistant: str 
     view_config = runtime.config.model_copy(deep=True)
     if assistant is not None:
         view_config.runtime.coding_assistant = _normalize_runtime_coding_assistant(assistant)
+    active_backend = _normalize_runtime_coding_assistant(assistant) if assistant is not None else runtime.config.active_backend()
     snapshots_by_backend = {}
     for backend in SUPPORTED_RUNTIME_ASSISTANTS:
         should_refresh_backend = refresh and (assistant is None or backend == assistant)
-        snapshots_by_backend[backend] = await _resolve_settings_snapshot(runtime, refresh=should_refresh_backend, assistant=backend)
+        if should_refresh_backend or backend == active_backend:
+            snapshots_by_backend[backend] = await _resolve_settings_snapshot(runtime, refresh=should_refresh_backend, assistant=backend)
+            continue
+        snapshots_by_backend[backend] = await asyncio.to_thread(runtime.model_registry.peek, cast(AssistantBackend, backend))
     return view_config, snapshots_by_backend
+
+
+async def _resolve_settings_validation_snapshots(runtime, *, config) -> dict[str, AssistantModelSnapshot]:
+    referenced_backends = {config.active_backend(), *(config.backend_for_role(role) for role in ASSISTANT_ROLES)}
+    snapshots_by_backend = {}
+    for backend in SUPPORTED_RUNTIME_ASSISTANTS:
+        if backend in referenced_backends:
+            snapshots_by_backend[backend] = await asyncio.to_thread(runtime.model_registry.get, cast(AssistantBackend, backend), refresh=True)
+            continue
+        snapshots_by_backend[backend] = await asyncio.to_thread(runtime.model_registry.peek, cast(AssistantBackend, backend))
+    return snapshots_by_backend
 
 
 def _uses_builtin_runtime_adapter(runtime) -> bool:
@@ -578,7 +626,7 @@ def build_router() -> APIRouter:
             _ = payload.slack_default_channel
         if "slack_app_mention_enabled" in fields_set and payload.slack_app_mention_enabled is not None:
             next_config.slack.app_mention_enabled = payload.slack_app_mention_enabled
-        _view_config, validation_snapshots = await _resolve_settings_snapshots(runtime, refresh=True, assistant=next_config.active_backend())
+        validation_snapshots = await _resolve_settings_validation_snapshots(runtime, config=next_config)
         availability_map = _resolve_availability_map(runtime, validation_snapshots)
         _validate_backend_available(availability_map[next_config.active_backend()], field_name="coding_assistant")
         for role in ASSISTANT_ROLES:
@@ -587,7 +635,7 @@ def build_router() -> APIRouter:
             if getattr(next_config.runtime.role_backends, role) is not None:
                 _validate_backend_available(availability_map[backend], field_name=field_name)
             available_models = set(validation_snapshots[next_config.backend_for_role(role)].models)
-            _validate_model_selection(next_config.role_model(role), field_name=f"{role}_model", available_models=available_models)
+            _validate_model_selection(next_config.role_model(role), backend=backend, field_name=f"{role}_model", available_models=available_models)
         config_path = next_config.persist()
         _apply_config_update(runtime.config, next_config)
         if getattr(runtime, "slack_runtime", None) is not None:

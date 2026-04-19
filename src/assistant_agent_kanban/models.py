@@ -125,7 +125,7 @@ class ImplementationInfo(BaseModel):
     last_run_tokens: int = 0
     session_tokens: int = 0
     resume_mode: Literal["pinned", "current-settings"] | None = None
-    resume_backend_override: Literal["opencode", "codex", "gemini"] | None = None
+    resume_backend_override: Literal["opencode", "codex", "gemini", "claude"] | None = None
     resume_model_override: str | None = None
 
 
@@ -137,7 +137,7 @@ class ReviewInfo(BaseModel):
     last_run_tokens: int = 0
     session_tokens: int = 0
     resume_mode: Literal["pinned", "current-settings"] | None = None
-    resume_backend_override: Literal["opencode", "codex", "gemini"] | None = None
+    resume_backend_override: Literal["opencode", "codex", "gemini", "claude"] | None = None
     resume_model_override: str | None = None
     consecutive_rework_loops: int = 0
     total_rework_loops: int = 0
@@ -219,15 +219,15 @@ class TargetRepoInfo(BaseModel):
 
 
 class TaskRuntimeRoleBackends(BaseModel):
-    planner: Literal["opencode", "codex", "gemini"] | None = None
-    plan_approval: Literal["opencode", "codex", "gemini"] | None = None
-    implementer: Literal["opencode", "codex", "gemini"] | None = None
-    reviewer: Literal["opencode", "codex", "gemini"] | None = None
-    commit: Literal["opencode", "codex", "gemini"] | None = None
+    planner: Literal["opencode", "codex", "gemini", "claude"] | None = None
+    plan_approval: Literal["opencode", "codex", "gemini", "claude"] | None = None
+    implementer: Literal["opencode", "codex", "gemini", "claude"] | None = None
+    reviewer: Literal["opencode", "codex", "gemini", "claude"] | None = None
+    commit: Literal["opencode", "codex", "gemini", "claude"] | None = None
 
 
 class TaskRuntimePin(BaseModel):
-    backend: Literal["opencode", "codex", "gemini"]
+    backend: Literal["opencode", "codex", "gemini", "claude"]
     captured_at: datetime = Field(default_factory=utc_now)
     captured_by: str
     role_backends: TaskRuntimeRoleBackends = Field(default_factory=TaskRuntimeRoleBackends)

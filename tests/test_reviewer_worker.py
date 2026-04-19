@@ -46,6 +46,63 @@ def reviewer_cycle_responses(
     return [greeting, live, finalize_json]
 
 
+def test_parse_finalize_artifact_accepts_fenced_json(configured_paths):
+    config, _, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter([]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    artifact = worker._parse_finalize_artifact(
+        "검토 결과를 반환합니다.\n\n```json\n"
+        '{"schema_version":1,"artifact_type":"review","task_id":"2db21ca","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\nReady"}'
+        "\n```"
+    )
+
+    assert artifact is not None
+    assert artifact["artifact_type"] == "review"
+    assert artifact["verdict"] == "PASS"
+    assert artifact["task_id"] == "2db21ca"
+
+
+def test_parse_finalize_artifact_accepts_fenced_json_with_literal_quotes_in_markdown(configured_paths):
+    config, _, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter([]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    artifact = worker._parse_finalize_artifact(
+        "설명을 덧붙입니다.\n\n```json\n"
+        '{"schema_version":1,"artifact_type":"review","task_id":"2db21ca","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\n계획의 "충돌하는 기존 기대값 일괄 교정" 범위 내 처리"}'
+        "\n```"
+    )
+
+    assert artifact is not None
+    assert artifact["verdict"] == "PASS"
+    assert '"충돌하는 기존 기대값 일괄 교정"' in artifact["markdown"]
+
+
 def _task_ready_for_review(config, *, worker_live_logs_enabled: bool = True):
     config.opencode.worker_live_logs_enabled = worker_live_logs_enabled
     metadata_store = MetadataStore()

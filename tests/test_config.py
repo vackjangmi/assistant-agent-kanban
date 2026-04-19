@@ -145,6 +145,25 @@ def test_load_config_accepts_codex_runtime_backend(tmp_path):
     assert config.codex.planner_model == "gpt-5.4"
 
 
+def test_load_config_accepts_claude_runtime_backend(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "runtime:",
+                "  coding_assistant: claude",
+                "claude:",
+                "  planner_model: claude-sonnet-4-6",
+            ]
+        )
+    )
+
+    config = load_config(config_path)
+
+    assert config.runtime.coding_assistant == "claude"
+    assert config.claude.planner_model == "claude-sonnet-4-6"
+
+
 def test_load_config_accepts_role_backend_overrides(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -175,6 +194,27 @@ def test_load_config_accepts_role_backend_overrides(tmp_path):
     assert config.role_model("request_draft") == "gemini-2.5-flash"
     assert config.role_model("implementer") == "gpt-5.4"
     assert config.role_model("reviewer") == "gpt-5.3-codex"
+
+
+def test_load_config_accepts_claude_role_backend_override(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "runtime:",
+                "  coding_assistant: opencode",
+                "  role_backends:",
+                "    reviewer: claude",
+                "claude:",
+                "  reviewer_model: claude-sonnet-4-6",
+            ]
+        )
+    )
+
+    config = load_config(config_path)
+
+    assert config.backend_for_role("reviewer") == "claude"
+    assert config.role_model("reviewer") == "claude-sonnet-4-6"
 
 
 def test_resolve_target_repo_docs_root_uses_configured_relative_path(tmp_path):

@@ -127,6 +127,15 @@ class AssistantBackendState:
                 supports_model_discovery=self.adapter.supports_model_discovery,
             )
 
+    def availability_snapshot(self) -> AssistantBackendStatusSnapshot:
+        with self._lock:
+            return AssistantBackendStatusSnapshot(
+                backend=cast(AssistantBackend, self.backend),
+                available=self._available,
+                error=self._availability_error,
+                checked_at=self._checked_at,
+            )
+
     def get(self, *, refresh: bool = False) -> AssistantModelSnapshot:
         if refresh:
             return self.refresh(refresh_cli=True)
@@ -222,8 +231,14 @@ class AssistantBackendManager:
     def get(self, backend: AssistantBackend, *, refresh: bool = False) -> AssistantModelSnapshot:
         return self.states[backend].get(refresh=refresh)
 
+    def peek(self, backend: AssistantBackend) -> AssistantModelSnapshot:
+        return self.states[backend].snapshot()
+
     def availability(self, backend: AssistantBackend, *, refresh: bool = False) -> AssistantBackendStatusSnapshot:
         return self.states[backend].availability(refresh=refresh)
+
+    def peek_availability(self, backend: AssistantBackend) -> AssistantBackendStatusSnapshot:
+        return self.states[backend].availability_snapshot()
 
     def all(self, *, refresh: bool = False) -> dict[AssistantBackend, AssistantModelSnapshot]:
         return {backend: state.get(refresh=refresh) for backend, state in self.states.items()}
@@ -256,7 +271,9 @@ def _backend_binary(config: AppConfig, backend: AssistantBackend) -> str:
         return config.opencode.binary
     if backend == "codex":
         return config.codex.binary
-    return config.gemini.binary
+    if backend == "gemini":
+        return config.gemini.binary
+    return config.claude.binary
 
 
 def _resolve_binary_error(binary: str) -> str | None:

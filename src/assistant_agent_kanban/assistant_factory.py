@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .assistant_adapter import AssistantAdapter
+from .claude_adapter import SubprocessClaudeAdapter
 from .codex_adapter import SubprocessCodexAdapter
 from .config import AppConfig, AssistantBackend
 from .gemini_adapter import SubprocessGeminiAdapter
@@ -14,6 +15,8 @@ def build_adapter(backend: AssistantBackend) -> AssistantAdapter:
         return SubprocessCodexAdapter()
     if backend == "gemini":
         return SubprocessGeminiAdapter()
+    if backend == "claude":
+        return SubprocessClaudeAdapter()
     raise NotImplementedError(f"unsupported coding assistant: {backend}")
 
 
@@ -22,6 +25,7 @@ def build_adapter_registry() -> dict[AssistantBackend, AssistantAdapter]:
         "opencode": build_adapter("opencode"),
         "codex": build_adapter("codex"),
         "gemini": build_adapter("gemini"),
+        "claude": build_adapter("claude"),
     }
 
 

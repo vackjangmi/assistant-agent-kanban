@@ -66,10 +66,11 @@ def valid_plan_markdown(summary: str = "plan") -> str:
     )
 
 
-def _settings_adapter_registry(opencode_adapter=None, codex_adapter=None):
+def _settings_adapter_registry(opencode_adapter=None, codex_adapter=None, claude_adapter=None):
     return {
         "opencode": opencode_adapter or FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]]),
         "codex": codex_adapter or FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]]),
+        "claude": claude_adapter or FakeAdapter(["claude"], discovery_responses=[["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]]),
     }
 
 
@@ -3498,6 +3499,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
             {"value": "opencode", "label": "OpenCode"},
             {"value": "codex", "label": "Codex CLI"},
             {"value": "gemini", "label": "Gemini CLI"},
+            {"value": "claude", "label": "Claude Code"},
         ]
         assert get_response.json()["planner_model"] is None
         assert get_response.json()["request_draft_model"] is None
@@ -3521,7 +3523,16 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["config_path"] == str(local_config_path.resolve())
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
-        assert "gpt-5.4" in get_response.json()["available_models_by_backend"]["codex"]
+        assert get_response.json()["available_models_by_backend"]["codex"] == []
+        assert get_response.json()["available_models_by_backend"]["claude"] == [
+            "default",
+            "best",
+            "sonnet",
+            "opus",
+            "haiku",
+            "opus[1m]",
+            "opusplan",
+        ]
         assert get_response.json()["discovery_status"] == "ready"
         assert get_response.json()["discovery_error"] is None
         assert get_response.json()["delegated_model_status"] == "ready"
@@ -4146,6 +4157,83 @@ def test_api_accepts_codex_runtime_coding_assistant(configured_paths):
     assert config.codex.planner_model == "gpt-5.4"
 
 
+def test_api_accepts_claude_runtime_coding_assistant(configured_paths):
+    config, _, _ = configured_paths
+    adapter_registry = _settings_adapter_registry(claude_adapter=FakeAdapter(["claude"], discovery_responses=[["claude-sonnet-4-6"]]))
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "claude",
+                "planner_model": "claude-sonnet-4-6",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 200
+    assert config.runtime.coding_assistant == "claude"
+    assert config.claude.planner_model == "claude-sonnet-4-6"
+
+
+def test_api_includes_persisted_claude_custom_models_in_candidates(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "claude"
+    config.claude.binary = "/bin/echo"
+    config.claude.planner_model = "claude-sonnet-4-6"
+    config.claude.implementer_model = "my-bedrock-profile"
+    adapter_registry = {
+        "opencode": FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]]),
+        "codex": FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]]),
+    }
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/models")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["coding_assistant"] == "claude"
+    assert payload["available_models"] == [
+        "default",
+        "best",
+        "sonnet",
+        "opus",
+        "haiku",
+        "opus[1m]",
+        "opusplan",
+        "claude-sonnet-4-6",
+        "my-bedrock-profile",
+    ]
+
+
+def test_api_accepts_unknown_claude_model_on_save(configured_paths):
+    config, _, _ = configured_paths
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "claude",
+                "planner_model": "custom-gateway-model",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["planner_model"] == "custom-gateway-model"
+    assert config.claude.planner_model == "custom-gateway-model"
+
+
 def test_api_rejects_unknown_opencode_model_on_save(configured_paths):
     config, _, _ = configured_paths
     planner_adapter = FakeAdapter(["plan"], discovery_responses=[["openai/gpt-5.4"]])
@@ -4194,6 +4282,32 @@ def test_api_rejects_unknown_codex_model_on_save(configured_paths):
     assert response.json()["detail"] == {
         "code": "settings.model_not_discovered",
         "field": "planner_model",
+    }
+
+
+def test_api_rejects_unknown_inactive_role_backend_model_on_save(configured_paths):
+    config, _, _ = configured_paths
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "opencode",
+                "role_backends": {"reviewer": "codex"},
+                "reviewer_model": "not-a-real-model",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "settings.model_not_discovered",
+        "field": "reviewer_model",
     }
 
 
@@ -4264,6 +4378,7 @@ def test_api_settings_only_lists_startup_available_assistants(configured_paths):
     assert response.json()["available_assistants"] == [
         {"value": "opencode", "label": "OpenCode"},
         {"value": "gemini", "label": "Gemini CLI"},
+        {"value": "claude", "label": "Claude Code"},
     ]
 
 
@@ -4392,6 +4507,58 @@ def test_api_refreshes_models_without_refreshing_cached_availability(configured_
     assert planner_adapter.availability_calls == 1
 
 
+def test_api_settings_initial_load_discovers_only_active_backend(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.coding_assistant = "opencode"
+    opencode_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
+    codex_adapter = FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]])
+    claude_adapter = FakeAdapter(["claude"], discovery_responses=[["default", "sonnet"]])
+    adapter_registry = _settings_adapter_registry(
+        opencode_adapter=opencode_adapter,
+        codex_adapter=codex_adapter,
+        claude_adapter=claude_adapter,
+    )
+    app = create_app(config, opencode_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/models")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
+    assert payload["available_models_by_backend"]["codex"] == []
+    assert payload["available_models_by_backend"]["claude"] == ["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]
+    assert opencode_adapter.discovery_calls == [False]
+    assert codex_adapter.discovery_calls == []
+    assert claude_adapter.discovery_calls == []
+
+
+def test_api_settings_refresh_discovers_only_requested_backend(configured_paths):
+    config, _, _ = configured_paths
+    opencode_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
+    codex_adapter = FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]])
+    claude_adapter = FakeAdapter(["claude"], discovery_responses=[["default", "sonnet"]])
+    adapter_registry = _settings_adapter_registry(
+        opencode_adapter=opencode_adapter,
+        codex_adapter=codex_adapter,
+        claude_adapter=claude_adapter,
+    )
+    app = create_app(config, opencode_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.get("/api/settings/models?refresh=true&assistant=codex")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["coding_assistant"] == "codex"
+    assert payload["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
+    assert payload["available_models_by_backend"]["opencode"] == []
+    assert payload["available_models_by_backend"]["claude"] == ["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]
+    assert opencode_adapter.discovery_calls == []
+    assert codex_adapter.discovery_calls == [True]
+    assert claude_adapter.discovery_calls == []
+
+
 def test_parse_discovered_models_ignores_verbose_json_metadata():
     verbose_output = """openai/gpt-5.4
 {
@@ -4500,7 +4667,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "slack_enabled: slackEnabledInput.checked" in response.text
     assert "slack_socket_mode_enabled: slackSocketModeEnabledInput.checked" in response.text
     assert "slack_app_mention_enabled: slackAppMentionEnabledInput.checked" in response.text
-    assert "await loadModelSettings(false);" in response.text
+    assert "void loadModelSettings(false, { allowHidden: true }).catch(() => {});" in response.text
+    assert "if (!lastSettingsPayload) {" in response.text
     assert "await navigator.clipboard.writeText(lastSlackReceiveInstruction);" in response.text
     assert "THINK LOG" in response.text
     assert "DEFAULT LOG" in response.text
@@ -4561,11 +4729,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "repo_discovery_root" in response.text
     assert "repo_discovery_max_depth" in response.text
     assert "readNumericSettingInput" in response.text
-    assert "planner-model-options" in response.text
-    assert "plan-approval-model-options" in response.text
-    assert "implementer-model-options" in response.text
-    assert "reviewer-model-options" in response.text
-    assert "commit-model-options" in response.text
+    assert 'id="planner_model_select"' in response.text
+    assert 'id="plan_approval_model_select"' in response.text
+    assert 'id="implementer_model_select"' in response.text
+    assert 'id="reviewer_model_select"' in response.text
+    assert 'id="commit_model_select"' in response.text
+    assert "Other / custom…" in response.text
     assert "const previousRoleSelections = Object.fromEntries(roleSettingConfigs.map(({ role, backendInput }) => [role, backendInput.value || 'default']));" in response.text
     assert "backendInput.value = roleOptions.some((item) => item.value === nextValue) ? nextValue : 'default';" in response.text
     assert "Refresh models" in response.text

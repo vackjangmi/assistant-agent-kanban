@@ -571,10 +571,7 @@ class ReviewerWorker(WorkerBase):
         return self.build_prompt(instructions, metadata, phase="reviewer")
 
     def _parse_finalize_artifact(self, assistant_text: str) -> ReviewFinalizeArtifact | None:
-        try:
-            payload = json.loads(assistant_text)
-        except json.JSONDecodeError:
-            return None
+        payload = self._extract_finalize_payload(assistant_text)
         if not isinstance(payload, dict):
             return None
         raw_verdict = payload.get("verdict")
@@ -597,6 +594,58 @@ class ReviewerWorker(WorkerBase):
             "primary_blocker": primary_blocker,
             "markdown": markdown.strip(),
         }
+
+    def _extract_finalize_payload(self, assistant_text: str) -> object | None:
+        candidates = [assistant_text.strip()]
+        fenced_matches = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", assistant_text, flags=re.DOTALL | re.IGNORECASE)
+        candidates.extend(match.strip() for match in fenced_matches)
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                relaxed = self._extract_relaxed_finalize_payload(candidate)
+                if relaxed is not None:
+                    return relaxed
+        return None
+
+    def _extract_relaxed_finalize_payload(self, candidate: str) -> dict[str, object] | None:
+        match = re.match(
+            r'^\{"schema_version":(?P<schema_version>\d+),"artifact_type":"(?P<artifact_type>[^"]+)","task_id":"(?P<task_id>[^"]*)","cycle":(?P<cycle>\d+),"verdict":"(?P<verdict>PASS|NEEDS_CHANGES)","primary_blocker":(?P<primary_blocker>null|"[^"]*"),"markdown":"(?P<markdown>.*)"\}$',
+            candidate,
+            flags=re.DOTALL,
+        )
+        if match is None:
+            return None
+        raw_primary_blocker = match.group("primary_blocker")
+        primary_blocker: str | None
+        if raw_primary_blocker == "null":
+            primary_blocker = None
+        else:
+            try:
+                primary_blocker = json.loads(raw_primary_blocker)
+            except json.JSONDecodeError:
+                return None
+        markdown = self._normalize_relaxed_json_string(match.group("markdown"))
+        return {
+            "schema_version": int(match.group("schema_version")),
+            "artifact_type": match.group("artifact_type"),
+            "task_id": match.group("task_id"),
+            "cycle": int(match.group("cycle")),
+            "verdict": match.group("verdict"),
+            "primary_blocker": primary_blocker,
+            "markdown": markdown,
+        }
+
+    def _normalize_relaxed_json_string(self, value: str) -> str:
+        return (
+            value.replace(r"\\", "\\")
+            .replace(r'\"', '"')
+            .replace(r"\n", "\n")
+            .replace(r"\r", "\r")
+            .replace(r"\t", "\t")
+        )
 
     def _normalize_primary_blocker(self, value: object, *, verdict: Literal["PASS", "NEEDS_CHANGES"]) -> str | None:
         if verdict == "PASS":
