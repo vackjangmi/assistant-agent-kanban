@@ -119,6 +119,15 @@ def test_claude_adapter_builds_noninteractive_command(monkeypatch, tmp_path):
     assert recorded["cwd"] == str(tmp_path)
 
 
+def test_claude_adapter_availability_only_checks_binary(tmp_path):
+    adapter = SubprocessClaudeAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "claude"
+    config.claude.binary = "/definitely/missing/claude"
+
+    assert adapter.availability_error(config=config, backend="claude") is not None
+
+
 def test_claude_adapter_returns_curated_aliases_for_model_candidates(tmp_path):
     adapter = SubprocessClaudeAdapter()
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")

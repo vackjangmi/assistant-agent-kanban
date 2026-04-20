@@ -23,7 +23,6 @@ CLAUDE_MODEL_ALIASES = [
     "opusplan",
 ]
 
-
 class SubprocessClaudeAdapter(AssistantAdapter):
     supports_model_discovery = True
 
@@ -56,6 +55,7 @@ class SubprocessClaudeAdapter(AssistantAdapter):
         show_thinking: bool = False,
     ) -> RunResult:
         del output_format, show_thinking
+        role = _role_from_agent(agent)
         command = [
             config.claude.binary,
             "-p",
@@ -68,12 +68,13 @@ class SubprocessClaudeAdapter(AssistantAdapter):
             "--allowedTools",
             "Bash,Read,Edit,Write,Glob,Grep,MultiEdit",
         ]
-        resolved_model = config.role_model(_role_from_agent(agent))
+        resolved_model = config.role_model(role)
         if session_id:
             command.extend(["--resume", session_id])
         if resolved_model:
             command.extend(["--model", resolved_model])
-        for directory in _normalize_include_directories(include_directories, cwd=cwd):
+        normalized_include_directories = _normalize_include_directories(include_directories, cwd=cwd)
+        for directory in normalized_include_directories:
             command.extend(["--add-dir", directory])
         command.append(prompt)
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
