@@ -1792,7 +1792,8 @@
                 <label id="settings-request-draft-model-label" for="request_draft_model_select">Model</label>
                 <div class="settings-model-stack">
                   <select id="request_draft_model_select"></select>
-                  <input id="request_draft_model" name="request_draft_model" class="settings-model-custom" placeholder="Enter a custom model" hidden disabled>
+                  <input id="request_draft_model" name="request_draft_model" class="settings-model-custom" placeholder="Enter a custom model" list="request_draft_model_options" hidden disabled>
+                  <datalist id="request_draft_model_options"></datalist>
                 </div>
               </div>
             </div>
@@ -1814,7 +1815,8 @@
                 <label id="settings-planner-model-label" for="planner_model_select">Model</label>
                 <div class="settings-model-stack">
                   <select id="planner_model_select"></select>
-                  <input id="planner_model" name="planner_model" class="settings-model-custom" placeholder="Enter a custom model" hidden disabled>
+                  <input id="planner_model" name="planner_model" class="settings-model-custom" placeholder="Enter a custom model" list="planner_model_options" hidden disabled>
+                  <datalist id="planner_model_options"></datalist>
                 </div>
               </div>
               <div class="settings-field settings-field-compact">
@@ -1836,7 +1838,8 @@
                 <label id="settings-plan-approval-model-label" for="plan_approval_model_select">Model</label>
                 <div class="settings-model-stack">
                   <select id="plan_approval_model_select"></select>
-                  <input id="plan_approval_model" name="plan_approval_model" class="settings-model-custom" placeholder="Enter a custom model" hidden disabled>
+                  <input id="plan_approval_model" name="plan_approval_model" class="settings-model-custom" placeholder="Enter a custom model" list="plan_approval_model_options" hidden disabled>
+                  <datalist id="plan_approval_model_options"></datalist>
                 </div>
               </div>
               <div class="settings-field settings-field-compact">
@@ -1862,7 +1865,8 @@
                 <label id="settings-implementer-model-label" for="implementer_model_select">Model</label>
                 <div class="settings-model-stack">
                   <select id="implementer_model_select"></select>
-                  <input id="implementer_model" name="implementer_model" class="settings-model-custom" placeholder="Enter a custom model" hidden disabled>
+                  <input id="implementer_model" name="implementer_model" class="settings-model-custom" placeholder="Enter a custom model" list="implementer_model_options" hidden disabled>
+                  <datalist id="implementer_model_options"></datalist>
                 </div>
               </div>
               <div class="settings-field settings-field-compact">
@@ -1888,7 +1892,8 @@
                 <label id="settings-reviewer-model-label" for="reviewer_model_select">Model</label>
                 <div class="settings-model-stack">
                   <select id="reviewer_model_select"></select>
-                  <input id="reviewer_model" name="reviewer_model" class="settings-model-custom" placeholder="Enter a custom model" hidden disabled>
+                  <input id="reviewer_model" name="reviewer_model" class="settings-model-custom" placeholder="Enter a custom model" list="reviewer_model_options" hidden disabled>
+                  <datalist id="reviewer_model_options"></datalist>
                 </div>
               </div>
               <div class="settings-field settings-field-compact">
@@ -1910,7 +1915,8 @@
                 <label id="settings-commit-model-label" for="commit_model_select">Model</label>
                 <div class="settings-model-stack">
                   <select id="commit_model_select"></select>
-                  <input id="commit_model" name="commit_model" class="settings-model-custom" placeholder="Enter a custom model" hidden disabled>
+                  <input id="commit_model" name="commit_model" class="settings-model-custom" placeholder="Enter a custom model" list="commit_model_options" hidden disabled>
+                  <datalist id="commit_model_options"></datalist>
                 </div>
               </div>
               <div class="settings-field settings-field-compact">
@@ -2361,28 +2367,34 @@
     const plannerBackendInput = document.getElementById('planner_backend');
     const plannerModelSelectInput = document.getElementById('planner_model_select');
     const plannerModelInput = document.getElementById('planner_model');
+    const plannerModelOptionsInput = document.getElementById('planner_model_options');
     const plannerSessionTokenBudgetInput = document.getElementById('planner_session_token_budget');
     const plannerAgentCountInput = document.getElementById('planner_agent_count');
     const requestDraftBackendInput = document.getElementById('request_draft_backend');
     const requestDraftModelSelectInput = document.getElementById('request_draft_model_select');
     const requestDraftModelInput = document.getElementById('request_draft_model');
+    const requestDraftModelOptionsInput = document.getElementById('request_draft_model_options');
     const planApprovalBackendInput = document.getElementById('plan_approval_backend');
     const planApprovalModelSelectInput = document.getElementById('plan_approval_model_select');
     const planApprovalModelInput = document.getElementById('plan_approval_model');
+    const planApprovalModelOptionsInput = document.getElementById('plan_approval_model_options');
     const planApprovalSessionTokenBudgetInput = document.getElementById('plan_approval_session_token_budget');
     const implementerBackendInput = document.getElementById('implementer_backend');
     const implementerModelSelectInput = document.getElementById('implementer_model_select');
     const implementerModelInput = document.getElementById('implementer_model');
+    const implementerModelOptionsInput = document.getElementById('implementer_model_options');
     const implementerSessionTokenBudgetInput = document.getElementById('implementer_session_token_budget');
     const implementerAgentCountInput = document.getElementById('implementer_agent_count');
     const reviewerBackendInput = document.getElementById('reviewer_backend');
     const reviewerModelSelectInput = document.getElementById('reviewer_model_select');
     const reviewerModelInput = document.getElementById('reviewer_model');
+    const reviewerModelOptionsInput = document.getElementById('reviewer_model_options');
     const reviewerSessionTokenBudgetInput = document.getElementById('reviewer_session_token_budget');
     const reviewerAgentCountInput = document.getElementById('reviewer_agent_count');
     const commitBackendInput = document.getElementById('commit_backend');
     const commitModelSelectInput = document.getElementById('commit_model_select');
     const commitModelInput = document.getElementById('commit_model');
+    const commitModelOptionsInput = document.getElementById('commit_model_options');
     const commitSessionTokenBudgetInput = document.getElementById('commit_session_token_budget');
     const settingsDiscoverySummary = document.getElementById('settings-discovery-summary');
     const settingsStatus = document.getElementById('settings-status');
@@ -2597,12 +2609,12 @@
     const customModelOptionValue = '__custom__';
 
     const roleSettingConfigs = [
-      { role: 'planner', backendInput: plannerBackendInput, modelInput: plannerModelInput, modelSelectInput: plannerModelSelectInput },
-      { role: 'request_draft', backendInput: requestDraftBackendInput, modelInput: requestDraftModelInput, modelSelectInput: requestDraftModelSelectInput },
-      { role: 'plan_approval', backendInput: planApprovalBackendInput, modelInput: planApprovalModelInput, modelSelectInput: planApprovalModelSelectInput },
-      { role: 'implementer', backendInput: implementerBackendInput, modelInput: implementerModelInput, modelSelectInput: implementerModelSelectInput },
-      { role: 'reviewer', backendInput: reviewerBackendInput, modelInput: reviewerModelInput, modelSelectInput: reviewerModelSelectInput },
-      { role: 'commit', backendInput: commitBackendInput, modelInput: commitModelInput, modelSelectInput: commitModelSelectInput },
+      { role: 'planner', backendInput: plannerBackendInput, modelInput: plannerModelInput, modelSelectInput: plannerModelSelectInput, modelOptionsInput: plannerModelOptionsInput },
+      { role: 'request_draft', backendInput: requestDraftBackendInput, modelInput: requestDraftModelInput, modelSelectInput: requestDraftModelSelectInput, modelOptionsInput: requestDraftModelOptionsInput },
+      { role: 'plan_approval', backendInput: planApprovalBackendInput, modelInput: planApprovalModelInput, modelSelectInput: planApprovalModelSelectInput, modelOptionsInput: planApprovalModelOptionsInput },
+      { role: 'implementer', backendInput: implementerBackendInput, modelInput: implementerModelInput, modelSelectInput: implementerModelSelectInput, modelOptionsInput: implementerModelOptionsInput },
+      { role: 'reviewer', backendInput: reviewerBackendInput, modelInput: reviewerModelInput, modelSelectInput: reviewerModelSelectInput, modelOptionsInput: reviewerModelOptionsInput },
+      { role: 'commit', backendInput: commitBackendInput, modelInput: commitModelInput, modelSelectInput: commitModelSelectInput, modelOptionsInput: commitModelOptionsInput },
     ];
 
     const settingsTranslations = {
@@ -4055,6 +4067,13 @@
       config.modelInput.placeholder = translateSettings('modelCustomPlaceholder');
     }
 
+    function renderRoleModelDatalist(config, items) {
+      if (!config?.modelOptionsInput) return;
+      config.modelOptionsInput.innerHTML = items
+        .map((item) => `<option value="${escapeHtml(item)}"></option>`)
+        .join('');
+    }
+
     function setRoleModelValue(role, modelValue = '') {
       const config = roleSettingConfig(role);
       if (!config) return;
@@ -4074,7 +4093,9 @@
       const currentValue = currentRoleModelValue(config);
       const backend = effectiveRoleBackend(role);
       const modelsByBackend = lastSettingsPayload?.available_models_by_backend || {};
-      const items = Array.isArray(modelsByBackend[backend]) ? modelsByBackend[backend] : [];
+      const items = Array.isArray(modelsByBackend[backend]) ? [...modelsByBackend[backend]] : [];
+      if (currentValue && !items.includes(currentValue) && items.length === 0) items.push(currentValue);
+      renderRoleModelDatalist(config, items);
       config.modelSelectInput.innerHTML = [
         `<option value="">${escapeHtml(translateSettings('modelDefaultOption'))}</option>`,
         ...items.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`),
@@ -5664,6 +5685,43 @@
       setSettingsStatus(translateSettings('statusLoadedHint'));
     }
 
+    function mergeSettingsPayload(data) {
+      if (!lastSettingsPayload?.available_models_by_backend) return data;
+      return {
+        ...lastSettingsPayload,
+        ...data,
+        available_models_by_backend: {
+          ...(lastSettingsPayload.available_models_by_backend || {}),
+          ...(data.available_models_by_backend || {}),
+        },
+        backend_availability_by_backend: {
+          ...(lastSettingsPayload.backend_availability_by_backend || {}),
+          ...(data.backend_availability_by_backend || {}),
+        },
+      };
+    }
+
+    function hydrateSettingsDiscovery(data, { preserveState = false, updateSummary = true } = {}) {
+      const mergedData = mergeSettingsPayload(data);
+      const preservedState = preserveState ? captureSettingsState() : null;
+      if (preserveState && preservedState) {
+        if (updateSummary) updateModelDiscoverySummary(mergedData);
+        else {
+          lastSettingsPayload = mergedData;
+          cachedAssistantOptions = resolveAssistantOptions(mergedData);
+        }
+        restoreSettingsState(preservedState);
+        if (!updateSummary) setSettingsStatus(translateSettings('statusLoaded'), 'success');
+        return;
+      }
+      if (!updateSummary) {
+        lastSettingsPayload = mergedData;
+        cachedAssistantOptions = resolveAssistantOptions(mergedData);
+      }
+      applyLoadedModelSettings(mergedData);
+      if (!updateSummary) setSettingsStatus(translateSettings('statusLoaded'), 'success');
+    }
+
     function applyLoadedModelSettings(data) {
       runtimeLanguageInput.value = data.language || 'EN';
       runtimeThemeInput.value = data.theme || 'light';
@@ -5707,20 +5765,23 @@
     async function loadModelSettings(refresh = false, options = {}) {
       const requestToken = ++settingsRequestToken;
       const allowHidden = Boolean(options.allowHidden);
+      const preserveState = Boolean(options.preserveState);
+      const assistantOverride = typeof options.assistantOverride === 'string' ? options.assistantOverride : '';
+      const updateSummary = options.updateSummary !== false;
       if (!refresh && !allowHidden) setSettingsFormHydrating(true);
       setSettingsStatus(refresh ? translateSettings('statusRefreshing') : translateSettings('statusLoading'));
       refreshModelOptionsButton.disabled = true;
       try {
         const params = new URLSearchParams();
         if (refresh) params.set('refresh', 'true');
-        const selectedAssistant = runtimeCodingAssistantInput.value || 'opencode';
+        const selectedAssistant = assistantOverride || runtimeCodingAssistantInput.value || 'opencode';
         if (refresh && selectedAssistant) params.set('assistant', selectedAssistant);
         const query = params.toString();
         const response = await fetch(`/api/settings/models${query ? `?${query}` : ''}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || translateSettings('settingsLoadFailed'));
         if (requestToken !== settingsRequestToken || (!allowHidden && settingsModal.hidden)) return;
-        applyLoadedModelSettings(data);
+        hydrateSettingsDiscovery(data, { preserveState, updateSummary });
       } finally {
         if (!refresh && !allowHidden && requestToken === settingsRequestToken && !settingsModal.hidden) {
           setSettingsFormHydrating(false);
@@ -9302,7 +9363,7 @@
       });
     });
     settingsForm.addEventListener('submit', saveModelSettings);
-    refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error')));
+    refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error')));
     testSlackSettingsButton.addEventListener('click', () => runSlackSettingsTest());
     startSlackReceiveTestButton.addEventListener('click', () => startSlackReceiveTest());
     copySlackReceiveTestButton.addEventListener('click', () => copySlackReceiveTestInstruction());
@@ -9339,25 +9400,21 @@
     runtimeCodingAssistantInput.addEventListener('input', handleAssistantModeVisibilityChange);
     runtimeCodingAssistantInput.addEventListener('change', () => {
       handleAssistantModeVisibilityChange();
-      renderAllRoleModelOptions();
-      loadModelSettings(true).catch((error) => setSettingsStatus(error.message, 'error'));
+      loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error'));
     });
     roleSettingConfigs.forEach((config) => {
       const { backendInput, modelInput, modelSelectInput, role } = config;
       backendInput.addEventListener('change', () => {
-        renderRoleModelOptions(role);
+        const selectedBackend = effectiveRoleBackend(role);
+        if (selectedBackend) {
+          loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false }).catch((error) => setSettingsStatus(error.message, 'error'));
+        }
       });
       modelSelectInput.addEventListener('change', () => {
+        applyRoleModelSelection(config, modelSelectInput.value);
         if (modelSelectInput.value === customModelOptionValue) {
-          modelInput.hidden = false;
-          modelInput.disabled = false;
-          modelInput.placeholder = translateSettings('modelCustomPlaceholder');
           modelInput.focus();
-          return;
         }
-        modelInput.hidden = true;
-        modelInput.disabled = true;
-        modelInput.value = '';
       });
     });
     board.addEventListener('click', (event) => {

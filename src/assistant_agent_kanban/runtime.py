@@ -123,6 +123,9 @@ class RuntimeSupervisor:
             self.backend_availability = cast(dict[AssistantBackend, Any], await asyncio.to_thread(warm_availability))
         else:
             self.backend_availability = {}
+        warm_models = getattr(self.model_registry, "warm", None)
+        if callable(warm_models):
+            await asyncio.to_thread(warm_models)
         if self.slack_runtime is not None:
             await self.slack_runtime.start_if_configured()
         if self.config.runtime.auto_dispatch:

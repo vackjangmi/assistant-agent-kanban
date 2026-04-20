@@ -2346,7 +2346,9 @@ def test_runtime_opens_slack_request_intake_modal_without_creating_task(configur
     assert len(list(config.request_drafts_dir.glob("*.json"))) == 1
     assert calls
     assert calls[0][0] == "views.open"
-    view = calls[0][2]["view"]
+    view_body = calls[0][2]
+    assert isinstance(view_body, dict)
+    view = view_body["view"]
     assert isinstance(view, dict)
     assert view["callback_id"] == "request_intake_modal"
     blocks = view["blocks"]
@@ -2412,7 +2414,10 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
             )
         )
         assert opened == {"status": "opened_modal", "clear_buttons": False}
-        opened_view = next(body for method, _token, body in calls if method == "views.open")["view"]
+        opened_view_body = next(body for method, _token, body in calls if method == "views.open")
+        assert isinstance(opened_view_body, dict)
+        opened_view = opened_view_body["view"]
+        assert isinstance(opened_view, dict)
         draft_id = json.loads(opened_view["private_metadata"])["draft_id"]
 
         blocked = asyncio.run(
@@ -3523,7 +3528,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["config_path"] == str(local_config_path.resolve())
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
-        assert get_response.json()["available_models_by_backend"]["codex"] == []
+        assert get_response.json()["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
         assert get_response.json()["available_models_by_backend"]["claude"] == [
             "default",
             "best",
@@ -4526,11 +4531,11 @@ def test_api_settings_initial_load_discovers_only_active_backend(configured_path
     assert response.status_code == 200
     payload = response.json()
     assert payload["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
-    assert payload["available_models_by_backend"]["codex"] == []
+    assert payload["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
     assert payload["available_models_by_backend"]["claude"] == ["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]
     assert opencode_adapter.discovery_calls == [False]
-    assert codex_adapter.discovery_calls == []
-    assert claude_adapter.discovery_calls == []
+    assert codex_adapter.discovery_calls == [False]
+    assert claude_adapter.discovery_calls == [False]
 
 
 def test_api_settings_refresh_discovers_only_requested_backend(configured_paths):
@@ -4552,11 +4557,11 @@ def test_api_settings_refresh_discovers_only_requested_backend(configured_paths)
     payload = response.json()
     assert payload["coding_assistant"] == "codex"
     assert payload["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
-    assert payload["available_models_by_backend"]["opencode"] == []
+    assert payload["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
     assert payload["available_models_by_backend"]["claude"] == ["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]
-    assert opencode_adapter.discovery_calls == []
-    assert codex_adapter.discovery_calls == [True]
-    assert claude_adapter.discovery_calls == []
+    assert opencode_adapter.discovery_calls == [False]
+    assert codex_adapter.discovery_calls == [False, True]
+    assert claude_adapter.discovery_calls == [False]
 
 
 def test_parse_discovered_models_ignores_verbose_json_metadata():
@@ -4730,11 +4735,27 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "repo_discovery_max_depth" in response.text
     assert "readNumericSettingInput" in response.text
     assert 'id="planner_model_select"' in response.text
+    assert 'id="planner_model_options"' in response.text
+    assert 'id="planner_model" name="planner_model" class="settings-model-custom" placeholder="Enter a custom model" list="planner_model_options" hidden disabled' in response.text
     assert 'id="plan_approval_model_select"' in response.text
+    assert 'id="plan_approval_model_options"' in response.text
     assert 'id="implementer_model_select"' in response.text
+    assert 'id="implementer_model_options"' in response.text
     assert 'id="reviewer_model_select"' in response.text
+    assert 'id="reviewer_model_options"' in response.text
     assert 'id="commit_model_select"' in response.text
+    assert 'id="commit_model_options"' in response.text
+    assert 'id="request_draft_model_options"' in response.text
     assert "Other / custom…" in response.text
+    assert "function renderRoleModelDatalist(config, items)" in response.text
+    assert "renderRoleModelDatalist(config, items);" in response.text
+    assert "function mergeSettingsPayload(data)" in response.text
+    assert "applyRoleModelSelection(config, modelSelectInput.value);" in response.text
+    assert "loadModelSettings(true, { preserveState: true })" in response.text
+    assert "function hydrateSettingsDiscovery(data, { preserveState = false, updateSummary = true } = {})" in response.text
+    assert "loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false })" in response.text
+    assert "renderAllRoleModelOptions();\n      loadModelSettings(true, { preserveState: true })" not in response.text
+    assert "renderRoleModelOptions(role);\n        const selectedBackend = effectiveRoleBackend(role);" not in response.text
     assert "const previousRoleSelections = Object.fromEntries(roleSettingConfigs.map(({ role, backendInput }) => [role, backendInput.value || 'default']));" in response.text
     assert "backendInput.value = roleOptions.some((item) => item.value === nextValue) ? nextValue : 'default';" in response.text
     assert "Refresh models" in response.text
