@@ -14,6 +14,7 @@ from ..integration_manager import IntegrationManager
 from ..language import generation_language_code, generation_language_name
 from ..models import RunResult, TaskErrorInfo
 from ..models import reset_review_loop_tracking
+from ..repo_branches import describe_target_repo_dirty_drift, describe_target_repo_head_drift, snapshot_target_repo_state
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from .base import WorkerBase
 
@@ -180,6 +181,14 @@ class ReviewerWorker(WorkerBase):
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                     done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
                 else:
+                    drift_note = self._target_repo_state_drift_note(reviewing.metadata)
+                    if drift_note is not None:
+                        apply_retry_gate(reviewing.metadata, reason="review-target-repo-drift")
+                        reviewing.metadata.errors.append(TaskErrorInfo(code="review-target-repo-drift", message=drift_note))
+                        self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                        done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=drift_note)
+                        await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                        return True
                     reset_review_loop_tracking(reviewing.metadata.review)
                     clear_retry_gate(reviewing.metadata)
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
@@ -314,12 +323,40 @@ class ReviewerWorker(WorkerBase):
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
             else:
+                drift_note = self._target_repo_state_drift_note(reviewing.metadata)
+                if drift_note is not None:
+                    apply_retry_gate(reviewing.metadata, reason="review-target-repo-drift")
+                    reviewing.metadata.errors.append(TaskErrorInfo(code="review-target-repo-drift", message=drift_note))
+                    self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                    done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=drift_note)
+                    await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                    return True
                 reset_review_loop_tracking(reviewing.metadata.review)
                 clear_retry_gate(reviewing.metadata)
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
+
+    def _target_repo_state_drift_note(self, metadata) -> str | None:
+        baseline = metadata.implementation.target_repo_baseline
+        if baseline is None:
+            return None
+        current = snapshot_target_repo_state(Path(metadata.target.repo_root), base_branch=metadata.target.base_branch)
+        head_drift = describe_target_repo_head_drift(
+            expected_branch=baseline.current_branch,
+            expected_head_sha=baseline.head_sha,
+            current_branch=current.current_branch,
+            current_head_sha=current.head_sha,
+        )
+        if head_drift is not None:
+            return head_drift
+        return describe_target_repo_dirty_drift(
+            expected_dirty=baseline.dirty,
+            current_branch=current.current_branch,
+            current_dirty=current.dirty,
+            current_status_short=current.status_short,
+        )
 
     async def answer_human_question_async(self, task_id: str, *, by: str, question: str) -> dict[str, str | int | None]:
         loop = asyncio.get_running_loop()

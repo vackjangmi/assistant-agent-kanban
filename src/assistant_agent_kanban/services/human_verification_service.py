@@ -18,9 +18,10 @@ from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..markdown_attachments import attachments_dir_for_task, normalize_markdown_attachments
 from ..metadata_store import MetadataStore
-from ..retry_policy import clear_retry_gate
+from ..retry_policy import apply_retry_gate, clear_retry_gate
 from ..assistant_adapter import AssistantAdapter
 from ..models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, TaskContext, TaskErrorInfo, reset_review_loop_tracking, utc_now
+from ..repo_branches import describe_target_repo_dirty_drift, describe_target_repo_head_drift, snapshot_target_repo_state
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
@@ -55,6 +56,12 @@ class HumanVerificationService:
         if context.state != TaskState.COMPLETED_REVIEWS:
             raise TransitionError("human verification can only start from completed-reviews")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-verifying"):
+            drift_note = self._target_repo_state_drift_note(context.metadata)
+            if drift_note is not None:
+                apply_retry_gate(context.metadata, reason="verification-target-repo-drift")
+                context.metadata.errors.append(TaskErrorInfo(code="verification-target-repo-drift", message=drift_note))
+                self.metadata_store.save(context.task_dir, context.metadata)
+                return self.transitions.move(context, TaskState.TODOS, by=by, note=drift_note)
             self._run_verification_apply(context)
             self.metadata_store.save(context.task_dir, context.metadata)
             try:
@@ -580,11 +587,32 @@ class HumanVerificationService:
             raise
 
     def _reset_implementation_context(self, metadata) -> None:
+        metadata.implementation.target_repo_baseline = None
         metadata.implementation.last_result = None
         metadata.implementation.resolved_model = None
         metadata.implementation.session_id = None
         metadata.implementation.last_run_tokens = 0
         metadata.implementation.session_tokens = 0
+
+    def _target_repo_state_drift_note(self, metadata) -> str | None:
+        baseline = metadata.implementation.target_repo_baseline
+        if baseline is None:
+            return None
+        current = snapshot_target_repo_state(Path(metadata.target.repo_root), base_branch=metadata.target.base_branch)
+        head_drift = describe_target_repo_head_drift(
+            expected_branch=baseline.current_branch,
+            expected_head_sha=baseline.head_sha,
+            current_branch=current.current_branch,
+            current_head_sha=current.head_sha,
+        )
+        if head_drift is not None:
+            return head_drift
+        return describe_target_repo_dirty_drift(
+            expected_dirty=baseline.dirty,
+            current_branch=current.current_branch,
+            current_dirty=current.dirty,
+            current_status_short=current.status_short,
+        )
 
     def _archived_patch_path(self, metadata, live_runs_dir: Path, archive_runs_dir: Path) -> Path | None:
         if not metadata.integration.patch_path:

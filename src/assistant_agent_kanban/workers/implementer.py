@@ -8,6 +8,7 @@ from ..exceptions import AdapterRunError
 from ..enums import TaskState
 from ..exceptions import WorkspaceSyncError
 from ..language import generation_language_name
+from ..repo_branches import snapshot_target_repo_state
 from ..models import RunResult, TaskErrorInfo
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from ..workspace_manager import WorkspaceManager
@@ -42,6 +43,8 @@ class ImplementerWorker(WorkerBase):
             await self.emit("task_moved", implementing.metadata.task_id, state=implementing.state.value)
             try:
                 workspace_repo = await self._prepare_workspace(implementing)
+                self._capture_target_repo_baseline(implementing.metadata)
+                self.metadata_store.save(implementing.task_dir, implementing.metadata)
             except WorkspaceSyncError as exc:
                 apply_retry_gate(implementing.metadata, reason="implementation-base-sync-conflict")
                 implementing.metadata.implementation.last_result = "failure"
@@ -50,6 +53,16 @@ class ImplementerWorker(WorkerBase):
                 )
                 self.metadata_store.save(implementing.task_dir, implementing.metadata)
                 done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note="workspace preparation failed")
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
+            except AdapterRunError as exc:
+                apply_retry_gate(implementing.metadata, reason="implementation-target-baseline-failed")
+                implementing.metadata.implementation.last_result = "failure"
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-target-baseline-failed", message=str(exc))
+                )
+                self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note="target repo baseline capture failed")
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
 
@@ -289,11 +302,16 @@ class ImplementerWorker(WorkerBase):
             return await asyncio.to_thread(self.workspace_manager.prepare, task.metadata)
 
     def _reset_implementation_context(self, metadata) -> None:
+        metadata.implementation.target_repo_baseline = None
         metadata.implementation.last_result = None
         metadata.implementation.resolved_model = None
         metadata.implementation.session_id = None
         metadata.implementation.last_run_tokens = 0
         metadata.implementation.session_tokens = 0
+
+    def _capture_target_repo_baseline(self, metadata) -> None:
+        snapshot = snapshot_target_repo_state(Path(metadata.target.repo_root), base_branch=metadata.target.base_branch)
+        metadata.implementation.target_repo_baseline = snapshot.model_copy(deep=True)
 
     def _resolve_implementer_run_config(self, task_dir: Path, metadata):
         run_config = self.resolve_task_run_config(task_dir, metadata)

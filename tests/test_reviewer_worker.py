@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 from typing import cast
 
 import pytest
@@ -186,6 +187,79 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert review_json["resolved_model"] == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.review.resolved_model == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.retry_gate.reason is None
+
+
+def test_reviewer_worker_returns_to_todos_when_target_base_branch_advances(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "review-drift-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    (repo_root / "app.txt").write_text("changed outside workspace\n")
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-am", "advance main"], check=True, capture_output=True, text=True)
+
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(reviewer_cycle_responses()),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.retry_gate.reason == "review-target-repo-drift"
+    assert any(error.code == "review-target-repo-drift" for error in updated.metadata.errors)
+
+
+def test_reviewer_worker_returns_to_todos_when_target_repo_becomes_dirty_on_main(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "review-dirty-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    (repo_root / "app.txt").write_text("dirty outside workspace\n")
+
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(reviewer_cycle_responses()),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.retry_gate.reason == "review-target-repo-drift"
+    assert any(error.code == "review-target-repo-drift" for error in updated.metadata.errors)
+
+
+def test_reviewer_worker_ignores_dirty_review_branch_for_other_task(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "review-other-review-branch-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    subprocess.run(["git", "-C", str(repo_root), "switch", "-c", "review/other-task"], check=True, capture_output=True, text=True)
+    (repo_root / "app.txt").write_text("human review edits\n")
+
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(reviewer_cycle_responses()),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.COMPLETED_REVIEWS
+    assert updated.metadata.retry_gate.reason is None
 
 
 def test_reviewer_worker_allows_same_blocker_loop_to_continue_when_patch_changes(configured_paths):

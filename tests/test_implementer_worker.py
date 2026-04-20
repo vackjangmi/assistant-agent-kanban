@@ -95,6 +95,18 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert work_json["resolved_model"] == "openai/gpt-5.4"
     assert updated.metadata.implementation.resolved_model == "openai/gpt-5.4"
     assert [call["output_format"] for call in adapter.run_calls] == ["json", "default", "json"]
+    assert updated.metadata.implementation.target_repo_baseline is not None
+    baseline = updated.metadata.implementation.target_repo_baseline
+    assert baseline.base_branch == "main"
+    assert baseline.dirty is False
+    assert baseline.status_short == ""
+    expected_head = subprocess.run(
+        ["git", "-C", str(config.repo_root), "rev-parse", "main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert baseline.head_sha == expected_head
 
 
 def test_implementer_worker_uses_pinned_backend_after_global_change(configured_paths):

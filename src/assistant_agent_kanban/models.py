@@ -119,6 +119,7 @@ class ImplementationInfo(BaseModel):
     iteration: int = 0
     workspace: str | None = None
     branch: str | None = None
+    target_repo_baseline: "TargetRepoBaselineInfo | None" = None
     last_result: str | None = None
     resolved_model: str | None = None
     session_id: str | None = None
@@ -216,6 +217,16 @@ class HumanVerificationInfo(BaseModel):
 class TargetRepoInfo(BaseModel):
     repo_root: str = "."
     base_branch: str = "main"
+
+
+class TargetRepoBaselineInfo(BaseModel):
+    repo_root: str
+    base_branch: str
+    current_branch: str | None = None
+    head_sha: str | None = None
+    dirty: bool = False
+    status_short: str = ""
+    captured_at: datetime = Field(default_factory=utc_now)
 
 
 class TaskRuntimeRoleBackends(BaseModel):
