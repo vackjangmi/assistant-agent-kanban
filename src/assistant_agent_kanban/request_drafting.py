@@ -29,6 +29,11 @@ ALLOWED_DRAFT_UPDATE_FIELDS = (
     "base_branch",
 )
 
+BASELINE_REFERENCE_FILENAMES = (
+    "AGENTS.md",
+    "CLAUDE.md",
+)
+
 
 class RequestDraftTranscriptEntry(BaseModel):
     role: Literal["user", "assistant"]
@@ -74,6 +79,7 @@ def draft_request(
     backend = config.backend_for_role("request_draft")
     adapter = adapter_registry[backend]
     agent = config.role_agent("request_draft")
+    discovered_reference_paths = _discover_baseline_reference_paths((payload.target_repo or "").strip())
     prompt = build_request_drafting_prompt(config=config, payload=payload)
     with tempfile.TemporaryDirectory(prefix="assistant-agent-kanban-draft-") as temp_dir:
         cwd = _resolve_drafting_cwd(config=config, payload=payload, temp_dir=Path(temp_dir))
@@ -89,6 +95,11 @@ def draft_request(
     if not result.ok:
         raise AdapterRunError(result.stderr.strip() or result.assistant_text.strip() or "request drafting failed")
     reply, field_updates = parse_request_drafting_response(result.assistant_text)
+    field_updates = _apply_baseline_reference_invariant(
+        field_updates=field_updates,
+        existing_references=payload.references or "",
+        discovered_reference_paths=discovered_reference_paths,
+    )
     return RequestDraftResult(
         reply=reply,
         field_updates=field_updates,
@@ -104,6 +115,8 @@ def build_request_drafting_prompt(*, config: AppConfig, payload: RequestDraftPay
     request_language = runtime_language_code_to_request_language(config.runtime.language)
     normalized_target_repo = (payload.target_repo or "").strip()
     normalized_base_branch = (payload.base_branch or "").strip() or config.base_branch
+    discovered_reference_paths = _discover_baseline_reference_paths(normalized_target_repo)
+    effective_references = _merge_reference_lines(payload.references or "", discovered_reference_paths)
     default_scope: list[str] = []
     default_out_of_scope: list[str] = []
     if normalized_target_repo:
@@ -140,6 +153,7 @@ def build_request_drafting_prompt(*, config: AppConfig, payload: RequestDraftPay
             "  }",
             "}",
             "For line-based sections such as scope, out_of_scope, constraints, references, and acceptance_criteria, return plain newline-separated items without markdown headings.",
+            "Always keep any auto-discovered baseline reference files in references when they are present in the target repository.",
             "Use null for fields that should stay unchanged.",
             "Current composer payload:",
             json.dumps(
@@ -151,7 +165,7 @@ def build_request_drafting_prompt(*, config: AppConfig, payload: RequestDraftPay
                     "scope": payload.scope or "",
                     "out_of_scope": payload.out_of_scope or "",
                     "constraints": payload.constraints or "",
-                    "references": payload.references or "",
+                    "references": effective_references,
                     "acceptance_criteria": payload.acceptance_criteria or "",
                     "target_repo": normalized_target_repo,
                     "base_branch": normalized_base_branch,
@@ -159,6 +173,8 @@ def build_request_drafting_prompt(*, config: AppConfig, payload: RequestDraftPay
                 ensure_ascii=False,
                 indent=2,
             ),
+            "Auto-discovered baseline references:",
+            json.dumps(discovered_reference_paths, ensure_ascii=False, indent=2),
             "Repo-aware defaults for empty scope fields:",
             json.dumps(
                 {
@@ -232,3 +248,49 @@ def _resolve_drafting_cwd(*, config: AppConfig, payload: RequestDraftPayload, te
     if not resolved.exists() or not resolved.is_dir():
         raise ValueError("target repo must be an existing directory")
     return resolved
+
+
+def _discover_baseline_reference_paths(target_repo: str) -> list[str]:
+    normalized_target_repo = target_repo.strip()
+    if not normalized_target_repo:
+        return []
+    repo_root = resolve_safe_target_repo_root(Path(normalized_target_repo))
+    if not repo_root.exists() or not repo_root.is_dir():
+        return []
+    discovered: list[str] = []
+    for filename in BASELINE_REFERENCE_FILENAMES:
+        candidate = repo_root / filename
+        if candidate.is_file():
+            discovered.append(filename)
+    return discovered
+
+
+def _merge_reference_lines(existing_references: str, discovered_reference_paths: list[str]) -> str:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for raw_line in existing_references.splitlines():
+        line = raw_line.strip()
+        if not line or line in seen:
+            continue
+        seen.add(line)
+        merged.append(line)
+    for path in discovered_reference_paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        merged.append(path)
+    return "\n".join(merged)
+
+
+def _apply_baseline_reference_invariant(
+    *,
+    field_updates: dict[str, str],
+    existing_references: str,
+    discovered_reference_paths: list[str],
+) -> dict[str, str]:
+    if not discovered_reference_paths:
+        return field_updates
+    merged = dict(field_updates)
+    reference_source = merged.get("references", existing_references)
+    merged["references"] = _merge_reference_lines(reference_source, discovered_reference_paths)
+    return merged
