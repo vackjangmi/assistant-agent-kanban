@@ -7943,6 +7943,7 @@
 
     function updateHumanVerificationState() {
       const state = activeTaskDetail?.metadata?.state;
+      const verificationLeaseRunId = activeTaskDetail?.metadata?.lease?.run_id;
       const review = activeTaskDetail?.metadata?.review || {};
       const integrationApplied = Boolean(activeTaskDetail?.metadata?.integration?.applied);
       const canResumePlanner = state === 'requests'
@@ -7957,7 +7958,8 @@
         && activeTaskDetail.metadata.retry_gate.reason.startsWith('review-')
         && Boolean(activeTaskDetail?.metadata?.retry_gate?.not_before);
       const canResumeReviewLoop = state === 'todos' && review.human_rework_required === true;
-      const canStart = state === 'completed-reviews';
+      const verificationStartInFlight = state === 'completed-reviews' && verificationLeaseRunId === 'manual-human-verifying';
+      const canStart = state === 'completed-reviews' && !verificationStartInFlight;
       const canApproveOrReject = state === 'human-verifying';
       const canRetryApply = canApproveOrReject && !integrationApplied;
       resumePlannerButton.hidden = !canResumePlanner;
@@ -8917,7 +8919,7 @@
     }
 
     async function startVerification() {
-      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'completed-reviews') return;
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'completed-reviews' || activeTaskDetail?.metadata?.lease?.run_id === 'manual-human-verifying') return;
       startVerificationButton.disabled = true;
       try {
         const response = await fetch(`/api/tasks/${activeTaskId}/start-verification`, { method: 'POST' });
