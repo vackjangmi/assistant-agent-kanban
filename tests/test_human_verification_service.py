@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import os
 import subprocess
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -181,6 +183,41 @@ def test_human_verification_start_uses_absolute_patch_path_from_relative_config(
         (tmp_path / ".kanban-agent" / "_runtime" / "runs" / updated.metadata.task_id / "review-001.patch").resolve()
     )
     assert (target_repo / "app.txt").read_text() == "review me\n"
+
+
+def test_human_verification_start_rechecks_state_after_lock_for_duplicate_requests(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-duplicate-start-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    entered_apply = Event()
+    allow_apply = Event()
+    original_run_verification_apply = service._run_verification_apply
+
+    def slow_run_verification_apply(context):
+        entered_apply.set()
+        assert allow_apply.wait(timeout=5)
+        return original_run_verification_apply(context)
+
+    service._run_verification_apply = slow_run_verification_apply
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first_start = executor.submit(service.start, completed.metadata.task_id, by="human-a")
+            assert entered_apply.wait(timeout=5)
+            second_start = executor.submit(service.start, completed.metadata.task_id, by="human-b")
+            allow_apply.set()
+
+            moved = first_start.result(timeout=10)
+            assert moved.state == TaskState.HUMAN_VERIFYING
+            with pytest.raises(TransitionError, match="human verification can only start from completed-reviews"):
+                second_start.result(timeout=10)
+    finally:
+        service._run_verification_apply = original_run_verification_apply
+
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.HUMAN_VERIFYING
+    assert refreshed.metadata.lease.owner is None
+    assert refreshed.metadata.lease.run_id is None
 
 
 def test_human_verification_reject_rolls_back_and_records_note(configured_paths):

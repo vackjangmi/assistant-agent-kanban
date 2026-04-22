@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import os
 import re
@@ -52,10 +53,9 @@ class HumanVerificationService:
         self.adapter_registry = dict(adapter_registry or {})
 
     def start(self, task_id: str, *, by: str) -> TaskContext:
-        context = self._find_task(task_id)
-        if context.state != TaskState.COMPLETED_REVIEWS:
-            raise TransitionError("human verification can only start from completed-reviews")
-        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-verifying"):
+        with self._acquire_current_task_lease(task_id, owner=by, run_id="manual-human-verifying") as context:
+            if context.state != TaskState.COMPLETED_REVIEWS:
+                raise TransitionError("human verification can only start from completed-reviews")
             drift_note = self._target_repo_state_drift_note(context.metadata)
             if drift_note is not None:
                 apply_retry_gate(context.metadata, reason="verification-target-repo-drift")
@@ -74,6 +74,23 @@ class HumanVerificationService:
                     context.metadata.commit.review_sha = None
                     self.metadata_store.save(context.task_dir, context.metadata)
                 raise
+
+    @contextmanager
+    def _acquire_current_task_lease(self, task_id: str, *, owner: str, run_id: str):
+        with self.locks.acquire_by_task_id(task_id, owner=owner, run_id=run_id):
+            context = self._find_task(task_id)
+            self.locks.heartbeat(context.task_dir, context.metadata, owner=owner, run_id=run_id)
+            try:
+                yield context
+            finally:
+                try:
+                    refreshed = self._find_task(task_id)
+                except TaskNotFoundError:
+                    return
+                refreshed.metadata.lease.owner = None
+                refreshed.metadata.lease.run_id = None
+                refreshed.metadata.lease.heartbeat_at = None
+                self.metadata_store.save(refreshed.task_dir, refreshed.metadata)
 
     def retry_apply(self, task_id: str, *, by: str) -> TaskContext:
         context = self._find_task(task_id)

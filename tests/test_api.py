@@ -1496,7 +1496,7 @@ def test_api_supports_human_verification_start_and_reject(configured_paths):
         assert (repo_root / "app.txt").read_text() == "hello\n"
 
 
-def test_api_keeps_human_verifying_and_allows_retry_on_verification_conflict(configured_paths):
+def test_api_returns_to_todos_on_verification_target_repo_drift(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
     create_request_task(config, "human-verify-start-conflict-task")
@@ -1511,21 +1511,13 @@ def test_api_keeps_human_verifying_and_allows_retry_on_verification_conflict(con
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
 
         assert start.status_code == 200
-        assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
-        conflict_detail = client.get(f"/api/tasks/{completed.metadata.task_id}?include_changed_files=true")
-        assert conflict_detail.status_code == 200
-        assert conflict_detail.json()["changed_files_available"] is True
-        assert len(conflict_detail.json()["changed_files"]) > 0
+        assert start.json()["state"] == TaskState.TODOS.value
 
-        subprocess.run(["git", "-C", str(repo_root), "reset", "--hard", "HEAD~1"], check=True, capture_output=True, text=True)
-        retry = client.post(f"/api/tasks/{completed.metadata.task_id}/retry-verification-apply")
-
-    assert retry.status_code == 200
-    assert retry.json()["state"] == TaskState.HUMAN_VERIFYING.value
     refreshed = scanner.find_task(completed.metadata.task_id)
-    assert refreshed.metadata.integration.applied is True
-    assert refreshed.metadata.commit.status == "review-committed"
-    assert refreshed.metadata.retry_gate.reason is None
+    assert refreshed.state == TaskState.TODOS
+    assert refreshed.metadata.integration.applied is False
+    assert refreshed.metadata.commit.status == "pending"
+    assert refreshed.metadata.retry_gate.reason == "verification-target-repo-drift"
 
 
 def test_api_rejects_retry_when_verification_apply_is_already_active(configured_paths):
@@ -1564,7 +1556,7 @@ def test_api_blocks_reject_without_note_or_line_comment(configured_paths):
     assert "request changes is only available after adding a review note or line comment" in reject.json()["detail"]
 
 
-def test_api_allows_reject_after_verification_conflict_without_extra_feedback(configured_paths):
+def test_api_blocks_reject_after_verification_target_repo_drift(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
     create_request_task(config, "human-verify-reject-conflict-task")
@@ -1578,13 +1570,13 @@ def test_api_allows_reject_after_verification_conflict_without_extra_feedback(co
     with TestClient(app) as client:
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
         assert start.status_code == 200
+        assert start.json()["state"] == TaskState.TODOS.value
         reject = client.post(
             f"/api/tasks/{completed.metadata.task_id}/reject-verification",
             json={"note": ""},
         )
 
-    assert reject.status_code == 200
-    assert reject.json()["state"] == TaskState.TODOS.value
+    assert reject.status_code == 409
     assert scanner.find_task(completed.metadata.task_id).state == TaskState.TODOS
 
 
