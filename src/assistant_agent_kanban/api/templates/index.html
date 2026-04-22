@@ -4089,6 +4089,10 @@
       applyRoleModelSelection(config, modelValue);
     }
 
+    function resetRoleModelSelection(config) {
+      applyRoleModelSelection(config, '');
+    }
+
     function effectiveRoleBackend(role) {
       const config = roleSettingConfigs.find((item) => item.role === role);
       if (!config) return runtimeCodingAssistantInput.value || 'opencode';
@@ -9417,11 +9421,18 @@
     runtimeCodingAssistantInput.addEventListener('input', handleAssistantModeVisibilityChange);
     runtimeCodingAssistantInput.addEventListener('change', () => {
       handleAssistantModeVisibilityChange();
+      roleSettingConfigs.forEach((config) => {
+        if ((config.backendInput.value || 'default') !== 'default') return;
+        resetRoleModelSelection(config);
+      });
+      renderAllRoleModelOptions();
       loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error'));
     });
     roleSettingConfigs.forEach((config) => {
       const { backendInput, modelInput, modelSelectInput, role } = config;
       backendInput.addEventListener('change', () => {
+        resetRoleModelSelection(config);
+        renderRoleModelOptions(role);
         const selectedBackend = effectiveRoleBackend(role);
         if (selectedBackend) {
           loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false }).catch((error) => setSettingsStatus(error.message, 'error'));
