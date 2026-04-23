@@ -6382,10 +6382,7 @@
       const canResumePlannerFromSnapshot = state === 'requests'
         && typeof snapshot?.metadata?.retry_gate?.reason === 'string'
         && snapshot.metadata.retry_gate.reason.startsWith('planner-');
-      const canResumeImplementerFromSnapshot = state === 'todos'
-        && typeof snapshot?.metadata?.retry_gate?.reason === 'string'
-        && snapshot.metadata.retry_gate.reason.startsWith('implementation-')
-        && Boolean(snapshot?.metadata?.retry_gate?.not_before);
+      const canResumeImplementerFromSnapshot = canResumeImplementerForMetadata(snapshot?.metadata, state);
       const canResumeReviewerFromSnapshot = state === 'waiting-reviews'
         && typeof snapshot?.metadata?.retry_gate?.reason === 'string'
         && snapshot.metadata.retry_gate.reason.startsWith('review-')
@@ -7968,10 +7965,7 @@
       const canResumePlanner = state === 'requests'
         && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
         && activeTaskDetail.metadata.retry_gate.reason.startsWith('planner-');
-      const canResumeImplementer = state === 'todos'
-        && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
-        && activeTaskDetail.metadata.retry_gate.reason.startsWith('implementation-')
-        && Boolean(activeTaskDetail?.metadata?.retry_gate?.not_before);
+      const canResumeImplementer = canResumeImplementerForMetadata(activeTaskDetail?.metadata, state);
       const canResumeReviewer = state === 'waiting-reviews'
         && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
         && activeTaskDetail.metadata.retry_gate.reason.startsWith('review-')
@@ -8977,9 +8971,7 @@
 
     function openResumeImplementerChoiceModal() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'todos') return;
-      if (typeof activeTaskDetail.metadata.retry_gate?.reason !== 'string') return;
-      if (!activeTaskDetail.metadata.retry_gate.reason.startsWith('implementation-')) return;
-      if (!activeTaskDetail.metadata.retry_gate?.not_before) return;
+      if (!canResumeImplementerForMetadata(activeTaskDetail.metadata, activeTaskDetail.metadata.state)) return;
       if (resumeImplementerButton.disabled) return;
       taskModalError.hidden = true;
       taskModalError.textContent = '';
@@ -9007,11 +8999,17 @@
       setResumeReviewerChoiceModalOpen(true);
     }
 
+    function canResumeImplementerForMetadata(metadata, state) {
+      if (state !== 'todos') return false;
+      const retryReason = typeof metadata?.retry_gate?.reason === 'string' ? metadata.retry_gate.reason : '';
+      if (!retryReason || !metadata?.retry_gate?.not_before) return false;
+      if (retryReason.startsWith('implementation-')) return true;
+      return retryReason === 'review-rework-backstop' && metadata?.review?.human_rework_required !== true;
+    }
+
     async function resumeImplementer(resumeMode) {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'todos') return;
-      if (typeof activeTaskDetail.metadata.retry_gate?.reason !== 'string') return;
-      if (!activeTaskDetail.metadata.retry_gate.reason.startsWith('implementation-')) return;
-      if (!activeTaskDetail.metadata.retry_gate?.not_before) return;
+      if (!canResumeImplementerForMetadata(activeTaskDetail.metadata, activeTaskDetail.metadata.state)) return;
       const normalizedResumeMode = resumeMode === 'current-settings' ? 'current-settings' : 'pinned';
       const message = (resumeImplementerMessageInput.value || '').trim();
       const statusKey = normalizedResumeMode === 'current-settings' ? 'resumeImplementerSubmittingCurrent' : 'resumeImplementerSubmittingPinned';

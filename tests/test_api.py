@@ -5171,11 +5171,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'id="resume-review-loop"' in response.text
     assert "function stripOuterMarkdownFence(value)" in response.text
     assert "const normalizedValue = activeArtifactName === 'PLAN.md' ? stripOuterMarkdownFence(value || '') : (value || '');" in response.text
-    assert "const canResumeImplementerFromSnapshot = state === 'todos'" in response.text
+    assert "const canResumeImplementerFromSnapshot = canResumeImplementerForMetadata(snapshot?.metadata, state);" in response.text
     assert "const canResumeReviewerFromSnapshot = state === 'waiting-reviews'" in response.text
     assert "const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;" in response.text
     assert "...(snapshotMetadata.review || {})," in response.text
     assert "function retryVerificationApply()" in response.text
+    assert "function canResumeImplementerForMetadata(metadata, state)" in response.text
+    assert "return retryReason === 'review-rework-backstop' && metadata?.review?.human_rework_required !== true;" in response.text
+    assert "if (!canResumeImplementerForMetadata(activeTaskDetail.metadata, activeTaskDetail.metadata.state)) return;" in response.text
     assert "async function resumeImplementer(resumeMode)" in response.text
     assert "body: JSON.stringify({ resume_mode: normalizedResumeMode, message })" in response.text
     assert "async function resumeReviewer(resumeMode)" in response.text
