@@ -284,6 +284,16 @@ class TaskService:
         task = self._find_task(task_id)
         return self._append_human_reviewer_qa_message(task, message=message, by=by)
 
+    def _can_resume_implementer_from_todos_retry_gate(self, task: TaskContext) -> bool:
+        if task.state != TaskState.TODOS:
+            return False
+        retry_reason = task.metadata.retry_gate.reason or ""
+        if task.metadata.retry_gate.not_before is None:
+            return False
+        if retry_reason.startswith("implementation-"):
+            return True
+        return retry_reason == "review-rework-backstop" and not task.metadata.review.human_rework_required
+
     def resume_review_loop(self, task_id: str, *, by: str = "human", message: str | None = None):
         task = self._find_task(task_id)
         if task.state != TaskState.TODOS:
@@ -367,10 +377,10 @@ class TaskService:
         task = self._find_task(task_id)
         if task.state != TaskState.TODOS:
             raise TransitionError("implementer resume is only allowed in todos")
-        retry_reason = task.metadata.retry_gate.reason or ""
-        implementation_retry = retry_reason.startswith("implementation-")
-        if not implementation_retry or task.metadata.retry_gate.not_before is None:
-            raise TransitionError("implementer resume is only allowed when an active implementation retry gate is present")
+        if not self._can_resume_implementer_from_todos_retry_gate(task):
+            raise TransitionError(
+                "implementer resume is only allowed when an active implementation retry gate or paused review backstop is present"
+            )
         if self.locks is None:
             raise TransitionError("implementer resume requires lock manager")
         with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-implementer-resume"):
