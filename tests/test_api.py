@@ -4306,7 +4306,7 @@ def test_api_accepts_unknown_claude_model_on_save(configured_paths):
     assert config.claude.planner_model == "custom-gateway-model"
 
 
-def test_api_rejects_unknown_opencode_model_on_save(configured_paths):
+def test_api_accepts_unknown_opencode_model_on_save(configured_paths):
     config, _, _ = configured_paths
     planner_adapter = FakeAdapter(["plan"], discovery_responses=[["openai/gpt-5.4"]])
     adapter_registry = _settings_adapter_registry(opencode_adapter=planner_adapter)
@@ -4325,14 +4325,12 @@ def test_api_rejects_unknown_opencode_model_on_save(configured_paths):
             },
         )
 
-    assert response.status_code == 422
-    assert response.json()["detail"] == {
-        "code": "settings.model_not_discovered",
-        "field": "planner_model",
-    }
+    assert response.status_code == 200
+    assert response.json()["planner_model"] == "not-a-real-model"
+    assert config.opencode.planner_model == "not-a-real-model"
 
 
-def test_api_rejects_unknown_codex_model_on_save(configured_paths):
+def test_api_accepts_unknown_codex_model_on_save(configured_paths):
     config, _, _ = configured_paths
     adapter_registry = _settings_adapter_registry()
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
@@ -4350,14 +4348,12 @@ def test_api_rejects_unknown_codex_model_on_save(configured_paths):
             },
         )
 
-    assert response.status_code == 422
-    assert response.json()["detail"] == {
-        "code": "settings.model_not_discovered",
-        "field": "planner_model",
-    }
+    assert response.status_code == 200
+    assert response.json()["planner_model"] == "not-a-real-model"
+    assert config.codex.planner_model == "not-a-real-model"
 
 
-def test_api_rejects_unknown_inactive_role_backend_model_on_save(configured_paths):
+def test_api_accepts_unknown_inactive_role_backend_model_on_save(configured_paths):
     config, _, _ = configured_paths
     adapter_registry = _settings_adapter_registry()
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
@@ -4376,11 +4372,9 @@ def test_api_rejects_unknown_inactive_role_backend_model_on_save(configured_path
             },
         )
 
-    assert response.status_code == 422
-    assert response.json()["detail"] == {
-        "code": "settings.model_not_discovered",
-        "field": "reviewer_model",
-    }
+    assert response.status_code == 200
+    assert response.json()["reviewer_model"] == "not-a-real-model"
+    assert config.codex.reviewer_model == "not-a-real-model"
 
 
 def test_api_refresh_can_preview_codex_models_without_switching_runtime(configured_paths):
@@ -4818,11 +4812,15 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "renderRoleModelDatalist(config, items);" in response.text
     assert "function mergeSettingsPayload(data)" in response.text
     assert "applyRoleModelSelection(config, modelSelectInput.value);" in response.text
+    assert "const useCustom = normalizedValue === customModelOptionValue || (Boolean(normalizedValue) && !knownOptions.includes(normalizedValue));" in response.text
+    assert "config.modelInput.value = useCustom && normalizedValue !== customModelOptionValue ? normalizedValue : '';" in response.text
     assert "loadModelSettings(true, { preserveState: true })" in response.text
     assert "function hydrateSettingsDiscovery(data, { preserveState = false, updateSummary = true } = {})" in response.text
     assert "loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false })" in response.text
-    assert "renderAllRoleModelOptions();\n      loadModelSettings(true, { preserveState: true })" not in response.text
-    assert "renderRoleModelOptions(role);\n        const selectedBackend = effectiveRoleBackend(role);" not in response.text
+    assert "renderAllRoleModelOptions();\n        loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false })" not in response.text
+    assert "backendInput.addEventListener('change', () => {" in response.text
+    assert "renderRoleModelOptions(role);" in response.text
+    assert "const selectedBackend = effectiveRoleBackend(role);" in response.text
     assert "const previousRoleSelections = Object.fromEntries(roleSettingConfigs.map(({ role, backendInput }) => [role, backendInput.value || 'default']));" in response.text
     assert "backendInput.value = roleOptions.some((item) => item.value === nextValue) ? nextValue : 'default';" in response.text
     assert "Refresh models" in response.text

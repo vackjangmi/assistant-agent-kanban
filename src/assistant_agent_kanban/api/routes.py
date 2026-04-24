@@ -458,19 +458,8 @@ def _deduplicate_models(values: Sequence[str | None]) -> list[str]:
 def _validate_model_selection(model_name: str | None, *, backend: str, field_name: str, available_models: set[str]) -> None:
     if model_name is None:
         return
-    if backend == "claude":
-        return
-    if not available_models:
-        return
-    if model_name in available_models:
-        return
-    raise HTTPException(
-        status_code=422,
-        detail={
-            "code": "settings.model_not_discovered",
-            "field": field_name,
-        },
-    )
+    del backend, field_name, available_models
+    return
 
 
 def _validate_backend_available(status: AssistantBackendStatusSnapshot, *, field_name: str) -> None:

@@ -4084,13 +4084,13 @@
       if (!config || !config.modelSelectInput || !config.modelInput) return;
       const normalizedValue = typeof modelValue === 'string' ? modelValue : '';
       const knownOptions = Array.from(config.modelSelectInput.options).map((option) => option.value);
-      const useCustom = Boolean(normalizedValue) && !knownOptions.includes(normalizedValue);
+      const useCustom = normalizedValue === customModelOptionValue || (Boolean(normalizedValue) && !knownOptions.includes(normalizedValue));
       config.modelSelectInput.value = useCustom
         ? customModelOptionValue
         : (knownOptions.includes(normalizedValue) ? normalizedValue : '');
       config.modelInput.hidden = !useCustom;
       config.modelInput.disabled = !useCustom;
-      config.modelInput.value = useCustom ? normalizedValue : '';
+      config.modelInput.value = useCustom && normalizedValue !== customModelOptionValue ? normalizedValue : '';
       config.modelInput.placeholder = translateSettings('modelCustomPlaceholder');
     }
 
