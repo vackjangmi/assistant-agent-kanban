@@ -76,7 +76,7 @@ class PlanningWorker(WorkerBase):
                     cwd=planner_cwd,
                     run_log_path=log_path,
                     config=run_config,
-                    include_directories=self._gemini_include_directories(run_config, planning.metadata, planner_cwd),
+                    include_directories=self._planner_include_directories(run_config, planning.metadata, planner_cwd),
                     session_id=session_id,
                     cancel_key=planning.metadata.task_id,
                     on_log_line=self.make_log_callback(loop, planning.metadata.task_id, log_name),
@@ -131,7 +131,7 @@ class PlanningWorker(WorkerBase):
                     cwd=planner_cwd,
                     run_log_path=log_path,
                     config=run_config,
-                    include_directories=self._gemini_include_directories(run_config, planning.metadata, planner_cwd),
+                    include_directories=self._planner_include_directories(run_config, planning.metadata, planner_cwd),
                     session_id=session_id,
                     cancel_key=planning.metadata.task_id,
                 )
@@ -166,7 +166,7 @@ class PlanningWorker(WorkerBase):
                     cwd=planner_cwd,
                     run_log_path=log_path,
                     config=run_config,
-                    include_directories=self._gemini_include_directories(run_config, planning.metadata, planner_cwd),
+                    include_directories=self._planner_include_directories(run_config, planning.metadata, planner_cwd),
                     session_id=active_session_id,
                     cancel_key=planning.metadata.task_id,
                     on_log_line=self.make_log_callback(loop, planning.metadata.task_id, log_name),
@@ -223,8 +223,8 @@ class PlanningWorker(WorkerBase):
             return False
         return has_required_request_fields(request_path.read_text())
 
-    def _gemini_include_directories(self, run_config, metadata, planner_cwd: Path) -> list[Path] | None:
-        if run_config.backend_for_role("planner") != "gemini":
+    def _planner_include_directories(self, run_config, metadata, planner_cwd: Path) -> list[Path] | None:
+        if run_config.backend_for_role("planner") not in {"gemini", "opencode"}:
             return None
         target_repo_root = Path(metadata.target.repo_root).expanduser().resolve()
         if target_repo_root == planner_cwd:
@@ -251,7 +251,7 @@ class PlanningWorker(WorkerBase):
             cwd=planner_cwd,
             run_log_path=log_path,
             config=run_config,
-            include_directories=self._gemini_include_directories(run_config, planning.metadata, planner_cwd),
+            include_directories=self._planner_include_directories(run_config, planning.metadata, planner_cwd),
             session_id=active_session_id,
             cancel_key=planning.metadata.task_id,
         )
@@ -279,7 +279,7 @@ class PlanningWorker(WorkerBase):
                 cwd=planner_cwd,
                 run_log_path=log_path,
                 config=run_config,
-                include_directories=self._gemini_include_directories(run_config, planning.metadata, planner_cwd),
+                include_directories=self._planner_include_directories(run_config, planning.metadata, planner_cwd),
                 session_id=planning.metadata.plan.session_id,
                 cancel_key=planning.metadata.task_id,
             )

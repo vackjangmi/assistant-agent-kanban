@@ -92,6 +92,7 @@ class ImplementerWorker(WorkerBase):
                     cwd=workspace_repo,
                     run_log_path=log_path,
                     config=run_config,
+                    include_directories=self._opencode_include_directories(run_config, implementing.metadata, workspace_repo),
                     session_id=session_id,
                     cancel_key=implementing.metadata.task_id,
                     on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, log_name),
@@ -164,6 +165,7 @@ class ImplementerWorker(WorkerBase):
                 cwd=workspace_repo,
                 run_log_path=log_path,
                 config=run_config,
+                include_directories=self._opencode_include_directories(run_config, implementing.metadata, workspace_repo),
                 session_id=session_id,
                 cancel_key=implementing.metadata.task_id,
             )
@@ -255,6 +257,7 @@ class ImplementerWorker(WorkerBase):
                     cwd=workspace_repo,
                     run_log_path=log_path,
                     config=run_config,
+                    include_directories=self._opencode_include_directories(run_config, implementing.metadata, workspace_repo),
                     session_id=live_result.session_id or active_session_id,
                     cancel_key=implementing.metadata.task_id,
                 )
@@ -406,6 +409,14 @@ class ImplementerWorker(WorkerBase):
             raise AdapterRunError(f"{backend} backend is unavailable for implementer: {availability_error}")
         return adapter
 
+    def _opencode_include_directories(self, run_config, metadata, workspace_repo: Path) -> list[Path] | None:
+        if run_config.backend_for_role("implementer") != "opencode":
+            return None
+        target_repo_root = Path(metadata.target.repo_root).expanduser().resolve()
+        if target_repo_root == workspace_repo:
+            return None
+        return [target_repo_root]
+
     async def _run_adapter_with_retry(
         self,
         *,
@@ -429,6 +440,7 @@ class ImplementerWorker(WorkerBase):
             cwd=workspace_repo,
             run_log_path=run_log_path,
             config=run_config,
+            include_directories=self._opencode_include_directories(run_config, implementing.metadata, workspace_repo),
             session_id=session_id,
             cancel_key=implementing.metadata.task_id,
             on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, log_name),
@@ -445,6 +457,7 @@ class ImplementerWorker(WorkerBase):
             cwd=workspace_repo,
             run_log_path=run_log_path,
             config=run_config,
+            include_directories=self._opencode_include_directories(run_config, implementing.metadata, workspace_repo),
             session_id=session_id,
             cancel_key=implementing.metadata.task_id,
             on_log_line=self.make_log_callback(loop, implementing.metadata.task_id, log_name),

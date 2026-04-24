@@ -126,6 +126,7 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert work_json["resolved_model"] == "openai/gpt-5.4"
     assert updated.metadata.implementation.resolved_model == "openai/gpt-5.4"
     assert [call["output_format"] for call in adapter.run_calls] == ["json", "default", "json"]
+    assert all(call["include_directories"] == [config.repo_root.resolve()] for call in adapter.run_calls)
     assert updated.metadata.implementation.target_repo_baseline is not None
     baseline = updated.metadata.implementation.target_repo_baseline
     assert baseline.base_branch == "main"

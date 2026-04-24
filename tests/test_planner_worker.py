@@ -939,9 +939,11 @@ def test_planner_worker_runs_from_project_repo_for_runtime_artifacts(configured_
         def __init__(self):
             super().__init__(planner_cycle_responses(artifact=valid_plan_artifact("plan")))
             self.cwd = None
+            self.include_directories = None
 
         def run(self, **kwargs):
             self.cwd = kwargs["cwd"]
+            self.include_directories = kwargs["include_directories"]
             return super().run(**kwargs)
 
     config, _, _ = configured_paths
@@ -957,6 +959,7 @@ def test_planner_worker_runs_from_project_repo_for_runtime_artifacts(configured_
 
     assert asyncio.run(worker.run_once()) is True
     assert adapter.cwd == config.repo_root.resolve()
+    assert adapter.include_directories == [target_repo.resolve()]
 
 
 def test_planner_worker_uses_updated_request_metadata_after_request_completion(configured_paths, tmp_path):
