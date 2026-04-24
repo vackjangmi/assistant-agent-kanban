@@ -236,8 +236,12 @@ class HumanVerificationService:
                     count = len(unresolved_comments)
                     raise TransitionError(f"approval is blocked until all inline comments are removed ({count} remaining)")
                 self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="APPROVED")
-                self._sync_task_documents_to_target_repo(context.task_dir, context.metadata)
-                self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
+                summary_markdown = self._sync_task_documents_to_target_repo(context.task_dir, context.metadata)
+                self.commit_manager.prepare_commit_message(
+                    context.task_dir,
+                    context.metadata,
+                    summary_markdown=summary_markdown,
+                )
                 sha = self.commit_manager.finalize_review_branch(
                     context.task_dir,
                     context.metadata,
@@ -459,7 +463,7 @@ class HumanVerificationService:
                 return candidate
         raise IntegrationError(f"base ref '{base_branch}' does not exist in workspace")
 
-    def _sync_task_documents_to_target_repo(self, task_dir: Path, metadata) -> None:
+    def _sync_task_documents_to_target_repo(self, task_dir: Path, metadata) -> str:
         try:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
@@ -486,6 +490,7 @@ class HumanVerificationService:
         if summary_path.name != filename:
             summary_path = docs_root / filename
         summary_path.write_bytes(content)
+        return content.decode("utf-8")
 
     def _default_comments_path(self, metadata) -> str:
         note_path = metadata.human_verification.note_path or f"HUMAN-VERIFY-{metadata.cycle:03d}.md"

@@ -1039,6 +1039,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
             f"Goal: Implement {done.metadata.title}.",
             "Plan: plan",
             f"Task: {done.metadata.task_id}",
+            f"Branch: {done.metadata.integration.final_branch_summary}",
         ]
     )
     assert done.metadata.commit.prepared_message == expected_message

@@ -11,16 +11,16 @@ from .target_repo_guard import resolve_safe_target_repo_root
 
 
 class CommitManager:
-    def build_commit_message(self, task_dir: Path, metadata: TaskMetadata) -> str:
+    def build_commit_message(self, task_dir: Path, metadata: TaskMetadata, *, summary_markdown: str | None = None) -> str:
         title = metadata.title.strip() or metadata.slug
         subject = f"{self._commit_type(title)}: {self._normalize_subject(title)}"
-        body_lines = self._build_commit_body(task_dir, metadata)
+        body_lines = self._build_commit_body(task_dir, metadata, summary_markdown=summary_markdown)
         if not body_lines:
             return subject
         return "\n".join([subject, "", *body_lines])
 
-    def prepare_commit_message(self, task_dir: Path, metadata: TaskMetadata) -> str:
-        message = self.build_commit_message(task_dir, metadata)
+    def prepare_commit_message(self, task_dir: Path, metadata: TaskMetadata, *, summary_markdown: str | None = None) -> str:
+        message = self.build_commit_message(task_dir, metadata, summary_markdown=summary_markdown)
         commit_path = task_dir / "COMMIT.md"
         commit_path.write_text(message + "\n")
         metadata.commit.message_path = "COMMIT.md"
@@ -180,7 +180,9 @@ class CommitManager:
             raise CommitError(switch.stderr.strip() or "failed to restore review branch")
         self._reapply_review_patch(repo_root, metadata)
 
-    def _build_commit_body(self, task_dir: Path, metadata: TaskMetadata) -> list[str]:
+    def _build_commit_body(self, task_dir: Path, metadata: TaskMetadata, *, summary_markdown: str | None = None) -> list[str]:
+        if summary_markdown is not None:
+            return self._commit_body_from_summary(summary_markdown)
         details: list[str] = []
         goal = self._request_goal(task_dir)
         if goal:
@@ -196,6 +198,75 @@ class CommitManager:
             details.append(f"Human review: {human_verify}")
         details.append(f"Task: {metadata.task_id}")
         return details
+
+    def _commit_body_from_summary(self, summary_markdown: str) -> list[str]:
+        sections = self._parse_summary_sections(summary_markdown)
+        missing_sections = [name for name in ("Overview", "Why / Keywords") if name not in sections]
+        if missing_sections:
+            missing = ", ".join(missing_sections)
+            raise CommitError(f"completion summary is missing required section(s): {missing}")
+
+        body_lines: list[str] = []
+
+        for line in sections.get("Why / Keywords", []):
+            cleaned = self._summary_line_to_commit_line(line)
+            if cleaned is not None:
+                body_lines.append(cleaned)
+
+        for line in sections.get("Overview", []):
+            overview_line = self._summary_overview_to_commit_line(line)
+            if overview_line is not None:
+                body_lines.append(overview_line)
+
+        if not body_lines:
+            raise CommitError("completion summary did not contain any commit-ready lines")
+
+        return body_lines[:10]
+
+    def _parse_summary_sections(self, summary_markdown: str) -> dict[str, list[str]]:
+        sections: dict[str, list[str]] = {}
+        current_section: str | None = None
+        for raw_line in summary_markdown.splitlines():
+            line = raw_line.rstrip()
+            if line.startswith("## "):
+                current_section = line[3:].strip()
+                sections.setdefault(current_section, [])
+                continue
+            if current_section is None:
+                continue
+            stripped = line.strip()
+            if not stripped:
+                continue
+            sections.setdefault(current_section, []).append(stripped)
+        return sections
+
+    def _summary_line_to_commit_line(self, line: str) -> str | None:
+        normalized = self._single_line(line.lstrip("- "))
+        if not normalized:
+            return None
+        if normalized.startswith("Keywords:"):
+            return None
+        if normalized.startswith("Goal:"):
+            return normalized
+        if normalized.startswith("Plan summary:"):
+            return normalized.replace("Plan summary:", "Plan:", 1)
+        if normalized.startswith("Review summary:"):
+            return normalized.replace("Review summary:", "Review:", 1)
+        if normalized.startswith("Human review summary:"):
+            return normalized.replace("Human review summary:", "Human review:", 1)
+        return None
+
+    def _summary_overview_to_commit_line(self, line: str) -> str | None:
+        normalized = self._single_line(line.lstrip("- "))
+        if not normalized:
+            return None
+        if normalized.startswith("Task ID:"):
+            task_id = normalized.removeprefix("Task ID:").strip().strip("`")
+            return f"Task: {task_id}" if task_id else None
+        if normalized.startswith("Branch summary:"):
+            summary = normalized.removeprefix("Branch summary:").strip().strip("`")
+            return f"Branch: {summary}" if summary else None
+        return None
 
     def _request_goal(self, task_dir: Path) -> str | None:
         request_path = task_dir / "REQUEST.md"
