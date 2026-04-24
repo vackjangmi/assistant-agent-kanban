@@ -8,7 +8,7 @@ from ..exceptions import AdapterRunError
 from ..enums import TaskState
 from ..exceptions import WorkspaceSyncError
 from ..language import generation_language_name
-from ..repo_branches import snapshot_target_repo_state
+from ..repo_branches import describe_target_repo_head_drift, snapshot_target_repo_state
 from ..models import RunResult, TaskErrorInfo
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
 from ..workspace_manager import WorkspaceManager
@@ -106,6 +106,17 @@ class ImplementerWorker(WorkerBase):
                     run_tokens=result.total_tokens,
                 )
                 implementing.metadata.cycle += 1
+                drift_note = self._target_repo_state_drift_note(implementing.metadata)
+                if drift_note is not None:
+                    implementing.metadata.implementation.last_result = "failure"
+                    implementing.metadata.errors.append(
+                        TaskErrorInfo(code="implementation-target-repo-drift", message=drift_note)
+                    )
+                    apply_retry_gate(implementing.metadata, reason="implementation-target-repo-drift")
+                    self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                    done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=drift_note)
+                    await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                    return True
                 has_changes = self.workspace_has_changes(workspace_repo)
                 has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
                 success = result.ok and has_changes and not has_local_commits
@@ -166,6 +177,17 @@ class ImplementerWorker(WorkerBase):
                 run_tokens=handshake_result.total_tokens,
             )
             self.metadata_store.save(implementing.task_dir, implementing.metadata)
+            drift_note = self._target_repo_state_drift_note(implementing.metadata)
+            if drift_note is not None:
+                implementing.metadata.implementation.last_result = "failure"
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-target-repo-drift", message=drift_note)
+                )
+                apply_retry_gate(implementing.metadata, reason="implementation-target-repo-drift")
+                self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=drift_note)
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
             if not handshake_result.ok:
                 implementing.metadata.implementation.last_result = "failure"
                 implementing.metadata.errors.append(
@@ -194,6 +216,17 @@ class ImplementerWorker(WorkerBase):
             )
 
             implementing.metadata.cycle += 1
+            drift_note = self._target_repo_state_drift_note(implementing.metadata)
+            if drift_note is not None:
+                implementing.metadata.implementation.last_result = "failure"
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(code="implementation-target-repo-drift", message=drift_note)
+                )
+                apply_retry_gate(implementing.metadata, reason="implementation-target-repo-drift")
+                self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=drift_note)
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
             has_changes = self.workspace_has_changes(workspace_repo)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
             success = live_result.ok and has_changes and not has_local_commits
@@ -236,6 +269,17 @@ class ImplementerWorker(WorkerBase):
                     prior_session_tokens=implementing.metadata.implementation.session_tokens,
                     run_tokens=finalize_result.total_tokens,
                 )
+                drift_note = self._target_repo_state_drift_note(implementing.metadata)
+                if drift_note is not None:
+                    implementing.metadata.implementation.last_result = "failure"
+                    implementing.metadata.errors.append(
+                        TaskErrorInfo(code="implementation-target-repo-drift", message=drift_note)
+                    )
+                    apply_retry_gate(implementing.metadata, reason="implementation-target-repo-drift")
+                    self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                    done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=drift_note)
+                    await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                    return True
                 if not finalize_result.ok or not finalize_result.assistant_text.strip():
                     implementing.metadata.implementation.last_result = "failure"
                     implementing.metadata.errors.append(
@@ -312,6 +356,29 @@ class ImplementerWorker(WorkerBase):
     def _capture_target_repo_baseline(self, metadata) -> None:
         snapshot = snapshot_target_repo_state(Path(metadata.target.repo_root), base_branch=metadata.target.base_branch)
         metadata.implementation.target_repo_baseline = snapshot.model_copy(deep=True)
+
+    def _target_repo_state_drift_note(self, metadata) -> str | None:
+        baseline = metadata.implementation.target_repo_baseline
+        if baseline is None:
+            return None
+        current = snapshot_target_repo_state(Path(metadata.target.repo_root), base_branch=metadata.target.base_branch)
+        if baseline.current_branch != current.current_branch:
+            return (
+                "target repo current branch changed from "
+                f"{baseline.current_branch or '(detached)'} to {current.current_branch or '(detached)'}"
+            )
+        head_drift = describe_target_repo_head_drift(
+            expected_branch=baseline.current_branch,
+            expected_head_sha=baseline.head_sha,
+            current_branch=current.current_branch,
+            current_head_sha=current.head_sha,
+        )
+        if head_drift is not None:
+            return head_drift
+        if baseline.dirty or not current.dirty:
+            return None
+        summary = current.status_short.splitlines()[0].strip() if current.status_short.strip() else "working tree is dirty"
+        return f"target repo working tree became dirty on {current.current_branch or '(detached)'}: {summary}"
 
     def _resolve_implementer_run_config(self, task_dir: Path, metadata):
         run_config = self.resolve_task_run_config(task_dir, metadata)

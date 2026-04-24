@@ -53,6 +53,37 @@ class InterruptedThenSuccessAdapter(FakeAdapter):
         return super().run(**kwargs)
 
 
+class HandshakeFailureWithTargetRepoMutationAdapter(FakeAdapter):
+    def __init__(self, *, target_repo: Path, side_effect=None) -> None:
+        super().__init__(responses=["hello"], side_effect=side_effect)
+        self.target_repo = target_repo
+        self.calls = 0
+
+    def run(self, **kwargs) -> RunResult:
+        self.calls += 1
+        if self.calls == 1:
+            cwd = kwargs["cwd"]
+            if self.side_effect is not None:
+                self.side_effect(cwd)
+            (self.target_repo / "app.txt").write_text("dirty during handshake\n")
+            run_log_path = kwargs["run_log_path"]
+            run_log_path.parent.mkdir(parents=True, exist_ok=True)
+            run_log_path.write_text("")
+            return RunResult(
+                ok=False,
+                returncode=1,
+                assistant_text="",
+                stdout="",
+                stderr="handshake failed",
+                raw_events_path=str(run_log_path),
+                command=["implementer"],
+                resolved_model="openai/gpt-5.4",
+                session_id=None,
+                total_tokens=0,
+            )
+        return super().run(**kwargs)
+
+
 def test_implementer_worker_uses_external_workspace(configured_paths):
     config, _, _ = configured_paths
     task_dir = create_request_task(config, "implement-task")
@@ -548,6 +579,98 @@ def test_implementer_worker_clones_task_target_repo(tmp_path):
     workspace_repo = scanner.scan()[0].metadata.implementation.workspace
     assert workspace_repo is not None
     assert Path(workspace_repo, "target.txt").read_text() == "changed target\n"
+
+
+def test_implementer_worker_returns_to_todos_when_target_repo_becomes_dirty(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.runtime.coding_assistant = "codex"
+    config.runtime.role_backends.implementer = "codex"
+    config.codex.implementer_model = "gpt-5.5"
+    config.bootstrap()
+    create_request_task(config, "target-repo-drift-task", target_repo_root=target_repo)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def mutate_workspace_and_target_repo(cwd: Path):
+        (cwd / "app.txt").write_text("changed in workspace\n")
+        (target_repo / "app.txt").write_text("dirty outside workspace\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(
+            responses=["implemented live"],
+            side_effect=mutate_workspace_and_target_repo,
+            side_effect_output_formats={"json"},
+            resolved_models=["gpt-5.5"],
+        ),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.retry_gate.reason == "implementation-target-repo-drift"
+    assert updated.metadata.implementation.last_result == "failure"
+    assert any(error.code == "implementation-target-repo-drift" for error in updated.metadata.errors)
+    assert list(updated.task_dir.glob("WORK-*.md")) == []
+    assert list(updated.task_dir.glob("WORK-*.json")) == []
+
+
+def test_implementer_worker_detects_target_repo_drift_during_handshake(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.coding_assistant = "opencode"
+    config.opencode.worker_live_logs_enabled = True
+    create_request_task(config, "implement-handshake-target-drift-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd: Path):
+        (cwd / "app.txt").write_text("changed in workspace\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=HandshakeFailureWithTargetRepoMutationAdapter(target_repo=repo_root, side_effect=modify_workspace),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.retry_gate.reason == "implementation-target-repo-drift"
+    assert updated.metadata.implementation.last_result == "failure"
+    assert any(error.code == "implementation-target-repo-drift" for error in updated.metadata.errors)
+    assert list(updated.task_dir.glob("WORK-*.md")) == []
+    assert list(updated.task_dir.glob("WORK-*.json")) == []
 
 
 def test_implementer_worker_supports_named_base_branch_in_cloned_workspace(tmp_path):
