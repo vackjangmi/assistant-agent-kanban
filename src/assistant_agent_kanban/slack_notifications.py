@@ -414,6 +414,25 @@ class SlackMilestoneNotifier:
                         "error": str(exc),
                     },
                 )
+        if milestone == "Task completed":
+            from .services.task_service import TaskService
+
+            task_service = TaskService(
+                KanbanScanner(self.config, self.metadata_store),
+                self.config.runs_dir,
+                self.config.kanban_root,
+                self.config.archive_runs_dir,
+                metadata_store=self.metadata_store,
+            )
+            try:
+                summary_path = task_service.target_repo_summary_path(context.metadata)
+            except ValueError:
+                summary_path = None
+            if summary_path is not None and summary_path.exists() and summary_path.is_file():
+                uploads.append((summary_path.name, summary_path.read_bytes()))
+            else:
+                uploads.append(task_service.build_target_repo_summary_artifact(context))
+            return uploads
         if milestone != "Human verification started":
             return uploads
         from .services.task_service import TaskService
