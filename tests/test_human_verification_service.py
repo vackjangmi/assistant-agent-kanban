@@ -1050,11 +1050,16 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     review_date = datetime.now(timezone.utc)
-    docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / done.metadata.task_id
-    assert (docs_root / "REQUEST.md").exists()
-    assert (docs_root / "PLAN.md").exists()
-    assert (docs_root / "HUMAN-VERIFY-001.md").exists()
-    assert (docs_root / "COMMIT.md").exists()
+    docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
+    summary_path = docs_root / f"{done.metadata.task_id}-summary.md"
+    assert summary_path.exists()
+    summary_text = summary_path.read_text()
+    assert f"# Task Summary: {done.metadata.title}" in summary_text
+    assert "## Why / Keywords" in summary_text
+    assert "- Keywords:" in summary_text
+    assert "## Changed Files (1)" in summary_text
+    assert "`app.txt` — modified (+1 / -1, hunks=1)" in summary_text
+    assert "## Time Summary" in summary_text
     assert detail.log_files == [
         "implementer.jsonl",
         "review-001.patch",
@@ -1124,11 +1129,11 @@ def test_human_verification_approve_uses_configured_target_docs_root(tmp_path):
 
     assert moved.state == TaskState.DONE
     review_date = datetime.now(timezone.utc)
-    docs_root = target_repo / "records" / "kanban-docs" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / moved.metadata.task_id
-    assert (docs_root / "REQUEST.md").exists()
+    docs_root = target_repo / "records" / "kanban-docs" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
+    assert (docs_root / f"{moved.metadata.task_id}-summary.md").exists()
 
 
-def test_human_verification_approve_copies_note_attachments_to_docs_root(tmp_path):
+def test_human_verification_approve_writes_summary_without_copying_attachments_bundle(tmp_path):
     target_repo = tmp_path / "target-repo"
     target_repo.mkdir()
     init_git_repo(target_repo)
@@ -1151,10 +1156,11 @@ def test_human_verification_approve_copies_note_attachments_to_docs_root(tmp_pat
     moved = service.approve(completed.metadata.task_id, by="human")
 
     review_date = datetime.now(timezone.utc)
-    docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / moved.metadata.task_id
-    copied_attachment = docs_root / "_attachments" / attachment_name
-    assert copied_attachment.exists()
-    assert copied_attachment.read_bytes() == b"pngdata"
+    docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
+    summary_path = docs_root / f"{moved.metadata.task_id}-summary.md"
+    assert summary_path.exists()
+    assert attachment_name not in summary_path.read_text()
+    assert not (docs_root / "_attachments").exists()
 
 
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):

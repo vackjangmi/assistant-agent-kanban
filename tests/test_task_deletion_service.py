@@ -130,9 +130,9 @@ def test_task_deletion_service_rolls_back_applied_integration_and_docs(configure
     scanner = KanbanScanner(config, metadata_store)
     task = scanner.scan()[0]
     review_branch = f"review/{task.metadata.task_id.lower()}"
-    docs_root = repo_root / "docs" / "kanban-agent" / "2026" / "03" / "14" / task.metadata.task_id
+    docs_root = repo_root / "docs" / "kanban-agent" / "2026" / "03" / "14"
     docs_root.mkdir(parents=True)
-    (docs_root / "HUMAN-VERIFY-001.md").write_text("review note\n")
+    (docs_root / f"{task.metadata.task_id}-summary.md").write_text("summary\n")
     subprocess.run(["git", "-C", str(repo_root), "branch", review_branch, "main"], check=True, capture_output=True, text=True)
     task.metadata.integration.applied = True
     task.metadata.integration.original_branch = "main"
@@ -155,9 +155,9 @@ def test_task_deletion_service_removes_docs_from_configured_target_docs_root(con
     scanner = KanbanScanner(config, metadata_store)
     task = scanner.scan()[0]
     review_branch = f"review/{task.metadata.task_id.lower()}"
-    docs_root = repo_root / "records" / "kanban-docs" / "2026" / "03" / "14" / task.metadata.task_id
+    docs_root = repo_root / "records" / "kanban-docs" / "2026" / "03" / "14"
     docs_root.mkdir(parents=True)
-    (docs_root / "HUMAN-VERIFY-001.md").write_text("review note\n")
+    (docs_root / f"{task.metadata.task_id}-summary.md").write_text("summary\n")
     subprocess.run(["git", "-C", str(repo_root), "branch", review_branch, "main"], check=True, capture_output=True, text=True)
     task.metadata.integration.applied = True
     task.metadata.integration.original_branch = "main"

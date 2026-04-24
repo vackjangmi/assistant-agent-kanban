@@ -17,7 +17,7 @@ from ..enums import TaskState
 from ..exceptions import AdapterRunError, IntegrationConflictError, IntegrationError, TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
-from ..markdown_attachments import attachments_dir_for_task, normalize_markdown_attachments
+from ..markdown_attachments import normalize_markdown_attachments
 from ..metadata_store import MetadataStore
 from ..retry_policy import apply_retry_gate, clear_retry_gate
 from ..assistant_adapter import AssistantAdapter
@@ -27,6 +27,7 @@ from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
 from ..config import AppConfig, AssistantBackend
+from .task_service import TaskService
 
 
 class HumanVerificationService:
@@ -463,22 +464,28 @@ class HumanVerificationService:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
-        review_date = datetime.now(timezone.utc)
         try:
-            docs_root = self.config.resolve_target_repo_docs_root(target_repo_root)
+            task_service = TaskService(
+                self.scanner,
+                self.config.runs_dir,
+                self.config.kanban_root,
+                self.config.archive_runs_dir,
+                metadata_store=self.metadata_store,
+                transitions=self.transitions,
+                locks=self.locks,
+            )
+            summary_path = task_service.target_repo_summary_path(metadata)
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
-        docs_root = docs_root / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}" / metadata.task_id
-        shutil.rmtree(docs_root, ignore_errors=True)
+        docs_root = summary_path.parent
         docs_root.mkdir(parents=True, exist_ok=True)
-        for path in sorted(task_dir.glob("*.md")):
-            shutil.copy2(path, docs_root / path.name)
-        attachments_dir = attachments_dir_for_task(task_dir)
-        if attachments_dir.exists():
-            shutil.copytree(attachments_dir, docs_root / attachments_dir.name, dirs_exist_ok=True)
-        comments_path = self._comments_artifact_path(task_dir, metadata)
-        if comments_path.exists():
-            shutil.copy2(comments_path, docs_root / comments_path.name)
+        legacy_task_dir = docs_root / metadata.task_id
+        if legacy_task_dir.exists():
+            shutil.rmtree(legacy_task_dir, ignore_errors=True)
+        filename, content = task_service.build_target_repo_summary_artifact(TaskContext(metadata=metadata, task_dir=task_dir, state=metadata.state))
+        if summary_path.name != filename:
+            summary_path = docs_root / filename
+        summary_path.write_bytes(content)
 
     def _default_comments_path(self, metadata) -> str:
         note_path = metadata.human_verification.note_path or f"HUMAN-VERIFY-{metadata.cycle:03d}.md"

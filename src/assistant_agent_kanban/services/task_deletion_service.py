@@ -79,6 +79,16 @@ class TaskDeletionService:
         if path.exists():
             shutil.rmtree(path)
 
+    def _prune_empty_parents(self, path: Path, *, stop_at: Path) -> None:
+        current = path
+        resolved_stop = stop_at.resolve()
+        while current.exists() and current.resolve() != resolved_stop:
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def _delete_target_repo_docs(self, metadata: TaskMetadata) -> None:
         try:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
@@ -97,3 +107,11 @@ class TaskDeletionService:
             except ValueError as exc:
                 raise TransitionError("task deletion is blocked because task docs path is outside the managed docs root") from exc
             self._delete_tree(resolved)
+        for candidate in docs_root.glob(f"*/*/*/{metadata.task_id}-summary.md"):
+            resolved = candidate.resolve()
+            try:
+                resolved.relative_to(docs_root.resolve())
+            except ValueError as exc:
+                raise TransitionError("task deletion is blocked because task docs path is outside the managed docs root") from exc
+            resolved.unlink(missing_ok=True)
+            self._prune_empty_parents(resolved.parent, stop_at=docs_root)
