@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+import json
 import subprocess
 
 from assistant_agent_kanban.config import AppConfig
@@ -121,6 +122,51 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     assert agent_file.read_text().startswith("---\nmodel: openai/gpt-5.4\n---\n")
     assert "FS Kanban Planner" in agent_file.read_text()
     assert not (nested_cwd / ".kanban-agent").exists()
+
+
+def test_subprocess_adapter_injects_read_only_permissions_for_included_directories(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.command = command
+            self.stdout = ['{"type":"final","content":"ok"}\n']
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["env"] = kwargs.get("env")
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessOpenCodeAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.bootstrap()
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+
+    adapter.run(
+        agent="fs-kanban-implementer",
+        prompt="sample",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "implementer.jsonl",
+        config=config,
+        include_directories=[target_repo],
+    )
+
+    env = cast(dict[str, str], recorded["env"])
+    permissions = json.loads(env["OPENCODE_PERMISSION"])
+    target_pattern = str(target_repo.resolve())
+    assert permissions["external_directory"][target_pattern] == "allow"
+    assert permissions["external_directory"][f"{target_pattern}/**"] == "allow"
+    assert permissions["edit"][target_pattern] == "deny"
+    assert permissions["edit"][f"{target_pattern}/**"] == "deny"
+    assert permissions["bash"][f"*{target_pattern}*"] == "deny"
 
 
 def test_discover_models_uses_absolute_runtime_config_home_from_relative_kanban_root(monkeypatch, tmp_path):

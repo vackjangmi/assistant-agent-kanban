@@ -66,7 +66,6 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
         stream_stderr_to_log: bool = False,
         show_thinking: bool = False,
     ) -> RunResult:
-        del include_directories
         command = [config.opencode.binary, "run"]
         agent_path = ensure_runtime_agent(config, agent)
         resolved_model = _read_agent_model(agent_path)
@@ -80,6 +79,9 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["XDG_CONFIG_HOME"] = str(runtime_config_home(config))
+        permission_config = _merge_opencode_permission_config(env.get("OPENCODE_PERMISSION"), include_directories)
+        if permission_config is not None:
+            env["OPENCODE_PERMISSION"] = permission_config
         try:
             process = subprocess.Popen(
                 command,
@@ -251,6 +253,48 @@ def _read_agent_model(path: Path | None) -> str | None:
     if path is None or not path.exists():
         return None
     return _extract_agent_model(path.read_text())
+
+
+def _merge_opencode_permission_config(existing: str | None, include_directories: list[Path] | None) -> str | None:
+    if not include_directories:
+        return existing
+
+    permissions: dict[str, object]
+    if existing:
+        try:
+            parsed = json.loads(existing)
+        except json.JSONDecodeError:
+            parsed = {}
+        permissions = parsed if isinstance(parsed, dict) else {}
+    else:
+        permissions = {}
+
+    external_rules = _coerce_permission_rule(permissions.get("external_directory"))
+    edit_rules = _coerce_permission_rule(permissions.get("edit"))
+    bash_rules = _coerce_permission_rule(permissions.get("bash"))
+
+    for directory in include_directories:
+        resolved = directory.expanduser().resolve()
+        direct_pattern = str(resolved)
+        child_pattern = str(resolved / "**")
+        external_rules[direct_pattern] = "allow"
+        external_rules[child_pattern] = "allow"
+        edit_rules[direct_pattern] = "deny"
+        edit_rules[child_pattern] = "deny"
+        bash_rules[f"*{direct_pattern}*"] = "deny"
+
+    permissions["external_directory"] = external_rules
+    permissions["edit"] = edit_rules
+    permissions["bash"] = bash_rules
+    return json.dumps(permissions, separators=(",", ":"))
+
+
+def _coerce_permission_rule(value: object) -> dict[str, str]:
+    if isinstance(value, dict):
+        return {str(key): str(rule) for key, rule in value.items()}
+    if isinstance(value, str):
+        return {"*": value}
+    return {}
 
 
 def _extract_agent_model(content: str) -> str | None:
