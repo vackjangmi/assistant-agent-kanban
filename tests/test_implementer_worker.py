@@ -140,6 +140,36 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert baseline.head_sha == expected_head
 
 
+def test_implementer_prompt_forbids_direct_target_repo_edits(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "implement-prompt-guard-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(implementer_cycle_responses()),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    prompt = worker.build_prompt("Implement the plan.", task.metadata, phase="implementer")
+    handshake_prompt = worker._build_handshake_prompt(task.metadata)
+
+    assert "must edit files only in the current workspace" in prompt
+    assert str(repo_root) in prompt
+    assert "must never be modified directly" in prompt
+    assert str(repo_root) in handshake_prompt
+    assert "off-limits" in handshake_prompt
+
+
 def test_implementer_worker_uses_pinned_backend_after_global_change(configured_paths):
     config, _, _ = configured_paths
     config.runtime.coding_assistant = "opencode"

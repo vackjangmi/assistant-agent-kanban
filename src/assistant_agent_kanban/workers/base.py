@@ -69,7 +69,13 @@ class WorkerBase:
             "Translate headings and narrative content to that language while preserving the required structure and semantics from the agent contract.",
         ]
         if phase == "implementer":
-            instructions.append("You must edit files in the current workspace before returning. Do not return a markdown summary unless you made real workspace file changes.")
+            instructions.append(
+                "You must edit files only in the current workspace before returning. "
+                "The real target repo at "
+                f"`{metadata.target.repo_root}` is off-limits and must never be modified directly. "
+                "Treat any path outside the current workspace as read-only context. "
+                "Do not return a markdown summary unless you made real workspace file changes."
+            )
         if phase == "reviewer":
             instructions.append("Keep one exact machine-readable line: `Verdict: PASS` or `Verdict: NEEDS_CHANGES`.")
         instructions.extend(["", "<task-document>", source_text.rstrip(), "</task-document>"])

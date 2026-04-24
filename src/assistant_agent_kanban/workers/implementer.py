@@ -483,6 +483,11 @@ class ImplementerWorker(WorkerBase):
                 f"Reply with one short greeting in {requested_language}.",
                 "Do not analyze the plan yet.",
                 "Do not modify files yet.",
+                (
+                    "The real target repo at "
+                    f"`{metadata.target.repo_root}` is off-limits. "
+                    "You will work only inside the current workspace once implementation begins."
+                ),
                 "Do not produce the final work artifact yet.",
             ]
         )
