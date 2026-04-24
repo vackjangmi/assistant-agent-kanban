@@ -62,7 +62,7 @@ class SubprocessCodexAdapter(AssistantAdapter):
             "-c",
             'approval_policy="never"',
             "-s",
-            "danger-full-access",
+            "workspace-write",
         ]
         if session_id:
             command.extend(["resume", session_id])

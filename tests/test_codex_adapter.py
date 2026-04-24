@@ -45,7 +45,7 @@ def test_codex_adapter_builds_exec_command(monkeypatch, tmp_path):
     )
 
     command = cast(list[str], recorded["command"])
-    assert command[:6] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "danger-full-access"]
+    assert command[:6] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "workspace-write"]
     assert "--json" in command
     assert "--model" in command
     assert command[command.index("--model") + 1] == "gpt-5.4"
@@ -90,7 +90,7 @@ def test_codex_adapter_reuses_session_id(monkeypatch, tmp_path):
     )
 
     command = cast(list[str], recorded["command"])
-    assert command[:8] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "danger-full-access", "resume", "thread-existing"]
+    assert command[:8] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "workspace-write", "resume", "thread-existing"]
     assert result.session_id == "thread-existing"
 
 
