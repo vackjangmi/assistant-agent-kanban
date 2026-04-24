@@ -39,6 +39,7 @@ from ..models import (
     utc_now,
 )
 from ..plan_artifacts import validate_plan_markdown
+from ..request_parser import extract_goal_text, parse_request_markdown
 from ..scanner import TERMINAL_STATES, KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
@@ -143,6 +144,88 @@ class TaskService:
             return None
         return patch_path.name, patch_path.read_bytes()
 
+    def build_target_repo_summary_artifact(self, task: TaskContext) -> tuple[str, bytes]:
+        metadata = task.metadata
+        stage_timing = self._build_stage_timing(metadata)
+        changed_files = self._target_repo_changed_files(metadata)
+        keywords = self._summary_keywords(metadata)
+        lines = [
+            f"# Task Summary: {metadata.title}",
+            "",
+            "## Overview",
+            f"- Task ID: `{metadata.task_id}`",
+            f"- Repo: `{metadata.target.repo_root}`",
+            f"- Base branch: `{metadata.target.base_branch}`",
+        ]
+        if metadata.integration.final_branch_summary:
+            lines.append(f"- Branch summary: `{metadata.integration.final_branch_summary}`")
+        if metadata.integration.applied_at is not None:
+            lines.append(f"- Verification applied at: {metadata.integration.applied_at.isoformat()}")
+
+        lines.extend([
+            "",
+            "## Why / Keywords",
+        ])
+        goal = self._request_goal(task.task_dir)
+        if goal:
+            lines.append(f"- Goal: {goal}")
+        plan = self._artifact_summary(task.task_dir / "PLAN.md")
+        if plan:
+            lines.append(f"- Plan summary: {plan}")
+        review = self._latest_artifact_summary(task.task_dir, "REVIEW-*.md")
+        if review:
+            lines.append(f"- Review summary: {review}")
+        human_review = self._latest_artifact_summary(task.task_dir, "HUMAN-VERIFY-*.md")
+        if human_review:
+            lines.append(f"- Human review summary: {human_review}")
+        if keywords:
+            lines.append(f"- Keywords: {', '.join(keywords)}")
+
+        lines.extend([
+            "",
+            f"## Changed Files ({len(changed_files)})",
+        ])
+        if not changed_files:
+            lines.append("- No changed files found.")
+        else:
+            for entry in changed_files:
+                summary = entry.summary
+                stats = f"+{summary.additions} / -{summary.deletions}, hunks={summary.hunk_count}"
+                if summary.is_binary:
+                    stats += ", binary"
+                lines.append(f"- `{summary.display_path}` — {summary.change_type} ({stats})")
+                if summary.previous_path and summary.previous_path != summary.path:
+                    lines.append(f"  - previous: `{summary.previous_path}`")
+
+        lines.extend([
+            "",
+            "## Time Summary",
+            f"- Total: {self._format_duration_ms(stage_timing.total_duration_ms)}",
+            f"- AI work: {self._format_duration_ms(stage_timing.ai_work_duration_ms)}",
+            f"- Human work: {self._format_duration_ms(stage_timing.human_work_duration_ms)}",
+            f"- Waiting: {self._format_duration_ms(stage_timing.waiting_duration_ms)}",
+            "",
+            "## Stage Breakdown",
+        ])
+        for summary in stage_timing.summaries:
+            if summary.attempt_count == 0:
+                continue
+            lines.append(
+                "- "
+                f"`{summary.state}` — total {self._format_duration_ms(summary.total_duration_ms)}, "
+                f"latest {self._format_duration_ms(summary.latest_duration_ms)}, "
+                f"attempts {summary.attempt_count}"
+            )
+        lines.append("")
+
+        return f"{metadata.task_id}-summary.md", "\n".join(lines).encode("utf-8")
+
+    def target_repo_summary_path(self, metadata: TaskMetadata, *, created_at: datetime | None = None) -> Path:
+        target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        timestamp = created_at or datetime.now(timezone.utc)
+        docs_root = self.scanner.config.resolve_target_repo_docs_root(target_repo_root)
+        return docs_root / f"{timestamp.year:04d}" / f"{timestamp.month:02d}" / f"{timestamp.day:02d}" / f"{metadata.task_id}-summary.md"
+
     def get_logs(self, task_id: str) -> TaskLogs:
         try:
             task = self.scanner.find_task(task_id)
@@ -178,6 +261,73 @@ class TaskService:
 
     def _should_show_log_file(self, filename: str) -> bool:
         return not filename.endswith(("-handshake.jsonl", "-finalize.jsonl"))
+
+    def _summary_keywords(self, metadata: TaskMetadata) -> list[str]:
+        raw_parts = [metadata.title, metadata.integration.final_branch_summary or ""]
+        seen: OrderedDict[str, None] = OrderedDict()
+        for part in raw_parts:
+            for token in re.findall(r"[A-Za-z0-9]+", part.lower()):
+                if len(token) < 3:
+                    continue
+                if token in {"task", "summary", "feature"}:
+                    continue
+                seen.setdefault(token, None)
+        return list(seen.keys())[:8]
+
+    def _target_repo_changed_files(self, metadata: TaskMetadata) -> list[ChangedFileDetail]:
+        diff_text = self._target_repo_diff_against_base(metadata, ref=None)
+        if diff_text is not None:
+            return self._parse_patch(diff_text)
+        patch_path = self._resolve_patch_path(metadata.task_id, metadata.integration.patch_path)
+        if patch_path is not None and patch_path.exists():
+            return self._parse_patch(patch_path.read_text())
+        return []
+
+    def _request_goal(self, task_dir: Path) -> str | None:
+        request_path = task_dir / "REQUEST.md"
+        if not request_path.exists():
+            return None
+        parsed = parse_request_markdown(request_path.read_text())
+        goal = extract_goal_text(parsed.body)
+        return self._single_line(goal)
+
+    def _latest_artifact_summary(self, task_dir: Path, pattern: str) -> str | None:
+        files = sorted(task_dir.glob(pattern))
+        if not files:
+            return None
+        return self._artifact_summary(files[-1])
+
+    def _artifact_summary(self, path: Path) -> str | None:
+        if not path.exists():
+            return None
+        for raw_line in path.read_text().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("Verdict:"):
+                continue
+            if line in {"No notes yet.", "No unresolved comments."}:
+                continue
+            return self._single_line(line)
+        return None
+
+    def _single_line(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+        collapsed = " ".join(value.split())
+        return collapsed or None
+
+    def _format_duration_ms(self, duration_ms: int) -> str:
+        total_seconds = max(0, duration_ms // 1000)
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        parts: list[str] = []
+        if hours:
+            parts.append(f"{hours}h")
+        if minutes or hours:
+            parts.append(f"{minutes}m")
+        parts.append(f"{seconds}s")
+        return " ".join(parts)
 
     def get_changed_file(self, task_id: str, changed_file_id: str) -> ChangedFileDetail:
         task = self._find_task(task_id)
