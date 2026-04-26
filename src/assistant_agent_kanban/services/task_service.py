@@ -154,8 +154,6 @@ class TaskService:
             "",
             "## Overview",
             f"- Task ID: `{metadata.task_id}`",
-            f"- Repo: `{metadata.target.repo_root}`",
-            f"- Base branch: `{metadata.target.base_branch}`",
         ]
         if metadata.integration.final_branch_summary:
             lines.append(f"- Branch summary: `{metadata.integration.final_branch_summary}`")

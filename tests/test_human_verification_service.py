@@ -1056,6 +1056,8 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert summary_path.exists()
     summary_text = summary_path.read_text()
     assert f"# Task Summary: {done.metadata.title}" in summary_text
+    assert "- Repo:" not in summary_text
+    assert "- Base branch:" not in summary_text
     assert "## Why / Keywords" in summary_text
     assert "- Keywords:" in summary_text
     assert "## Changed Files (1)" in summary_text
