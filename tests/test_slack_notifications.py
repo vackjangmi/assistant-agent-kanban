@@ -7,6 +7,7 @@ from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.models import TaskContext
 from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.slack_notifications import SlackMilestoneNotifier
 
 from .conftest import create_request_task
@@ -626,13 +627,8 @@ def test_slack_notifier_uploads_target_repo_summary_when_task_completes(configur
     )
     task.metadata.integration.patch_path = str(patch_path)
     review_date = datetime.now(timezone.utc)
-    summary_path = (
-        config.resolve_target_repo_docs_root(config.repo_root)
-        / f"{review_date.year:04d}"
-        / f"{review_date.month:02d}"
-        / f"{review_date.day:02d}"
-        / f"{task.metadata.task_id}-summary.md"
-    )
+    task_service = TaskService(KanbanScanner(config, MetadataStore()), config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=MetadataStore())
+    summary_path = task_service.target_repo_summary_path(task.metadata, created_at=review_date)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text("# Task Summary: shipped\n\n## Changed Files (1)\n")
     MetadataStore().save(task.task_dir, task.metadata)
@@ -652,9 +648,63 @@ def test_slack_notifier_uploads_target_repo_summary_when_task_completes(configur
 
     SlackMilestoneNotifier(config, MetadataStore()).notify_transition(done, previous_state=TaskState.HUMAN_VERIFYING, by="human")
 
-    assert [name for name, _content in uploads] == [f"{task.metadata.task_id}-summary.md"]
+    assert [name for name, _content in uploads] == [summary_path.name]
     summary_text = uploads[0][1].decode("utf-8")
     assert summary_text == "# Task Summary: shipped\n\n## Changed Files (1)\n"
+
+
+def test_slack_notifier_uploads_legacy_target_repo_summary_when_task_completes(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.slack.enabled = True
+    config.slack.bot_token = "xoxb-test"
+    config.slack.default_channel = "#agent-alerts"
+    create_request_task(config, "slack-task-complete-legacy-summary-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    task.metadata.cycle = 1
+    task.metadata.state = TaskState.DONE
+    task.metadata.slack.thread_ts = "173.456"
+    task.metadata.slack.channel = "C123"
+    task.metadata.integration.final_branch = f"feature/{task.metadata.task_id.lower()}-{task.metadata.slug}"
+    task.metadata.integration.final_branch_summary = "ship-summary"
+    runs_dir = config.runs_dir / task.metadata.task_id
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    patch_path = runs_dir / "review-001.patch"
+    patch_path.write_text(
+        "diff --git a/app.txt b/app.txt\n"
+        "index ce01362..2ee250a 100644\n"
+        "--- a/app.txt\n"
+        "+++ b/app.txt\n"
+        "@@ -1 +1 @@\n"
+        "-hello\n"
+        "+review me\n"
+    )
+    task.metadata.integration.patch_path = str(patch_path)
+    review_date = datetime.now(timezone.utc)
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=metadata_store)
+    legacy_summary_path = task_service.legacy_target_repo_summary_path(task.metadata, created_at=review_date)
+    legacy_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_summary_path.write_text("# Task Summary: legacy shipped\n")
+    metadata_store.save(task.task_dir, task.metadata)
+    done = TaskContext(metadata=task.metadata, task_dir=task.task_dir, state=TaskState.DONE)
+    done.metadata.state = TaskState.DONE
+    uploads: list[tuple[str, bytes]] = []
+
+    def fake_call(method: str, *, token: str, body=None):
+        return {"ok": True, "ts": "173.789", "channel": "C123"}
+
+    def fake_upload(*, token: str, channel_id: str, thread_ts: str, filename: str, title: str, content: bytes):
+        uploads.append((filename, content))
+        return {"ok": True}
+
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.slack_notifications.slack_upload_file_to_thread", fake_upload)
+
+    SlackMilestoneNotifier(config, metadata_store).notify_transition(done, previous_state=TaskState.HUMAN_VERIFYING, by="human")
+
+    assert [name for name, _content in uploads] == [legacy_summary_path.name]
+    assert uploads[0][1].decode("utf-8") == "# Task Summary: legacy shipped\n"
 
 
 def test_slack_notifier_adds_start_verification_button(configured_paths, monkeypatch):

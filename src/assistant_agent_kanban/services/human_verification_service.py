@@ -479,6 +479,7 @@ class HumanVerificationService:
                 locks=self.locks,
             )
             summary_path = task_service.target_repo_summary_path(metadata)
+            legacy_summary_path = task_service.legacy_target_repo_summary_path(metadata)
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
         docs_root = summary_path.parent
@@ -490,6 +491,8 @@ class HumanVerificationService:
         if summary_path.name != filename:
             summary_path = docs_root / filename
         summary_path.write_bytes(content)
+        if legacy_summary_path != summary_path and legacy_summary_path.exists() and legacy_summary_path.is_file():
+            legacy_summary_path.unlink(missing_ok=True)
         return content.decode("utf-8")
 
     def _default_comments_path(self, metadata) -> str:

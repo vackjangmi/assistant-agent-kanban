@@ -1052,7 +1052,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert review_branch == ""
     review_date = datetime.now(timezone.utc)
     docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
-    summary_path = docs_root / f"{done.metadata.task_id}-summary.md"
+    summary_path = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=scanner.metadata_store).target_repo_summary_path(done.metadata, created_at=review_date)
     assert summary_path.exists()
     summary_text = summary_path.read_text()
     assert f"# Task Summary: {done.metadata.title}" in summary_text
@@ -1133,7 +1133,9 @@ def test_human_verification_approve_uses_configured_target_docs_root(tmp_path):
     assert moved.state == TaskState.DONE
     review_date = datetime.now(timezone.utc)
     docs_root = target_repo / "records" / "kanban-docs" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
-    assert (docs_root / f"{moved.metadata.task_id}-summary.md").exists()
+    summary_path = TaskService(KanbanScanner(config, MetadataStore()), config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=MetadataStore()).target_repo_summary_path(moved.metadata, created_at=review_date)
+    assert summary_path.exists()
+    assert summary_path.parent == docs_root
 
 
 def test_human_verification_approve_writes_summary_without_copying_attachments_bundle(tmp_path):
@@ -1160,10 +1162,35 @@ def test_human_verification_approve_writes_summary_without_copying_attachments_b
 
     review_date = datetime.now(timezone.utc)
     docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
-    summary_path = docs_root / f"{moved.metadata.task_id}-summary.md"
+    summary_path = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=scanner.metadata_store).target_repo_summary_path(moved.metadata, created_at=review_date)
     assert summary_path.exists()
     assert attachment_name not in summary_path.read_text()
     assert not (docs_root / "_attachments").exists()
+
+
+def test_human_verification_approve_migrates_legacy_summary_filename(tmp_path):
+    target_repo = tmp_path / "target-repo"
+    target_repo.mkdir()
+    init_git_repo(target_repo)
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "unused-default")
+    config.bootstrap()
+    create_request_task(config, "verify-approve-summary-migration-task", target_repo_root=target_repo)
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    service.start(completed.metadata.task_id, by="human")
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=scanner.metadata_store)
+    review_date = datetime.now(timezone.utc)
+    legacy_summary_path = task_service.legacy_target_repo_summary_path(refreshed.metadata, created_at=review_date)
+    new_summary_path = task_service.target_repo_summary_path(refreshed.metadata, created_at=review_date)
+    legacy_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_summary_path.write_text("legacy summary\n")
+
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.DONE
+    assert new_summary_path.exists()
+    assert not legacy_summary_path.exists()
+    assert f"# Task Summary: {moved.metadata.title}" in new_summary_path.read_text()
 
 
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):

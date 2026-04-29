@@ -425,7 +425,7 @@ class SlackMilestoneNotifier:
                 metadata_store=self.metadata_store,
             )
             try:
-                summary_path = task_service.target_repo_summary_path(context.metadata)
+                summary_path = task_service.find_target_repo_summary_path(context.metadata)
             except ValueError:
                 summary_path = None
             if summary_path is not None and summary_path.exists() and summary_path.is_file():
