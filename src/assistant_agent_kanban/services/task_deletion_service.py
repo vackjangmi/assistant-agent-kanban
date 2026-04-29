@@ -107,8 +107,15 @@ class TaskDeletionService:
             except ValueError as exc:
                 raise TransitionError("task deletion is blocked because task docs path is outside the managed docs root") from exc
             self._delete_tree(resolved)
-        for candidate in docs_root.glob(f"*/*/*/{metadata.task_id}-summary.md"):
+        candidates: list[Path] = []
+        candidates.extend(docs_root.glob(f"*/*/*/{metadata.task_id}-summary.md"))
+        candidates.extend(docs_root.glob(f"*/*/*/{metadata.task_id}-*-summary.md"))
+        seen: set[Path] = set()
+        for candidate in candidates:
             resolved = candidate.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
             try:
                 resolved.relative_to(docs_root.resolve())
             except ValueError as exc:

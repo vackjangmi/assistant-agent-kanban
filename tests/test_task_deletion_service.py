@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 
@@ -13,6 +14,7 @@ from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.services.task_deletion_service import TaskDeletionService
+from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.transitions import TransitionManager
 
 from .conftest import create_request_task
@@ -168,6 +170,35 @@ def test_task_deletion_service_removes_docs_from_configured_target_docs_root(con
     service.delete(task.metadata.task_id, by="human")
 
     assert not docs_root.exists()
+
+
+def test_task_deletion_service_removes_legacy_and_semantic_summary_files(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "delete-semantic-summary-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    task = scanner.scan()[0]
+    task.metadata.integration.final_branch_summary = "semantic-summary"
+    review_branch = f"review/{task.metadata.task_id.lower()}"
+    metadata_store.save(task.task_dir, task.metadata)
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=metadata_store)
+    semantic_summary_path = task_service.target_repo_summary_path(task.metadata, created_at=datetime(2026, 3, 14, tzinfo=timezone.utc))
+    legacy_summary_path = task_service.legacy_target_repo_summary_path(task.metadata, created_at=datetime(2026, 3, 14, tzinfo=timezone.utc))
+    semantic_summary_path.parent.mkdir(parents=True)
+    semantic_summary_path.write_text("semantic\n")
+    legacy_summary_path.write_text("legacy\n")
+    subprocess.run(["git", "-C", str(repo_root), "branch", review_branch, "main"], check=True, capture_output=True, text=True)
+    task.metadata.integration.applied = True
+    task.metadata.integration.original_branch = "main"
+    task.metadata.integration.review_branch = review_branch
+    metadata_store.save(task.task_dir, task.metadata)
+
+    service = TaskDeletionService(config, scanner, TaskLockManager(config, metadata_store), IntegrationManager(config))
+    service.delete(task.metadata.task_id, by="human")
+
+    assert not semantic_summary_path.exists()
+    assert not legacy_summary_path.exists()
+    assert not semantic_summary_path.parent.exists()
 
 
 def test_task_deletion_service_allows_delete_when_target_repo_overlaps_orchestrator(configured_paths):
