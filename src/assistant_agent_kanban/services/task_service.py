@@ -43,6 +43,7 @@ from ..request_parser import extract_goal_text, parse_request_markdown
 from ..scanner import TERMINAL_STATES, KanbanScanner, derive_agent_status
 from ..target_repo_guard import resolve_safe_target_repo_root
 from ..transitions import TransitionManager
+from ..commit_manager import CommitManager
 from .plan_approval_learning import PlanApprovalLearningService, classify_plan_change, load_plan_baseline_text, plan_text_hash
 from ..retry_policy import clear_retry_gate
 
@@ -216,13 +217,38 @@ class TaskService:
             )
         lines.append("")
 
-        return f"{metadata.task_id}-summary.md", "\n".join(lines).encode("utf-8")
+        return self.target_repo_summary_filename(metadata), "\n".join(lines).encode("utf-8")
 
-    def target_repo_summary_path(self, metadata: TaskMetadata, *, created_at: datetime | None = None) -> Path:
+    def target_repo_summary_filename(self, metadata: TaskMetadata) -> str:
+        branch_summary = CommitManager().sanitize_branch_summary(
+            metadata.integration.final_branch_summary,
+            fallback_title=metadata.title,
+        )
+        return f"{metadata.task_id}-{branch_summary}-summary.md"
+
+    def legacy_target_repo_summary_filename(self, metadata: TaskMetadata) -> str:
+        return f"{metadata.task_id}-summary.md"
+
+    def target_repo_summary_dir(self, metadata: TaskMetadata, *, created_at: datetime | None = None) -> Path:
         target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         timestamp = created_at or datetime.now(timezone.utc)
         docs_root = self.scanner.config.resolve_target_repo_docs_root(target_repo_root)
-        return docs_root / f"{timestamp.year:04d}" / f"{timestamp.month:02d}" / f"{timestamp.day:02d}" / f"{metadata.task_id}-summary.md"
+        return docs_root / f"{timestamp.year:04d}" / f"{timestamp.month:02d}" / f"{timestamp.day:02d}"
+
+    def target_repo_summary_path(self, metadata: TaskMetadata, *, created_at: datetime | None = None) -> Path:
+        return self.target_repo_summary_dir(metadata, created_at=created_at) / self.target_repo_summary_filename(metadata)
+
+    def legacy_target_repo_summary_path(self, metadata: TaskMetadata, *, created_at: datetime | None = None) -> Path:
+        return self.target_repo_summary_dir(metadata, created_at=created_at) / self.legacy_target_repo_summary_filename(metadata)
+
+    def find_target_repo_summary_path(self, metadata: TaskMetadata, *, created_at: datetime | None = None) -> Path:
+        summary_path = self.target_repo_summary_path(metadata, created_at=created_at)
+        if summary_path.exists() and summary_path.is_file():
+            return summary_path
+        legacy_path = self.legacy_target_repo_summary_path(metadata, created_at=created_at)
+        if legacy_path.exists() and legacy_path.is_file():
+            return legacy_path
+        return summary_path
 
     def get_logs(self, task_id: str) -> TaskLogs:
         try:

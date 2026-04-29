@@ -29,7 +29,7 @@ def test_task_service_summary_prefers_empty_target_repo_diff_over_patch_fallback
     artifact = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=metadata_store)
     filename, content = artifact.build_target_repo_summary_artifact(task)
 
-    assert filename == f"{task.metadata.task_id}-summary.md"
+    assert filename == artifact.target_repo_summary_filename(task.metadata)
     summary_text = content.decode("utf-8")
     assert "## Changed Files (0)" in summary_text
     assert "`app.txt` — modified" not in summary_text
