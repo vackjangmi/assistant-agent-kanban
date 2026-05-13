@@ -231,6 +231,17 @@ class HumanVerificationService:
                     raise TransitionError("approval is blocked until verification apply succeeds")
                 if context.metadata.human_verification.note_markdown.strip():
                     raise TransitionError("approval is blocked until the review note is cleared")
+                incomplete_qa_items = [
+                    item
+                    for item in context.metadata.human_verification.qa_items
+                    if context.metadata.human_verification.qa_cycle == context.metadata.cycle
+                    and item.required
+                    and not item.checked
+                    and not item.skipped
+                ]
+                if incomplete_qa_items:
+                    count = len(incomplete_qa_items)
+                    raise TransitionError(f"approval is blocked until required QA checklist items are completed ({count} remaining)")
                 unresolved_comments = [comment for comment in self._load_comments_artifact(context.task_dir, context.metadata).comments if not comment.resolved]
                 if unresolved_comments:
                     count = len(unresolved_comments)

@@ -19,7 +19,7 @@ from assistant_agent_kanban.exceptions import IntegrationError, TransitionError
 from assistant_agent_kanban.integration_manager import IntegrationManager
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
-from assistant_agent_kanban.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact
+from assistant_agent_kanban.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, HumanQaChecklistItem
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.services.human_verification_service import HumanVerificationService
@@ -117,6 +117,35 @@ def test_human_verification_start_includes_untracked_files(configured_paths):
     assert diff.summary.path == "new-file.txt"
     assert diff.hunks[0].unified_lines[0].kind == "add"
     assert diff.hunks[0].unified_lines[0].content == "brand new"
+
+
+def test_human_verification_approve_blocks_incomplete_required_qa(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "verify-qa-block-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    completed.metadata.human_verification.qa_cycle = completed.metadata.cycle
+    completed.metadata.human_verification.qa_path = f"HUMAN-QA-{completed.metadata.cycle:03d}.md"
+    completed.metadata.human_verification.qa_items = [
+        HumanQaChecklistItem(
+            id="qa-required",
+            title="Required QA",
+            steps=["Check the changed behavior"],
+            expected_result="The behavior works.",
+            required=True,
+        )
+    ]
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+    service.start(completed.metadata.task_id, by="human")
+
+    with pytest.raises(TransitionError, match="required QA checklist"):
+        service.approve(completed.metadata.task_id, by="human")
+
+    verifying = scanner.find_task(completed.metadata.task_id)
+    verifying.metadata.human_verification.qa_items[0].checked = True
+    scanner.metadata_store.save(verifying.task_dir, verifying.metadata)
+    moved = service.approve(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.DONE
 
 
 def test_human_verification_start_returns_to_todos_when_target_base_branch_advances(configured_paths):

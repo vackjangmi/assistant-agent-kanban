@@ -149,6 +149,12 @@ class UpdateChangedFileViewedPayload(BaseModel):
     viewed: bool = False
 
 
+class UpdateHumanQaChecklistItemPayload(BaseModel):
+    checked: bool | None = None
+    skipped: bool | None = None
+    note: str | None = None
+
+
 class ModelSettingsPayload(BaseModel):
     class RoleBackendsPayload(BaseModel):
         planner: str | None = None
@@ -729,6 +735,25 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return summary
+
+    @router.post("/api/tasks/{task_id}/human-qa/{item_id}")
+    async def update_human_qa_item(task_id: str, item_id: str, payload: UpdateHumanQaChecklistItemPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            item = await asyncio.to_thread(
+                runtime.task_service.set_human_qa_item_state,
+                task_id,
+                item_id,
+                by="human",
+                checked=payload.checked,
+                skipped=payload.skipped,
+                note=payload.note,
+            )
+        except (TaskNotFoundError, TransitionError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return item
 
     @router.post("/api/tasks/{task_id}/changed-files/{changed_file_id}/comments")
     async def create_line_comment(task_id: str, changed_file_id: str, payload: CreateLineCommentPayload, request: Request):

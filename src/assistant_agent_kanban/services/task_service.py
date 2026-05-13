@@ -24,6 +24,7 @@ from ..models import (
     ChangedFileSummary,
     HumanLineComment,
     HumanLineCommentsArtifact,
+    HumanQaChecklistItem,
     HumanReviewState,
     PlanEditEvent,
     StageTimingSegment,
@@ -49,7 +50,7 @@ from ..retry_policy import clear_retry_gate
 
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
-ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|REVIEWER-QA|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
+ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-QA|REVIEWER-QA|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
 PLANNER_RESTART_ARTIFACT = "PLANNER-RESTART.md"
 AI_ACTIVE_STATES = {
     TaskState.PLANNING,
@@ -715,6 +716,39 @@ class TaskService:
                 return entry.summary.model_copy(update={"viewed": viewed})
         raise TaskNotFoundError(changed_file_id)
 
+    def set_human_qa_item_state(
+        self,
+        task_id: str,
+        item_id: str,
+        *,
+        by: str,
+        checked: bool | None = None,
+        skipped: bool | None = None,
+        note: str | None = None,
+    ) -> HumanQaChecklistItem:
+        task = self._find_task(task_id)
+        if task.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("QA checklist updates are only available during human verification")
+        if self.metadata_store is None or self.locks is None:
+            raise TransitionError("QA checklist updates require a configured runtime")
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-human-qa-checklist"):
+            human_verification = task.metadata.human_verification
+            if human_verification.qa_cycle != task.metadata.cycle or not human_verification.qa_items:
+                raise TaskNotFoundError(item_id)
+            for index, item in enumerate(human_verification.qa_items):
+                if item.id != item_id:
+                    continue
+                next_checked = item.checked if checked is None else checked
+                next_skipped = item.skipped if skipped is None else skipped
+                if next_checked and next_skipped:
+                    next_skipped = False
+                normalized_note = item.note if note is None else (note.strip() or None)
+                updated = item.model_copy(update={"checked": next_checked, "skipped": next_skipped, "note": normalized_note})
+                human_verification.qa_items[index] = updated
+                self.metadata_store.save(task.task_dir, task.metadata)
+                return updated
+        raise TaskNotFoundError(item_id)
+
     def _find_task(self, task_id: str):
         try:
             return self.scanner.find_task(task_id)
@@ -835,6 +869,11 @@ class TaskService:
             note_markdown=metadata.human_verification.note_markdown,
             reviewer_qa_path=reviewer_qa_path,
             reviewer_qa_markdown=reviewer_qa_markdown,
+            qa_path=metadata.human_verification.qa_path,
+            qa_items=metadata.human_verification.qa_items if metadata.human_verification.qa_cycle == metadata.cycle else [],
+            qa_total_count=len(metadata.human_verification.qa_items) if metadata.human_verification.qa_cycle == metadata.cycle else 0,
+            qa_required_count=sum(1 for item in metadata.human_verification.qa_items if item.required) if metadata.human_verification.qa_cycle == metadata.cycle else 0,
+            qa_completed_required_count=sum(1 for item in metadata.human_verification.qa_items if item.required and (item.checked or item.skipped)) if metadata.human_verification.qa_cycle == metadata.cycle else 0,
             total_comment_count=len(comments),
             unresolved_comment_count=sum(1 for comment in comments if not comment.resolved),
             historical_comment_count=max(0, len(all_comments) - len(comments)),
@@ -851,7 +890,7 @@ class TaskService:
         if match:
             kind = match.group(1)
             cycle = int(match.group("cycle"))
-            kind_order = {"WORK": 0, "REVIEW": 1, "REVIEWER-QA": 2, "HUMAN-VERIFY": 3}[kind]
+            kind_order = {"WORK": 0, "REVIEW": 1, "HUMAN-QA": 2, "REVIEWER-QA": 3, "HUMAN-VERIFY": 4}[kind]
             return (3, cycle, kind_order, filename)
         if filename == "COMMIT.md":
             return (5, 0, 0, filename)
