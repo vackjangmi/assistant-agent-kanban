@@ -12,6 +12,7 @@ For normal review runs, prefer `Verdict: PASS` when only minor follow-up notes r
 For normal review runs, judge acceptance criteria by the original request meaning first; do not silently broaden changed-scope requirements into whole-repository requirements.
 For normal review runs, if coverage requirements distinguish changed scope from full-suite success, keep those checks separate in the review.
 For normal review runs, when you return `NEEDS_CHANGES`, keep the main blocker identified consistently so the system can tell whether the same blocker is repeating or the work has made progress to a new blocker.
+For normal review runs involving HTTP endpoints, API routes, controllers, handlers, or route documentation, include the endpoint location in the review markdown: method/path when known, plus the file path and symbol/class/function where the endpoint is declared or changed.
 
 Use the language requested in the prompt for all explanatory text.
 For normal review runs, keep the exact line `Verdict: PASS` or `Verdict: NEEDS_CHANGES` so the system can parse the result.

@@ -1036,6 +1036,7 @@ REVIEWER_TEXT = {
             "- If you return NEEDS_CHANGES, identify the main remaining blocker consistently so repeated reviews can tell whether the same blocker is still unresolved or a new blocker has replaced it.",
             "- Use `Verdict: NEEDS_CHANGES` only when implementation changes are still required.",
             "- If the work is acceptable with only minor notes, prefer `Verdict: PASS` and list the notes under follow-ups.",
+            "- When the work involves HTTP endpoints, API routes, controllers, handlers, or route documentation, include endpoint locations in the markdown: method/path when known, plus the file path and symbol/class/function where each endpoint is declared or changed.",
         ],
     },
     "ko": {
@@ -1056,6 +1057,7 @@ REVIEWER_TEXT = {
             "- NEEDS_CHANGES를 반환할 때는 이번 사이클의 주된 남은 blocker를 일관된 짧은 키로 식별해, 같은 blocker의 반복인지 새로운 blocker로 진전된 것인지 구분할 수 있게 하세요.",
             "- 실제 구현 수정이 더 필요할 때만 `Verdict: NEEDS_CHANGES`를 사용하세요.",
             "- 사소한 후속 메모만 남는 수준이면 `Verdict: PASS`를 우선하고 후속 항목 아래에 정리하세요.",
+            "- 작업에 HTTP endpoint, API route, controller, handler, route 문서가 포함되면 markdown에 endpoint 위치를 함께 적으세요: 알 수 있으면 method/path, 그리고 endpoint가 선언되거나 변경된 파일 경로와 symbol/class/function을 포함하세요.",
         ],
     },
 }

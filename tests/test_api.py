@@ -4542,6 +4542,7 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert "If the prompt says this is a final review-artifact step, return only the requested strict JSON object." in reviewer_agent_path.read_text()
         assert "If the prompt says this is human review Q&A, answer the human's question directly in markdown with a natural response." in reviewer_agent_path.read_text()
         assert "For normal review runs, prefer `Verdict: PASS` when only minor follow-up notes remain" in reviewer_agent_path.read_text()
+        assert "include the endpoint location in the review markdown" in reviewer_agent_path.read_text()
 
         second_save = client.put(
             "/api/settings/models",

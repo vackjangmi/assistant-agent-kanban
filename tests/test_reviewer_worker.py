@@ -773,6 +773,8 @@ def test_reviewer_worker_reuses_session_and_builds_full_context(configured_paths
     assert prompt.index("# Reviewer Q&A History") < prompt.index("# Previous AI Reviews")
     assert "Treat the latest human verification request as the authoritative goal for this cycle, but not in ways that break the original request" in prompt
     assert "Do not repeat earlier findings unless they still apply" in prompt
+    assert "include endpoint locations in the markdown" in prompt
+    assert "method/path when known" in prompt
 
 
 def test_reviewer_human_qa_writes_artifact_and_uses_thinking_mode(configured_paths):
@@ -1102,6 +1104,7 @@ def test_reviewer_worker_localizes_review_source_for_korean_requests(configured_
     assert "# 계획" in prompt
     assert "# 리뷰 지침" in prompt
     assert "판단하기 전에 먼저 원래 요청과 승인된 계획을 기준으로 보고" in prompt
+    assert "endpoint 위치를 함께 적으세요" in prompt
 
 
 def test_reviewer_worker_falls_back_to_english_for_unsupported_request_language(configured_paths):
@@ -1137,6 +1140,7 @@ def test_reviewer_worker_falls_back_to_english_for_unsupported_request_language(
     prompt = adapter.prompts[1]
     assert "Return the markdown artifact in English." in prompt
     assert "# Review Instructions" in prompt
+    assert "include endpoint locations in the markdown" in prompt
 
 
 def test_reviewer_finalize_failure_returns_to_waiting_reviews(configured_paths):
