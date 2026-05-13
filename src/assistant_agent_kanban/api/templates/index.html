@@ -1218,6 +1218,35 @@
     .diff-file-viewed-toggle input { margin: 0; }
     .diff-file-viewed-toggle.is-viewed { border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.88); color: var(--success); }
     .diff-file-viewed-toggle:hover, .diff-file-viewed-toggle:focus-within { border-color: rgba(124,79,44,0.24); color: var(--accent-strong); }
+    .qa-checklist-panel { display: grid; gap: 12px; height: 100%; min-height: 0; }
+    .qa-checklist-summary { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--border); background: rgba(255,249,239,0.9); }
+    .qa-checklist-summary-copy { display: grid; gap: 4px; min-width: 0; }
+    .qa-checklist-summary strong { font-size: 1rem; }
+    .qa-checklist-items { display: grid; gap: 10px; min-height: 0; overflow: auto; }
+    .qa-checklist-item { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); }
+    .qa-checklist-item.is-complete { border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.9); }
+    .qa-checklist-item-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .qa-checklist-title { display: grid; gap: 4px; min-width: 0; }
+    .qa-checklist-title strong { overflow-wrap: anywhere; }
+    .qa-checklist-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .qa-checklist-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.78); color: var(--muted); font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
+    .qa-checklist-toggle input { margin: 0; }
+    .qa-checklist-toggle.is-active { border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.88); color: var(--success); }
+    .qa-checklist-toggle.is-skipped { border-color: rgba(124,79,44,0.2); background: var(--accent-soft); color: var(--accent-strong); }
+    .qa-checklist-steps { margin: 0; padding-left: 20px; color: var(--text); }
+    .qa-checklist-expected { color: var(--muted); }
+    .qa-checklist-note { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 8px 10px; font: inherit; color: var(--text); }
+    body[data-theme="dark"] .qa-checklist-summary,
+    body[data-theme="dark"] .qa-checklist-item {
+      background: linear-gradient(180deg, rgba(31, 43, 54, 0.98), rgba(23, 32, 41, 0.96));
+      border-color: var(--review-border);
+      color: var(--text);
+    }
+    body[data-theme="dark"] .qa-checklist-note {
+      background: rgba(20, 28, 36, 0.98);
+      border-color: rgba(186, 200, 214, 0.16);
+      color: var(--text);
+    }
     .diff-file-heading { display: grid; gap: 3px; min-width: 0; }
     .diff-file-title { display: block; font-weight: 700; font-size: 0.96rem; line-height: 1.35; overflow-wrap: anywhere; }
     .diff-file-path { display: block; font-size: 0.78rem; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
@@ -1987,6 +2016,7 @@
         <button type="button" id="task-tab-logs" hidden>Logs</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
+        <button type="button" id="task-tab-qa-checklist" hidden>QA checklist</button>
         <button type="button" id="task-tab-reviewer-qa" hidden>Reviewer Q&amp;A</button>
         <button type="button" id="task-tab-review-note" hidden>Review note</button>
       </div>
@@ -2031,6 +2061,18 @@
               </div>
             </div>
           </div>
+        </div>
+      </section>
+      <section id="task-panel-qa-checklist" class="task-panel" hidden>
+        <div id="task-qa-checklist-panel" class="qa-checklist-panel">
+          <div class="qa-checklist-summary">
+            <div class="qa-checklist-summary-copy">
+              <strong id="task-qa-checklist-title">QA checklist</strong>
+              <span id="task-qa-checklist-status" class="muted">Reviewer-provided human QA cases appear here after a PASS review.</span>
+            </div>
+            <div id="task-qa-checklist-badges" class="diff-badges"></div>
+          </div>
+          <div id="task-qa-checklist-items" class="qa-checklist-items"></div>
         </div>
       </section>
       <section id="task-panel-reviewer-qa" class="task-panel" hidden>
@@ -2466,12 +2508,14 @@
     const taskTabOverview = document.getElementById('task-tab-overview');
     const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
+    const taskTabQaChecklist = document.getElementById('task-tab-qa-checklist');
     const taskTabReviewerQa = document.getElementById('task-tab-reviewer-qa');
     const taskTabReviewNote = document.getElementById('task-tab-review-note');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
+    const taskPanelQaChecklist = document.getElementById('task-panel-qa-checklist');
     const taskChangedFilesLayout = document.getElementById('task-changed-files-layout');
     const taskChangedFilesSplitter = document.getElementById('task-changed-files-splitter');
     const taskPanelReviewerQa = document.getElementById('task-panel-reviewer-qa');
@@ -2500,6 +2544,11 @@
     const taskDiffShell = document.getElementById('task-diff-shell');
     const taskDiffDesktop = document.getElementById('task-diff-desktop');
     const taskDiffMobile = document.getElementById('task-diff-mobile');
+    const taskQaChecklistPanel = document.getElementById('task-qa-checklist-panel');
+    const taskQaChecklistTitle = document.getElementById('task-qa-checklist-title');
+    const taskQaChecklistStatus = document.getElementById('task-qa-checklist-status');
+    const taskQaChecklistBadges = document.getElementById('task-qa-checklist-badges');
+    const taskQaChecklistItems = document.getElementById('task-qa-checklist-items');
     const taskReviewerQaPanel = document.getElementById('task-reviewer-qa-panel');
     const taskReviewerQaStatus = document.getElementById('task-reviewer-qa-status');
     const taskReviewerQaTranscript = document.getElementById('task-reviewer-qa-transcript');
@@ -3100,6 +3149,21 @@
         viewedLabel: 'Viewed',
         viewedBadge: 'Viewed',
         viewedSaveError: 'Failed to update viewed state.',
+        qaChecklistTab: 'QA checklist',
+        qaChecklistTitle: 'QA checklist',
+        qaChecklistReadOnly: 'Read-only until human verification starts.',
+        qaChecklistInteractive: 'Check or skip required QA items before final approval.',
+        qaChecklistEmpty: 'No human QA checklist was generated for this task.',
+        qaChecklistProgress: '{completed}/{required} required complete',
+        qaChecklistRequired: 'Required',
+        qaChecklistOptional: 'Optional',
+        qaChecklistChecked: 'Checked',
+        qaChecklistSkipped: 'Skipped',
+        qaChecklistExpected: 'Expected',
+        qaChecklistNotePlaceholder: 'Optional note',
+        qaChecklistSaveError: 'Failed to update QA checklist.',
+        approvalBlockedQaOne: 'Approval is blocked until {count} required QA checklist item is completed.',
+        approvalBlockedQaMany: 'Approval is blocked until {count} required QA checklist items are completed.',
         approvalChoiceTitle: 'Finalize review',
         approvalChoiceDescription: 'Choose how this reviewed task should be completed in the target repository.',
         approvalChoiceCopyTitle: 'Final approval mode',
@@ -3154,6 +3218,21 @@
         viewedLabel: '검토함',
         viewedBadge: '검토함',
         viewedSaveError: '검토 완료 상태를 저장하지 못했습니다.',
+        qaChecklistTab: 'QA 체크리스트',
+        qaChecklistTitle: 'QA 체크리스트',
+        qaChecklistReadOnly: '사람 검증을 시작하기 전까지 읽기 전용입니다.',
+        qaChecklistInteractive: '최종 승인 전에 필수 QA 항목을 체크하거나 스킵하세요.',
+        qaChecklistEmpty: '이 작업에는 사람 QA 체크리스트가 생성되지 않았습니다.',
+        qaChecklistProgress: '필수 {required}개 중 {completed}개 완료',
+        qaChecklistRequired: '필수',
+        qaChecklistOptional: '선택',
+        qaChecklistChecked: '확인함',
+        qaChecklistSkipped: '스킵',
+        qaChecklistExpected: '기대 결과',
+        qaChecklistNotePlaceholder: '선택 노트',
+        qaChecklistSaveError: 'QA 체크리스트를 저장하지 못했습니다.',
+        approvalBlockedQaOne: '필수 QA 체크리스트 {count}개가 남아 있어 승인이 막혀 있습니다.',
+        approvalBlockedQaMany: '필수 QA 체크리스트 {count}개가 남아 있어 승인이 막혀 있습니다.',
         approvalChoiceTitle: '리뷰 최종 확정',
         approvalChoiceDescription: '검토가 끝난 이 작업을 대상 저장소에서 어떤 방식으로 마무리할지 선택하세요.',
         approvalChoiceCopyTitle: '최종 승인 방식',
@@ -3805,6 +3884,8 @@
       taskTabLogs.textContent = translateTask('tabLogs');
       taskTabEditor.textContent = translateTask('tabViewer');
       taskTabChangedFiles.textContent = translateTask('tabChangedFiles');
+      taskTabQaChecklist.textContent = translateHumanReview('qaChecklistTab');
+      taskQaChecklistTitle.textContent = translateHumanReview('qaChecklistTitle');
       taskTabReviewerQa.textContent = translateTask('tabReviewerQa');
       askReviewerQuestionButton.textContent = translateTask('reviewerQaSend');
       taskLogModeBadge.textContent = translateTask('runtimeLogs');
@@ -6363,12 +6444,14 @@
       taskTabOverview.classList.toggle('active', tab === 'overview');
       taskTabLogs.classList.toggle('active', tab === 'logs');
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
+      taskTabQaChecklist.classList.toggle('active', tab === 'qa-checklist');
       taskTabReviewerQa.classList.toggle('active', tab === 'reviewer-qa');
       taskTabReviewNote.classList.toggle('active', tab === 'review-note');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskPanelOverview.hidden = tab !== 'overview';
       taskPanelLogs.hidden = tab !== 'logs';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
+      taskPanelQaChecklist.hidden = tab !== 'qa-checklist';
       taskPanelReviewerQa.hidden = tab !== 'reviewer-qa';
       taskPanelReviewNote.hidden = tab !== 'review-note';
       taskPanelEditor.hidden = tab !== 'editor';
@@ -6381,6 +6464,7 @@
       if (!load) return;
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
+      if (tab === 'qa-checklist') renderQaChecklistPanel();
       if (tab === 'reviewer-qa' && activeTaskId) loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false });
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
     }
@@ -6388,6 +6472,7 @@
     function taskChromeState(state = '') {
       return {
         changedFilesVisible: state === 'human-verifying' || state === 'done',
+        qaChecklistVisible: state === 'completed-reviews' || state === 'human-verifying',
         reviewerQaVisible: state === 'completed-reviews' || state === 'human-verifying',
         reviewNoteVisible: state === 'human-verifying',
         viewerVisible: true,
@@ -6411,6 +6496,7 @@
       document.getElementById('task-modal-title').textContent = snapshot?.title || translateTask('modalTitle');
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags(snapshot);
       taskTabChangedFiles.hidden = !chrome.changedFilesVisible;
+      taskTabQaChecklist.hidden = !chrome.qaChecklistVisible;
       taskTabReviewerQa.hidden = !chrome.reviewerQaVisible;
       taskTabReviewNote.hidden = !chrome.reviewNoteVisible;
       taskTabEditor.hidden = !chrome.viewerVisible;
@@ -6786,6 +6872,89 @@
           </button>
         </div>
       `).join('');
+    }
+
+    function qaChecklistItems() {
+      const items = activeTaskDetail?.human_review?.qa_items;
+      return Array.isArray(items) ? items : [];
+    }
+
+    function qaChecklistProgress() {
+      const items = qaChecklistItems();
+      const requiredItems = items.filter((item) => item.required);
+      const completedRequired = requiredItems.filter((item) => item.checked || item.skipped);
+      return { total: items.length, required: requiredItems.length, completedRequired: completedRequired.length };
+    }
+
+    function renderQaChecklistPanel() {
+      const state = activeTaskDetail?.metadata?.state || '';
+      const canToggle = state === 'human-verifying' && !taskDetailStale;
+      const items = qaChecklistItems();
+      const progress = qaChecklistProgress();
+      taskQaChecklistPanel.hidden = !(state === 'completed-reviews' || state === 'human-verifying');
+      taskQaChecklistStatus.textContent = state === 'human-verifying'
+        ? translateHumanReview('qaChecklistInteractive')
+        : translateHumanReview('qaChecklistReadOnly');
+      taskQaChecklistBadges.innerHTML = `
+        <span class="diff-badge">${escapeHtml(translateHumanReview('qaChecklistProgress', { completed: progress.completedRequired, required: progress.required }))}</span>
+        ${activeTaskDetail?.human_review?.qa_path ? `<span class="diff-badge">${escapeHtml(activeTaskDetail.human_review.qa_path)}</span>` : ''}
+      `;
+      if (!items.length) {
+        taskQaChecklistItems.innerHTML = `<div class="diff-empty">${escapeHtml(translateHumanReview('qaChecklistEmpty'))}</div>`;
+        return;
+      }
+      taskQaChecklistItems.innerHTML = items.map((item) => {
+        const complete = Boolean(item.checked || item.skipped);
+        const steps = Array.isArray(item.steps) ? item.steps : [];
+        return `
+          <article class="qa-checklist-item${complete ? ' is-complete' : ''}" data-qa-item-id="${escapeHtml(item.id)}">
+            <div class="qa-checklist-item-head">
+              <div class="qa-checklist-title">
+                <strong>${escapeHtml(item.title || item.id)}</strong>
+                <div class="diff-badges">
+                  <span class="diff-badge">${escapeHtml(item.required ? translateHumanReview('qaChecklistRequired') : translateHumanReview('qaChecklistOptional'))}</span>
+                  <span class="diff-badge">${escapeHtml(item.id)}</span>
+                </div>
+              </div>
+              <div class="qa-checklist-actions">
+                <label class="qa-checklist-toggle${item.checked ? ' is-active' : ''}" ${canToggle ? '' : 'aria-disabled="true"'}>
+                  <input type="checkbox" data-qa-check="${escapeHtml(item.id)}" ${item.checked ? 'checked' : ''} ${canToggle ? '' : 'disabled'}>
+                  <span>${escapeHtml(translateHumanReview('qaChecklistChecked'))}</span>
+                </label>
+                <label class="qa-checklist-toggle${item.skipped ? ' is-skipped' : ''}" ${canToggle ? '' : 'aria-disabled="true"'}>
+                  <input type="checkbox" data-qa-skip="${escapeHtml(item.id)}" ${item.skipped ? 'checked' : ''} ${canToggle ? '' : 'disabled'}>
+                  <span>${escapeHtml(translateHumanReview('qaChecklistSkipped'))}</span>
+                </label>
+              </div>
+            </div>
+            <ol class="qa-checklist-steps">${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}</ol>
+            <div class="qa-checklist-expected"><strong>${escapeHtml(translateHumanReview('qaChecklistExpected'))}:</strong> ${escapeHtml(item.expected_result || '')}</div>
+            <input class="qa-checklist-note" data-qa-note="${escapeHtml(item.id)}" value="${escapeHtml(item.note || '')}" placeholder="${escapeHtml(translateHumanReview('qaChecklistNotePlaceholder'))}" ${canToggle ? '' : 'disabled'}>
+          </article>`;
+      }).join('');
+    }
+
+    function applyQaChecklistItemUpdate(updated) {
+      if (!updated || !activeTaskDetail?.human_review?.qa_items) return;
+      activeTaskDetail.human_review.qa_items = activeTaskDetail.human_review.qa_items.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
+      const progress = qaChecklistProgress();
+      activeTaskDetail.human_review.qa_total_count = progress.total;
+      activeTaskDetail.human_review.qa_required_count = progress.required;
+      activeTaskDetail.human_review.qa_completed_required_count = progress.completedRequired;
+      renderQaChecklistPanel();
+      updateHumanReviewPanel();
+    }
+
+    async function setQaChecklistItemState(taskId, itemId, patch) {
+      const response = await fetch(`/api/tasks/${taskId}/human-qa/${encodeURIComponent(itemId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateHumanReview('qaChecklistSaveError'));
+      applyQaChecklistItemUpdate(payload);
+      return payload;
     }
 
     function renderChangedFileSummaryCard(summary) {
@@ -7772,9 +7941,11 @@
       const canVerify = activeTaskDetail?.metadata?.state === 'human-verifying';
       const integrationApplied = Boolean(activeTaskDetail?.metadata?.integration?.applied);
       const currentCommentCount = Number(activeTaskDetail?.human_review?.total_comment_count || 0);
+      const qaProgress = qaChecklistProgress();
+      const incompleteQaCount = canVerify ? Math.max(0, qaProgress.required - qaProgress.completedRequired) : 0;
       const noteExists = canVerify && getHumanReviewEditorContent().trim().length > 0;
       const hasFeedback = !integrationApplied || noteExists || currentCommentCount > 0;
-      const approvalBlockedByContent = !integrationApplied || noteExists || currentCommentCount > 0;
+      const approvalBlockedByContent = !integrationApplied || noteExists || currentCommentCount > 0 || incompleteQaCount > 0;
       taskHumanReviewPanel.hidden = !canVerify;
       requestChangesShell.hidden = !canVerify;
       approveHumanReviewShell.hidden = !canVerify;
@@ -7803,6 +7974,8 @@
         approvalReason = translateHumanReview('approvalBlockedNoteOnly');
       } else if (currentCommentCount > 0) {
         approvalReason = translateHumanReview(currentCommentCount === 1 ? 'approvalBlockedCommentsOnlyOne' : 'approvalBlockedCommentsOnlyMany', { count: currentCommentCount });
+      } else if (incompleteQaCount > 0) {
+        approvalReason = translateHumanReview(incompleteQaCount === 1 ? 'approvalBlockedQaOne' : 'approvalBlockedQaMany', { count: incompleteQaCount });
       }
 
       requestChangesShell.title = requestChangesReason;
@@ -8252,6 +8425,7 @@
       setTaskDetailStale(false);
       const latestError = latestVisibleError(metadata.errors);
       const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
+      const qaChecklistVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const reviewerQaVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const reviewNoteVisible = metadata.state === 'human-verifying';
       const viewerVisible = detail.markdown_files.length > 0;
@@ -8259,11 +8433,13 @@
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
       taskTabLogs.hidden = !logsVisible;
       taskTabChangedFiles.hidden = !changedFilesVisible;
+      taskTabQaChecklist.hidden = !qaChecklistVisible;
       taskTabReviewerQa.hidden = !reviewerQaVisible;
       taskTabReviewNote.hidden = !reviewNoteVisible;
       taskTabEditor.hidden = !viewerVisible;
       if (!logsVisible && taskTabLogs.classList.contains('active')) setTaskTab(viewerVisible ? 'editor' : 'overview');
       if (!changedFilesVisible && taskTabChangedFiles.classList.contains('active')) setTaskTab('overview');
+      if (!qaChecklistVisible && taskTabQaChecklist.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!reviewerQaVisible && taskTabReviewerQa.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!reviewNoteVisible && taskTabReviewNote.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!viewerVisible && taskTabEditor.classList.contains('active')) setTaskTab('overview');
@@ -8276,6 +8452,7 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
+      renderQaChecklistPanel();
       setReviewerQaTranscript(detail.human_review?.reviewer_qa_markdown || '', { preserveScroll: true });
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
       updateReviewerQaPanel();
@@ -8319,7 +8496,7 @@
     }
 
     function parseArtifactCycle(file) {
-      const match = /^(WORK|REVIEW|HUMAN-VERIFY)-([0-9]{3})\.md$/.exec(file);
+      const match = /^(WORK|REVIEW|HUMAN-QA|HUMAN-VERIFY)-([0-9]{3})\.md$/.exec(file);
       if (!match) {
         const reviewerQaMatch = /^(REVIEWER-QA)-([0-9]{3})\.md$/.exec(file);
         if (!reviewerQaMatch) return null;
@@ -8624,6 +8801,8 @@
         taskLogViewer.textContent = translateTask('runtimeLogSummaryEmpty');
         taskLogViewerPinnedToBottom = true;
         taskChangedFiles.innerHTML = '';
+        taskQaChecklistItems.innerHTML = '';
+        taskQaChecklistBadges.innerHTML = '';
         renderDiffPlaceholder(translateTask('selectChangedTabToInspect'));
         setHumanReviewEditorContent('');
         reviewerQaTranscriptPinnedToBottom = true;
@@ -9499,6 +9678,7 @@
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
+    taskTabQaChecklist.addEventListener('click', () => setTaskTab('qa-checklist'));
     taskTabReviewerQa.addEventListener('click', () => setTaskTab('reviewer-qa'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
@@ -9559,6 +9739,23 @@
     }
     taskChangedFiles.addEventListener('change', handleChangedFileViewedToggleChange);
     taskChangedFileSummary.addEventListener('change', handleChangedFileViewedToggleChange);
+    taskQaChecklistItems.addEventListener('change', (event) => {
+      const checkToggle = event.target.closest('[data-qa-check]');
+      const skipToggle = event.target.closest('[data-qa-skip]');
+      const noteInput = event.target.closest('[data-qa-note]');
+      const itemId = checkToggle?.dataset.qaCheck || skipToggle?.dataset.qaSkip || noteInput?.dataset.qaNote || '';
+      if (!activeTaskId || !itemId) return;
+      const patch = checkToggle
+        ? { checked: Boolean(checkToggle.checked), skipped: false }
+        : skipToggle
+          ? { skipped: Boolean(skipToggle.checked), checked: false }
+          : { note: noteInput.value || '' };
+      setQaChecklistItemState(activeTaskId, itemId, patch).catch((error) => {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        renderQaChecklistPanel();
+      });
+    });
     taskDiffShell.addEventListener('click', (event) => {
       const lineCommentButton = event.target.closest('[data-line-comment-action]');
       if (lineCommentButton && activeChangedFileDetail) {

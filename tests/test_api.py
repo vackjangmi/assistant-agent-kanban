@@ -22,7 +22,7 @@ from assistant_agent_kanban.exceptions import IntegrationError
 from assistant_agent_kanban.events import EventBus
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
-from assistant_agent_kanban.models import HistoryEntry
+from assistant_agent_kanban.models import HistoryEntry, HumanQaChecklistItem
 from assistant_agent_kanban.opencode_adapter import _parse_discovered_models
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.transitions import TransitionManager
@@ -3125,6 +3125,44 @@ def test_api_updates_changed_file_viewed_state(configured_paths):
         assert cleared_detail.json()["changed_files"][0]["id"] == changed_file_id
 
 
+def test_api_updates_human_qa_checklist_item_during_verification(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-qa-api-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-qa-api-task")
+    completed.metadata.human_verification.qa_cycle = completed.metadata.cycle
+    completed.metadata.human_verification.qa_path = f"HUMAN-QA-{completed.metadata.cycle:03d}.md"
+    completed.metadata.human_verification.qa_items = [
+        HumanQaChecklistItem(
+            id="qa-main",
+            title="Verify main behavior",
+            steps=["Open the target repo", "Exercise the change"],
+            expected_result="The requested behavior works.",
+            required=True,
+        )
+    ]
+    scanner.metadata_store.save(completed.task_dir, completed.metadata)
+
+    with TestClient(app) as client:
+        blocked = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/human-qa/qa-main",
+            json={"checked": True},
+        )
+        assert blocked.status_code == 409
+
+        client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        response = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/human-qa/qa-main",
+            json={"checked": True, "note": "Passed manually."},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["checked"] is True
+        assert response.json()["note"] == "Passed manually."
+        detail = client.get(f"/api/tasks/{completed.metadata.task_id}")
+        assert detail.json()["human_review"]["qa_completed_required_count"] == 1
+
 def test_api_blocks_changed_file_viewed_updates_after_done(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -3282,9 +3320,11 @@ def test_api_orders_markdown_artifacts_by_lifecycle_and_cycle(configured_paths):
     (task.task_dir / "PLAN.md").write_text("plan\n")
     (task.task_dir / "WORK-002.md").write_text("work 2\n")
     (task.task_dir / "REVIEW-002.md").write_text("review 2\n")
+    (task.task_dir / "HUMAN-QA-002.md").write_text("qa 2\n")
     (task.task_dir / "HUMAN-VERIFY-002.md").write_text("verify 2\n")
     (task.task_dir / "WORK-001.md").write_text("work 1\n")
     (task.task_dir / "REVIEW-001.md").write_text("review 1\n")
+    (task.task_dir / "HUMAN-QA-001.md").write_text("qa 1\n")
     (task.task_dir / "HUMAN-VERIFY-001.md").write_text("verify 1\n")
     (task.task_dir / "NOTES.md").write_text("notes\n")
     (task.task_dir / "COMMIT.md").write_text("commit\n")
@@ -3298,9 +3338,11 @@ def test_api_orders_markdown_artifacts_by_lifecycle_and_cycle(configured_paths):
         "PLAN.md",
         "WORK-001.md",
         "REVIEW-001.md",
+        "HUMAN-QA-001.md",
         "HUMAN-VERIFY-001.md",
         "WORK-002.md",
         "REVIEW-002.md",
+        "HUMAN-QA-002.md",
         "HUMAN-VERIFY-002.md",
         "NOTES.md",
         "COMMIT.md",
@@ -4499,7 +4541,7 @@ def test_api_save_materializes_runtime_agents_immediately(configured_paths):
         assert "Do not delegate the final file edits" in implementer_agent_path.read_text()
         assert "If the prompt says this is a final review-artifact step, return only the requested strict JSON object." in reviewer_agent_path.read_text()
         assert "If the prompt says this is human review Q&A, answer the human's question directly in markdown with a natural response." in reviewer_agent_path.read_text()
-        assert "Prefer `Verdict: PASS` when only minor follow-up notes remain" in reviewer_agent_path.read_text()
+        assert "For normal review runs, prefer `Verdict: PASS` when only minor follow-up notes remain" in reviewer_agent_path.read_text()
 
         second_save = client.put(
             "/api/settings/models",
@@ -4880,8 +4922,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/retrospectives/create" in response.text
     assert 'id="task-tab-reviewer-qa"' in response.text
     assert 'id="task-panel-reviewer-qa"' in response.text
+    assert 'id="task-tab-qa-checklist"' in response.text
+    assert 'id="task-panel-qa-checklist"' in response.text
+    assert "const taskQaChecklistTitle = document.getElementById('task-qa-checklist-title');" in response.text
+    assert "taskQaChecklistTitle.textContent = translateHumanReview('qaChecklistTitle');" in response.text
     assert 'id="task-tab-review-note"' in response.text
     assert 'id="task-panel-review-note"' in response.text
+    assert "/^(WORK|REVIEW|HUMAN-QA|HUMAN-VERIFY)-([0-9]{3})\\.md$/" in response.text
+    assert "qaChecklistVisible: state === 'completed-reviews' || state === 'human-verifying'" in response.text
     assert "reviewerQaVisible: state === 'completed-reviews' || state === 'human-verifying'" in response.text
     assert "reviewNoteVisible: state === 'human-verifying'" in response.text
     assert "function parseReviewerQaTranscript(source)" in response.text
