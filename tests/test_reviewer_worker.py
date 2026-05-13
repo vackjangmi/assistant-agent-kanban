@@ -1020,6 +1020,52 @@ def test_reviewer_worker_uses_single_json_run_when_live_logs_disabled(configured
     assert review_json["total_tokens"] == 33
 
 
+def test_reviewer_worker_falls_back_to_default_output_when_json_finalize_is_empty(configured_paths):
+    config, _, _ = configured_paths
+    config.opencode.worker_live_logs_enabled = False
+    create_request_task(config, "reviewer-empty-json-fallback-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config, worker_live_logs_enabled=False)
+    fallback_json = json.dumps(
+        {
+            "schema_version": 1,
+            "artifact_type": "review",
+            "task_id": "TASK-TEST",
+            "cycle": 1,
+            "verdict": "PASS",
+            "primary_blocker": None,
+            "markdown": "Verdict: PASS\n\n## Acceptance Criteria Check\nReady",
+        }
+    )
+    adapter = FakeAdapter(["", fallback_json], session_ids=["ses_empty", "ses_fallback"], total_tokens=[41, 7])
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=adapter,
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.COMPLETED_REVIEWS
+    assert len(adapter.run_calls) == 2
+    assert adapter.run_calls[0]["output_format"] == "json"
+    assert adapter.run_calls[0]["stream_stderr_to_log"] is True
+    assert adapter.run_calls[1]["output_format"] == "default"
+    assert adapter.run_calls[1]["stream_stderr_to_log"] is True
+    assert updated.metadata.review.session_id == "ses_fallback"
+    assert updated.metadata.review.last_run_tokens == 48
+    assert updated.metadata.review.session_tokens == 48
+    review_json = json.loads((updated.task_dir / "REVIEW-001.json").read_text())
+    assert review_json["verdict"] == "PASS"
+    assert "Verdict: PASS" in review_json["assistant_text"]
+    assert review_json["total_tokens"] == 48
+
+
 def test_reviewer_worker_localizes_review_source_for_korean_requests(configured_paths):
     class PromptCapturingAdapter(FakeAdapter):
         def __init__(self):
@@ -1117,6 +1163,15 @@ def test_reviewer_finalize_failure_returns_to_waiting_reviews(configured_paths):
     assert updated.metadata.retry_gate.reason == "review-finalize-failed"
     assert updated.metadata.retry_gate.not_before is not None
     assert worker.candidate_tasks() == []
+    assert all(call["stream_stderr_to_log"] is True for call in adapter.run_calls)
+    failure_json = json.loads((updated.task_dir / "REVIEW-FAILED-001.json").read_text())
+    assert failure_json["ok"] is True
+    assert failure_json["returncode"] == 0
+    assert failure_json["stdout"] == "not-json"
+    assert failure_json["stderr"] == ""
+    assert failure_json["command"] == ["fs-kanban-reviewer"]
+    assert "Review Finalize Failed" in failure_json["assistant_text"]
+    assert updated.metadata.errors[-1].message.endswith("diagnostics written to REVIEW-FAILED-001.json")
 
 
 def test_reviewer_worker_uses_current_settings_override_when_requested(configured_paths):

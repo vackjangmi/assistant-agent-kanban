@@ -5,7 +5,7 @@ import json
 import re
 from datetime import timezone, datetime
 from pathlib import Path
-from typing import Literal, NotRequired, TypedDict, cast
+from typing import Callable, Literal, NotRequired, TypedDict, cast
 
 from ..assistant_adapter import AssistantAdapter
 from ..enums import TaskState
@@ -113,17 +113,16 @@ class ReviewerWorker(WorkerBase):
 
             if not self.worker_live_logs_enabled(run_config):
                 self.append_log_marker(log_path=log_path, phase="run", cycle=cycle)
-                result = await asyncio.to_thread(
-                    adapter.run,
-                    agent=run_config.role_agent("reviewer"),
-                    prompt=finalize_prompt,
-                    cwd=workspace_path,
-                    run_log_path=log_path,
-                    config=run_config,
+                result, artifact = await self._run_finalize_with_fallback(
+                    adapter=adapter,
+                    run_config=run_config,
+                    finalize_prompt=finalize_prompt,
+                    workspace_path=workspace_path,
+                    log_path=log_path,
+                    cycle=cycle,
+                    task_id=reviewing.metadata.task_id,
                     session_id=session_id,
-                    cancel_key=reviewing.metadata.task_id,
                     on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, log_name),
-                    show_thinking=True,
                 )
                 reviewing.metadata.review.resolved_model = result.resolved_model
                 reviewing.metadata.review.session_id = result.session_id
@@ -134,11 +133,9 @@ class ReviewerWorker(WorkerBase):
                     prior_session_tokens=prior_session_tokens,
                     run_tokens=result.total_tokens,
                 )
-                artifact = self._parse_finalize_artifact(result.assistant_text)
                 if not result.ok or artifact is None:
-                    reviewing.metadata.errors.append(
-                        TaskErrorInfo(code="review-finalize-failed", message=result.stderr.strip() or "review finalize artifact invalid")
-                    )
+                    diagnostic_path = self._write_finalize_failure_artifact(reviewing.task_dir, result, cycle=cycle)
+                    reviewing.metadata.errors.append(TaskErrorInfo(code="review-finalize-failed", message=self._finalize_failure_message(result, diagnostic_path)))
                     apply_retry_gate(reviewing.metadata, reason="review-finalize-failed")
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                     done = self.transitions.move(reviewing, TaskState.WAITING_REVIEWS, by=self.worker_name, note="review finalize failed")
@@ -208,6 +205,7 @@ class ReviewerWorker(WorkerBase):
                 config=run_config,
                 session_id=session_id,
                 cancel_key=reviewing.metadata.task_id,
+                stream_stderr_to_log=True,
                 show_thinking=True,
             )
             reviewing.metadata.review.resolved_model = handshake_result.resolved_model
@@ -242,6 +240,7 @@ class ReviewerWorker(WorkerBase):
                 session_id=active_session_id,
                 cancel_key=reviewing.metadata.task_id,
                 on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, log_name),
+                stream_stderr_to_log=True,
                 show_thinking=True,
             )
             if not live_result.ok:
@@ -255,16 +254,15 @@ class ReviewerWorker(WorkerBase):
                 return True
 
             self.append_log_marker(log_path=log_path, phase="finalize", cycle=cycle)
-            finalize_result = await asyncio.to_thread(
-                adapter.run,
-                agent=run_config.role_agent("reviewer"),
-                prompt=finalize_prompt,
-                cwd=workspace_path,
-                run_log_path=log_path,
-                config=run_config,
+            finalize_result, artifact = await self._run_finalize_with_fallback(
+                adapter=adapter,
+                run_config=run_config,
+                finalize_prompt=finalize_prompt,
+                workspace_path=workspace_path,
+                log_path=log_path,
+                cycle=cycle,
+                task_id=reviewing.metadata.task_id,
                 session_id=live_result.session_id or active_session_id,
-                cancel_key=reviewing.metadata.task_id,
-                show_thinking=True,
             )
             reviewing.metadata.review.resolved_model = finalize_result.resolved_model or live_result.resolved_model or handshake_result.resolved_model
             reviewing.metadata.review.session_id = finalize_result.session_id or live_result.session_id or active_session_id
@@ -276,11 +274,9 @@ class ReviewerWorker(WorkerBase):
                 run_tokens=finalize_result.total_tokens,
             )
 
-            artifact = self._parse_finalize_artifact(finalize_result.assistant_text)
             if not finalize_result.ok or artifact is None:
-                reviewing.metadata.errors.append(
-                    TaskErrorInfo(code="review-finalize-failed", message=finalize_result.stderr.strip() or "review finalize artifact invalid")
-                )
+                diagnostic_path = self._write_finalize_failure_artifact(reviewing.task_dir, finalize_result, cycle=cycle)
+                reviewing.metadata.errors.append(TaskErrorInfo(code="review-finalize-failed", message=self._finalize_failure_message(finalize_result, diagnostic_path)))
                 apply_retry_gate(reviewing.metadata, reason="review-finalize-failed")
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 done = self.transitions.move(reviewing, TaskState.WAITING_REVIEWS, by=self.worker_name, note="review finalize failed")
@@ -340,6 +336,115 @@ class ReviewerWorker(WorkerBase):
                 done = self.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by=self.worker_name, note="review passed")
         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
         return True
+
+    async def _run_finalize_with_fallback(
+        self,
+        *,
+        adapter: AssistantAdapter,
+        run_config,
+        finalize_prompt: str,
+        workspace_path: Path,
+        log_path: Path,
+        cycle: int,
+        task_id: str,
+        session_id: str | None,
+        on_log_line: Callable[[str, str | None], None] | None = None,
+    ) -> tuple[RunResult, ReviewFinalizeArtifact | None]:
+        result = await asyncio.to_thread(
+            adapter.run,
+            agent=run_config.role_agent("reviewer"),
+            prompt=finalize_prompt,
+            cwd=workspace_path,
+            run_log_path=log_path,
+            config=run_config,
+            session_id=session_id,
+            cancel_key=task_id,
+            on_log_line=on_log_line,
+            stream_stderr_to_log=True,
+            show_thinking=True,
+        )
+        artifact = self._parse_finalize_artifact(result.assistant_text)
+        if artifact is not None or not self._should_retry_finalize_with_default_output(result, run_config):
+            return result, artifact
+
+        self.append_log_marker(log_path=log_path, phase="finalize-default-fallback", cycle=cycle)
+        fallback = await asyncio.to_thread(
+            adapter.run,
+            agent=run_config.role_agent("reviewer"),
+            prompt=finalize_prompt,
+            cwd=workspace_path,
+            run_log_path=log_path,
+            config=run_config,
+            session_id=result.session_id or session_id,
+            cancel_key=task_id,
+            on_log_line=on_log_line,
+            output_format="default",
+            stream_stderr_to_log=True,
+            show_thinking=True,
+        )
+        return self._combine_finalize_attempts(result, fallback), self._parse_finalize_artifact(fallback.assistant_text)
+
+    def _should_retry_finalize_with_default_output(self, result: RunResult, run_config) -> bool:
+        return run_config.backend_for_role("reviewer") == "opencode" and result.ok and not result.assistant_text.strip()
+
+    def _combine_finalize_attempts(self, first: RunResult, fallback: RunResult) -> RunResult:
+        return RunResult(
+            ok=fallback.ok,
+            returncode=fallback.returncode,
+            assistant_text=fallback.assistant_text,
+            stdout=self._join_attempt_streams(first.stdout, fallback.stdout),
+            stderr=self._join_attempt_streams(first.stderr, fallback.stderr),
+            raw_events_path=fallback.raw_events_path,
+            command=fallback.command,
+            resolved_model=fallback.resolved_model or first.resolved_model,
+            session_id=fallback.session_id or first.session_id,
+            total_tokens=first.total_tokens + fallback.total_tokens,
+        )
+
+    def _join_attempt_streams(self, first: str, second: str) -> str:
+        if not first:
+            return second
+        if not second:
+            return first
+        separator = "" if first.endswith("\n") else "\n"
+        return f"{first}{separator}{second}"
+
+    def _write_finalize_failure_artifact(self, task_dir: Path, result: RunResult, *, cycle: int) -> str:
+        diagnostic = RunResult(
+            ok=result.ok,
+            returncode=result.returncode,
+            assistant_text=self._render_finalize_failure_diagnostic(result),
+            stdout=result.stdout,
+            stderr=result.stderr,
+            raw_events_path=result.raw_events_path,
+            command=result.command,
+            resolved_model=result.resolved_model,
+            session_id=result.session_id,
+            total_tokens=result.total_tokens,
+        )
+        _, json_path = self.write_result_artifacts(task_dir, f"REVIEW-FAILED-{cycle:03d}", diagnostic)
+        return json_path
+
+    def _render_finalize_failure_diagnostic(self, result: RunResult) -> str:
+        message = result.stderr.strip() or "review finalize artifact invalid"
+        return "\n".join(
+            [
+                "## Review Finalize Failed",
+                "",
+                message,
+                "",
+                f"- returncode: {result.returncode}",
+                f"- resolved_model: {result.resolved_model or 'unknown'}",
+                f"- session_id: {result.session_id or 'none'}",
+                f"- raw_events_path: {result.raw_events_path}",
+                f"- stdout_bytes: {len(result.stdout.encode('utf-8'))}",
+                f"- stderr_bytes: {len(result.stderr.encode('utf-8'))}",
+            ]
+        )
+
+    def _finalize_failure_message(self, result: RunResult, diagnostic_path: str) -> str:
+        message = result.stderr.strip() or "review finalize artifact invalid"
+        return f"{message}; diagnostics written to {diagnostic_path}"
 
     def _target_repo_state_drift_note(self, metadata) -> str | None:
         baseline = metadata.implementation.target_repo_baseline
