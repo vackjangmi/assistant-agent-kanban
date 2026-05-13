@@ -104,6 +104,37 @@ def test_parse_finalize_artifact_accepts_fenced_json_with_literal_quotes_in_mark
     assert '"충돌하는 기존 기대값 일괄 교정"' in artifact["markdown"]
 
 
+def test_parse_finalize_artifact_accepts_relaxed_json_with_qa_checklist(configured_paths):
+    config, _, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter([]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    artifact = worker._parse_finalize_artifact(
+        "```json\n"
+        '{"schema_version":1,"artifact_type":"review","task_id":"2db21ca","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\nVerify the "main" path","human_qa_checklist":[{"id":"qa-optional","title":"Optional flow","steps":["Open settings"],"expected_result":"Settings open.","required":"false"}]}'
+        "\n```"
+    )
+
+    assert artifact is not None
+    assert artifact["verdict"] == "PASS"
+    assert '"main"' in artifact["markdown"]
+    items = worker._human_qa_items_from_artifact(artifact)
+    assert items[0].id == "qa-optional"
+    assert items[0].required is False
+
+
 def _task_ready_for_review(config, *, worker_live_logs_enabled: bool = True):
     config.opencode.worker_live_logs_enabled = worker_live_logs_enabled
     metadata_store = MetadataStore()
@@ -187,6 +218,45 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert review_json["resolved_model"] == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.review.resolved_model == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.retry_gate.reason is None
+
+
+def test_reviewer_worker_writes_human_qa_checklist_on_pass(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-pass-qa-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    qa_finalize = reviewer_cycle_responses(
+        markdown="Verdict: PASS\n\n## Acceptance Criteria Check\nReady",
+    )
+    finalize_payload = json.loads(qa_finalize[-1])
+    finalize_payload["human_qa_checklist"] = [
+        {
+            "id": "qa-main-flow",
+            "title": "Verify main flow",
+            "steps": ["Open the changed flow", "Confirm the requested behavior"],
+            "expected_result": "The main flow works for a human verifier.",
+            "required": True,
+        }
+    ]
+    qa_finalize[-1] = json.dumps(finalize_payload)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(qa_finalize),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.COMPLETED_REVIEWS
+    assert updated.metadata.human_verification.qa_path == "HUMAN-QA-001.md"
+    assert updated.metadata.human_verification.qa_cycle == 1
+    assert updated.metadata.human_verification.qa_items[0].id == "qa-main-flow"
+    assert updated.metadata.human_verification.qa_items[0].checked is False
+    assert "Verify main flow" in (updated.task_dir / "HUMAN-QA-001.md").read_text()
 
 
 def test_reviewer_worker_returns_to_todos_when_target_base_branch_advances(configured_paths):

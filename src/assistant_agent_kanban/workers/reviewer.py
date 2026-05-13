@@ -5,14 +5,14 @@ import json
 import re
 from datetime import timezone, datetime
 from pathlib import Path
-from typing import Literal, TypedDict, cast
+from typing import Literal, NotRequired, TypedDict, cast
 
 from ..assistant_adapter import AssistantAdapter
 from ..enums import TaskState
 from ..exceptions import TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..language import generation_language_code, generation_language_name
-from ..models import RunResult, TaskErrorInfo
+from ..models import HumanQaChecklistItem, RunResult, TaskErrorInfo
 from ..models import reset_review_loop_tracking
 from ..repo_branches import describe_target_repo_dirty_drift, describe_target_repo_head_drift, snapshot_target_repo_state
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
@@ -27,6 +27,7 @@ class ReviewFinalizeArtifact(TypedDict):
     verdict: Literal["PASS", "NEEDS_CHANGES"]
     primary_blocker: str | None
     markdown: str
+    human_qa_checklist: NotRequired[list[object]]
 
 
 class ReviewerWorker(WorkerBase):
@@ -189,6 +190,7 @@ class ReviewerWorker(WorkerBase):
                         done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=drift_note)
                         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                         return True
+                    self._write_human_qa_checklist(reviewing.task_dir, reviewing.metadata, artifact)
                     reset_review_loop_tracking(reviewing.metadata.review)
                     clear_retry_gate(reviewing.metadata)
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
@@ -331,6 +333,7 @@ class ReviewerWorker(WorkerBase):
                     done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=drift_note)
                     await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                     return True
+                self._write_human_qa_checklist(reviewing.task_dir, reviewing.metadata, artifact)
                 reset_review_loop_tracking(reviewing.metadata.review)
                 clear_retry_gate(reviewing.metadata)
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
@@ -598,14 +601,158 @@ class ReviewerWorker(WorkerBase):
                 "",
                 "# Finalize Review Artifact",
                 "Return only valid JSON with this exact shape:",
-                '{"schema_version":1,"artifact_type":"review","task_id":"...","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\n## Acceptance Criteria Check\\n..."}',
+                '{"schema_version":1,"artifact_type":"review","task_id":"...","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\n## Acceptance Criteria Check\\n...","human_qa_checklist":[{"id":"qa-001","title":"Verify primary happy path","steps":["Open the changed UI or command","Exercise the main request flow"],"expected_result":"The requested behavior works without regressions.","required":true}]}',
                 "Allowed verdict values are PASS or NEEDS_CHANGES.",
                 "Set `primary_blocker` to null for PASS.",
                 "For NEEDS_CHANGES, set `primary_blocker` to a stable short kebab-case key for the main remaining blocker (example: changed-scope-coverage).",
                 "The markdown field must contain the complete final review markdown.",
+                "For PASS only, include `human_qa_checklist`: 3-7 concrete human QA test cases with stable ids, title, ordered steps, expected_result, and required boolean.",
             ]
         )
         return self.build_prompt(instructions, metadata, phase="reviewer")
+
+    def _write_human_qa_checklist(self, task_dir: Path, metadata, artifact: ReviewFinalizeArtifact) -> None:
+        cycle = metadata.cycle
+        items = self._human_qa_items_from_artifact(artifact)
+        if not items:
+            items = self._fallback_human_qa_items(task_dir, artifact)
+        metadata.human_verification.qa_cycle = cycle
+        metadata.human_verification.qa_path = f"HUMAN-QA-{cycle:03d}.md"
+        metadata.human_verification.qa_items = items
+        (task_dir / metadata.human_verification.qa_path).write_text(self._render_human_qa_markdown(metadata, items))
+
+    def _human_qa_items_from_artifact(self, artifact: ReviewFinalizeArtifact) -> list[HumanQaChecklistItem]:
+        raw_items = artifact.get("human_qa_checklist")
+        if not isinstance(raw_items, list):
+            return []
+        items: list[HumanQaChecklistItem] = []
+        seen_ids: set[str] = set()
+        for index, raw_item in enumerate(raw_items, start=1):
+            if not isinstance(raw_item, dict):
+                continue
+            title = self._clean_single_line(raw_item.get("title"))
+            expected_result = self._clean_single_line(raw_item.get("expected_result"))
+            raw_steps = raw_item.get("steps")
+            if not title or not expected_result or not isinstance(raw_steps, list):
+                continue
+            steps = [self._clean_single_line(step) for step in raw_steps]
+            clean_steps = [step for step in steps if step]
+            if not clean_steps:
+                continue
+            item_id = self._stable_qa_item_id(raw_item.get("id"), index=index, seen_ids=seen_ids)
+            seen_ids.add(item_id)
+            items.append(
+                HumanQaChecklistItem(
+                    id=item_id,
+                    title=title,
+                    steps=clean_steps,
+                    expected_result=expected_result,
+                    required=self._parse_human_qa_required(raw_item.get("required", True)),
+                )
+            )
+        return items
+
+    def _parse_human_qa_required(self, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized == "false":
+                return False
+            if normalized == "true":
+                return True
+        return True
+
+    def _fallback_human_qa_items(self, task_dir: Path, artifact: ReviewFinalizeArtifact) -> list[HumanQaChecklistItem]:
+        request_summary = self._first_meaningful_line(task_dir / "REQUEST.md") or "the original request"
+        plan_summary = self._first_meaningful_line(task_dir / "PLAN.md") or "the approved plan"
+        review_summary = self._first_meaningful_text(cast(str, artifact["markdown"])) or "the passed review notes"
+        return [
+            HumanQaChecklistItem(
+                id="qa-001",
+                title="Verify the requested behavior",
+                steps=[
+                    f"Review the request context: {request_summary}",
+                    "Exercise the primary user or developer flow affected by the implementation.",
+                ],
+                expected_result="The implemented behavior satisfies the original request without visible errors.",
+                required=True,
+            ),
+            HumanQaChecklistItem(
+                id="qa-002",
+                title="Confirm plan acceptance criteria",
+                steps=[
+                    f"Compare the result against the approved plan: {plan_summary}",
+                    "Check each acceptance criterion or planned deliverable in the target repository.",
+                ],
+                expected_result="The completed implementation matches the approved plan and no planned scope is missing.",
+                required=True,
+            ),
+            HumanQaChecklistItem(
+                id="qa-003",
+                title="Re-check reviewer pass notes",
+                steps=[
+                    f"Read the PASS review summary: {review_summary}",
+                    "Manually inspect any areas the reviewer called out as important or risky.",
+                ],
+                expected_result="The human verification result agrees with the AI reviewer PASS verdict.",
+                required=True,
+            ),
+        ]
+
+    def _render_human_qa_markdown(self, metadata, items: list[HumanQaChecklistItem]) -> str:
+        lines = [
+            "# Human QA Checklist",
+            "",
+            f"- Task ID: `{metadata.task_id}`",
+            f"- Cycle: {metadata.cycle:03d}",
+            "- Source: Reviewer PASS handoff",
+            "",
+            "Use the dashboard QA checklist tab for interactive progress. This markdown is the durable handoff artifact.",
+            "",
+        ]
+        for item in items:
+            lines.extend(
+                [
+                    f"## {item.id}: {item.title}",
+                    f"- Required: {'yes' if item.required else 'no'}",
+                    "- Steps:",
+                ]
+            )
+            lines.extend(f"  {index}. {step}" for index, step in enumerate(item.steps, start=1))
+            lines.extend([f"- Expected result: {item.expected_result}", ""])
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _stable_qa_item_id(self, raw_id: object, *, index: int, seen_ids: set[str]) -> str:
+        candidate = self._clean_single_line(raw_id)
+        if candidate:
+            candidate = re.sub(r"[^a-zA-Z0-9_-]+", "-", candidate).strip("-").lower()
+        if not candidate:
+            candidate = f"qa-{index:03d}"
+        original = candidate
+        suffix = 2
+        while candidate in seen_ids:
+            candidate = f"{original}-{suffix}"
+            suffix += 1
+        return candidate
+
+    def _clean_single_line(self, value: object) -> str:
+        if not isinstance(value, str):
+            return ""
+        return " ".join(value.split()).strip()
+
+    def _first_meaningful_line(self, path: Path) -> str | None:
+        if not path.exists():
+            return None
+        return self._first_meaningful_text(path.read_text())
+
+    def _first_meaningful_text(self, text: str) -> str | None:
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or line.startswith("-") or line.startswith("Verdict:"):
+                continue
+            return line[:160]
+        return None
 
     def _parse_finalize_artifact(self, assistant_text: str) -> ReviewFinalizeArtifact | None:
         payload = self._extract_finalize_payload(assistant_text)
@@ -622,7 +769,7 @@ class ReviewerWorker(WorkerBase):
         if not isinstance(markdown, str) or not markdown.strip():
             return None
         primary_blocker = self._normalize_primary_blocker(payload.get("primary_blocker"), verdict=verdict)
-        return {
+        parsed: ReviewFinalizeArtifact = {
             "schema_version": payload.get("schema_version", 1),
             "artifact_type": "review",
             "task_id": str(payload.get("task_id", "")),
@@ -631,6 +778,10 @@ class ReviewerWorker(WorkerBase):
             "primary_blocker": primary_blocker,
             "markdown": markdown.strip(),
         }
+        raw_checklist = payload.get("human_qa_checklist")
+        if isinstance(raw_checklist, list):
+            parsed["human_qa_checklist"] = raw_checklist
+        return parsed
 
     def _extract_finalize_payload(self, assistant_text: str) -> object | None:
         candidates = [assistant_text.strip()]
@@ -648,11 +799,7 @@ class ReviewerWorker(WorkerBase):
         return None
 
     def _extract_relaxed_finalize_payload(self, candidate: str) -> dict[str, object] | None:
-        match = re.match(
-            r'^\{"schema_version":(?P<schema_version>\d+),"artifact_type":"(?P<artifact_type>[^"]+)","task_id":"(?P<task_id>[^"]*)","cycle":(?P<cycle>\d+),"verdict":"(?P<verdict>PASS|NEEDS_CHANGES)","primary_blocker":(?P<primary_blocker>null|"[^"]*"),"markdown":"(?P<markdown>.*)"\}$',
-            candidate,
-            flags=re.DOTALL,
-        )
+        match = self._match_relaxed_finalize_payload(candidate, with_checklist=True) or self._match_relaxed_finalize_payload(candidate, with_checklist=False)
         if match is None:
             return None
         raw_primary_blocker = match.group("primary_blocker")
@@ -665,7 +812,7 @@ class ReviewerWorker(WorkerBase):
             except json.JSONDecodeError:
                 return None
         markdown = self._normalize_relaxed_json_string(match.group("markdown"))
-        return {
+        payload: dict[str, object] = {
             "schema_version": int(match.group("schema_version")),
             "artifact_type": match.group("artifact_type"),
             "task_id": match.group("task_id"),
@@ -674,6 +821,23 @@ class ReviewerWorker(WorkerBase):
             "primary_blocker": primary_blocker,
             "markdown": markdown,
         }
+        raw_checklist = match.groupdict().get("human_qa_checklist")
+        if raw_checklist is not None:
+            try:
+                checklist = json.loads(raw_checklist)
+            except json.JSONDecodeError:
+                return None
+            if isinstance(checklist, list):
+                payload["human_qa_checklist"] = checklist
+        return payload
+
+    def _match_relaxed_finalize_payload(self, candidate: str, *, with_checklist: bool) -> re.Match[str] | None:
+        suffix = r',"human_qa_checklist":(?P<human_qa_checklist>\[.*\])' if with_checklist else ""
+        return re.match(
+            r'^\{"schema_version":(?P<schema_version>\d+),"artifact_type":"(?P<artifact_type>[^"]+)","task_id":"(?P<task_id>[^"]*)","cycle":(?P<cycle>\d+),"verdict":"(?P<verdict>PASS|NEEDS_CHANGES)","primary_blocker":(?P<primary_blocker>null|"[^"]*"),"markdown":"(?P<markdown>.*)"' + suffix + r'\}$',
+            candidate,
+            flags=re.DOTALL,
+        )
 
     def _normalize_relaxed_json_string(self, value: str) -> str:
         return (

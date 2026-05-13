@@ -206,12 +206,26 @@ class RequestInfo(BaseModel):
     plan_auto_approve: bool = False
 
 
+class HumanQaChecklistItem(BaseModel):
+    id: str
+    title: str
+    steps: list[str] = Field(default_factory=list)
+    expected_result: str
+    required: bool = True
+    checked: bool = False
+    skipped: bool = False
+    note: str | None = None
+
+
 class HumanVerificationInfo(BaseModel):
     note_path: str | None = None
     comments_path: str | None = None
     note_markdown: str = ""
     viewed_cycle: int | None = None
     viewed_files: dict[str, bool] = Field(default_factory=dict)
+    qa_cycle: int | None = None
+    qa_path: str | None = None
+    qa_items: list[HumanQaChecklistItem] = Field(default_factory=list)
 
 
 class TargetRepoInfo(BaseModel):
@@ -448,6 +462,11 @@ class HumanReviewState(BaseModel):
     note_markdown: str = ""
     reviewer_qa_path: str | None = None
     reviewer_qa_markdown: str = ""
+    qa_path: str | None = None
+    qa_items: list[HumanQaChecklistItem] = Field(default_factory=list)
+    qa_total_count: int = 0
+    qa_required_count: int = 0
+    qa_completed_required_count: int = 0
     total_comment_count: int = 0
     unresolved_comment_count: int = 0
     historical_comment_count: int = 0
