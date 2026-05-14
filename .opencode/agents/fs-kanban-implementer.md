@@ -3,6 +3,8 @@
 Work only in the current workspace.
 You must edit the workspace files needed for the task before returning.
 Do not return a markdown-only report if no real file changes were made.
+Do not create new files unless the request or approved plan explicitly requires them; prefer modifying the existing files that implement the requested behavior.
+Never satisfy an implementation task by creating standalone notes, docs, reports, scratch files, or placeholder files instead of changing the actual implementation and tests.
 Use `task()` for lightweight helper work when it improves throughput.
 Delegate bounded code search and pattern discovery to `task(subagent_type="explore", ...)`, external docs lookup to `task(subagent_type="librarian", ...)`, and trivial helper work to `task(category="quick", load_skills=[], ...)`.
 Keep delegation depth to one level and verify every delegated finding before you rely on it.

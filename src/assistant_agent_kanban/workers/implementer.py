@@ -118,13 +118,22 @@ class ImplementerWorker(WorkerBase):
                     done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=drift_note)
                     await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                     return True
-                has_changes = self.workspace_has_changes(workspace_repo)
+                changes = self.workspace_changes(workspace_repo)
+                has_changes = bool(changes)
+                has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, changes)
                 has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
-                success = result.ok and has_changes and not has_local_commits
+                success = result.ok and has_changes and has_substantive_changes and not has_local_commits
                 implementing.metadata.implementation.iteration = implementing.metadata.cycle
                 implementing.metadata.implementation.last_result = "success" if success else "failure"
                 if not has_changes:
                     implementing.metadata.errors.append(TaskErrorInfo(code="implementation-no-changes", message="implementer produced no workspace changes"))
+                if has_changes and not has_substantive_changes:
+                    implementing.metadata.errors.append(
+                        TaskErrorInfo(
+                            code="implementation-non-code-changes",
+                            message="implementer changed only docs, notes, reports, or other non-implementation artifacts",
+                        )
+                    )
                 if has_local_commits:
                     implementing.metadata.errors.append(TaskErrorInfo(code="implementation-local-commits", message="implementer must not create local git commits"))
                 if not result.ok:
@@ -146,6 +155,9 @@ class ImplementerWorker(WorkerBase):
                     elif not has_changes:
                         apply_retry_gate(implementing.metadata, reason="implementation-no-changes")
                         note = "implementation produced no workspace changes"
+                    elif not has_substantive_changes:
+                        apply_retry_gate(implementing.metadata, reason="implementation-non-code-changes")
+                        note = "implementation changed only non-implementation artifacts"
                     elif has_local_commits:
                         apply_retry_gate(implementing.metadata, reason="implementation-local-commits")
                         note = "implementation created local commits"
@@ -217,6 +229,15 @@ class ImplementerWorker(WorkerBase):
                 stream_stderr_to_log=True,
             )
 
+            implementing.metadata.implementation.resolved_model = live_result.resolved_model or handshake_result.resolved_model
+            implementing.metadata.implementation.session_id = live_result.session_id or active_session_id
+            implementing.metadata.implementation.last_run_tokens = live_result.total_tokens
+            implementing.metadata.implementation.session_tokens = self.next_session_token_total(
+                reused_session_id=active_session_id,
+                returned_session_id=live_result.session_id,
+                prior_session_tokens=implementing.metadata.implementation.session_tokens,
+                run_tokens=live_result.total_tokens,
+            )
             implementing.metadata.cycle += 1
             drift_note = self._target_repo_state_drift_note(implementing.metadata)
             if drift_note is not None:
@@ -229,9 +250,11 @@ class ImplementerWorker(WorkerBase):
                 done = self.transitions.move(implementing, TaskState.TODOS, by=self.worker_name, note=drift_note)
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
-            has_changes = self.workspace_has_changes(workspace_repo)
+            changes = self.workspace_changes(workspace_repo)
+            has_changes = bool(changes)
+            has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, changes)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
-            success = live_result.ok and has_changes and not has_local_commits
+            success = live_result.ok and has_changes and has_substantive_changes and not has_local_commits
             implementing.metadata.implementation.iteration = implementing.metadata.cycle
             implementing.metadata.implementation.last_result = "success" if success else "failure"
 
@@ -242,6 +265,13 @@ class ImplementerWorker(WorkerBase):
             if has_local_commits:
                 implementing.metadata.errors.append(
                     TaskErrorInfo(code="implementation-local-commits", message="implementer must not create local git commits")
+                )
+            if has_changes and not has_substantive_changes:
+                implementing.metadata.errors.append(
+                    TaskErrorInfo(
+                        code="implementation-non-code-changes",
+                        message="implementer changed only docs, notes, reports, or other non-implementation artifacts",
+                    )
                 )
             if not live_result.ok:
                 implementing.metadata.errors.append(
@@ -322,6 +352,9 @@ class ImplementerWorker(WorkerBase):
                 if not has_changes:
                     apply_retry_gate(implementing.metadata, reason="implementation-no-changes")
                     note = "implementation produced no workspace changes"
+                elif not has_substantive_changes:
+                    apply_retry_gate(implementing.metadata, reason="implementation-non-code-changes")
+                    note = "implementation changed only non-implementation artifacts"
                 elif has_local_commits:
                     apply_retry_gate(implementing.metadata, reason="implementation-local-commits")
                     note = "implementation created local commits"
@@ -408,6 +441,98 @@ class ImplementerWorker(WorkerBase):
         if availability_error is not None:
             raise AdapterRunError(f"{backend} backend is unavailable for implementer: {availability_error}")
         return adapter
+
+    def _has_allowed_implementation_changes(self, task_dir: Path, changes) -> bool:
+        substantive_changes = [change for change in changes if not self._is_non_implementation_artifact(change.path)]
+        if not substantive_changes:
+            return self._task_allows_docs_only_changes(task_dir)
+        if all(change.is_new_file for change in substantive_changes):
+            return self._task_allows_new_files(task_dir)
+        return True
+
+    def _is_non_implementation_artifact(self, path: Path) -> bool:
+        normalized = path.as_posix().strip("/")
+        docs_root = self.config.target_repo_docs_root.strip().strip("/")
+        if docs_root and (normalized == docs_root or normalized.startswith(f"{docs_root}/")):
+            return True
+        return path.suffix.lower() in {".adoc", ".markdown", ".md", ".rst"}
+
+    def _task_allows_docs_only_changes(self, task_dir: Path) -> bool:
+        task_text = self._task_intent_text(task_dir)
+        docs_terms = (
+            "update documentation",
+            "write documentation",
+            "create documentation",
+            "readme",
+            "문서 작성",
+            "문서 수정",
+            "문서 업데이트",
+            "문서를 작성",
+            "문서를 수정",
+            "마크다운 작성",
+            "마크다운 문서",
+        )
+        return self._contains_positive_intent(task_text, docs_terms)
+
+    def _task_allows_new_files(self, task_dir: Path) -> bool:
+        task_text = self._task_intent_text(task_dir)
+        new_file_terms = (
+            "create a new file",
+            "create new files",
+            "add a new file",
+            "add new files",
+            "add tests",
+            "add test",
+            "새 파일을 생성",
+            "신규 파일을 생성",
+            "새 파일을 추가",
+            "신규 파일을 추가",
+            "테스트를 추가",
+        )
+        return self._contains_positive_intent(task_text, new_file_terms)
+
+    def _contains_positive_intent(self, task_text: str, terms: tuple[str, ...]) -> bool:
+        negation_markers = (
+            "do not",
+            "don't",
+            "does not",
+            "without",
+            "must not",
+            "not ",
+            "no ",
+            "금지",
+            "하지 않는다",
+            "하지 않",
+            "하지 말",
+            "하지말",
+            "생성하지",
+            "추가하지",
+            "수정하지",
+            "없이",
+            "아니",
+        )
+        for term in terms:
+            lowered_term = term.lower()
+            start = 0
+            while True:
+                index = task_text.find(lowered_term, start)
+                if index == -1:
+                    break
+                window_start = max(0, index - 48)
+                window_end = min(len(task_text), index + len(lowered_term) + 48)
+                context = task_text[window_start:window_end]
+                if not any(marker in context for marker in negation_markers):
+                    return True
+                start = index + len(lowered_term)
+        return False
+
+    def _task_intent_text(self, task_dir: Path) -> str:
+        parts: list[str] = []
+        for name in ("REQUEST.md", "PLAN.md"):
+            path = task_dir / name
+            if path.exists():
+                parts.append(path.read_text(errors="replace"))
+        return "\n".join(parts).lower()
 
     def _opencode_include_directories(self, run_config, metadata, workspace_repo: Path) -> list[Path] | None:
         if run_config.backend_for_role("implementer") != "opencode":

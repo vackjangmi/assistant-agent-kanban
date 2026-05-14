@@ -16,6 +16,7 @@ from assistant_agent_kanban.models import RunResult, utc_now
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.workers.base import WorkerBase
 from assistant_agent_kanban.workspace_manager import WorkspaceManager
 from assistant_agent_kanban.workers.implementer import ImplementerWorker
 
@@ -788,6 +789,245 @@ def test_implementer_worker_returns_to_todos_when_no_workspace_changes(configure
     assert any(error.code == "implementation-no-changes" for error in updated.metadata.errors)
     assert updated.metadata.retry_gate.reason == "implementation-no-changes"
     assert updated.metadata.retry_gate.not_before is not None
+
+
+def test_worker_base_parses_workspace_changes_without_truncating_paths(configured_paths):
+    config, repo_root, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    worker = WorkerBase(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        TransitionManager(config, metadata_store, scanner, locks),
+        EventBus(),
+    )
+
+    (repo_root / "app.txt").write_text("modified\n")
+
+    changes = worker.workspace_changes(repo_root)
+
+    assert [change.path for change in changes] == [Path("app.txt")]
+    assert changes[0].index_status == " "
+    assert changes[0].worktree_status == "M"
+    assert changes[0].is_new_file is False
+
+
+def test_worker_base_parses_renamed_workspace_changes(configured_paths):
+    config, repo_root, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    worker = WorkerBase(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        TransitionManager(config, metadata_store, scanner, locks),
+        EventBus(),
+    )
+    original = repo_root / "old name.txt"
+    original.write_text("old\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "old name.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "add old name"], check=True, capture_output=True, text=True)
+
+    subprocess.run(["git", "-C", str(repo_root), "mv", "old name.txt", "new name.txt"], check=True, capture_output=True, text=True)
+
+    changes = worker.workspace_changes(repo_root)
+
+    assert [change.path for change in changes] == [Path("new name.txt")]
+    assert changes[0].index_status == "R"
+    assert changes[0].is_new_file is False
+
+
+def test_implementer_worker_rejects_docs_only_workspace_changes(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-docs-only-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("implement this without creating docs\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def create_docs_artifact(cwd):
+        docs_dir = cwd / "docs" / "kanban-agent" / "2026" / "05" / "14"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "implementer-plan.md").write_text("# Plan\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=create_docs_artifact),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.cycle == 1
+    assert updated.metadata.implementation.iteration == 1
+    assert updated.metadata.implementation.last_result == "failure"
+    assert any(error.code == "implementation-non-code-changes" for error in updated.metadata.errors)
+    assert updated.metadata.retry_gate.reason == "implementation-non-code-changes"
+    assert updated.metadata.retry_gate.not_before is not None
+    assert not (updated.task_dir / "WORK-001.md").exists()
+
+
+def test_implementer_worker_rejects_docs_only_when_docs_intent_is_negated(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-negated-docs-task", body="Do not update documentation. Modify the existing implementation instead.")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("README 문서를 수정하지 않는다. 기존 구현을 수정한다.\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def create_docs_artifact(cwd):
+        (cwd / "README.md").write_text("# Wrong docs-only change\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=create_docs_artifact),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.implementation.last_result == "failure"
+    assert updated.metadata.retry_gate.reason == "implementation-non-code-changes"
+
+
+def test_implementer_worker_allows_explicit_docs_only_workspace_changes(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-explicit-docs-task", body="README 문서를 수정한다.")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("README 문서 수정\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def create_readme(cwd):
+        (cwd / "README.md").write_text("# Updated docs\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=create_readme),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.WAITING_REVIEWS
+    assert updated.metadata.implementation.last_result == "success"
+    assert updated.metadata.retry_gate.reason is None
+    assert (updated.task_dir / "WORK-001.md").exists()
+
+
+def test_implementer_worker_rejects_unrequested_new_file_only_changes(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-unrequested-new-file-task", body="기존 구현을 수정한다.")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("기존 구현을 수정한다. 새 파일 생성은 하지 않는다.\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def create_new_source(cwd):
+        src_dir = cwd / "src"
+        src_dir.mkdir()
+        (src_dir / "new_feature.py").write_text("print('new')\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=create_new_source),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.implementation.last_result == "failure"
+    assert any(error.code == "implementation-non-code-changes" for error in updated.metadata.errors)
+    assert updated.metadata.retry_gate.reason == "implementation-non-code-changes"
+
+
+def test_implementer_worker_rejects_new_file_only_when_new_file_intent_is_negated(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "implement-negated-new-file-task", body="Do not add new files. Update the existing implementation.")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("새 파일을 추가하지 말고 기존 구현을 수정한다.\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def create_new_source(cwd):
+        src_dir = cwd / "src"
+        src_dir.mkdir()
+        (src_dir / "new_feature.py").write_text("print('new')\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=create_new_source),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.implementation.last_result == "failure"
+    assert updated.metadata.retry_gate.reason == "implementation-non-code-changes"
 
 
 def test_implementer_worker_retries_interrupted_run_once(configured_paths):

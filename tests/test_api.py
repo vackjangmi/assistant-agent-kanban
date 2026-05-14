@@ -3456,6 +3456,7 @@ def test_api_creates_default_scope_sections_when_blank(configured_paths, tmp_pat
     assert "## Out of Scope" in request_markdown
     assert f"Do not modify files outside `{target_repo}`." in request_markdown
     assert "Do not modify files under `records/kanban-docs` unless the request explicitly asks for it." in request_markdown
+    assert "Do not create new files unless the request or approved plan explicitly asks for them." in request_markdown
     assert "## Acceptance Criteria" in request_markdown
     assert "Add tests for every case introduced by the code added or changed for this request, and keep test coverage for that changed scope at 100%." in request_markdown
     assert "This does not require 100% coverage across the entire repository; the full test suite must still pass separately from the changed-scope coverage target." in request_markdown

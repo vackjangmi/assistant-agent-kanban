@@ -10,6 +10,7 @@ REVIEW_REWORK_BACKSTOP_COOLDOWN = timedelta(hours=1)
 IMMEDIATE_GATE_REASONS = {
     "planner-empty-artifact",
     "implementation-no-changes",
+    "implementation-non-code-changes",
     "implementation-base-sync-conflict",
     "implementation-local-commits",
     "implementation-failed",

@@ -5,6 +5,7 @@ import hashlib
 import json
 import subprocess
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, cast
 
@@ -19,6 +20,17 @@ from ..assistant_adapter import AssistantAdapter
 from ..models import RunResult, TaskMetadata, WorkerEvent
 from ..scanner import KanbanScanner
 from ..transitions import TransitionManager
+
+
+@dataclass(frozen=True)
+class WorkspaceChange:
+    path: Path
+    index_status: str
+    worktree_status: str
+
+    @property
+    def is_new_file(self) -> bool:
+        return self.index_status in {"?", "A"} or self.worktree_status in {"?", "A"}
 
 
 class WorkerBase:
@@ -66,6 +78,7 @@ class WorkerBase:
         instructions = [
             f"You are the fs-kanban {phase} worker.",
             f"Return the markdown artifact in {requested_language}.",
+            "Return that artifact as your final assistant response, not as a workspace file.",
             "Translate headings and narrative content to that language while preserving the required structure and semantics from the agent contract.",
         ]
         if phase == "implementer":
@@ -91,6 +104,42 @@ class WorkerBase:
         if result.returncode != 0:
             return False
         return bool(result.stdout.strip())
+
+    def workspace_changed_paths(self, workspace_repo: Path) -> list[Path]:
+        return [change.path for change in self.workspace_changes(workspace_repo)]
+
+    def workspace_changes(self, workspace_repo: Path) -> list[WorkspaceChange]:
+        result = subprocess.run(
+            ["git", "-C", str(workspace_repo), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return []
+        changes: list[WorkspaceChange] = []
+        entries = [entry for entry in result.stdout.split(b"\0") if entry]
+        index = 0
+        while index < len(entries):
+            entry = entries[index]
+            if len(entry) < 4:
+                index += 1
+                continue
+            index_status = chr(entry[0])
+            worktree_status = chr(entry[1])
+            path_text = entry[3:].decode("utf-8", errors="replace")
+            if path_text:
+                changes.append(
+                    WorkspaceChange(
+                        path=Path(path_text),
+                        index_status=index_status,
+                        worktree_status=worktree_status,
+                    )
+                )
+            if index_status in {"R", "C"} or worktree_status in {"R", "C"}:
+                index += 2
+            else:
+                index += 1
+        return changes
 
     def workspace_has_local_commits(self, workspace_repo: Path, base_branch: str) -> bool:
         result = subprocess.run(

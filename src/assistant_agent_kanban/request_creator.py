@@ -65,6 +65,7 @@ def build_default_scope_sections_for_language(target_repo_root: str | Path, *, l
         out_of_scope = [
             f"`{target_path}` 밖의 파일은 수정하지 않는다.",
             f"`{docs_root}` 하위 문서는 요청에서 명시하지 않으면 수정하지 않는다.",
+            "요청이나 승인된 계획에서 명시하지 않은 신규 파일은 생성하지 않는다.",
             "관련 없는 앱, 패키지, 워크스페이스 전체 설정은 변경하지 않는다.",
             "요청에서 명시하지 않으면 배포나 인프라 변경은 추가하지 않는다.",
         ]
@@ -77,6 +78,7 @@ def build_default_scope_sections_for_language(target_repo_root: str | Path, *, l
     out_of_scope = [
         f"Do not modify files outside `{target_path}`.",
         f"Do not modify files under `{docs_root}` unless the request explicitly asks for it.",
+        "Do not create new files unless the request or approved plan explicitly asks for them.",
         "Do not change unrelated apps, packages, or workspace-wide configuration.",
         "Do not add deployment or infrastructure changes unless the request explicitly asks for them.",
     ]
