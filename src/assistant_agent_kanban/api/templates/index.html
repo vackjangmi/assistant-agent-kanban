@@ -1330,6 +1330,15 @@
     body[data-theme="dark"] .request-draft-suggestion { border-color: var(--review-border); background: linear-gradient(180deg, rgba(31, 43, 54, 0.98), rgba(23, 32, 41, 0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
     .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
     .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
+    .approval-gate-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid rgba(163,58,42,0.2); background: linear-gradient(135deg, rgba(255,249,239,0.98), rgba(163,58,42,0.08)); color: var(--text); box-shadow: 0 12px 28px rgba(24,32,38,0.08); }
+    .approval-gate-notice[hidden] { display: none; }
+    .approval-gate-copy { display: grid; gap: 3px; min-width: 0; }
+    .approval-gate-copy strong { color: var(--accent-strong); font-size: 0.95rem; }
+    .approval-gate-copy span { color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+    .approval-gate-notice button { white-space: nowrap; }
+    body[data-theme="dark"] .approval-gate-notice { border-color: rgba(240,148,134,0.28); background: linear-gradient(135deg, rgba(56,47,38,0.98), rgba(102,44,38,0.28)); box-shadow: 0 14px 34px rgba(0,0,0,0.28); }
+    body[data-theme="dark"] .approval-gate-copy strong { color: #f2cfaa; }
+    body[data-theme="dark"] .approval-gate-copy span { color: #c4d0da; }
     .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
     .approval-choice-panel { width: min(860px, 100%); }
     .approval-choice-shell { display: grid; gap: 14px; }
@@ -2011,6 +2020,7 @@
         </div>
       </div>
       <div id="task-modal-error" class="form-error" hidden></div>
+      <div id="task-approval-gate-notice" class="approval-gate-notice" role="status" aria-live="polite" hidden></div>
       <div class="task-tabs">
         <button type="button" id="task-tab-overview" class="active">Overview</button>
         <button type="button" id="task-tab-logs" hidden>Logs</button>
@@ -2504,6 +2514,7 @@
     const taskChangedFilesPaneDefaultWidth = 260;
     const taskChangedFilesPaneMinWidth = 220;
     const taskModalError = document.getElementById('task-modal-error');
+    const taskApprovalGateNotice = document.getElementById('task-approval-gate-notice');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
     const taskTabLogs = document.getElementById('task-tab-logs');
@@ -3164,6 +3175,14 @@
         qaChecklistSaveError: 'Failed to update QA checklist.',
         approvalBlockedQaOne: 'Approval is blocked until {count} required QA checklist item is completed.',
         approvalBlockedQaMany: 'Approval is blocked until {count} required QA checklist items are completed.',
+        approvalGateQaTitle: 'Final approval is waiting on QA',
+        approvalGateQaBodyOne: 'Complete or skip the remaining required QA item, then the Approve button will unlock automatically.',
+        approvalGateQaBodyMany: 'Complete or skip the remaining {count} required QA items, then the Approve button will unlock automatically.',
+        approvalGateQaAction: 'Open QA checklist',
+        approvalGateRetryTitle: 'Verification apply must finish first',
+        approvalGateRetryBody: 'Run Retry apply before final approval so the target repository has the reviewed patch.',
+        approvalGateReviewTitle: 'Review feedback is still open',
+        approvalGateReviewBody: 'Clear the request-change note or inline comments if you want to approve, or use Request changes to send the feedback back to implementation.',
         approvalChoiceTitle: 'Finalize review',
         approvalChoiceDescription: 'Choose how this reviewed task should be completed in the target repository.',
         approvalChoiceCopyTitle: 'Final approval mode',
@@ -3233,6 +3252,14 @@
         qaChecklistSaveError: 'QA 체크리스트를 저장하지 못했습니다.',
         approvalBlockedQaOne: '필수 QA 체크리스트 {count}개가 남아 있어 승인이 막혀 있습니다.',
         approvalBlockedQaMany: '필수 QA 체크리스트 {count}개가 남아 있어 승인이 막혀 있습니다.',
+        approvalGateQaTitle: '최종 승인 전에 QA 확인이 필요합니다',
+        approvalGateQaBodyOne: '남은 필수 QA 항목 1개를 확인하거나 스킵하면 승인 버튼이 자동으로 열립니다.',
+        approvalGateQaBodyMany: '남은 필수 QA 항목 {count}개를 확인하거나 스킵하면 승인 버튼이 자동으로 열립니다.',
+        approvalGateQaAction: 'QA 체크리스트 열기',
+        approvalGateRetryTitle: '먼저 검증 적용을 완료해야 합니다',
+        approvalGateRetryBody: '최종 승인 전에 Retry apply를 실행해 검토된 패치가 대상 저장소에 적용되도록 해주세요.',
+        approvalGateReviewTitle: '아직 리뷰 피드백이 남아 있습니다',
+        approvalGateReviewBody: '승인하려면 재요청 노트나 줄 코멘트를 비워야 합니다. 피드백을 반영시키려면 재요청을 누르세요.',
         approvalChoiceTitle: '리뷰 최종 확정',
         approvalChoiceDescription: '검토가 끝난 이 작업을 대상 저장소에서 어떤 방식으로 마무리할지 선택하세요.',
         approvalChoiceCopyTitle: '최종 승인 방식',
@@ -6886,6 +6913,23 @@
       return { total: items.length, required: requiredItems.length, completedRequired: completedRequired.length };
     }
 
+    function setApprovalGateNotice({ title = '', body = '', actionLabel = '', action = '' } = {}) {
+      if (!taskApprovalGateNotice) return;
+      if (!title && !body) {
+        taskApprovalGateNotice.hidden = true;
+        taskApprovalGateNotice.innerHTML = '';
+        return;
+      }
+      taskApprovalGateNotice.hidden = false;
+      taskApprovalGateNotice.innerHTML = `
+        <div class="approval-gate-copy">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(body)}</span>
+        </div>
+        ${actionLabel && action ? `<button type="button" class="accent-button" data-approval-gate-action="${escapeHtml(action)}">${escapeHtml(actionLabel)}</button>` : ''}
+      `;
+    }
+
     function renderQaChecklistPanel() {
       const state = activeTaskDetail?.metadata?.state || '';
       const canToggle = state === 'human-verifying' && !taskDetailStale;
@@ -7949,7 +7993,10 @@
       taskHumanReviewPanel.hidden = !canVerify;
       requestChangesShell.hidden = !canVerify;
       approveHumanReviewShell.hidden = !canVerify;
-      if (!canVerify) return;
+      if (!canVerify) {
+        setApprovalGateNotice();
+        return;
+      }
       taskHumanReviewNoteStatus.textContent = humanReviewNoteDirty() ? translateHumanReview('noteSaving') : translateHumanReview('noteStatus');
       saveHumanReviewNoteButton.disabled = taskDetailStale || !humanReviewNoteDirty();
       retryVerificationApplyButton.disabled = taskDetailStale || integrationApplied;
@@ -7986,6 +8033,28 @@
       taskHumanReviewApprovalStatus.hidden = !approvalReason;
       taskHumanReviewApprovalStatus.textContent = approvalReason || '';
       taskHumanReviewApprovalStatus.dataset.tone = approvalReason ? 'warning' : 'neutral';
+      if (taskDetailStale) {
+        setApprovalGateNotice();
+      } else if (!integrationApplied) {
+        setApprovalGateNotice({
+          title: translateHumanReview('approvalGateRetryTitle'),
+          body: translateHumanReview('approvalGateRetryBody'),
+        });
+      } else if (noteExists || currentCommentCount > 0) {
+        setApprovalGateNotice({
+          title: translateHumanReview('approvalGateReviewTitle'),
+          body: translateHumanReview('approvalGateReviewBody'),
+        });
+      } else if (incompleteQaCount > 0) {
+        setApprovalGateNotice({
+          title: translateHumanReview('approvalGateQaTitle'),
+          body: translateHumanReview(incompleteQaCount === 1 ? 'approvalGateQaBodyOne' : 'approvalGateQaBodyMany', { count: incompleteQaCount }),
+          actionLabel: translateHumanReview('approvalGateQaAction'),
+          action: 'qa-checklist',
+        });
+      } else {
+        setApprovalGateNotice();
+      }
     }
 
     function setReviewerQaTranscript(value, { preserveScroll = true } = {}) {
@@ -9681,6 +9750,12 @@
     taskTabQaChecklist.addEventListener('click', () => setTaskTab('qa-checklist'));
     taskTabReviewerQa.addEventListener('click', () => setTaskTab('reviewer-qa'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
+    taskApprovalGateNotice.addEventListener('click', (event) => {
+      const actionButton = event.target.closest('[data-approval-gate-action]');
+      if (!actionButton) return;
+      const action = actionButton.dataset.approvalGateAction;
+      if (action === 'qa-checklist') setTaskTab('qa-checklist');
+    });
     taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
     requestComposerTabFields.addEventListener('click', () => setRequestComposerTab('fields'));
     requestComposerTabAssistant.addEventListener('click', () => setRequestComposerTab('assistant'));

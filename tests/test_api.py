@@ -322,6 +322,30 @@ def test_api_creates_request_with_plan_auto_approve_flag(configured_paths):
     assert "plan_auto_approve: true" in (task.task_dir / "REQUEST.md").read_text()
 
 
+def test_api_creates_parseable_request_when_title_contains_colon(configured_paths):
+    config, _, _ = configured_paths
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Sonar cleanup: PAYMENT_ID constant",
+                "goal": "Fix the Sonar finding.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "feature/sonar-cleanup",
+                "plan_auto_approve": True,
+            },
+        )
+
+    assert response.status_code == 200
+    task = KanbanScanner(config).scan()[0]
+    assert task.metadata.title == "Sonar cleanup: PAYMENT_ID constant"
+    assert task.metadata.target.repo_root == str(config.repo_root.resolve())
+    assert task.metadata.target.base_branch == "feature/sonar-cleanup"
+    assert task.metadata.request.plan_auto_approve is True
+
+
 def test_api_drafts_request_without_creating_task_dirs(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -4727,6 +4751,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true" checked' in response.text
     assert '.field-checkbox-row input[type="checkbox"] { width: auto;' in response.text
     assert "task-modal" in response.text
+    assert 'id="task-approval-gate-notice"' in response.text
+    assert "approval-gate-notice" in response.text
+    assert "function setApprovalGateNotice" in response.text
+    assert "data-approval-gate-action" in response.text
     assert "retrospective-modal" in response.text
     assert "task-modal-panel" in response.text
     assert "retrospective-modal-title" in response.text
@@ -4891,6 +4919,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "buildOutOfScopeDefaults" in response.text
     assert "const requestTranslations = {" in response.text
     assert "const humanReviewTranslations = {" in response.text
+    assert "Final approval is waiting on QA" in response.text
+    assert "최종 승인 전에 QA 확인이 필요합니다" in response.text
+    assert "Open QA checklist" in response.text
+    assert "QA 체크리스트 열기" in response.text
+    assert "approvalGateRetryTitle" in response.text
+    assert "approvalGateReviewTitle" in response.text
     assert "applyRequestTranslations();" in response.text
     assert "['plan-approving', 'waiting-check-plans', 'completed-reviews', 'human-verifying', 'done'].includes(metadata?.state) && files.includes('PLAN.md')" in response.text
     assert "task-human-review-panel" in response.text
