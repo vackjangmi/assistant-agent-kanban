@@ -27,10 +27,7 @@ def parse_request_markdown(content: str) -> ParsedRequest:
         parts = content.split("\n---\n", 1)
         if len(parts) == 2:
             body = parts[1]
-            try:
-                metadata = yaml.safe_load(parts[0][4:]) or {}
-            except yaml.YAMLError:
-                metadata = {}
+            metadata = _parse_front_matter(parts[0][4:])
     target = metadata.get("target") if isinstance(metadata, dict) else None
     raw_title = metadata.get("title") if isinstance(metadata, dict) else None
     title = raw_title if isinstance(raw_title, str) else _extract_title(body)
@@ -52,6 +49,57 @@ def parse_request_markdown(content: str) -> ParsedRequest:
         language=language or detect_primary_language(content),
         plan_auto_approve=_coerce_bool(raw_plan_auto_approve),
     )
+
+
+def _parse_front_matter(raw: str) -> dict[str, object]:
+    try:
+        loaded = yaml.safe_load(raw) or {}
+    except yaml.YAMLError:
+        loaded = _parse_known_front_matter_fields(raw)
+    if isinstance(loaded, dict):
+        return loaded
+    return {}
+
+
+def _parse_known_front_matter_fields(raw: str) -> dict[str, object]:
+    metadata: dict[str, object] = {}
+    current_section: str | None = None
+    for line in raw.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            key, value = _split_front_matter_assignment(line)
+            current_section = key if key else None
+            if key and value is not None:
+                metadata[key] = _strip_front_matter_scalar(value)
+            elif key == "target":
+                metadata[key] = {}
+            continue
+        if current_section == "target":
+            key, value = _split_front_matter_assignment(line.strip())
+            if key and value is not None:
+                target = metadata.setdefault("target", {})
+                if isinstance(target, dict):
+                    target[key] = _strip_front_matter_scalar(value)
+    return metadata
+
+
+def _split_front_matter_assignment(line: str) -> tuple[str | None, str | None]:
+    if ":" not in line:
+        return None, None
+    key, value = line.split(":", 1)
+    normalized_key = key.strip()
+    if not normalized_key:
+        return None, None
+    stripped_value = value.strip()
+    return normalized_key, stripped_value if stripped_value else None
+
+
+def _strip_front_matter_scalar(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value
 
 
 def _coerce_bool(value: object) -> bool:

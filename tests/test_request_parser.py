@@ -53,12 +53,13 @@ def test_request_parser_reads_plan_auto_approve_from_front_matter():
     assert parsed.plan_auto_approve is True
 
 
-def test_request_parser_ignores_invalid_yaml_front_matter_and_uses_body():
+def test_request_parser_recovers_known_fields_from_invalid_yaml_front_matter():
     parsed = parse_request_markdown(
         "\n".join(
             [
                 "---",
-                "title: `disposition` / `disposition_matrix` rename",
+                "title: Sonar cleanup: PAYMENT_ID constant",
+                "plan_auto_approve: true",
                 "target:",
                 "  repo_root: /tmp/repo",
                 "  base_branch: main",
@@ -72,8 +73,32 @@ def test_request_parser_ignores_invalid_yaml_front_matter_and_uses_body():
         )
     )
 
-    assert parsed.title == "Rename disposition fields"
-    assert parsed.target_repo_root is None
-    assert parsed.base_branch is None
+    assert parsed.title == "Sonar cleanup: PAYMENT_ID constant"
+    assert parsed.target_repo_root == "/tmp/repo"
+    assert parsed.base_branch == "main"
+    assert parsed.plan_auto_approve is True
     assert parsed.body.lstrip().startswith("# Rename disposition fields")
     assert "front matter is malformed" in parsed.body
+
+
+def test_request_parser_accepts_required_korean_request_with_colon_title():
+    content = "\n".join(
+        [
+            "---",
+            "title: Sonar 지적사항 정리: PAYMENT_ID 상수화 및 Mapper 테스트 assertion 축소",
+            "language: ko",
+            "plan_auto_approve: true",
+            "target:",
+            "  repo_root: /tmp/repo",
+            "  base_branch: cms-advances/track_0430",
+            "---",
+            "",
+            "# Sonar 지적사항 정리: PAYMENT_ID 상수화 및 Mapper 테스트 assertion 축소",
+            "",
+            "## 목표",
+            "Sonar 지적사항을 정리한다.",
+            "",
+        ]
+    )
+
+    assert has_required_request_fields(content) is True

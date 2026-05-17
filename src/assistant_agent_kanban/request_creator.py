@@ -10,6 +10,7 @@ import secrets
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+import yaml
 
 from .config import AppConfig
 from .enums import TaskState
@@ -117,18 +118,20 @@ def create_request(
             }
         )
         request_path = task_dir / "REQUEST.md"
-        lines = [
-            "---",
-            f"title: {title}",
-            f"language: {request_language}",
-            f"plan_auto_approve: {'true' if normalized_template.plan_auto_approve else 'false'}",
-            "target:",
-            f"  repo_root: {resolved_repo}",
-            f"  base_branch: {base_branch or config.base_branch}",
-            "---",
-            "",
-            f"# {title}",
-        ]
+        front_matter = yaml.safe_dump(
+            {
+                "title": title,
+                "language": request_language,
+                "plan_auto_approve": normalized_template.plan_auto_approve,
+                "target": {
+                    "repo_root": str(resolved_repo),
+                    "base_branch": base_branch or config.base_branch,
+                },
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ).strip()
+        lines = ["---", front_matter, "---", "", f"# {title}"]
         lines.extend(_render_request_sections(normalized_template.model_copy(update={"title": title}), language_code=request_language))
         request_path.write_text("\n".join(lines))
         draft_markdown = _normalize_request_markdown_field(
