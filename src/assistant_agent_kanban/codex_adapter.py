@@ -123,12 +123,13 @@ class SubprocessCodexAdapter(AssistantAdapter):
             stderr_thread.join(timeout=1)
             stdout = "".join(stdout_chunks)
             stderr = "".join(stderr_chunks)
+            failure_message = _extract_failure_message(stdout)
             return RunResult(
                 ok=returncode == 0,
                 returncode=returncode,
                 assistant_text=_extract_assistant_text(stdout),
                 stdout=stdout,
-                stderr=stderr,
+                stderr=stderr or failure_message,
                 raw_events_path=str(run_log_path),
                 command=command,
                 resolved_model=resolved_model,
@@ -227,6 +228,44 @@ def _extract_total_tokens(stdout: str) -> int:
                     if isinstance(value, int):
                         total += value
     return total
+
+
+def _extract_failure_message(stdout: str) -> str:
+    messages: list[str] = []
+    saw_empty_web_search = False
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if _contains_empty_web_search(payload):
+            saw_empty_web_search = True
+        if payload.get("type") != "turn.failed":
+            continue
+        message = payload.get("message")
+        if isinstance(message, str) and message.strip():
+            messages.append(message.strip())
+    if not messages:
+        return ""
+    details = messages[-1]
+    if saw_empty_web_search:
+        details = f"{details} Previous Codex event included web_search with an empty query."
+    return details
+
+
+def _contains_empty_web_search(value: object) -> bool:
+    if isinstance(value, dict):
+        item_type = value.get("type")
+        query = value.get("query")
+        if item_type == "web_search" and isinstance(query, str) and not query.strip():
+            return True
+        return any(_contains_empty_web_search(child) for child in value.values())
+    if isinstance(value, list):
+        return any(_contains_empty_web_search(item) for item in value)
+    return False
 
 
 def _render_codex_event_line(raw_line: str) -> str | None:

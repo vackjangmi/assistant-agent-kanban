@@ -140,3 +140,69 @@ def test_codex_adapter_uses_request_draft_model_for_request_draft_agent(monkeypa
     command = cast(list[str], recorded["command"])
     assert command[command.index("--model") + 1] == "gpt-5.1"
     assert result.resolved_model == "gpt-5.1"
+
+
+def test_codex_adapter_promotes_stdout_turn_failed_to_stderr(monkeypatch, tmp_path):
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = [
+                '{"type":"turn.failed","message":"Invalid prompt: policy flagged"}\n',
+            ]
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 1
+
+        def kill(self):
+            return None
+
+    monkeypatch.setattr(subprocess, "Popen", lambda command, **kwargs: FakeProcess(command))
+    adapter = SubprocessCodexAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "codex"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-implementer",
+        prompt="implement this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "implementer.jsonl",
+        config=config,
+    )
+
+    assert not result.ok
+    assert result.stderr == "Invalid prompt: policy flagged"
+
+
+def test_codex_adapter_notes_empty_web_search_before_turn_failed(monkeypatch, tmp_path):
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = [
+                '{"type":"item.completed","item":{"type":"web_search","query":""}}\n',
+                '{"type":"turn.failed","message":"Invalid prompt: policy flagged"}\n',
+            ]
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 1
+
+        def kill(self):
+            return None
+
+    monkeypatch.setattr(subprocess, "Popen", lambda command, **kwargs: FakeProcess(command))
+    adapter = SubprocessCodexAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "codex"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-implementer",
+        prompt="implement this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "implementer.jsonl",
+        config=config,
+    )
+
+    assert not result.ok
+    assert "Invalid prompt: policy flagged" in result.stderr
+    assert "web_search with an empty query" in result.stderr
