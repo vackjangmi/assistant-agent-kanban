@@ -25,6 +25,8 @@ def render_assistant_event_line(raw_line: str, *, debug: bool = False) -> str | 
     except json.JSONDecodeError:
         return line
     event_type = payload.get("type")
+    if _looks_like_claude_event(payload):
+        return render_claude_event_line(raw_line, debug=debug)
     if isinstance(event_type, str) and (event_type.startswith("item.") or event_type.startswith("turn.") or event_type.startswith("thread.")):
         return render_codex_event_line(raw_line, debug=debug)
     return render_opencode_event_line(raw_line, debug=debug)
@@ -117,6 +119,120 @@ def render_codex_event_line(raw_line: str, *, debug: bool = False) -> str | None
         if isinstance(message, str) and message.strip():
             return f"ERROR: {message}"
         return "ERROR: turn failed"
+    return None
+
+
+def render_claude_event_line(raw_line: str, *, debug: bool = False) -> str | None:
+    line = strip_ansi(raw_line).strip()
+    if not line:
+        return None
+    try:
+        payload = json.loads(raw_line.strip())
+    except json.JSONDecodeError:
+        return line
+    event_type = payload.get("type")
+    if event_type == "system":
+        subtype = payload.get("subtype")
+        if subtype == "api_retry":
+            attempt = payload.get("attempt")
+            max_retries = payload.get("max_retries")
+            if isinstance(attempt, int) and isinstance(max_retries, int):
+                return f"Retrying Claude API call ({attempt}/{max_retries})"
+        return None
+    if event_type == "result":
+        text = _extract_claude_text(payload.get("result"))
+        if text:
+            return text
+        if payload.get("is_error") is True:
+            return "ERROR: Claude run failed"
+        return "Completed Claude run" if debug else None
+    if event_type in {"assistant", "message"}:
+        message = payload.get("message") if isinstance(payload.get("message"), dict) else payload
+        if isinstance(message, dict) and message.get("role") not in {None, "assistant"}:
+            return None
+        return _extract_claude_text(message)
+    if event_type == "stream_event":
+        if debug:
+            return _render_claude_stream_debug(payload.get("event"))
+        return None
+    return None
+
+
+def _looks_like_claude_event(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    event_type = payload.get("type")
+    if event_type in {"stream_event", "rate_limit_event"}:
+        return True
+    if event_type == "assistant":
+        return True
+    if event_type == "result" and (
+        "terminal_reason" in payload
+        or "modelUsage" in payload
+        or "fast_mode_state" in payload
+        or "api_error_status" in payload
+    ):
+        return True
+    if event_type == "system" and (
+        "claude_code_version" in payload
+        or "fast_mode_state" in payload
+        or payload.get("subtype") == "api_retry"
+    ):
+        return True
+    if event_type == "user" and "tool_use_result" in payload:
+        return True
+    if event_type == "message":
+        content = payload.get("content")
+        return isinstance(content, list)
+    return False
+
+
+def _extract_claude_text(payload: object) -> str | None:
+    if isinstance(payload, str) and payload.strip():
+        return payload
+    if isinstance(payload, list):
+        parts = [_extract_claude_text(item) for item in payload]
+        text = "\n".join(part for part in parts if part)
+        return text or None
+    if not isinstance(payload, dict):
+        return None
+    text = payload.get("text")
+    if isinstance(text, str) and text.strip():
+        return text
+    content = payload.get("content")
+    content_text = _extract_claude_text(content)
+    if content_text:
+        return content_text
+    message = payload.get("message")
+    message_text = _extract_claude_text(message)
+    if message_text:
+        return message_text
+    result = payload.get("result")
+    result_text = _extract_claude_text(result)
+    if result_text:
+        return result_text
+    return None
+
+
+def _render_claude_stream_debug(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    event_type = payload.get("type")
+    if event_type == "message_delta":
+        usage = payload.get("usage")
+        if isinstance(usage, dict):
+            parts = ["Debug tokens"]
+            for key in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"):
+                value = usage.get(key)
+                if isinstance(value, int):
+                    parts.append(f"{key}={value}")
+            return " | ".join(parts) if len(parts) > 1 else None
+    if event_type == "content_block_start":
+        block = payload.get("content_block")
+        if isinstance(block, dict) and block.get("type") == "tool_use":
+            name = block.get("name")
+            if isinstance(name, str) and name.strip():
+                return f"Tool `{name}` invoked"
     return None
 
 
