@@ -51,6 +51,11 @@ from ..retry_policy import clear_retry_gate
 
 HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old_start>\d+)(?:,(?P<old_count>\d+))? \+(?P<new_start>\d+)(?:,(?P<new_count>\d+))? @@(?P<header>.*)$")
 ARTIFACT_CYCLE_RE = re.compile(r"^(WORK|REVIEW|HUMAN-QA|REVIEWER-QA|HUMAN-VERIFY)-(?P<cycle>\d{3})\.md$")
+REQUEST_DRAFT_ARTIFACT_RE = re.compile(r"^REQUEST-DRAFT(?:-(?P<cycle>\d{3}))?\.md$")
+PLAN_APPROVAL_ARTIFACT_ORDER = {
+    "PLAN-APPROVAL.md": 0,
+    "PLAN-HUMAN-APPROVAL.md": 1,
+}
 PLANNER_RESTART_ARTIFACT = "PLANNER-RESTART.md"
 AI_ACTIVE_STATES = {
     TaskState.PLANNING,
@@ -880,23 +885,30 @@ class TaskService:
         )
 
     def _artifact_sort_key(self, filename: str) -> tuple[int, int, int, str]:
+        request_draft_match = REQUEST_DRAFT_ARTIFACT_RE.match(filename)
+        if request_draft_match:
+            cycle = request_draft_match.group("cycle")
+            return (0, int(cycle) if cycle else 0, 0, filename)
         if filename == "REQUEST.md":
-            return (0, 0, 0, filename)
-        if filename == PLANNER_RESTART_ARTIFACT:
             return (1, 0, 0, filename)
-        if filename == "PLAN.md":
+        if filename == PLANNER_RESTART_ARTIFACT:
             return (2, 0, 0, filename)
+        if filename == "PLAN.md":
+            return (3, 0, 0, filename)
+        plan_approval_order = PLAN_APPROVAL_ARTIFACT_ORDER.get(filename)
+        if plan_approval_order is not None:
+            return (4, plan_approval_order, 0, filename)
         match = ARTIFACT_CYCLE_RE.match(filename)
         if match:
             kind = match.group(1)
             cycle = int(match.group("cycle"))
             kind_order = {"WORK": 0, "REVIEW": 1, "HUMAN-QA": 2, "REVIEWER-QA": 3, "HUMAN-VERIFY": 4}[kind]
-            return (3, cycle, kind_order, filename)
+            return (5, cycle, kind_order, filename)
         if filename == "COMMIT.md":
-            return (5, 0, 0, filename)
+            return (7, 0, 0, filename)
         if filename.startswith("RETRO-") and filename.endswith(".md"):
-            return (6, 0, 0, filename)
-        return (4, 0, 0, filename)
+            return (8, 0, 0, filename)
+        return (6, 0, 0, filename)
 
     def _load_changed_files(self, task_id: str, *, require_available: bool) -> list[ChangedFileDetail]:
         task = self._find_task(task_id)

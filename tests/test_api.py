@@ -3341,7 +3341,10 @@ def test_api_orders_markdown_artifacts_by_lifecycle_and_cycle(configured_paths):
     create_request_task(config, "artifact-order-task")
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
     task = KanbanScanner(config).scan()[0]
+    (task.task_dir / "REQUEST-DRAFT.md").write_text("draft\n")
     (task.task_dir / "PLAN.md").write_text("plan\n")
+    (task.task_dir / "PLAN-APPROVAL.md").write_text("approved plan\n")
+    (task.task_dir / "PLAN-HUMAN-APPROVAL.md").write_text("human approved plan\n")
     (task.task_dir / "WORK-002.md").write_text("work 2\n")
     (task.task_dir / "REVIEW-002.md").write_text("review 2\n")
     (task.task_dir / "HUMAN-QA-002.md").write_text("qa 2\n")
@@ -3358,8 +3361,11 @@ def test_api_orders_markdown_artifacts_by_lifecycle_and_cycle(configured_paths):
 
     assert detail.status_code == 200
     assert detail.json()["markdown_files"] == [
+        "REQUEST-DRAFT.md",
         "REQUEST.md",
         "PLAN.md",
+        "PLAN-APPROVAL.md",
+        "PLAN-HUMAN-APPROVAL.md",
         "WORK-001.md",
         "REVIEW-001.md",
         "HUMAN-QA-001.md",
