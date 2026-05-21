@@ -7,11 +7,56 @@
   <title>Assistant Agent Kanban</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <style>
-    :root { --bg-top: #f7f2e8; --bg-bottom: #e8eef5; --panel: rgba(255,255,255,0.78); --panel-strong: rgba(255,252,247,0.95); --border: rgba(24,32,38,0.15); --border-strong: rgba(24,32,38,0.28); --accent: #7c4f2c; --accent-strong: #5f3417; --accent-soft: rgba(124,79,44,0.12); --success: #217349; --danger: #a33a2a; --text: #182026; --muted: #53616c; --shadow: 0 18px 40px rgba(0,0,0,0.12); }
-    body[data-theme="dark"] { --bg-top: #0c1218; --bg-bottom: #141d26; --panel: rgba(24,34,44,0.84); --panel-strong: rgba(28,39,50,0.96); --border: rgba(186,200,214,0.12); --border-strong: rgba(186,200,214,0.22); --accent: #d6ab78; --accent-strong: #f2c693; --accent-soft: rgba(214,171,120,0.16); --success: #72c89a; --danger: #f09486; --text: #eef4f8; --muted: #aebcca; --shadow: 0 18px 40px rgba(0,0,0,0.42); --review-panel: rgba(19, 28, 36, 0.96); --review-panel-strong: rgba(24, 34, 44, 0.98); --review-panel-soft: rgba(31, 43, 54, 0.96); --review-border: rgba(186, 200, 214, 0.16); --review-border-strong: rgba(214, 171, 120, 0.3); --review-toolbar: rgba(27, 38, 48, 0.98); --review-toolbar-divider: rgba(186, 200, 214, 0.1); --review-editor-surface: rgba(16, 24, 31, 0.98); --review-editor-gutter: rgba(21, 30, 39, 0.98); --review-add-bg: rgba(34, 111, 73, 0.4); --review-add-line-bg: rgba(31, 86, 59, 0.5); --review-add-text: #b7f0cf; --review-remove-bg: rgba(142, 53, 44, 0.38); --review-remove-line-bg: rgba(121, 43, 35, 0.48); --review-remove-text: #ffc2b7; }
+    :root {
+      --bg-top: #f8fafc;
+      --bg-bottom: #f1f5f9;
+      --panel: rgba(255, 255, 255, 0.85);
+      --panel-strong: rgba(255, 255, 255, 0.98);
+      --border: rgba(99, 102, 241, 0.12);
+      --border-strong: rgba(99, 102, 241, 0.24);
+      --accent: #6366f1;
+      --accent-strong: #4f46e5;
+      --accent-soft: rgba(99, 102, 241, 0.08);
+      --success: #10b981;
+      --danger: #ef4444;
+      --text: #0f172a;
+      --muted: #64748b;
+      --shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.08), 0 4px 12px -3px rgba(0, 0, 0, 0.03);
+    }
+    body[data-theme="dark"] {
+      --bg-top: #0f172a;
+      --bg-bottom: #090d16;
+      --panel: rgba(15, 23, 42, 0.85);
+      --panel-strong: rgba(15, 23, 42, 0.98);
+      --border: rgba(99, 102, 241, 0.16);
+      --border-strong: rgba(99, 102, 241, 0.28);
+      --accent: #818cf8;
+      --accent-strong: #6366f1;
+      --accent-soft: rgba(99, 102, 241, 0.12);
+      --success: #34d399;
+      --danger: #f87171;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.05);
+      --review-panel: rgba(15, 23, 42, 0.96);
+      --review-panel-strong: rgba(9, 13, 22, 0.98);
+      --review-panel-soft: rgba(30, 41, 59, 0.96);
+      --review-border: rgba(99, 102, 241, 0.18);
+      --review-border-strong: rgba(129, 140, 248, 0.3);
+      --review-toolbar: rgba(15, 23, 42, 0.98);
+      --review-toolbar-divider: rgba(255, 255, 255, 0.08);
+      --review-editor-surface: rgba(9, 13, 22, 0.98);
+      --review-editor-gutter: rgba(15, 23, 42, 0.98);
+      --review-add-bg: rgba(16, 185, 129, 0.35);
+      --review-add-line-bg: rgba(16, 185, 129, 0.45);
+      --review-add-text: #a7f3d0;
+      --review-remove-bg: rgba(239, 68, 68, 0.35);
+      --review-remove-line-bg: rgba(239, 68, 68, 0.45);
+      --review-remove-text: #fca5a5;
+    }
     body[data-theme="dark"] .column,
     body[data-theme="dark"] .final-project-column,
     body[data-theme="dark"] .settings-card,
@@ -71,7 +116,7 @@
     body[data-theme="dark"] .diff-file-list button,
     body[data-theme="dark"] .diff-badge,
     body[data-theme="dark"] .diff-unified {
-      background: rgba(28, 39, 50, 0.94);
+      background: rgba(15, 23, 42, 0.85);
       border-color: var(--border);
     }
     body[data-theme="dark"] .target-branch-label,
@@ -82,8 +127,8 @@
     body[data-theme="dark"] .approval-choice-copy,
     body[data-theme="dark"] .diff-inline-comment,
     body[data-theme="dark"] .retrospective-status {
-      background: linear-gradient(180deg, rgba(36, 49, 62, 0.96), rgba(29, 40, 52, 0.92));
-      border-color: rgba(239, 190, 135, 0.18);
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.9));
+      border-color: rgba(99, 102, 241, 0.16);
     }
     body[data-theme="dark"] .target-branch-meta,
     body[data-theme="dark"] .target-branch-retrospective,
@@ -91,8 +136,8 @@
     body[data-theme="dark"] .mode-pill,
     body[data-theme="dark"] .diff-line-comment-button,
     body[data-theme="dark"] .ghost-button {
-      background: rgba(34, 46, 58, 0.96);
-      border-color: rgba(239, 190, 135, 0.18);
+      background: rgba(30, 41, 59, 0.7);
+      border-color: rgba(99, 102, 241, 0.16);
       color: var(--text);
     }
     body[data-theme="dark"] .target-branch-retrospective:hover,
@@ -101,26 +146,26 @@
     body[data-theme="dark"] .diff-line-comment-button:focus-visible,
     body[data-theme="dark"] .ghost-button:hover,
     body[data-theme="dark"] .ghost-button:focus-visible {
-      background: rgba(46, 60, 74, 0.98);
+      background: rgba(51, 65, 85, 0.8);
       color: var(--accent-strong);
     }
     body[data-theme="dark"] .accent-button,
     body[data-theme="dark"] button.primary {
-      background: linear-gradient(180deg, #dfb482, #cf9d66);
-      border-color: rgba(242, 198, 147, 0.45);
-      color: #1a232c;
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border-color: rgba(129, 140, 248, 0.4);
+      color: #ffffff;
       box-shadow: 0 10px 24px rgba(0,0,0,0.26);
     }
     body[data-theme="dark"] .accent-button:hover,
     body[data-theme="dark"] .accent-button:focus-visible,
     body[data-theme="dark"] button.primary:hover,
     body[data-theme="dark"] button.primary:focus-visible {
-      background: linear-gradient(180deg, #e7be90, #d8a874);
-      color: #121920;
+      background: linear-gradient(135deg, #818cf8, #6366f1);
+      color: #ffffff;
     }
     body[data-theme="dark"] .danger-button {
-      background: linear-gradient(180deg, #cf6f60, #bb5949);
-      border-color: rgba(255, 180, 167, 0.34);
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      border-color: rgba(239, 68, 68, 0.4);
       color: #fff8f6;
     }
     body[data-theme="dark"] .card {
@@ -135,7 +180,7 @@
       border-color: var(--tag-border-dark, rgba(186, 200, 214, 0.1));
       color: var(--tag-text-dark, var(--text));
     }
-    body[data-theme="dark"] .card-tag-id { --tag-bg: rgba(214, 171, 120, 0.16); --tag-border: rgba(214, 171, 120, 0.18); --tag-text: #f3d4ae; --tag-bg-dark: rgba(214, 171, 120, 0.2); --tag-border-dark: rgba(214, 171, 120, 0.24); --tag-text-dark: #f6d9b5; }
+    body[data-theme="dark"] .card-tag-id { --tag-bg: rgba(99, 102, 241, 0.12); --tag-border: rgba(129, 140, 248, 0.2); --tag-text: #a5b4fc; --tag-bg-dark: rgba(99, 102, 241, 0.16); --tag-border-dark: rgba(129, 140, 248, 0.24); --tag-text-dark: #c7d2fe; }
     body[data-theme="dark"] .card-tag-branch { --tag-bg: rgba(74, 92, 109, 0.44); --tag-border: rgba(186, 200, 214, 0.14); --tag-text: #d9e3eb; --tag-bg-dark: rgba(74, 92, 109, 0.5); --tag-border-dark: rgba(186, 200, 214, 0.18); --tag-text-dark: #e2ebf2; }
     body[data-theme="dark"] .card-tag-final-branch { --tag-bg: rgba(99, 132, 114, 0.28); --tag-border: rgba(114, 200, 154, 0.18); --tag-text: #d8f3e4; --tag-bg-dark: rgba(99, 132, 114, 0.34); --tag-border-dark: rgba(114, 200, 154, 0.26); --tag-text-dark: #e3f7ec; }
     body[data-theme="dark"] .card-meta,
@@ -194,8 +239,8 @@
     body[data-theme="dark"] .verification-actions textarea,
     body[data-theme="dark"] .diff-inline-comment-fallback,
     body[data-theme="dark"] .editor-textarea {
-      background: rgba(20, 28, 36, 0.98);
-      border-color: rgba(186, 200, 214, 0.16);
+      background: rgba(15, 23, 42, 0.98);
+      border-color: rgba(99, 102, 241, 0.2);
       color: var(--text);
     }
     body[data-theme="dark"] .field input::placeholder,
@@ -204,9 +249,9 @@
     body[data-theme="dark"] .retrospective-compare-field input::placeholder,
     body[data-theme="dark"] .editor-textarea::placeholder,
     body[data-theme="dark"] .diff-inline-comment-fallback::placeholder {
-      color: #93a5b5;
+      color: #94a3b8;
     }
-    body[data-theme="dark"] select option { background: #16202a; color: var(--text); }
+    body[data-theme="dark"] select option { background: #0f172a; color: var(--text); }
     body[data-theme="dark"] .modal-head,
     body[data-theme="dark"] .stacked-modal-panel .modal-head { border-bottom-color: rgba(226, 234, 242, 0.08); }
     body[data-theme="dark"] .task-model-row,
@@ -219,8 +264,8 @@
       color: var(--text);
     }
     body[data-theme="dark"] .task-model-row {
-      background: rgba(34, 46, 58, 0.88);
-      border-color: rgba(186, 200, 214, 0.1);
+      background: rgba(30, 41, 59, 0.7);
+      border-color: rgba(99, 102, 241, 0.16);
     }
     body[data-theme="dark"] .task-model-row small,
     body[data-theme="dark"] .retrospective-view-copy p,
@@ -232,8 +277,8 @@
       color: var(--muted);
     }
     body[data-theme="dark"] .stage-timeline-bar {
-      background: rgba(13, 19, 26, 0.8);
-      border-color: rgba(186, 200, 214, 0.08);
+      background: rgba(15, 23, 42, 0.8);
+      border-color: rgba(99, 102, 241, 0.16);
     }
     body[data-theme="dark"] .stage-timing-total strong,
     body[data-theme="dark"] .stage-timing-head h3,
@@ -249,23 +294,23 @@
     }
     body[data-theme="dark"] .task-tabs button,
     body[data-theme="dark"] .board-phase-tabs button {
-      background: rgba(26, 36, 46, 0.88);
+      background: rgba(30, 41, 59, 0.85);
       color: #aebcca;
-      border-color: rgba(186, 200, 214, 0.08);
+      border-color: rgba(99, 102, 241, 0.16);
     }
     body[data-theme="dark"] .task-tabs button.active,
     body[data-theme="dark"] .board-phase-tabs button.active {
-      background: linear-gradient(180deg, #e4bb8c, #d0a06a);
-      border-color: rgba(242, 198, 147, 0.44);
-      color: #13202a;
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border-color: rgba(129, 140, 248, 0.35);
+      color: #ffffff;
       box-shadow: 0 10px 24px rgba(0,0,0,0.22);
     }
     body[data-theme="dark"] .task-tabs button:hover,
     body[data-theme="dark"] .task-tabs button:focus-visible,
     body[data-theme="dark"] .board-phase-tabs button:hover,
     body[data-theme="dark"] .board-phase-tabs button:focus-visible {
-      background: rgba(37, 51, 64, 0.96);
-      border-color: rgba(214, 171, 120, 0.18);
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(129, 140, 248, 0.20);
       color: #dce6ee;
     }
     body[data-theme="dark"] .task-tabs,
@@ -289,7 +334,7 @@
     body[data-theme="dark"] #task-panel-reviewer-qa .human-review-box,
     body[data-theme="dark"] #task-panel-review-note .human-review-box,
     body[data-theme="dark"] #task-panel-editor .artifact-edit-shell {
-      background: linear-gradient(180deg, rgba(24, 35, 45, 0.98), rgba(17, 25, 33, 0.97)) !important;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(9, 13, 22, 0.97)) !important;
       border-color: var(--review-border) !important;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 14px 28px rgba(0,0,0,0.22) !important;
     }
@@ -835,13 +880,14 @@
     body[data-theme="dark"] .diff-unified,
     body[data-theme="dark"] .approval-choice-status,
     body[data-theme="dark"] .settings-status {
-      background: rgba(27, 38, 49, 0.94);
+      background: rgba(15, 23, 42, 0.94);
     }
-    body[data-theme="dark"] .stage-timing-card.current { background: rgba(36, 48, 60, 0.96); box-shadow: 0 10px 22px rgba(0,0,0,0.18); }
-    body[data-theme="dark"] .stage-timing-card.upcoming { background: rgba(25, 35, 45, 0.74); opacity: 0.65; }
+    body[data-theme="dark"] .stage-timing-card.current { background: rgba(30, 41, 59, 0.85); box-shadow: 0 10px 22px rgba(0,0,0,0.3); }
+    body[data-theme="dark"] .stage-timing-card.upcoming { background: rgba(15, 23, 42, 0.74); opacity: 0.65; }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { font-family: "Nanum Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; min-height: 100%; display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }
+    body { font-family: 'Inter', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; margin: 0; min-height: 100%; display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom)); color: var(--text); }
+    h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; font-weight: 600; }
     body.modal-open { overflow: hidden; }
     header { padding: 12px 20px 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
     .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -918,7 +964,7 @@
     .card-tag { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 4px 8px; border: 1px solid var(--tag-border, var(--border)); background: var(--tag-bg, rgba(255,249,239,0.9)); color: var(--tag-text, var(--accent-strong)); font-size: 0.53rem; line-height: 1.2; }
     .card-tag-label { flex: 0 0 auto; opacity: 0.72; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.68rem; }
     .card-tag-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .card-tag-id { --tag-bg: rgba(139,90,43,0.12); --tag-border: rgba(139,90,43,0.24); --tag-text: #7a4921; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }
+    .card-tag-id { --tag-bg: rgba(99, 102, 241, 0.08); --tag-border: rgba(99, 102, 241, 0.18); --tag-text: #4f46e5; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }
     .card-task-id-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .card-repo-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .card-tag-branch { --tag-bg: rgba(82,96,107,0.1); --tag-border: rgba(82,96,107,0.18); --tag-text: #45525d; }
@@ -3216,6 +3262,7 @@
       KO: {
         title: '인간 리뷰',
         tab: '재요청 노트',
+        status: '리뷰 노트와 파일 줄 코멘트가 여기에 표시됩니다.',
         noteTitle: '재요청 노트',
         noteStatus: '현재 HUMAN-VERIFY 문서에 저장됩니다. 파일 줄 코멘트는 변경된 줄 아래에 바로 붙습니다.',
         saveNote: '노트 저장',
@@ -3422,6 +3469,7 @@
         retrospectiveNoContent: 'No retrospective loaded.',
         requestPathLabel: 'REQUEST.md path',
         finalBranchNotCreated: 'Not created yet',
+        currentStageModelUsed: 'Current stage model used',
         capturedStageModels: 'Captured stage models',
         plannerModelUsed: 'Planner model used',
         implementerModelUsed: 'Implementer model used',
@@ -3628,7 +3676,9 @@
         unableLoadTaskDetails: '작업 상세를 표시할 수 없습니다.',
         stalePlanMessage: 'PLAN.md를 로컬에서 편집하는 동안 작업 상태가 바뀌었습니다. 초안을 저장하거나 편집 모드를 나가서 최신 상태를 다시 불러오세요.',
         titleLabel: '제목',
+        taskIdLabel: '작업 ID',
         stateLabel: '상태',
+        requestLanguageLabel: '요청 언어',
         updatedLabel: '업데이트 시각',
         targetRepoLabel: '대상 프로젝트',
         baseBranchLabel: '기준 브랜치',
@@ -3660,7 +3710,20 @@
         retrospectivePathLabel: '저장소 경로',
         retrospectiveModelLabel: '모델',
         retrospectiveNoContent: '불러온 회고가 없습니다.',
+        requestPathLabel: 'REQUEST.md 경로',
         finalBranchNotCreated: '아직 생성되지 않음',
+        currentStageModelUsed: '현재 단계 사용 모델',
+        capturedStageModels: '기록된 단계별 모델',
+        plannerModelUsed: '사용된 플래너 모델',
+        implementerModelUsed: '사용된 구현 모델',
+        reviewerModelUsed: '사용된 리뷰 모델',
+        plannerModelNote: '계획 실행 출력에서 캡처됨.',
+        implementerModelNote: '작업 공간 구현 실행에서 캡처됨.',
+        reviewerModelNote: 'AI 리뷰 실행에서 캡처됨.',
+        modelUsageSuffix: '설정의 런타임 오버라이드와 별개로 실제 사용된 모델입니다. 최근 실행 토큰: {tokens}. 세션 토큰: {sessionTokens}.',
+        notCapturedYet: '아직 기록되지 않음',
+        markdownFiles: '마크다운 파일',
+        jsonFiles: 'JSON 파일',
         latestError: '최근 오류',
         completedGroupTitle: '완료 그룹',
         completedGroupDescription: '기준 브랜치를 기본 그룹으로 유지하면서, 완료된 작업은 나중에 다른 완료 그룹으로 옮길 수 있습니다.',
@@ -3675,9 +3738,12 @@
         completedGroupSavedDefault: '완료 그룹을 기본 기준 브랜치({group})로 되돌렸습니다.',
         completedGroupSaveFailed: '완료 그룹을 저장하지 못했습니다.',
         completedGroupBlockedStale: '완료 그룹을 바꾸기 전에 작업 상세를 새로고침하세요.',
+        noMarkdownFiles: '마크다운 파일 없음',
+        noJsonFiles: 'JSON 파일 없음',
         noRecordedErrors: '기록된 오류가 없습니다.',
         taskSubtitleFormat: '{taskId} · {state}',
         taskSubtitleWithFinalBranch: '{taskId} · {state} · {branch}',
+        taskActivity: '에이전트 활동',
         leaseOwner: 'Lease 소유자',
         leaseRun: 'Lease 실행',
         heartbeat: '하트비트',
@@ -3737,7 +3803,7 @@
         renderedPreviewEditable: '렌더된 markdown 미리보기입니다. 문서를 바꾸려면 Edit PLAN.md를 사용하세요.',
         renderedPreviewReadonly: '이 작업 상태에서는 렌더된 markdown 미리보기만 제공합니다.',
         loadingArtifact: '{name} 불러오는 중...',
-        viewingPlan: '',
+        viewingPlan: '렌더링된 PLAN.md를 보고 있습니다. 편집 모드로 전환하려면 PLAN.md 편집을 사용하세요.',
         editingPlan: 'PLAN.md markdown을 편집 중입니다. 승인 전에 초안을 저장하세요.',
         renderedArtifact: '{name} 문서를 렌더된 markdown으로 표시합니다.',
         unableLoadArtifact: '{name} 문서를 불러올 수 없습니다.',
@@ -4640,6 +4706,7 @@
     }
 
     function applyBoardSnapshot(data) {
+      saveBoardScrollPositions();
       boardTaskSnapshots = new Map(data.columns.flatMap((column) => (column.items || []).map((item) => [item.task_id, item])));
       if (!boardPhaseManuallySelected) {
         activeBoardPhase = selectDefaultBoardPhase(data.columns);
@@ -4663,6 +4730,7 @@
       }
       refreshRunningClocks();
       refreshActiveTaskFromBoardSnapshot();
+      restoreBoardScrollPositions();
     }
 
     function refreshActiveTaskFromBoardSnapshot() {
@@ -4711,6 +4779,89 @@
       if (!draftResponse.ok) throw new Error(draftData.detail || 'Failed to load request drafts.');
       requestDraftList = Array.isArray(draftData.items) ? draftData.items : [];
       renderRequestDrafts();
+    }
+
+    let savedScrollPositions = {
+      boardLeft: 0,
+      boardTop: 0,
+      columns: {},
+      taskOverview: 0
+    };
+
+    function saveBoardScrollPositions() {
+      const boardEl = document.getElementById('board');
+      if (boardEl) {
+        savedScrollPositions.boardLeft = boardEl.scrollLeft;
+        savedScrollPositions.boardTop = boardEl.scrollTop;
+      }
+      savedScrollPositions.columns = {};
+      const columns = document.querySelectorAll('.column');
+      columns.forEach((col) => {
+        let key = '';
+        if (col.dataset.state) {
+          key = `state:${col.dataset.state}`;
+        } else if (col.dataset.projectPath) {
+          key = `project:${col.dataset.projectPath}`;
+        }
+        if (key) {
+          const cardsEl = col.querySelector('.column-cards');
+          if (cardsEl) {
+            savedScrollPositions.columns[key] = cardsEl.scrollTop;
+          }
+          const groups = col.querySelectorAll('.target-branch-group');
+          groups.forEach((group) => {
+            const branch = group.dataset.branch;
+            if (branch) {
+              const groupCardsEl = group.querySelector('.column-cards');
+              if (groupCardsEl) {
+                savedScrollPositions.columns[`${key}:branch:${branch}`] = groupCardsEl.scrollTop;
+              }
+            }
+          });
+        }
+      });
+      const taskOverviewEl = document.getElementById('task-overview');
+      if (taskOverviewEl) {
+        savedScrollPositions.taskOverview = taskOverviewEl.scrollTop;
+      }
+    }
+
+    function restoreBoardScrollPositions() {
+      const boardEl = document.getElementById('board');
+      if (boardEl) {
+        boardEl.scrollLeft = savedScrollPositions.boardLeft;
+        boardEl.scrollTop = savedScrollPositions.boardTop;
+      }
+      const columns = document.querySelectorAll('.column');
+      columns.forEach((col) => {
+        let key = '';
+        if (col.dataset.state) {
+          key = `state:${col.dataset.state}`;
+        } else if (col.dataset.projectPath) {
+          key = `project:${col.dataset.projectPath}`;
+        }
+        if (key) {
+          const cardsEl = col.querySelector('.column-cards');
+          if (cardsEl && savedScrollPositions.columns[key] !== undefined) {
+            cardsEl.scrollTop = savedScrollPositions.columns[key];
+          }
+          const groups = col.querySelectorAll('.target-branch-group');
+          groups.forEach((group) => {
+            const branch = group.dataset.branch;
+            if (branch) {
+              const groupCardsEl = group.querySelector('.column-cards');
+              const groupKey = `${key}:branch:${branch}`;
+              if (groupCardsEl && savedScrollPositions.columns[groupKey] !== undefined) {
+                groupCardsEl.scrollTop = savedScrollPositions.columns[groupKey];
+              }
+            }
+          });
+        }
+      });
+      const taskOverviewEl = document.getElementById('task-overview');
+      if (taskOverviewEl && savedScrollPositions.taskOverview !== undefined) {
+        taskOverviewEl.scrollTop = savedScrollPositions.taskOverview;
+      }
     }
 
     function boardCardLabel(key) {
@@ -4924,12 +5075,12 @@
       const repoTone = repoTagTone(projectPath);
       const columnStyle = `--repo-accent:${repoTone.text};--repo-accent-dark:${repoTone.darkAccent};--repo-accent-soft:${repoTone.background};`;
       return `
-        <section class="column final-project-column" style="${columnStyle}">
+        <section class="column final-project-column" data-project-path="${escapeHtml(projectPath)}" style="${columnStyle}">
           <div class="final-project-heading">
             <h2 class="final-project-title" title="${escapeHtml(projectPath)}">${escapeHtml(projectLabel)}</h2>
           </div>
           <div class="final-project-branches">${branchGroups.map(([branch, branchItems], index) => `
-            <section class="target-branch-group" data-expanded="${index === 0 ? 'true' : 'false'}">
+            <section class="target-branch-group" data-branch="${escapeHtml(branch)}" data-expanded="${index === 0 ? 'true' : 'false'}">
               <div class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? 'true' : 'false'}"><span class="target-branch-label-main"><span class="target-branch-title">${branchIconSvg('target-branch-icon')}<span class="target-branch-name">${escapeHtml(branch)}</span></span></span><span class="target-branch-label-side"><button type="button" class="target-branch-retrospective" data-target-repo="${escapeHtml(branchItems[0].target_repo_root || '')}" data-base-branch="${escapeHtml(branch)}">${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>${caretIconSvg('target-branch-caret')}</span></div>
               <div class="column-cards">${branchItems.map((item) => renderTaskCard(item, { compactFinal: true })).join('')}</div>
             </section>`).join('')}</div>
@@ -4975,7 +5126,7 @@
     function renderBoardColumn(column) {
       const items = column.items || [];
       return `
-        <section class="column">
+        <section class="column" data-state="${column.state}">
           <h2>${stateLabel(column.state)}</h2>
           <div class="column-cards">${items.length ? items.map((item) => renderTaskCard(item)).join('') : `<div class="board-empty">${escapeHtml(translateTask('noItemsInColumn'))}</div>`}</div>
         </section>`;
@@ -5021,7 +5172,7 @@
 
     function renderCardModelMeta(item) {
       if (!item.active_model) return '';
-      return `<div class="card-model"><strong>Current stage model used</strong>${escapeHtml(item.active_model)}</div>`;
+      return `<div class="card-model"><strong>${escapeHtml(translateTask('currentStageModelUsed'))}</strong>${escapeHtml(item.active_model)}</div>`;
     }
 
     function normalizeAgentActivityStatus(status) {
@@ -5035,13 +5186,14 @@
       if (Number.isNaN(parsed.getTime())) return String(value);
       const deltaSeconds = Math.max(0, Math.round((Date.now() - parsed.getTime()) / 1000));
       if (deltaSeconds < 10) return translateSettings('justNow');
-      if (deltaSeconds < 60) return `${deltaSeconds}s ago`;
+      const isKo = currentUiLanguage() === 'KO';
+      if (deltaSeconds < 60) return isKo ? `${deltaSeconds}초 전` : `${deltaSeconds}s ago`;
       const deltaMinutes = Math.round(deltaSeconds / 60);
-      if (deltaMinutes < 60) return `${deltaMinutes}m ago`;
+      if (deltaMinutes < 60) return isKo ? `${deltaMinutes}분 전` : `${deltaMinutes}m ago`;
       const deltaHours = Math.round(deltaMinutes / 60);
-      if (deltaHours < 24) return `${deltaHours}h ago`;
+      if (deltaHours < 24) return isKo ? `${deltaHours}시간 전` : `${deltaHours}h ago`;
       const deltaDays = Math.round(deltaHours / 24);
-      return `${deltaDays}d ago`;
+      return isKo ? `${deltaDays}일 전` : `${deltaDays}d ago`;
     }
 
     function resolveAgentActivity({ status = '', owner = '', heartbeatAt = '', state = '' } = {}) {
@@ -8531,6 +8683,7 @@
         renderDiffPlaceholder(detail.changed_files.length ? translateTask('selectChangedFile') : translateTask('changedFilesPatchAvailable'));
       }
       renderArtifactButtons(detail.markdown_files);
+      saveBoardScrollPositions();
       taskOverview.innerHTML = `
         ${renderStageTiming(detail.stage_timing)}
         <div class="task-section">
@@ -8551,6 +8704,7 @@
         history: metadata.history || [],
       });
       updateCompletedGroupControls();
+      restoreBoardScrollPositions();
     }
 
     function preferredArtifact(files, metadata = activeTaskDetail?.metadata) {
