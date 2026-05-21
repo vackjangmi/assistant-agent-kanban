@@ -135,6 +135,7 @@ class SubprocessCodexAdapter(AssistantAdapter):
                 resolved_model=resolved_model,
                 session_id=_extract_session_id(stdout) or session_id,
                 total_tokens=_extract_total_tokens(stdout),
+                session_budget_tokens=_extract_session_budget_tokens(stdout),
             )
         finally:
             if cancel_key:
@@ -211,6 +212,14 @@ def _extract_session_id(stdout: str) -> str | None:
 
 
 def _extract_total_tokens(stdout: str) -> int:
+    return _extract_token_sum(stdout, keys=("input_tokens", "output_tokens"))
+
+
+def _extract_session_budget_tokens(stdout: str) -> int:
+    return _extract_token_sum(stdout, keys=("input_tokens", "output_tokens"))
+
+
+def _extract_token_sum(stdout: str, *, keys: tuple[str, ...]) -> int:
     total = 0
     for raw_line in stdout.splitlines():
         line = raw_line.strip()
@@ -223,7 +232,7 @@ def _extract_total_tokens(stdout: str) -> int:
         if payload.get("type") == "turn.completed":
             usage = payload.get("usage") or {}
             if isinstance(usage, dict):
-                for key in ("input_tokens", "cached_input_tokens", "output_tokens"):
+                for key in keys:
                     value = usage.get(key)
                     if isinstance(value, int):
                         total += value

@@ -5,7 +5,7 @@ from typing import cast
 
 import subprocess
 
-from assistant_agent_kanban.codex_adapter import CODEX_KNOWN_MODELS, SubprocessCodexAdapter
+from assistant_agent_kanban.codex_adapter import CODEX_KNOWN_MODELS, SubprocessCodexAdapter, _extract_session_budget_tokens, _extract_total_tokens
 from assistant_agent_kanban.config import AppConfig
 
 
@@ -92,6 +92,18 @@ def test_codex_adapter_reuses_session_id(monkeypatch, tmp_path):
     command = cast(list[str], recorded["command"])
     assert command[:8] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "workspace-write", "resume", "thread-existing"]
     assert result.session_id == "thread-existing"
+
+
+def test_codex_token_extraction_does_not_double_count_cached_input_tokens():
+    stdout = "\n".join(
+        [
+            '{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":80,"output_tokens":20}}',
+            '{"type":"turn.completed","usage":{"input_tokens":50,"cached_input_tokens":25,"output_tokens":10}}',
+        ]
+    )
+
+    assert _extract_total_tokens(stdout) == 180
+    assert _extract_session_budget_tokens(stdout) == 180
 
 
 def test_codex_adapter_exposes_known_models(tmp_path):

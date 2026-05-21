@@ -259,6 +259,7 @@ class WorkerBase:
                     "resolved_model": result.resolved_model,
                     "session_id": result.session_id,
                     "total_tokens": result.total_tokens,
+                    "session_budget_tokens": result.session_budget_tokens,
                     "markdown_path": markdown_path.name,
                     "editable_markdown": True,
                     "sync_policy": "markdown_edits_do_not_modify_json",
@@ -287,6 +288,9 @@ class WorkerBase:
         if reused_session_id and returned_session_id == reused_session_id:
             return prior_session_tokens + run_tokens
         return run_tokens
+
+    def session_budget_tokens(self, result: RunResult) -> int:
+        return result.session_budget_tokens if result.session_budget_tokens is not None else result.total_tokens
 
     def ensure_task_runtime_pin(self, task_dir: Path, metadata: TaskMetadata) -> None:
         if metadata.runtime_pin is not None:

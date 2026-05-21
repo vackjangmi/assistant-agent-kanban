@@ -28,6 +28,7 @@ class FakeAdapter(AssistantAdapter):
         resolved_models: list[str | None] | None = None,
         session_ids: list[str | None] | None = None,
         total_tokens: list[int] | None = None,
+        session_budget_tokens: list[int | None] | None = None,
     ) -> None:
         self.responses = responses or []
         self._last_response: str | None = None
@@ -41,6 +42,7 @@ class FakeAdapter(AssistantAdapter):
         self.resolved_models = resolved_models or []
         self.session_ids = session_ids or []
         self.total_tokens = total_tokens or []
+        self.session_budget_tokens = session_budget_tokens or []
         self.run_calls: list[dict[str, object]] = []
         self.cancelled_task_ids: list[str] = []
 
@@ -90,6 +92,7 @@ class FakeAdapter(AssistantAdapter):
         resolved_model = self.resolved_models.pop(0) if self.resolved_models else None
         returned_session_id = self.session_ids.pop(0) if self.session_ids else session_id
         returned_total_tokens = self.total_tokens.pop(0) if self.total_tokens else 0
+        returned_session_budget_tokens = self.session_budget_tokens.pop(0) if self.session_budget_tokens else None
         return RunResult(
             ok=self.ok,
             returncode=self.returncode,
@@ -101,6 +104,7 @@ class FakeAdapter(AssistantAdapter):
             resolved_model=resolved_model,
             session_id=returned_session_id,
             total_tokens=returned_total_tokens,
+            session_budget_tokens=returned_session_budget_tokens,
         )
 
     def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:

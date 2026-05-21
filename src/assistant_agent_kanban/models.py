@@ -382,6 +382,7 @@ class RetrospectiveRecord(BaseModel):
     resolved_model: str | None = None
     session_id: str | None = None
     total_tokens: int = 0
+    session_budget_tokens: int | None = None
     commit_sha: str | None = None
     generated_at: datetime | None = None
 
@@ -496,6 +497,7 @@ class RunResult(BaseModel):
     resolved_model: str | None = None
     session_id: str | None = None
     total_tokens: int = 0
+    session_budget_tokens: int | None = None
 
 
 class TaskContext(BaseModel):
