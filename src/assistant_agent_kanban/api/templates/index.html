@@ -956,6 +956,7 @@
     .column-cards { display: grid; gap: 10px; min-height: 0; }
     .plan-board .column-cards, .implementation-board .column-cards, .final-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
     .final-board .column-cards { overflow-x: hidden; }
+    .final-board .column-cards { overflow-y: visible; min-height: auto; height: auto; }
     .board-empty { color: var(--muted); padding: 12px; border: 1px dashed var(--border); background: rgba(255,255,255,0.55); text-align: center; min-height: 88px; display: flex; align-items: center; justify-content: center; }
     body[data-theme="dark"] .board-empty { color: rgba(226, 234, 242, 0.82); border-color: rgba(186, 200, 214, 0.2); background: linear-gradient(180deg, rgba(31, 43, 54, 0.92), rgba(23, 32, 41, 0.88)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
     .card { position: relative; background: white; border-left: 4px solid var(--card-accent, var(--accent)); padding: 0; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); overflow: hidden; transition: transform 180ms ease, box-shadow 180ms ease; }
@@ -981,7 +982,7 @@
     .card-tag-final-branch { --tag-bg: rgba(124,79,44,0.14); --tag-border: rgba(124,79,44,0.26); --tag-text: #6c3b16; }
     .card-history-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
     .final-board .card { min-width: 0; max-width: 100%; min-height: 88px; overflow: hidden; }
-    .final-board .card { min-height: 56px; }
+    .final-board .card { min-height: auto; height: auto; }
     .final-board .card-button { display: block; min-width: 0; max-width: 100%; padding-right: 0; }
     .final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .final-board .card-meta-row { min-width: 0; max-width: 100%; }
