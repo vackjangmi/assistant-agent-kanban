@@ -88,7 +88,7 @@ class PlanningWorker(WorkerBase):
                     reused_session_id=session_id,
                     returned_session_id=result.session_id,
                     prior_session_tokens=prior_session_tokens,
-                    run_tokens=result.total_tokens,
+                    run_tokens=self.session_budget_tokens(result),
                 )
                 if not result.ok:
                     apply_retry_gate(planning.metadata, reason="planner-run-failed")
@@ -142,7 +142,7 @@ class PlanningWorker(WorkerBase):
                     reused_session_id=session_id,
                     returned_session_id=handshake_result.session_id,
                     prior_session_tokens=prior_session_tokens,
-                    run_tokens=handshake_result.total_tokens,
+                    run_tokens=self.session_budget_tokens(handshake_result),
                 )
                 self.metadata_store.save(planning.task_dir, planning.metadata)
                 if not handshake_result.ok:
@@ -192,7 +192,7 @@ class PlanningWorker(WorkerBase):
                     reused_session_id=active_session_id,
                     returned_session_id=live_result.session_id,
                     prior_session_tokens=planning.metadata.plan.session_tokens,
-                    run_tokens=live_result.total_tokens,
+                    run_tokens=self.session_budget_tokens(live_result),
                 )
                 finalized_result = await self._finalize_plan_artifact(
                     planning,
@@ -313,6 +313,7 @@ class PlanningWorker(WorkerBase):
             resolved_model=planning.metadata.plan.resolved_model,
             session_id=planning.metadata.plan.session_id,
             total_tokens=artifact_result.total_tokens,
+            session_budget_tokens=artifact_result.session_budget_tokens,
         )
 
     def _record_plan_result(self, planning, result: RunResult, *, reused_session_id: str | None) -> None:
@@ -323,7 +324,7 @@ class PlanningWorker(WorkerBase):
             reused_session_id=reused_session_id,
             returned_session_id=result.session_id,
             prior_session_tokens=planning.metadata.plan.session_tokens,
-            run_tokens=result.total_tokens,
+            run_tokens=self.session_budget_tokens(result),
         )
 
     def _raise_on_failed_plan_result(self, planning, result: RunResult) -> None:

@@ -131,7 +131,7 @@ class ReviewerWorker(WorkerBase):
                     reused_session_id=session_id,
                     returned_session_id=result.session_id,
                     prior_session_tokens=prior_session_tokens,
-                    run_tokens=result.total_tokens,
+                    run_tokens=self.session_budget_tokens(result),
                 )
                 if not result.ok or artifact is None:
                     diagnostic_path = self._write_finalize_failure_artifact(reviewing.task_dir, result, cycle=cycle)
@@ -157,6 +157,7 @@ class ReviewerWorker(WorkerBase):
                     resolved_model=reviewing.metadata.review.resolved_model,
                     session_id=reviewing.metadata.review.session_id,
                     total_tokens=result.total_tokens,
+                    session_budget_tokens=result.session_budget_tokens,
                 )
                 markdown_path, json_path = self.write_result_artifacts(reviewing.task_dir, review_name, finalized_result)
                 review_payload = json.loads((reviewing.task_dir / json_path).read_text())
@@ -215,7 +216,7 @@ class ReviewerWorker(WorkerBase):
                 reused_session_id=session_id,
                 returned_session_id=handshake_result.session_id,
                 prior_session_tokens=prior_session_tokens,
-                run_tokens=handshake_result.total_tokens,
+                run_tokens=self.session_budget_tokens(handshake_result),
             )
             self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
             if not handshake_result.ok:
@@ -271,7 +272,7 @@ class ReviewerWorker(WorkerBase):
                 reused_session_id=active_session_id,
                 returned_session_id=finalize_result.session_id,
                 prior_session_tokens=reviewing.metadata.review.session_tokens,
-                run_tokens=finalize_result.total_tokens,
+                run_tokens=self.session_budget_tokens(finalize_result),
             )
 
             if not finalize_result.ok or artifact is None:
@@ -299,6 +300,7 @@ class ReviewerWorker(WorkerBase):
                 resolved_model=reviewing.metadata.review.resolved_model,
                 session_id=reviewing.metadata.review.session_id,
                 total_tokens=finalize_result.total_tokens,
+                session_budget_tokens=finalize_result.session_budget_tokens,
             )
             markdown_path, json_path = self.write_result_artifacts(reviewing.task_dir, review_name, finalized_result)
             review_payload = json.loads((reviewing.task_dir / json_path).read_text())
@@ -399,6 +401,7 @@ class ReviewerWorker(WorkerBase):
             resolved_model=fallback.resolved_model or first.resolved_model,
             session_id=fallback.session_id or first.session_id,
             total_tokens=first.total_tokens + fallback.total_tokens,
+            session_budget_tokens=self.session_budget_tokens(first) + self.session_budget_tokens(fallback),
         )
 
     def _join_attempt_streams(self, first: str, second: str) -> str:
@@ -421,6 +424,7 @@ class ReviewerWorker(WorkerBase):
             resolved_model=result.resolved_model,
             session_id=result.session_id,
             total_tokens=result.total_tokens,
+            session_budget_tokens=result.session_budget_tokens,
         )
         _, json_path = self.write_result_artifacts(task_dir, f"REVIEW-FAILED-{cycle:03d}", diagnostic)
         return json_path
@@ -526,7 +530,7 @@ class ReviewerWorker(WorkerBase):
                 reused_session_id=session_id,
                 returned_session_id=result.session_id,
                 prior_session_tokens=prior_session_tokens,
-                run_tokens=result.total_tokens,
+                run_tokens=self.session_budget_tokens(result),
             )
             answer = result.assistant_text.strip()
             if not result.ok or not answer:

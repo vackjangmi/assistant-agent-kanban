@@ -91,7 +91,7 @@ class PlanApprovalWorker(WorkerBase):
                     reused_session_id=session_id,
                     returned_session_id=result.session_id,
                     prior_session_tokens=prior_session_tokens,
-                    run_tokens=result.total_tokens,
+                    run_tokens=self.session_budget_tokens(result),
                 )
                 decision = self._parse_decision(result)
                 finalized_result = RunResult(
@@ -105,6 +105,7 @@ class PlanApprovalWorker(WorkerBase):
                     resolved_model=task.metadata.plan_approval.resolved_model,
                     session_id=task.metadata.plan_approval.session_id,
                     total_tokens=result.total_tokens,
+                    session_budget_tokens=result.session_budget_tokens,
                 )
                 approval_path, json_path = self.write_result_artifacts(task.task_dir, "PLAN-APPROVAL", finalized_result)
                 self._write_decision_json(task.task_dir / json_path, decision)
