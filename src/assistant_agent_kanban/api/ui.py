@@ -10,7 +10,15 @@ from fastapi.responses import HTMLResponse
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 TEMPLATE_PATH = TEMPLATE_DIR / "index.html"
 CSS_PATH = TEMPLATE_DIR / "index.css"
-JS_PATH = TEMPLATE_DIR / "index.js"
+JS_DIR = TEMPLATE_DIR / "js"
+JS_MANIFEST = [
+    "01_globals.js",
+    "02_translations.js",
+    "03_utils.js",
+    "04_diff.js",
+    "05_board.js",
+    "06_sse.js",
+]
 
 TEMPLATE_DEFAULT_TARGET_REPO = "__DEFAULT_TARGET_REPO__"
 TEMPLATE_DEFAULT_BASE_BRANCH = "__DEFAULT_BASE_BRANCH__"
@@ -23,7 +31,7 @@ TEMPLATE_TARGET_REPO_DOCS_ROOT = "__TARGET_REPO_DOCS_ROOT__"
 def _render_index_html(*, default_target_repo: str, default_base_branch: str, initial_runtime_language: str, initial_runtime_theme: str, target_repo_docs_root: str) -> str:
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
     css_content = CSS_PATH.read_text(encoding="utf-8")
-    js_content = JS_PATH.read_text(encoding="utf-8")
+    js_content = "".join((JS_DIR / name).read_text(encoding="utf-8") for name in JS_MANIFEST)
 
     rendered = template.replace("/* {{ INJECT_CSS }} */", css_content).replace("/* {{ INJECT_JS }} */", js_content)
 
