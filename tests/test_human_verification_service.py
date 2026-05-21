@@ -377,7 +377,7 @@ def test_human_verification_rerequest_from_reviewer_qa_works_during_human_verify
     assert (repo_root / "app.txt").read_text() == "hello\n"
 
 
-def test_human_verification_reject_resets_implementation_resume_context(configured_paths):
+def test_human_verification_reject_preserves_reusable_implementation_session(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-reject-reset-implementation-task")
     scanner, service, completed = _task_ready_for_human_verification(config)
@@ -399,9 +399,9 @@ def test_human_verification_reject_resets_implementation_resume_context(configur
     refreshed = scanner.find_task(completed.metadata.task_id)
     assert refreshed.metadata.implementation.last_result is None
     assert refreshed.metadata.implementation.resolved_model is None
-    assert refreshed.metadata.implementation.session_id is None
+    assert refreshed.metadata.implementation.session_id == "ses_previous"
     assert refreshed.metadata.implementation.last_run_tokens == 0
-    assert refreshed.metadata.implementation.session_tokens == 0
+    assert refreshed.metadata.implementation.session_tokens == 456
     assert refreshed.metadata.retry_gate.reason is None
     assert refreshed.metadata.retry_gate.consecutive_count == 0
     assert refreshed.metadata.retry_gate.not_before is None

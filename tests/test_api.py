@@ -1184,8 +1184,8 @@ def test_api_resumes_implementer_from_todos_retry_gate(configured_paths):
         assert payload["implementation"]["resume_mode"] == "pinned"
         assert payload["implementation"]["resume_backend_override"] is None
         assert payload["implementation"]["resume_model_override"] is None
-        assert payload["implementation"]["session_id"] is None
-        assert payload["implementation"]["session_tokens"] == 0
+        assert payload["implementation"]["session_id"] == "ses_impl"
+        assert payload["implementation"]["session_tokens"] == 321
         assert payload["implementation"]["last_run_tokens"] == 0
 
         detail = client.get(f"/api/tasks/{todos.metadata.task_id}")

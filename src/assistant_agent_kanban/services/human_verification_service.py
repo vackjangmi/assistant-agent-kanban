@@ -633,9 +633,7 @@ class HumanVerificationService:
         metadata.implementation.target_repo_baseline = None
         metadata.implementation.last_result = None
         metadata.implementation.resolved_model = None
-        metadata.implementation.session_id = None
         metadata.implementation.last_run_tokens = 0
-        metadata.implementation.session_tokens = 0
 
     def _target_repo_state_drift_note(self, metadata) -> str | None:
         baseline = metadata.implementation.target_repo_baseline
