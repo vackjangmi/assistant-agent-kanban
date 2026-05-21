@@ -7,7 +7,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 
-TEMPLATE_PATH = Path(__file__).with_name("templates") / "index.html"
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+TEMPLATE_PATH = TEMPLATE_DIR / "index.html"
+CSS_PATH = TEMPLATE_DIR / "index.css"
+JS_PATH = TEMPLATE_DIR / "index.js"
+
 TEMPLATE_DEFAULT_TARGET_REPO = "__DEFAULT_TARGET_REPO__"
 TEMPLATE_DEFAULT_BASE_BRANCH = "__DEFAULT_BASE_BRANCH__"
 TEMPLATE_INITIAL_RUNTIME_LANGUAGE = "__INITIAL_RUNTIME_LANGUAGE__"
@@ -17,9 +21,14 @@ TEMPLATE_TARGET_REPO_DOCS_ROOT = "__TARGET_REPO_DOCS_ROOT__"
 
 
 def _render_index_html(*, default_target_repo: str, default_base_branch: str, initial_runtime_language: str, initial_runtime_theme: str, target_repo_docs_root: str) -> str:
-    template = TEMPLATE_PATH.read_text()
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css_content = CSS_PATH.read_text(encoding="utf-8")
+    js_content = JS_PATH.read_text(encoding="utf-8")
+
+    rendered = template.replace("/* {{ INJECT_CSS }} */", css_content).replace("/* {{ INJECT_JS }} */", js_content)
+
     return (
-        template.replace(TEMPLATE_DEFAULT_TARGET_REPO, json.dumps(default_target_repo))
+        rendered.replace(TEMPLATE_DEFAULT_TARGET_REPO, json.dumps(default_target_repo))
         .replace(TEMPLATE_DEFAULT_BASE_BRANCH, json.dumps(default_base_branch))
         .replace(TEMPLATE_INITIAL_RUNTIME_LANGUAGE, json.dumps(initial_runtime_language))
         .replace(TEMPLATE_INITIAL_RUNTIME_THEME_ATTR, initial_runtime_theme)
