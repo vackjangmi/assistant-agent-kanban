@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import threading
 from collections import defaultdict
@@ -14,7 +15,9 @@ from .models import RunResult
 
 
 CODEX_KNOWN_MODELS = [
+    "gpt-5.5",
     "gpt-5.4",
+    "gpt-5.4-mini",
     "gpt-5.3-codex",
     "gpt-5.3-codex-spark",
     "gpt-5.2-codex",
@@ -26,6 +29,11 @@ CODEX_KNOWN_MODELS = [
     "gpt-5-codex-mini",
     "gpt-5",
 ]
+CODEX_REASONING_EFFORTS = ("low", "medium", "high", "xhigh")
+CODEX_KNOWN_REASONING_MODELS = {
+    "gpt-5.5": CODEX_REASONING_EFFORTS,
+}
+CODEX_REASONING_MODEL_RE = re.compile(r"^(?P<model>.+?)\s+\((?P<effort>low|medium|high|xhigh)\)$")
 
 
 class SubprocessCodexAdapter(AssistantAdapter):
@@ -34,7 +42,24 @@ class SubprocessCodexAdapter(AssistantAdapter):
         self._task_processes: dict[str, set[subprocess.Popen[str]]] = defaultdict(set)
 
     def discover_models(self, *, config: AppConfig, refresh: bool = False) -> list[str]:
-        return list(CODEX_KNOWN_MODELS)
+        command = [config.codex.binary, "debug", "models"]
+        if not refresh:
+            command.append("--bundled")
+        try:
+            result = subprocess.run(
+                command,
+                cwd=str(config.repo_root),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=config.codex.timeout_seconds,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return _known_model_candidates()
+        if result.returncode != 0:
+            return _known_model_candidates()
+        models = _parse_codex_discovered_models(result.stdout)
+        return models or _known_model_candidates()
 
     def availability_error(self, *, config: AppConfig, backend) -> str | None:
         return _resolve_binary_error(config.codex.binary)
@@ -67,9 +92,13 @@ class SubprocessCodexAdapter(AssistantAdapter):
         if session_id:
             command.extend(["resume", session_id])
         command.extend(["--json", "--skip-git-repo-check"])
-        resolved_model = config.role_model(_role_from_agent(agent))
-        if resolved_model:
-            command.extend(["--model", resolved_model])
+        role = _role_from_agent(agent)
+        resolved_model = config.role_model(role)
+        command_model, reasoning_effort = _split_codex_model_reasoning(resolved_model)
+        if reasoning_effort:
+            command.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
+        if command_model:
+            command.extend(["--model", command_model])
         command.append(prompt)
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -169,6 +198,100 @@ def _role_from_agent(agent: str) -> AssistantRole:
     if suffix == "commit":
         return "commit"
     return cast(AssistantRole, "planner")
+
+
+def _parse_codex_discovered_models(stdout: str) -> list[str]:
+    payload = _decode_codex_models_payload(stdout)
+    if isinstance(payload, dict):
+        raw_models = payload.get("models")
+    else:
+        raw_models = payload
+    if not isinstance(raw_models, list):
+        return []
+
+    models: list[str] = []
+    seen: set[str] = set()
+    for item in raw_models:
+        candidate: str | None = None
+        reasoning_efforts: list[str] = []
+        if isinstance(item, str):
+            candidate = item
+        elif isinstance(item, dict):
+            if item.get("visibility") == "hidden":
+                continue
+            for key in ("slug", "id", "model"):
+                value = item.get(key)
+                if isinstance(value, str):
+                    candidate = value
+                    break
+            reasoning_efforts = _extract_supported_reasoning_efforts(item)
+        if candidate is None:
+            continue
+        _append_model_candidate(models, seen, candidate)
+        for effort in reasoning_efforts:
+            _append_model_candidate(models, seen, _format_reasoning_model(candidate, effort))
+    return models
+
+
+def _known_model_candidates() -> list[str]:
+    models: list[str] = []
+    seen: set[str] = set()
+    for model in CODEX_KNOWN_MODELS:
+        _append_model_candidate(models, seen, model)
+        for effort in CODEX_KNOWN_REASONING_MODELS.get(model, ()):
+            _append_model_candidate(models, seen, _format_reasoning_model(model, effort))
+    return models
+
+
+def _append_model_candidate(models: list[str], seen: set[str], value: str) -> None:
+    normalized = value.strip()
+    if not normalized or normalized in seen:
+        return
+    seen.add(normalized)
+    models.append(normalized)
+
+
+def _extract_supported_reasoning_efforts(item: dict) -> list[str]:
+    raw_levels = item.get("supported_reasoning_levels")
+    if not isinstance(raw_levels, list):
+        return []
+    efforts: list[str] = []
+    for level in raw_levels:
+        if not isinstance(level, dict):
+            continue
+        effort = level.get("effort")
+        if isinstance(effort, str) and effort in CODEX_REASONING_EFFORTS and effort not in efforts:
+            efforts.append(effort)
+    return efforts
+
+
+def _format_reasoning_model(model: str, effort: str) -> str:
+    return f"{model.strip()} ({effort})"
+
+
+def _split_codex_model_reasoning(model: str | None) -> tuple[str | None, str | None]:
+    if model is None:
+        return None, None
+    normalized = model.strip()
+    if not normalized:
+        return None, None
+    match = CODEX_REASONING_MODEL_RE.match(normalized)
+    if not match:
+        return normalized, None
+    return match.group("model").strip(), match.group("effort")
+
+
+def _decode_codex_models_payload(stdout: str) -> object | None:
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(stdout):
+        if char not in "{[":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(stdout[index:])
+        except json.JSONDecodeError:
+            continue
+        return payload
+    return None
 
 
 def _extract_assistant_text(stdout: str) -> str:

@@ -5,7 +5,13 @@ from typing import cast
 
 import subprocess
 
-from assistant_agent_kanban.codex_adapter import CODEX_KNOWN_MODELS, SubprocessCodexAdapter, _extract_session_budget_tokens, _extract_total_tokens
+from assistant_agent_kanban.codex_adapter import (
+    CODEX_KNOWN_MODELS,
+    SubprocessCodexAdapter,
+    _extract_session_budget_tokens,
+    _extract_total_tokens,
+    _parse_codex_discovered_models,
+)
 from assistant_agent_kanban.config import AppConfig
 
 
@@ -33,7 +39,7 @@ def test_codex_adapter_builds_exec_command(monkeypatch, tmp_path):
     adapter = SubprocessCodexAdapter()
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.runtime.coding_assistant = "codex"
-    config.codex.planner_model = "gpt-5.4"
+    config.codex.planner_model = "gpt-5.5 (xhigh)"
     config.bootstrap()
 
     result = adapter.run(
@@ -48,9 +54,11 @@ def test_codex_adapter_builds_exec_command(monkeypatch, tmp_path):
     assert command[:6] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "workspace-write"]
     assert "--json" in command
     assert "--model" in command
-    assert command[command.index("--model") + 1] == "gpt-5.4"
+    assert command[command.index("--model") + 1] == "gpt-5.5"
+    assert 'model_reasoning_effort="xhigh"' in command
     assert command[-1] == "plan this task"
     assert result.assistant_text == "ok"
+    assert result.resolved_model == "gpt-5.5 (xhigh)"
     assert result.session_id == "thread-123"
     assert recorded["cwd"] == str(tmp_path)
 
@@ -106,13 +114,73 @@ def test_codex_token_extraction_does_not_double_count_cached_input_tokens():
     assert _extract_session_budget_tokens(stdout) == 180
 
 
-def test_codex_adapter_exposes_known_models(tmp_path):
+def test_codex_adapter_discovers_models_from_cli(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        recorded["command"] = command
+        recorded["cwd"] = kwargs.get("cwd")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='{"models":[{"slug":"gpt-5.5","visibility":"list","supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"high"},{"effort":"xhigh"}]},{"slug":"gpt-5.4","visibility":"list"}]}\n',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
     adapter = SubprocessCodexAdapter()
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.runtime.coding_assistant = "codex"
     config.bootstrap()
 
-    assert adapter.discover_models(config=config) == CODEX_KNOWN_MODELS
+    assert adapter.discover_models(config=config) == ["gpt-5.5", "gpt-5.5 (low)", "gpt-5.5 (medium)", "gpt-5.5 (high)", "gpt-5.5 (xhigh)", "gpt-5.4"]
+    assert recorded["command"] == ["codex", "debug", "models", "--bundled"]
+    assert recorded["cwd"] == str(config.repo_root)
+
+
+def test_codex_adapter_refreshes_models_from_cli(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        recorded["command"] = command
+        return subprocess.CompletedProcess(command, 0, stdout='{"models":["gpt-5.5"]}\n', stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    adapter = SubprocessCodexAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "codex"
+    config.bootstrap()
+
+    assert adapter.discover_models(config=config, refresh=True) == ["gpt-5.5"]
+    assert recorded["command"] == ["codex", "debug", "models"]
+
+
+def test_codex_adapter_falls_back_to_known_models_when_discovery_fails(monkeypatch, tmp_path):
+    def fake_run(command, **kwargs):
+        return subprocess.CompletedProcess(command, 2, stdout="", stderr="unknown command")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    adapter = SubprocessCodexAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "codex"
+    config.bootstrap()
+
+    assert adapter.discover_models(config=config)[:5] == ["gpt-5.5", "gpt-5.5 (low)", "gpt-5.5 (medium)", "gpt-5.5 (high)", "gpt-5.5 (xhigh)"]
+    assert CODEX_KNOWN_MODELS[0] == "gpt-5.5"
+
+
+def test_parse_codex_discovered_models_uses_visible_catalog_slugs():
+    output = """
+WARNING: proceeding, even though we could not update PATH
+{"models":[
+  {"slug":"gpt-5.5","display_name":"GPT-5.5","visibility":"list","supported_reasoning_levels":[{"effort":"low"},{"effort":"high"},{"effort":"xhigh"}]},
+  {"slug":"hidden-model","visibility":"hidden"},
+  {"id":"gpt-5.4","visibility":"list"},
+  {"model":"gpt-5.4","visibility":"list"}
+]}
+"""
+
+    assert _parse_codex_discovered_models(output) == ["gpt-5.5", "gpt-5.5 (low)", "gpt-5.5 (high)", "gpt-5.5 (xhigh)", "gpt-5.4"]
 
 
 def test_codex_adapter_uses_request_draft_model_for_request_draft_agent(monkeypatch, tmp_path):

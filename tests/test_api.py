@@ -3704,13 +3704,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
                 "request_draft_model": "gemini-2.5-flash",
                 "planner_session_token_budget": 210,
                 "planner_agent_count": 2,
-                "implementer_model": " gpt-5.4 ",
+                "implementer_model": " gpt-5.4 (high) ",
                 "implementer_session_token_budget": 230,
                 "implementer_agent_count": 3,
                 "reviewer_model": "",
                 "reviewer_session_token_budget": 190,
                 "reviewer_agent_count": 4,
-                "commit_model": "gpt-5",
+                "commit_model": "gpt-5 (xhigh)",
                 "commit_session_token_budget": 250,
                 "repo_discovery_root": "../",
                 "repo_discovery_max_depth": 4,
@@ -3749,13 +3749,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert payload["request_draft_model"] == "gemini-2.5-flash"
     assert payload["planner_session_token_budget"] == 210
     assert payload["planner_agent_count"] == 2
-    assert payload["implementer_model"] == "gpt-5.4"
+    assert payload["implementer_model"] == "gpt-5.4 (high)"
     assert payload["implementer_session_token_budget"] == 230
     assert payload["implementer_agent_count"] == 3
     assert payload["reviewer_model"] is None
     assert payload["reviewer_session_token_budget"] == 190
     assert payload["reviewer_agent_count"] == 4
-    assert payload["commit_model"] == "gpt-5"
+    assert payload["commit_model"] == "gpt-5 (xhigh)"
     assert payload["commit_session_token_budget"] == 250
     assert payload["repo_discovery_root"] == "../"
     assert payload["repo_discovery_max_depth"] == 4
@@ -3778,7 +3778,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.opencode.planner_session_token_budget == 210000
     assert app.state.runtime.config.runtime.planner_agent_count == 2
     assert app.state.runtime.config.gemini.request_draft_model == "gemini-2.5-flash"
-    assert app.state.runtime.config.codex.implementer_model == "gpt-5.4"
+    assert app.state.runtime.config.codex.implementer_model == "gpt-5.4 (high)"
     assert app.state.runtime.config.codex.implementer_session_token_budget == 230000
     assert app.state.runtime.config.runtime.implementer_agent_count == 3
     assert app.state.runtime.config.opencode.reviewer_model is None
@@ -3793,7 +3793,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
     assert app.state.runtime.config.slack.default_channel is None
     assert app.state.runtime.config.slack.default_channel_display is None
     assert app.state.runtime.config.slack.app_mention_enabled is True
-    assert load_config(config_path).codex.commit_model == "gpt-5"
+    assert load_config(config_path).codex.commit_model == "gpt-5 (xhigh)"
     assert load_config(config_path).codex.commit_session_token_budget == 250000
     assert load_config(config_path).runtime.role_backends.implementer == "codex"
     assert load_config(config_path).runtime.role_backends.commit == "codex"

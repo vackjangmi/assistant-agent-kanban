@@ -134,7 +134,7 @@ def test_load_config_accepts_codex_runtime_backend(tmp_path):
                 "runtime:",
                 "  coding_assistant: codex",
                 "codex:",
-                "  planner_model: gpt-5.4",
+                "  planner_model: gpt-5.5 (xhigh)",
             ]
         )
     )
@@ -142,7 +142,7 @@ def test_load_config_accepts_codex_runtime_backend(tmp_path):
     config = load_config(config_path)
 
     assert config.runtime.coding_assistant == "codex"
-    assert config.codex.planner_model == "gpt-5.4"
+    assert config.codex.planner_model == "gpt-5.5 (xhigh)"
 
 
 def test_load_config_accepts_claude_runtime_backend(tmp_path):
