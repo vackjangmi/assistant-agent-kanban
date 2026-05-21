@@ -104,7 +104,7 @@ class ImplementerWorker(WorkerBase):
                     reused_session_id=session_id,
                     returned_session_id=result.session_id,
                     prior_session_tokens=prior_session_tokens,
-                    run_tokens=result.total_tokens,
+                    run_tokens=self.session_budget_tokens(result),
                 )
                 implementing.metadata.cycle += 1
                 drift_note = self._target_repo_state_drift_note(implementing.metadata)
@@ -188,7 +188,7 @@ class ImplementerWorker(WorkerBase):
                 reused_session_id=session_id,
                 returned_session_id=handshake_result.session_id,
                 prior_session_tokens=prior_session_tokens,
-                run_tokens=handshake_result.total_tokens,
+                run_tokens=self.session_budget_tokens(handshake_result),
             )
             self.metadata_store.save(implementing.task_dir, implementing.metadata)
             drift_note = self._target_repo_state_drift_note(implementing.metadata)
@@ -236,7 +236,7 @@ class ImplementerWorker(WorkerBase):
                 reused_session_id=active_session_id,
                 returned_session_id=live_result.session_id,
                 prior_session_tokens=implementing.metadata.implementation.session_tokens,
-                run_tokens=live_result.total_tokens,
+                run_tokens=self.session_budget_tokens(live_result),
             )
             implementing.metadata.cycle += 1
             drift_note = self._target_repo_state_drift_note(implementing.metadata)
@@ -300,7 +300,7 @@ class ImplementerWorker(WorkerBase):
                     reused_session_id=active_session_id,
                     returned_session_id=finalize_result.session_id,
                     prior_session_tokens=implementing.metadata.implementation.session_tokens,
-                    run_tokens=finalize_result.total_tokens,
+                    run_tokens=self.session_budget_tokens(finalize_result),
                 )
                 drift_note = self._target_repo_state_drift_note(implementing.metadata)
                 if drift_note is not None:
@@ -342,6 +342,7 @@ class ImplementerWorker(WorkerBase):
                     resolved_model=implementing.metadata.implementation.resolved_model,
                     session_id=implementing.metadata.implementation.session_id,
                     total_tokens=finalize_result.total_tokens,
+                    session_budget_tokens=finalize_result.session_budget_tokens,
                 )
                 work_name = f"WORK-{implementing.metadata.cycle:03d}"
                 self.write_result_artifacts(implementing.task_dir, work_name, finalized_result)
