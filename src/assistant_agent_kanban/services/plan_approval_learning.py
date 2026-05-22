@@ -246,13 +246,19 @@ def _parse_sections(text: str) -> dict[str, str] | None:
     saw_heading = False
     for line in text.splitlines():
         match = HEADING_RE.match(line)
-        if match is not None and len(match.group("level")) <= 2:
-            current_key = match.group("title").strip().lower()
-            sections[current_key] = []
+        if match is not None:
+            level = match.group("level")
+            title = match.group("title")
+            if level is None or title is None or len(level) > 2:
+                continue
+            key = title.strip().lower()
+            current_key = key
+            sections[key] = []
             saw_heading = True
             continue
         if current_key is None:
             continue
+        assert current_key is not None
         sections[current_key].append(line)
     if not saw_heading:
         return None

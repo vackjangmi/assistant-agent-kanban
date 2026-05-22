@@ -61,8 +61,6 @@ def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effe
         ),
         workspace_manager=WorkspaceManager(config),
     )
-    import asyncio
-
     asyncio.run(implementer.run_task(scanner.find_task(waiting.metadata.task_id)))
     reviewing = transitions.move(scanner.find_task(waiting.metadata.task_id), TaskState.REVIEWING, by="reviewer")
     completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
@@ -1080,7 +1078,6 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     review_date = datetime.now(timezone.utc)
-    docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
     summary_path = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=scanner.metadata_store).target_repo_summary_path(done.metadata, created_at=review_date)
     assert summary_path.exists()
     summary_text = summary_path.read_text()

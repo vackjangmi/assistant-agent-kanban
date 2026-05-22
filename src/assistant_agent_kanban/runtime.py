@@ -21,12 +21,12 @@ from .services.retrospective_service import RetrospectiveService
 from .services.task_deletion_service import TaskDeletionService
 from .services.task_service import TaskService
 from .transitions import TransitionManager
-from .assistant_adapter import AssistantAdapter, AssistantBackendManager, build_backend_manager
+from .assistant_adapter import AssistantAdapter, build_backend_manager
 from .exceptions import AdapterRunError, CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from .language import runtime_language_code_to_request_language
 from .request_creator import RequestTemplateData, build_default_scope_sections_for_language, create_request, split_lines
 from .request_draft_store import RequestDraftStore, StoredRequestDraft, serialize_request_draft_transcript_markdown
-from .request_drafting import draft_request
+from .request_drafting import RequestDraftResult, draft_request
 from .slack_api import slack_api_call, slack_error_message, slack_upload_file_to_thread
 from .slack_channel_matcher import slack_channel_matches_config
 from .slack_notifications import SlackMilestoneNotifier
@@ -629,7 +629,7 @@ class RuntimeSupervisor:
             return {"status": "success"}
         return self._update_slack_request_intake_view(payload, updated)
 
-    def _generate_slack_request_draft_core(self, draft: StoredRequestDraft) -> tuple[StoredRequestDraft, object]:
+    def _generate_slack_request_draft_core(self, draft: StoredRequestDraft) -> tuple[StoredRequestDraft, RequestDraftResult]:
         message = (draft.request_draft_input or "").strip()
         if not message:
             raise ValueError("Draft prompt is required before generating a request draft.")

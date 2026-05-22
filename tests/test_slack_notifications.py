@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from assistant_agent_kanban.config import AppConfig
 from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.models import TaskContext

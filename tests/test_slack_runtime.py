@@ -441,17 +441,17 @@ def test_slack_request_draft_flow_supports_revise_loop_and_parent_message_update
     draft = RequestDraftStore(config).load(draft_id)
     assert len(draft.transcript) == 4
     assert sum(1 for entry in draft.transcript if entry.role == "assistant") == 2
-    assert len([
-        body
-        for method, _token, body in calls
-        if method == "chat.update"
-        and body
-        and str(body.get("text", "")).startswith("Assistant draft")
-        and isinstance(body.get("blocks"), list)
-        and body["blocks"]
-        and isinstance(body["blocks"][-1], dict)
-        and body["blocks"][-1].get("type") == "actions"
-    ]) == 2
+    assistant_draft_updates = []
+    for method, _token, body in calls:
+        if method != "chat.update" or body is None:
+            continue
+        blocks = body.get("blocks")
+        if not isinstance(blocks, list) or not blocks:
+            continue
+        last_block = blocks[-1]
+        if str(body.get("text", "")).startswith("Assistant draft") and isinstance(last_block, dict) and last_block.get("type") == "actions":
+            assistant_draft_updates.append(body)
+    assert len(assistant_draft_updates) == 2
 
     cleared_revise_message = cast(
         dict[str, Any],

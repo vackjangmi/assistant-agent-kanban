@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib.resources import files
 from pathlib import Path
 from typing import cast
 
@@ -10,12 +11,12 @@ def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
     role = _role_for_agent_name(config, agent_name)
     if role is None or config.backend_for_role(role) != "opencode":
         return None
-    source = PROJECT_ROOT / ".opencode" / "agents" / f"{agent_name}.md"
-    if not source.exists():
+    source_content = _agent_source_content(agent_name)
+    if source_content is None:
         return None
     target = runtime_agents_dir(config) / f"{agent_name}.md"
     target.parent.mkdir(parents=True, exist_ok=True)
-    content = _materialize_agent_content(source.read_text(), _model_for_agent(config, agent_name))
+    content = _materialize_agent_content(source_content, _model_for_agent(config, agent_name))
     if not target.exists() or target.read_text() != content:
         target.write_text(content)
     return target
@@ -60,6 +61,17 @@ def _role_for_agent_name(config: AppConfig, agent_name: str) -> AssistantRole | 
     for role in ASSISTANT_ROLES:
         if getattr(config.opencode, f"{role}_agent") == agent_name:
             return cast(AssistantRole, role)
+    return None
+
+
+def _agent_source_content(agent_name: str) -> str | None:
+    repo_source = PROJECT_ROOT / ".opencode" / "agents" / f"{agent_name}.md"
+    if repo_source.exists():
+        return repo_source.read_text()
+
+    bundled_source = files("assistant_agent_kanban").joinpath("agent_prompts", "opencode", f"{agent_name}.md")
+    if bundled_source.is_file():
+        return bundled_source.read_text()
     return None
 
 

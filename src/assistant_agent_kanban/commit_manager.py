@@ -55,7 +55,8 @@ class CommitManager:
             target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise CommitError(str(exc)) from exc
-        metadata.commit.prepared_message or self.prepare_commit_message(task_dir, metadata)
+        if not metadata.commit.prepared_message:
+            self.prepare_commit_message(task_dir, metadata)
         review_branch = metadata.integration.review_branch
         if review_branch:
             current_branch = self._current_branch(target_repo_root)

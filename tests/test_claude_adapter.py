@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import cast
 
-import pytest
 import subprocess
 
 from assistant_agent_kanban.claude_adapter import CLAUDE_MODEL_ALIASES, SubprocessClaudeAdapter, _extract_assistant_text, _extract_session_id, _extract_total_tokens

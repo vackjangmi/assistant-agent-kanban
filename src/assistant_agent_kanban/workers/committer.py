@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
 from ..commit_manager import CommitManager
 from ..assistant_adapter import AssistantAdapter
 from .base import WorkerBase

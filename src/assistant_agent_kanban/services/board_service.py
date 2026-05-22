@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import Protocol
+
 from ..models import BoardSnapshot
-from ..scanner import KanbanScanner
+
+
+class BoardSnapshotProvider(Protocol):
+    def board_snapshot(self) -> BoardSnapshot: ...
 
 
 class BoardService:
-    def __init__(self, scanner: KanbanScanner) -> None:
+    def __init__(self, scanner: BoardSnapshotProvider) -> None:
         self.scanner = scanner
         self._cached_board: BoardSnapshot | None = None
 

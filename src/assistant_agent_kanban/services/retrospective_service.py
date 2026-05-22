@@ -10,7 +10,7 @@ from typing import Literal, TypedDict
 
 from ..commit_manager import CommitManager
 from ..config import AppConfig
-from ..exceptions import AdapterRunError, CommitError, TaskNotFoundError, TransitionError
+from ..exceptions import AdapterRunError, CommitError, TransitionError
 from ..language import generation_language_code, language_name
 from ..locks import TaskLockManager
 from ..models import RetrospectiveRecord, RunResult, TaskContext

@@ -6,7 +6,6 @@ import os
 import re
 import shutil
 import subprocess
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 import uuid
@@ -476,7 +475,7 @@ class HumanVerificationService:
 
     def _sync_task_documents_to_target_repo(self, task_dir: Path, metadata) -> str:
         try:
-            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+            resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
         try:

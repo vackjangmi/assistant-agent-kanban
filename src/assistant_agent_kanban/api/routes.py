@@ -16,24 +16,18 @@ from ..agent_materializer import ensure_runtime_agents
 from ..assistant_adapter import AssistantBackendStatusSnapshot, AssistantModelSnapshot
 from ..claude_adapter import CLAUDE_MODEL_ALIASES
 from ..config import ASSISTANT_ROLES, DEFAULT_REPO_DISCOVERY_ROOT, DEFAULT_SESSION_TOKEN_BUDGET, SUPPORTED_RUNTIME_ASSISTANTS, AssistantBackend, normalize_runtime_assistant
-from ..enums import TaskState
 from ..exceptions import AdapterRunError, CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..language import normalize_runtime_language
 from ..omo_config import read_omo_delegation_snapshot
 from ..repo_branches import describe_target_repo_branches
 from ..repo_discovery import discover_target_repos
-from ..language import runtime_language_code_to_request_language
 from ..request_creator import (
-    RequestTemplateData,
-    build_default_scope_sections_for_language,
-    create_request,
     delete_request_uploads,
     get_request_upload,
     save_request_upload,
-    split_lines,
 )
 from ..request_drafting import RequestDraftPayload as RequestDraftRoutePayload, draft_request
-from ..request_draft_store import RequestDraftStore, serialize_request_draft_transcript_markdown
+from ..request_draft_store import RequestDraftStore
 from ..slack_settings_test import run_slack_settings_test
 
 

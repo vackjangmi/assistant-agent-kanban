@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from assistant_agent_kanban.config import AppConfig, PROJECT_ROOT, load_config
 from assistant_agent_kanban.enums import STATE_ORDER
 

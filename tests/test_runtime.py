@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from types import MethodType
 from types import SimpleNamespace
 
+from assistant_agent_kanban.config import AssistantBackend
 from assistant_agent_kanban.events import EventBus
 from assistant_agent_kanban.models import BoardSnapshot
 from assistant_agent_kanban.runtime import RuntimeSupervisor
@@ -27,7 +29,22 @@ class DummyModelRegistry:
     def __init__(self) -> None:
         self.adapter = object()
 
-    def get(self, *, refresh: bool = False):
+    def warm_availability(self) -> dict[AssistantBackend, Any]:
+        return {}
+
+    def get(self, backend: AssistantBackend, *, refresh: bool = False) -> None:
+        return None
+
+    def peek(self, backend: AssistantBackend) -> None:
+        return None
+
+    def peek_availability(self, backend: AssistantBackend) -> None:
+        return None
+
+    def all_availability(self, *, refresh: bool = False) -> dict[AssistantBackend, Any]:
+        return {}
+
+    def refresh_all(self) -> None:
         return None
 
 

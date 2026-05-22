@@ -12,6 +12,16 @@ That led to the idea behind `Assistant Agent Kanban`: combine an agent-based wor
 
 The current version is best described as a public MVP. The core workflow, dashboard, multi-runtime support, Slack integration, and tests are in place, but it is not yet a fully hardened production system.
 
+### Why I Built This
+
+Coding agent tools such as Claude Code, Codex, OpenCode, and Gemini CLI are improving quickly. Each tool offers its own way to extend workflows through skills, custom commands, subagents, hooks, MCP, or similar mechanisms. Some of these formats are starting to look more portable, but the actual execution model, permissions, state handling, review flow, and human intervention points still differ by tool.
+
+The ranking of agent tools also changes quickly. A workflow that is tightly coupled to one tool can become expensive to move when another runtime becomes a better fit. `Assistant Agent Kanban` treats those tools as execution engines, while keeping the development process, workflow state, approvals, reviews, and human verification outside the individual agent session.
+
+The project also comes from a practical workflow concern: real software work is rarely just “give an agent a goal and wait until the end.” Requirements need to be clarified, plans need to be reviewed, implementations need feedback, review can send work back into another loop, and final verification should happen in the real target repository only when the reviewed result is ready.
+
+In other words, `Assistant Agent Kanban` is not trying to replace coding agents. It is a tool-independent workflow layer for making agent-driven development visible, reviewable, recoverable, and human-governed.
+
 ### Demo
 
 Full video: [Watch on YouTube](https://youtu.be/gpdcVGiLxaQ)
@@ -377,11 +387,28 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 ### Testing And Open-Source Notes
 
 - Run the full test suite with `pytest -q`
+- Run lint and type checks with `python -m ruff check .` and `python -m pyright`
 - This project emphasizes a reviewable workflow more than raw AI automation
 - Human approval stages are intentional and should not be removed
 - The target repo should be clean when verification begins
 - The full workspace must not live inside the task directory
 - Internal CLI state files (OpenCode/Codex/Claude/Gemini) are not the source of truth
+
+### Known Limitations
+
+- This is a public MVP, not a fully hardened production system.
+- The web app currently assumes a trusted local environment. Do not expose it directly to the public internet without adding appropriate authentication, authorization, and deployment hardening.
+- External agent runtime behavior depends on the installed and authenticated CLI tools on the host machine.
+- Slack integration is optional and should be configured carefully because it can trigger workflow actions.
+- The largest modules are still candidates for future refactoring as the workflow surface grows.
+
+### Roadmap
+
+- Harden packaging and installation paths for non-editable installs
+- Add more deployment guidance and operational safety checks
+- Continue improving role-specific runtime support across OpenCode, Codex, Claude, and Gemini
+- Split larger service, runtime, API, and frontend modules into smaller maintainable units
+- Add more workflow observability around retries, failed runs, and recovery actions
 
 ### Contributing
 
@@ -417,6 +444,16 @@ See `CONTRIBUTING.md` for details.
 그래서 실제 업무에서 익숙하게 사용하던 스프린트/칸반 프로세스를 Agent 개발 흐름과 결합해, 파일 기반 기록과 웹 기반 가시성을 갖춘 도구를 만들어 보자는 목표로 `Assistant Agent Kanban`을 만들게 되었습니다.
 
 현재 버전은 공개 가능한 MVP에 가깝습니다. 핵심 워크플로, 대시보드, 멀티 런타임 지원, Slack 연동, 테스트는 갖추고 있지만 production hardening이나 인증까지 모두 포함한 상태는 아닙니다.
+
+### 왜 만들었는가
+
+Claude Code, Codex, OpenCode, Gemini CLI 같은 coding agent 도구들은 매우 빠르게 발전하고 있습니다. 각 도구는 skills, custom commands, subagents, hooks, MCP 같은 방식으로 workflow를 확장할 수 있게 해주지만, 실제 실행 방식, 권한 모델, 상태 관리, 리뷰 흐름, 사람이 개입하는 타이밍은 여전히 도구마다 다릅니다.
+
+또한 이 영역에서는 도구와 모델의 성능 우위가 빠르게 바뀝니다. 특정 도구의 내부 세션이나 workflow 기능에 개발 프로세스 전체를 강하게 묶어두면, 더 잘 맞는 실행기가 나왔을 때 전환 비용이 커질 수 있습니다. `Assistant Agent Kanban`은 agent 도구를 실행 엔진으로 활용하되, 개발 프로세스와 상태, 승인, 리뷰, 검증 흐름은 도구와 독립적으로 관리하려는 프로젝트입니다.
+
+실제 개발은 단순히 “goal을 주고 끝까지 맡기는 것”만으로 끝나지 않는다고 생각합니다. 처음 요청을 정리하고, 계획을 확인하고, 구현하고, 리뷰하고, 다시 수정하고, 사람이 실제 target repo에서 검증한 뒤 최종 반영하는 과정이 필요합니다.
+
+즉 `Assistant Agent Kanban`은 coding agent를 대체하려는 도구가 아니라, agent 기반 개발을 사람이 볼 수 있고, 검토할 수 있고, 복구할 수 있고, 승인할 수 있는 흐름으로 만들기 위한 도구 독립적인 workflow layer입니다.
 
 ### 데모
 
@@ -783,11 +820,28 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 ### 테스트와 공개 운영 메모
 
 - 전체 테스트는 `pytest -q`
+- lint와 type check는 `python -m ruff check .`, `python -m pyright`로 실행
 - 이 프로젝트는 “AI 자동화”보다 “검토 가능한 워크플로”에 무게를 둡니다.
 - 사람이 개입하는 승인 단계는 의도적으로 제거하지 않았습니다.
 - target repo는 verification 시점에 clean 상태여야 합니다.
 - task 디렉토리 안에 전체 workspace를 두지 않습니다.
 - CLI(OpenCode/Codex/Claude/Gemini) 내부 상태 파일은 source of truth로 사용하지 않습니다.
+
+### 현재 한계
+
+- 현재 버전은 공개 가능한 MVP이며, production hardening이 모두 끝난 제품은 아닙니다.
+- 웹 앱은 신뢰할 수 있는 로컬 환경을 전제로 합니다. 인증, 권한, 배포 보강 없이 public internet에 바로 노출하지 않는 것을 권장합니다.
+- 외부 agent runtime 동작은 호스트에 설치되고 인증된 CLI 도구 상태에 영향을 받습니다.
+- Slack 연동은 선택 기능이며 workflow action을 실행할 수 있으므로 신중하게 설정해야 합니다.
+- 큰 service, runtime, API, frontend 모듈은 장기 유지보수를 위해 추후 리팩토링 대상입니다.
+
+### 로드맵
+
+- editable install이 아닌 일반 설치 환경에서도 안정적으로 동작하도록 packaging 경로 보강
+- 배포 가이드와 운영 안전장치 강화
+- OpenCode, Codex, Claude, Gemini에 대한 역할별 runtime 지원 개선
+- 큰 service, runtime, API, frontend 모듈을 더 작은 단위로 분리
+- retry, 실패한 run, recovery action에 대한 workflow observability 강화
 
 ### 기여 안내
 
