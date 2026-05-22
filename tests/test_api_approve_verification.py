@@ -6,7 +6,7 @@ from assistant_agent_kanban.api.app import create_app
 from assistant_agent_kanban.exceptions import IntegrationError
 
 from .conftest import FakeAdapter, create_request_task
-from .test_api import _task_ready_for_completed_reviews
+from .api._helpers import _task_ready_for_completed_reviews
 
 
 def test_api_returns_json_conflict_when_approve_verification_raises_integration_error(configured_paths):
