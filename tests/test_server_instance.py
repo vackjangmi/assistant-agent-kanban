@@ -4,9 +4,19 @@ from fastapi.testclient import TestClient
 import pytest
 
 from assistant_agent_kanban.api.app import create_app
-from assistant_agent_kanban.exceptions import ServerAlreadyRunningError
+from assistant_agent_kanban.exceptions import NoSupportedAssistantError, ServerAlreadyRunningError
 
 from .conftest import FakeAdapter
+
+
+class UnavailableAdapter(FakeAdapter):
+    def __init__(self, binary: str) -> None:
+        super().__init__([])
+        self.binary = binary
+
+    def availability_error(self, *, config, backend):
+        del config, backend
+        return f"binary not found on PATH: {self.binary}"
 
 
 def test_server_startup_blocks_second_instance_for_same_kanban_root(configured_paths):
@@ -58,3 +68,25 @@ def test_server_startup_warms_model_snapshots(configured_paths):
         assert planner_adapter.discovery_calls == [False]
         assert implementer_adapter.discovery_calls == [False]
         assert reviewer_adapter.discovery_calls == [False]
+
+
+def test_server_startup_fails_when_no_supported_assistant_cli_is_available(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    adapters = {
+        "opencode": UnavailableAdapter("opencode"),
+        "codex": UnavailableAdapter("codex"),
+        "gemini": UnavailableAdapter("gemini"),
+        "claude": UnavailableAdapter("claude"),
+    }
+    app = create_app(
+        config,
+        adapters["opencode"],
+        adapters["opencode"],
+        adapters["opencode"],
+        adapter_registry=adapters,
+    )
+
+    with pytest.raises(NoSupportedAssistantError, match="No supported assistant CLI is available"):
+        with TestClient(app):
+            pass

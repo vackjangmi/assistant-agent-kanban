@@ -14,6 +14,10 @@ class ServerAlreadyRunningError(FsKanbanError):
     pass
 
 
+class NoSupportedAssistantError(FsKanbanError):
+    pass
+
+
 class TaskNotFoundError(FsKanbanError):
     pass
 

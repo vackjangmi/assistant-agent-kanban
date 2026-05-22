@@ -8,6 +8,7 @@ from typing import Any, Protocol, cast
 
 from ..config import AppConfig, AssistantBackend
 from ..events import EventBus
+from ..exceptions import NoSupportedAssistantError
 from ..locks import TaskLockManager
 from ..metadata_store import MetadataStore
 from ..models import TaskContext
@@ -116,6 +117,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
             self.backend_availability = cast(dict[AssistantBackend, Any], await asyncio.to_thread(warm_availability))
         else:
             self.backend_availability = {}
+        self._raise_if_no_supported_assistant()
         warm_models = getattr(self.model_registry, "warm", None)
         if callable(warm_models):
             await asyncio.to_thread(warm_models)
@@ -157,6 +159,21 @@ class RuntimeSupervisor(_SlackHandlersMixin):
     async def force_delete(self, task_id: str, *, by: str) -> None:
         await self.cancel_task(task_id)
         await asyncio.to_thread(self.deletion_service.delete, task_id, by=by)
+
+    def _raise_if_no_supported_assistant(self) -> None:
+        if not self.backend_availability:
+            return
+        if any(getattr(status, "available", False) for status in self.backend_availability.values()):
+            return
+        details = "; ".join(
+            f"{backend}: {getattr(status, 'error', None) or 'unavailable'}"
+            for backend, status in sorted(self.backend_availability.items())
+        )
+        raise NoSupportedAssistantError(
+            "No supported assistant CLI is available. Install and authenticate at least one of: "
+            "opencode, codex, gemini, claude."
+            f" Availability errors: {details}"
+        )
 
     async def cancel_task(self, task_id: str) -> None:
         tasks_to_cancel: list[asyncio.Task[None]] = []

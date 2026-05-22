@@ -105,7 +105,16 @@ Or use:
 - initialize a config file when missing
 - bootstrap the kanban root and runtime directories
 
-You will additionally need at least one supported CLI installed and authenticated on your machine: `opencode`, `codex`, `claude`, or `gemini`.
+You will additionally need at least one supported CLI installed and authenticated on your machine. The app refuses to start when none of these CLIs are available.
+
+Supported assistant CLIs:
+
+| Assistant | Binary | Official link |
+| --- | --- | --- |
+| OpenCode | `opencode` | [OpenCode install docs](https://opencode.ai/docs/#install) |
+| Codex CLI | `codex` | [OpenAI Codex CLI quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
+| Claude Code | `claude` | [Anthropic Claude Code native install](https://code.claude.com/docs/en/overview#native-install-recommended) |
+| Gemini CLI | `gemini` | [Google Gemini CLI quick install](https://google-gemini.github.io/gemini-cli/#quick-install) |
 
 #### 2. Run the App
 
@@ -538,7 +547,16 @@ pip install -e .[dev]
 - 설정 파일 초기화
 - 기본 칸반 루트와 런타임 디렉토리 bootstrap
 
-추가로 지원되는 CLI 중 최소 하나는 설치·인증되어 있어야 합니다: `opencode`, `codex`, `claude`, `gemini`.
+추가로 지원되는 CLI 중 최소 하나는 설치·인증되어 있어야 합니다. 사용할 수 있는 CLI가 하나도 없으면 앱은 시작되지 않습니다.
+
+지원되는 에이전트 CLI:
+
+| 에이전트 | 실행 파일 | 공식 링크 |
+| --- | --- | --- |
+| OpenCode | `opencode` | [OpenCode 설치 문서](https://opencode.ai/docs/#install) |
+| Codex CLI | `codex` | [OpenAI Codex CLI Quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
+| Claude Code | `claude` | [Anthropic Claude Code Native Install](https://code.claude.com/docs/en/overview#native-install-recommended) |
+| Gemini CLI | `gemini` | [Google Gemini CLI Quick Install](https://google-gemini.github.io/gemini-cli/#quick-install) |
 
 #### 2. 앱 실행
 
