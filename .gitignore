@@ -4,11 +4,22 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 .venv/
+
+# Local secrets and machine-specific tool state.
+.env
+.env.*
+!.env.example
+config.local.yaml
+.claude/settings.local.json
+*.pem
+*.key
+*.p12
+*.pfx
+
 ai-kanban/
 .sisyphus/
 build/
 dist/
 *.egg-info/
-config.local.yaml
 .kanban-agent/
 .playwright-mcp/

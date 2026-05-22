@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/vackjangmi/assistant-agent-kanban/security
+    about: Please avoid public issues for security-sensitive reports. Use GitHub's private vulnerability reporting if it is enabled, or contact the maintainer privately.

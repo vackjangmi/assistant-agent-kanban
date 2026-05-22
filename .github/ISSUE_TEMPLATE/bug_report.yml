@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a reproducible problem in Assistant Agent Kanban.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do not include secrets, private runtime logs, or sensitive task artifacts.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the shortest steps that reproduce the problem.
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - State machine / transitions
+        - Planner worker
+        - Plan approval worker
+        - Implementer worker
+        - Reviewer worker
+        - Human verification / commit flow
+        - FastAPI dashboard / SSE
+        - Slack integration
+        - Configuration / setup
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Package version, branch, or commit SHA if known.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant sanitized logs
+      description: Paste only sanitized logs. Mask tokens, repository-private data, paths, and personal information.
+      render: text

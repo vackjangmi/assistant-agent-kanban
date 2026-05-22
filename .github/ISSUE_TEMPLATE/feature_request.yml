@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest an improvement or new capability.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please keep private repository details and sensitive task artifacts out of public issues.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What would you like Assistant Agent Kanban to do?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - State machine / transitions
+        - Planning flow
+        - Implementation flow
+        - Review flow
+        - Human verification / commit flow
+        - FastAPI dashboard / SSE
+        - Slack integration
+        - Runtime adapters
+        - Configuration / setup
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Mention workarounds or other designs you considered.
