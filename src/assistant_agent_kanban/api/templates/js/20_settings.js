@@ -380,9 +380,10 @@
 
     function resolveAssistantOptions(payload) {
       const defaults = [
-        { value: 'opencode', label: 'OpenCode' },
         { value: 'codex', label: 'Codex CLI' },
+        { value: 'claude', label: 'Claude Code' },
         { value: 'gemini', label: 'Gemini CLI' },
+        { value: 'opencode', label: 'OpenCode' },
       ];
       const configured = Array.isArray(payload?.available_assistants) ? payload.available_assistants : [];
       const availabilityByBackend = payload?.backend_availability_by_backend;
@@ -924,4 +925,3 @@
     document.getElementById('settings-tab-general').addEventListener('click', () => setSettingsTab('general'));
     document.getElementById('settings-tab-slack').addEventListener('click', () => setSettingsTab('slack'));
     document.getElementById('settings-tab-roles').addEventListener('click', () => setSettingsTab('roles'));
-

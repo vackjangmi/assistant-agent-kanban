@@ -22,10 +22,10 @@ AssistantRole = Literal["planner", "request_draft", "plan_approval", "implemente
 ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit")
 TASK_RUNTIME_ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
 SUPPORTED_RUNTIME_ASSISTANTS = {
-    "opencode": "OpenCode",
     "codex": "Codex CLI",
-    "gemini": "Gemini CLI",
     "claude": "Claude Code",
+    "gemini": "Gemini CLI",
+    "opencode": "OpenCode",
 }
 
 

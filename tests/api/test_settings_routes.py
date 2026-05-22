@@ -67,10 +67,10 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         }
         assert get_response.json()["worker_live_logs_enabled"] is True
         assert get_response.json()["available_assistants"] == [
-            {"value": "opencode", "label": "OpenCode"},
             {"value": "codex", "label": "Codex CLI"},
-            {"value": "gemini", "label": "Gemini CLI"},
             {"value": "claude", "label": "Claude Code"},
+            {"value": "gemini", "label": "Gemini CLI"},
+            {"value": "opencode", "label": "OpenCode"},
         ]
         assert get_response.json()["planner_model"] is None
         assert get_response.json()["request_draft_model"] is None
@@ -839,9 +839,9 @@ def test_api_settings_only_lists_startup_available_assistants(configured_paths):
 
     assert response.status_code == 200
     assert response.json()["available_assistants"] == [
-        {"value": "opencode", "label": "OpenCode"},
-        {"value": "gemini", "label": "Gemini CLI"},
         {"value": "claude", "label": "Claude Code"},
+        {"value": "gemini", "label": "Gemini CLI"},
+        {"value": "opencode", "label": "OpenCode"},
     ]
 
 
