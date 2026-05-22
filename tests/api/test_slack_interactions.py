@@ -149,7 +149,7 @@ def test_runtime_handles_slack_interactive_resume_review_loop_action(configured_
             modal_calls.append((method, token, body))
             return {"ok": True}
 
-        monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+        monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
         error = asyncio.run(
             app.state.runtime.handle_slack_interactive_action(
                 {
@@ -220,7 +220,7 @@ def test_runtime_handles_slack_resume_review_loop_modal_submission(configured_pa
             modal_calls.append((method, token, body))
             return {"ok": True}
 
-        monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+        monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
         result = asyncio.run(
             app.state.runtime.handle_slack_interactive_action(
                 {
@@ -349,7 +349,7 @@ def test_runtime_handles_slack_interactive_request_changes_action(configured_pat
             modal_calls.append((method, token, body))
             return {"ok": True}
 
-        monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+        monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
         result = asyncio.run(
             app.state.runtime.handle_slack_interactive_action(
                 {
@@ -418,7 +418,7 @@ def test_runtime_handles_slack_request_changes_modal_submission(configured_paths
             modal_calls.append((method, token, body))
             return {"ok": True}
 
-        monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+        monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
         result = asyncio.run(
             app.state.runtime.handle_slack_interactive_action(
                 {
@@ -648,8 +648,8 @@ def test_runtime_posts_slack_request_intake_button_on_app_mention(configured_pat
         calls.append(("slack_upload_file_to_thread", token, {"channel": channel_id, "thread_ts": thread_ts, "filename": filename, "content": content.decode("utf-8")}))
         return {"ok": True}
 
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_upload_file_to_thread", fake_upload)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_upload_file_to_thread", fake_upload)
 
     with TestClient(app):
         asyncio.run(
@@ -683,7 +683,7 @@ def test_runtime_opens_slack_request_intake_modal_without_creating_task(configur
         calls.append((method, token, body))
         return {"ok": True}
 
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
 
     with TestClient(app):
         before = len(app.state.runtime.scanner.scan())
@@ -758,8 +758,8 @@ def test_runtime_slack_request_intake_requires_assistant_then_creates_task(confi
         calls.append(("slack_upload_file_to_thread", token, {"channel": channel_id, "thread_ts": thread_ts, "filename": filename, "content": content.decode("utf-8")}))
         return {"ok": True}
 
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_upload_file_to_thread", fake_upload)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_upload_file_to_thread", fake_upload)
 
     with TestClient(app):
         opened = asyncio.run(

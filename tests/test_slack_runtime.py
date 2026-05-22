@@ -548,14 +548,14 @@ def test_slack_request_draft_flow_posts_review_message_when_placeholder_update_f
         ],
     )
 
-    original_call = runtime_module.slack_api_call
+    original_call = runtime_module._slack.slack_api_call
 
     def fail_placeholder_update(method: str, *, token: str, body=None):
         if method == "chat.update" and isinstance(body, dict) and body.get("text") == "Assistant draft 1 ready for review.":
             return {"ok": False, "error": "cant_update_message"}
         return original_call(method, token=token, body=body)
 
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fail_placeholder_update)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fail_placeholder_update)
 
     draft_id = _open_slack_request_modal(runtime, calls)
     result = _generate_slack_request_draft(
@@ -597,7 +597,7 @@ def test_slack_request_draft_flow_logs_when_review_fallback_post_fails(configure
         ],
     )
 
-    original_call = runtime_module.slack_api_call
+    original_call = runtime_module._slack.slack_api_call
 
     def fail_update_and_post(method: str, *, token: str, body=None):
         if method == "chat.update" and isinstance(body, dict) and body.get("text") == "Assistant draft 1 ready for review.":
@@ -606,7 +606,7 @@ def test_slack_request_draft_flow_logs_when_review_fallback_post_fails(configure
             return {"ok": False, "error": "missing_scope"}
         return original_call(method, token=token, body=body)
 
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fail_update_and_post)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fail_update_and_post)
 
     draft_id = _open_slack_request_modal(runtime, calls)
     with caplog.at_level(logging.WARNING):
@@ -699,9 +699,9 @@ def _build_slack_request_runtime(config, monkeypatch, *, draft_replies, update_p
         calls.append(("slack_upload_file_to_thread", token, {"channel": channel_id, "thread_ts": thread_ts, "filename": filename, "title": title, "content": content.decode("utf-8")}))
         return {"ok": True, "file": {"id": f"F{post_counter['value'] + 1}"}}
 
-    monkeypatch.setattr("assistant_agent_kanban.runtime.draft_request", fake_draft_request)
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_api_call", fake_call)
-    monkeypatch.setattr("assistant_agent_kanban.runtime.slack_upload_file_to_thread", fake_upload)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.draft_request", fake_draft_request)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_api_call", fake_call)
+    monkeypatch.setattr("assistant_agent_kanban.runtime._slack.slack_upload_file_to_thread", fake_upload)
     return runtime, calls
 
 
