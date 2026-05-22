@@ -163,8 +163,8 @@ class ReviewerWorker(WorkerBase):
                 review_payload = json.loads((reviewing.task_dir / json_path).read_text())
                 review_payload["schema_version"] = artifact["schema_version"]
                 review_payload["artifact_type"] = artifact["artifact_type"]
-                review_payload["task_id"] = artifact["task_id"]
-                review_payload["cycle"] = artifact["cycle"]
+                review_payload["task_id"] = reviewing.metadata.task_id
+                review_payload["cycle"] = reviewing.metadata.cycle
                 review_payload["verdict"] = verdict
                 review_payload["primary_blocker"] = artifact["primary_blocker"]
                 (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
@@ -306,8 +306,8 @@ class ReviewerWorker(WorkerBase):
             review_payload = json.loads((reviewing.task_dir / json_path).read_text())
             review_payload["schema_version"] = artifact["schema_version"]
             review_payload["artifact_type"] = artifact["artifact_type"]
-            review_payload["task_id"] = artifact["task_id"]
-            review_payload["cycle"] = artifact["cycle"]
+            review_payload["task_id"] = reviewing.metadata.task_id
+            review_payload["cycle"] = reviewing.metadata.cycle
             review_payload["verdict"] = verdict
             review_payload["primary_blocker"] = artifact["primary_blocker"]
             (reviewing.task_dir / json_path).write_text(json.dumps(review_payload, indent=2) + "\n")
@@ -704,13 +704,36 @@ class ReviewerWorker(WorkerBase):
 
     def _build_finalize_prompt(self, task_dir: Path, metadata) -> str:
         source = self._build_reviewer_source(task_dir, metadata)
+        example_artifact = json.dumps(
+            {
+                "schema_version": 1,
+                "artifact_type": "review",
+                "task_id": metadata.task_id,
+                "cycle": metadata.cycle,
+                "verdict": "PASS",
+                "primary_blocker": None,
+                "markdown": "Verdict: PASS\n\n## Acceptance Criteria Check\n...",
+                "human_qa_checklist": [
+                    {
+                        "id": "qa-001",
+                        "title": "Verify primary happy path",
+                        "steps": ["Open the changed UI or command", "Exercise the main request flow"],
+                        "expected_result": "The requested behavior works without regressions.",
+                        "required": True,
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
         instructions = "\n".join(
             [
                 source,
                 "",
                 "# Finalize Review Artifact",
                 "Return only valid JSON with this exact shape:",
-                '{"schema_version":1,"artifact_type":"review","task_id":"...","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\n## Acceptance Criteria Check\\n...","human_qa_checklist":[{"id":"qa-001","title":"Verify primary happy path","steps":["Open the changed UI or command","Exercise the main request flow"],"expected_result":"The requested behavior works without regressions.","required":true}]}',
+                example_artifact,
+                f"Use `task_id` exactly `{metadata.task_id}` and `cycle` exactly `{metadata.cycle}`.",
                 "Allowed verdict values are PASS or NEEDS_CHANGES.",
                 "Set `primary_blocker` to null for PASS.",
                 "For NEEDS_CHANGES, set `primary_blocker` to a stable short kebab-case key for the main remaining blocker (example: changed-scope-coverage).",
@@ -864,7 +887,13 @@ class ReviewerWorker(WorkerBase):
         return None
 
     def _parse_finalize_artifact(self, assistant_text: str) -> ReviewFinalizeArtifact | None:
-        payload = self._extract_finalize_payload(assistant_text)
+        for payload in self._extract_finalize_payloads(assistant_text):
+            artifact = self._parse_finalize_payload(payload)
+            if artifact is not None:
+                return artifact
+        return None
+
+    def _parse_finalize_payload(self, payload: object) -> ReviewFinalizeArtifact | None:
         if not isinstance(payload, dict):
             return None
         raw_verdict = payload.get("verdict")
@@ -877,12 +906,17 @@ class ReviewerWorker(WorkerBase):
             return None
         if not isinstance(markdown, str) or not markdown.strip():
             return None
+        try:
+            schema_version = int(payload.get("schema_version", 1))
+            cycle = int(payload.get("cycle", 0))
+        except (TypeError, ValueError):
+            return None
         primary_blocker = self._normalize_primary_blocker(payload.get("primary_blocker"), verdict=verdict)
         parsed: ReviewFinalizeArtifact = {
-            "schema_version": payload.get("schema_version", 1),
+            "schema_version": schema_version,
             "artifact_type": "review",
             "task_id": str(payload.get("task_id", "")),
-            "cycle": int(payload.get("cycle", 0)),
+            "cycle": cycle,
             "verdict": verdict,
             "primary_blocker": primary_blocker,
             "markdown": markdown.strip(),
@@ -893,19 +927,68 @@ class ReviewerWorker(WorkerBase):
         return parsed
 
     def _extract_finalize_payload(self, assistant_text: str) -> object | None:
+        return next(self._extract_finalize_payloads(assistant_text), None)
+
+    def _extract_finalize_payloads(self, assistant_text: str):
+        for candidate in self._finalize_payload_candidates(assistant_text):
+            if not candidate:
+                continue
+            try:
+                yield json.loads(candidate)
+                continue
+            except json.JSONDecodeError:
+                relaxed = self._extract_relaxed_finalize_payload(candidate)
+                if relaxed is not None:
+                    yield relaxed
+
+    def _finalize_payload_candidates(self, assistant_text: str):
+        seen: set[str] = set()
         candidates = [assistant_text.strip()]
         fenced_matches = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", assistant_text, flags=re.DOTALL | re.IGNORECASE)
         candidates.extend(match.strip() for match in fenced_matches)
         for candidate in candidates:
-            if not candidate:
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+        for candidate in self._embedded_json_object_candidates(assistant_text):
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+
+    def _embedded_json_object_candidates(self, text: str):
+        start: int | None = None
+        depth = 0
+        in_string = False
+        escaped = False
+        for index, character in enumerate(text):
+            if start is None:
+                if character == "{":
+                    start = index
+                    depth = 1
+                    in_string = False
+                    escaped = False
                 continue
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                relaxed = self._extract_relaxed_finalize_payload(candidate)
-                if relaxed is not None:
-                    return relaxed
-        return None
+            if escaped:
+                escaped = False
+                continue
+            if in_string and character == "\\":
+                escaped = True
+                continue
+            if character == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    yield text[start : index + 1].strip()
+                    start = None
+                elif depth < 0:
+                    start = None
+                    depth = 0
 
     def _extract_relaxed_finalize_payload(self, candidate: str) -> dict[str, object] | None:
         match = self._match_relaxed_finalize_payload(candidate, with_checklist=True) or self._match_relaxed_finalize_payload(candidate, with_checklist=False)

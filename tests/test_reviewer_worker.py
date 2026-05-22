@@ -76,6 +76,36 @@ def test_parse_finalize_artifact_accepts_fenced_json(configured_paths):
     assert artifact["task_id"] == "2db21ca"
 
 
+def test_parse_finalize_artifact_accepts_prefixed_json(configured_paths):
+    config, _, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter([]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    artifact = worker._parse_finalize_artifact(
+        '구현이 계획과 일치합니다. {"not":"the artifact"}\n\n'
+        '{"schema_version":1,"artifact_type":"review","task_id":"1355d29","cycle":1,"verdict":"PASS","primary_blocker":null,"markdown":"Verdict: PASS\\n\\nReady","human_qa_checklist":[{"id":"qa-001","title":"Verify result","steps":["Run the changed flow"],"expected_result":"The flow works.","required":true}]}'
+    )
+
+    assert artifact is not None
+    assert artifact["artifact_type"] == "review"
+    assert artifact["verdict"] == "PASS"
+    assert artifact["task_id"] == "1355d29"
+    items = worker._human_qa_items_from_artifact(artifact)
+    assert items[0].id == "qa-001"
+
+
 def test_parse_finalize_artifact_accepts_fenced_json_with_literal_quotes_in_markdown(configured_paths):
     config, _, _ = configured_paths
     metadata_store = MetadataStore()
@@ -214,6 +244,8 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert (repo_root / "app.txt").read_text() == "hello\n"
     review_json = json.loads((scanner.scan()[0].task_dir / "REVIEW-001.json").read_text())
     assert review_json["verdict"] == "PASS"
+    assert review_json["task_id"] == scanner.scan()[0].metadata.task_id
+    assert review_json["cycle"] == scanner.scan()[0].metadata.cycle
     assert "Verdict: PASS" in review_json["assistant_text"]
     assert review_json["resolved_model"] == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.review.resolved_model == "github-copilot/gpt-5"
