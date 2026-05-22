@@ -596,7 +596,8 @@ def test_api_rejects_invalid_runtime_language(configured_paths):
 
 def test_api_accepts_codex_runtime_coding_assistant(configured_paths):
     config, _, _ = configured_paths
-    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
     with TestClient(app) as client:
         response = client.put(
