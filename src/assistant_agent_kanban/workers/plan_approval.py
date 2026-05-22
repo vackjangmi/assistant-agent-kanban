@@ -14,6 +14,7 @@ from ..models import RunResult, TaskContext, reset_plan_approval_tracking, utc_n
 from ..plan_artifacts import validate_plan_markdown
 from ..retry_policy import can_auto_dispatch, clear_retry_gate
 from ..services.plan_approval_learning import PlanApprovalLearningService
+from ..split_proposals import has_split_proposal
 from .base import WorkerBase
 
 
@@ -117,6 +118,10 @@ class PlanApprovalWorker(WorkerBase):
                     continue
                 self.metadata_store.save(task.task_dir, task.metadata)
                 if decision.disposition == "auto_approve":
+                    split_done = self._block_split_proposal_auto_approval(task)
+                    if split_done is not None:
+                        done = split_done
+                        break
                     invalid_done = self._block_invalid_plan_auto_approval(task)
                     if invalid_done is not None:
                         done = invalid_done
@@ -151,6 +156,11 @@ class PlanApprovalWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             if not self._should_process(task, now=utc_now()):
                 return False
+            split_done = self._block_split_proposal_auto_approval(task)
+            if split_done is not None:
+                done = split_done
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
             invalid_done = self._block_invalid_plan_auto_approval(task)
             if invalid_done is not None:
                 done = invalid_done
@@ -207,6 +217,11 @@ class PlanApprovalWorker(WorkerBase):
         with self.locks.acquire(task.task_dir, task.metadata, owner=self.worker_name, run_id=run_id):
             if not self._should_auto_approve_by_request(task):
                 return False
+            split_done = self._block_split_proposal_auto_approval(task)
+            if split_done is not None:
+                done = split_done
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
             invalid_done = self._block_invalid_plan_auto_approval(task)
             if invalid_done is not None:
                 done = invalid_done
@@ -267,6 +282,27 @@ class PlanApprovalWorker(WorkerBase):
         self.metadata_store.save(task.task_dir, task.metadata)
         if task.state == TaskState.PLAN_APPROVING:
             return self.transitions.move(task, TaskState.WAITING_CHECK_PLANS, by=self.worker_name, note="plan artifact invalid for approval")
+        if task.state != TaskState.WAITING_CHECK_PLANS:
+            raise TransitionError(f"invalid plan approval state: {task.state.value}")
+        return self.scanner.find_task(task.metadata.task_id)
+
+    def _block_split_proposal_auto_approval(self, task: TaskContext) -> TaskContext | None:
+        if not has_split_proposal(task.task_dir):
+            return None
+        task.metadata.plan.approved = False
+        task.metadata.plan_approval.disposition = "review_required"
+        task.metadata.plan_approval.confidence = "medium"
+        task.metadata.plan_approval.risk_signals = ["split_proposal"]
+        task.metadata.plan_approval.rationale = "The planner recommended splitting this request into independent child requests."
+        task.metadata.plan_approval.source_plan_revision = task.metadata.plan.revision
+        task.metadata.plan_approval.auto_progress_at = None
+        task.metadata.plan_approval.resolved_by = self.worker_name
+        task.metadata.plan_approval.resolved_at = utc_now()
+        task.metadata.plan_approval.last_retry_reason = None
+        task.metadata.plan_approval.escalation_reason = "split_proposal"
+        self.metadata_store.save(task.task_dir, task.metadata)
+        if task.state == TaskState.PLAN_APPROVING:
+            return self.transitions.move(task, TaskState.WAITING_CHECK_PLANS, by=self.worker_name, note="split proposal requires human decision")
         if task.state != TaskState.WAITING_CHECK_PLANS:
             raise TransitionError(f"invalid plan approval state: {task.state.value}")
         return self.scanner.find_task(task.metadata.task_id)

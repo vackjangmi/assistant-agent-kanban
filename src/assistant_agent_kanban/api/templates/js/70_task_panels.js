@@ -456,12 +456,15 @@
 
     function updatePlanActionState() {
       const editableArtifact = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md');
+      const canSplitPlan = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans' && taskHasSplitProposal(activeTaskDetail.metadata));
       togglePlanEditButton.hidden = !editableArtifact;
       savePlanButton.hidden = !editableArtifact || !planEditMode;
       approvePlanButton.hidden = !editableArtifact;
+      splitPlanButton.hidden = !canSplitPlan;
       togglePlanEditButton.textContent = planEditMode ? translateTask('backToViewer') : translateTask('editPlan');
       savePlanButton.disabled = !editableArtifact || !planEditMode;
-       approvePlanButton.disabled = !editableArtifact || taskDetailStale;
+      approvePlanButton.disabled = !editableArtifact || taskDetailStale;
+      splitPlanButton.disabled = !canSplitPlan || taskDetailStale;
     }
 
     function updateHumanVerificationState() {
@@ -517,7 +520,7 @@
       return `${base}${summary.is_current ? translateTask('currentSuffix') : ''}`;
     }
 
-    const singleVisitStageLabels = new Set(['requests', 'planning', 'plan-approving', 'waiting-check-plans', 'done']);
+    const singleVisitStageLabels = new Set(['requests', 'planning', 'plan-approving', 'waiting-check-plans', 'done', 'closed']);
 
     function formatStageVisitLabel(segment) {
       const baseLabel = stateLabel(segment.state);
@@ -527,7 +530,7 @@
 
     function formatStageSegmentEnd(segment) {
       if (segment.exited_at) return formatDateTime(segment.exited_at);
-      if (segment.state === 'done') return translateTask('completedLabel');
+      if (segment.state === 'done' || segment.state === 'closed') return translateTask('completedLabel');
       return translateTask('now');
     }
 
@@ -538,7 +541,7 @@
     ];
 
     function renderStageTiming(stageTiming) {
-      const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];
+      const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done' && summary.state !== 'closed') : [];
       const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];
       const bucketDurationAttrs = (durationMs, states, { live = true } = {}) => {
         if (!live) return buildDurationAttributes(Number(durationMs || 0));
@@ -555,7 +558,7 @@
       const hasRecordedTime = segments.length > 0 || Array.from(visitedStates).length > 0;
       const hiddenDurationMs = Array.isArray(stageTiming?.segments)
         ? stageTiming.segments
-            .filter((segment) => segment.state === 'done')
+            .filter((segment) => segment.state === 'done' || segment.state === 'closed')
             .reduce((total, segment) => total + Number(segment.duration_ms || 0), 0)
         : 0;
       const totalDurationMs = Math.max(0, Number(stageTiming?.total_duration_ms || 0) - hiddenDurationMs);
@@ -563,7 +566,7 @@
       const humanWorkDurationMs = Math.max(0, Number(stageTiming?.human_work_duration_ms || 0));
       const waitingDurationMs = Math.max(0, Number(stageTiming?.waiting_duration_ms || 0));
       const currentSummary = summaries.find((summary) => summary.is_current) || null;
-      const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');
+      const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done' && currentSummary.state !== 'closed');
       const totalBaseDurationMs = currentSummaryIsLive
         ? Math.max(0, totalDurationMs - Number(currentSummary.latest_duration_ms || 0))
         : totalDurationMs;
@@ -600,7 +603,7 @@
             latest_entered_at: '',
             is_current: false,
           };
-          const summaryIsLive = summary.is_current && summary.state !== 'done';
+          const summaryIsLive = summary.is_current && summary.state !== 'done' && summary.state !== 'closed';
           const totalBaseMs = summaryIsLive
             ? Math.max(0, Number(summary.total_duration_ms || 0) - Number(summary.latest_duration_ms || 0))
             : Number(summary.total_duration_ms || 0);
@@ -740,7 +743,7 @@
       activeTaskDetail = detail;
       setTaskDetailStale(false);
       const latestError = latestVisibleError(metadata.errors);
-      const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
+      const changedFilesVisible = metadata.state !== 'done' && Boolean(detail.changed_files_available || detail.changed_files.length > 0);
       const qaChecklistVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const reviewerQaVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const reviewNoteVisible = metadata.state === 'human-verifying';
@@ -801,4 +804,3 @@
       updateCompletedGroupControls();
       restoreBoardScrollPositions();
     }
-

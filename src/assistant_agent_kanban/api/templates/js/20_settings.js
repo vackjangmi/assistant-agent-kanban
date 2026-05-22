@@ -138,6 +138,7 @@
       closeResumeReviewerChoiceButton.textContent = translateTask('resumeReviewerChoiceClose');
       resumeReviewLoopButton.textContent = translateTask('resumeReviewLoop');
       approvePlanButton.textContent = translateTask('approvePlan');
+      splitPlanButton.textContent = translateTask('splitPlan');
       deleteTaskButton.textContent = translateTask('deleteTask');
       closeTaskModalButton.textContent = translateTask('close');
       closeTaskModalButton.setAttribute('aria-label', translateTask('closeAria'));
@@ -871,11 +872,13 @@
             plan: '플랜 단계',
             implementation: '구현 단계',
             final: '최종 완료',
+            closed: '취소됨',
           }
         : {
             plan: 'Planning',
             implementation: 'Implementation',
             final: 'Completed',
+            closed: 'Closed',
           };
       return labels[phase] || phase;
     }
@@ -885,7 +888,7 @@
     }
 
     function shouldShowBoardPhaseCount(phase) {
-      return phase === 'plan' || phase === 'implementation';
+      return phase === 'plan' || phase === 'implementation' || phase === 'closed';
     }
 
     function boardPhaseCountLabel(phase, count) {

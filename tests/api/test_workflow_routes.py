@@ -11,8 +11,10 @@ from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.exceptions import IntegrationError
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.models import utc_now
+from assistant_agent_kanban.split_proposals import sync_split_proposal_artifacts
 
 from ..conftest import FakeAdapter, create_request_task
+from ..test_plan_approval_worker import plan_with_split_proposal
 
 
 from ._helpers import _task_ready_for_completed_reviews
@@ -63,6 +65,36 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
     assert "## Question 1" in qa_markdown
     assert "- Source: human resume note" in qa_markdown
     assert "Please keep the existing review direction, but incorporate the human note." in qa_markdown
+
+
+def test_api_split_plan_creates_children_and_closes_parent(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "api-split-parent")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+    task = next(task for task in scanner.scan() if task.metadata.title == "api-split-parent")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    plan_text = plan_with_split_proposal()
+    (planning.task_dir / "PLAN.md").write_text(plan_text)
+    planning.metadata.plan.revision = 1
+    sync_split_proposal_artifacts(planning.task_dir, planning.metadata, plan_text)
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{waiting.metadata.task_id}/split-plan")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "closed"
+    assert payload["closure"]["reason"] == "split_into_children"
+    assert len(payload["closure"]["child_task_ids"]) == 2
+    children = [scanner.find_task(task_id) for task_id in payload["closure"]["child_task_ids"]]
+    assert all(child.state == TaskState.REQUESTS for child in children)
 
 
 

@@ -44,6 +44,7 @@ Always keep these rules intact.
 - `completed-reviews` — AI review passed, waiting to start human verification
 - `human-verifying` — human is verifying in the target repo
 - `done` — final approval and commit are complete
+- `closed` — terminal task that will not be implemented, such as a parent request split into child tasks
 
 ### Allowed Transitions
 
@@ -54,6 +55,7 @@ Always keep these rules intact.
 - `plan-approving -> waiting-check-plans`
 - `plan-approving -> todos`
 - `waiting-check-plans -> todos`
+- `waiting-check-plans -> closed`
 - `todos -> implementing`
 - `implementing -> todos`
 - `implementing -> waiting-reviews`
@@ -65,6 +67,7 @@ Always keep these rules intact.
 - `completed-reviews -> human-verifying`
 - `human-verifying -> todos`
 - `human-verifying -> done`
+- `closed` has no outgoing transitions
 
 The code must block any transition that is not allowed.
 
@@ -73,6 +76,7 @@ The code must block any transition that is not allowed.
 These are the main decision points that require human judgment.
 
 - `waiting-check-plans -> todos` — approve implementation after reviewing or editing the plan
+- `waiting-check-plans -> closed` — close a parent request after creating split child tasks
 - `completed-reviews -> human-verifying` — start verification by applying the reviewed result to the real target repo
 - `human-verifying -> done` — final approval after human verification
 
@@ -83,6 +87,7 @@ These are the main decision points that require human judgment.
 - Input state: `requests`
 - Input document: `REQUEST.md`
 - Output document: `PLAN.md`
+- Optional output documents: `SPLIT-PROPOSAL.md`, `SPLIT-PROPOSAL.json`
 - Result state: `plan-approving`
 - Planner should remain a read-only document producer by default.
 
@@ -144,6 +149,11 @@ Minimum required fields:
 - `runtime_pin`
 - `plan`
 - `plan_approval`
+- `split_proposal`
+- `closure`
+- `parent_task_id`
+- `split_index`
+- `split_count`
 - `cycle`
 - `implementation`
 - `review`

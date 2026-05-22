@@ -74,6 +74,9 @@ Never break the following rules while working here.
 ### `done`
 - final approval and commit are complete
 
+### `closed`
+- the task is terminal but was not implemented or committed, such as a parent request split into child requests
+
 ## Code And Workspace Boundaries
 
 ### Task Directory
@@ -82,6 +85,8 @@ This stores task state documents and metadata.
 
 - `REQUEST.md`
 - `PLAN.md`
+- `SPLIT-PROPOSAL.md`
+- `SPLIT-PROPOSAL.json`
 - `PLAN-APPROVAL.md` or `PLAN-HUMAN-APPROVAL.md`
 - `WORK-{n}.md`
 - `REVIEW-{n}.md`

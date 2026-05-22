@@ -686,6 +686,36 @@
       }
     }
 
+    function taskHasSplitProposal(metadata) {
+      return Boolean(metadata?.split_proposal?.recommended && metadata?.split_proposal?.json_path);
+    }
+
+    async function splitPlan() {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'waiting-check-plans') return;
+      if (!taskHasSplitProposal(activeTaskDetail.metadata)) return;
+      savePlanButton.disabled = true;
+      approvePlanButton.disabled = true;
+      splitPlanButton.disabled = true;
+      setTaskEditorMessage(translateTask('splittingPlan'));
+      try {
+        if (isPlanDirty()) await savePlanArtifact();
+        const response = await fetch(`/api/tasks/${activeTaskId}/split-plan`, { method: 'POST' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedSplitPlan'));
+        setTaskEditorMessage(translateTask('planSplit'));
+        activeBoardPhase = 'plan';
+        boardPhaseManuallySelected = true;
+        await loadBoard();
+        setTaskModalOpen(false);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        setTaskEditorMessage(translateTask('failedSplitPlan'));
+      } finally {
+        updatePlanActionState();
+      }
+    }
+
     async function startVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'completed-reviews' || activeTaskDetail?.metadata?.lease?.run_id === 'manual-human-verifying') return;
       startVerificationButton.disabled = true;
@@ -723,4 +753,3 @@
         updateHumanVerificationState();
       }
     }
-

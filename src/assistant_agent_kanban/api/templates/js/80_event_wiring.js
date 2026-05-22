@@ -369,6 +369,7 @@
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
     savePlanButton.addEventListener('click', savePlanArtifact);
     approvePlanButton.addEventListener('click', approvePlan);
+    splitPlanButton.addEventListener('click', splitPlan);
     startVerificationButton.addEventListener('click', startVerification);
     retryVerificationApplyButton.addEventListener('click', retryVerificationApply);
     resumePlannerButton.addEventListener('click', openResumePlannerChoiceModal);

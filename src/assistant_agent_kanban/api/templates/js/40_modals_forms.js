@@ -913,7 +913,7 @@
 
     function taskChromeState(state = '') {
       return {
-        changedFilesVisible: state === 'human-verifying' || state === 'done',
+        changedFilesVisible: state === 'human-verifying',
         qaChecklistVisible: state === 'completed-reviews' || state === 'human-verifying',
         reviewerQaVisible: state === 'completed-reviews' || state === 'human-verifying',
         reviewNoteVisible: state === 'human-verifying',
@@ -948,6 +948,8 @@
       savePlanButton.disabled = true;
       approvePlanButton.hidden = state !== 'waiting-check-plans';
       approvePlanButton.disabled = state !== 'waiting-check-plans';
+      splitPlanButton.hidden = !(state === 'waiting-check-plans' && taskHasSplitProposal(snapshot?.metadata));
+      splitPlanButton.disabled = splitPlanButton.hidden;
       startVerificationButton.hidden = state !== 'completed-reviews';
       startVerificationButton.disabled = state !== 'completed-reviews';
       retryVerificationApplyButton.hidden = state !== 'human-verifying';

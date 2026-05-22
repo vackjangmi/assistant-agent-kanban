@@ -146,6 +146,55 @@ def test_planner_worker_generates_plan(configured_paths):
     assert "## Planner Context Docs" in str(adapter.run_calls[1]["prompt"])
 
 
+def test_planner_worker_persists_embedded_split_proposal(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "planner-split-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    split_json = {
+        "recommended": True,
+        "reason": "Split into two independent requests.",
+        "children": [
+            {
+                "title": "Child one",
+                "goal": "Do child one.",
+                "scope": ["One"],
+                "out_of_scope": ["Two"],
+                "constraints": [],
+                "references": [],
+                "acceptance_criteria": ["One works"],
+                "independence_notes": "Independent from child two.",
+            },
+            {
+                "title": "Child two",
+                "goal": "Do child two.",
+                "scope": ["Two"],
+                "out_of_scope": ["One"],
+                "constraints": [],
+                "references": [],
+                "acceptance_criteria": ["Two works"],
+                "independence_notes": "Independent from child one.",
+            },
+        ],
+    }
+    artifact = valid_plan_artifact("large plan") + "\n\n## Split Proposal\n```json\n" + json.dumps(split_json) + "\n```"
+    adapter = FakeAdapter(planner_cycle_responses(artifact=artifact))
+    worker = PlanningWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    task = scanner.scan()[0]
+    assert task.state == TaskState.PLAN_APPROVING
+    assert task.metadata.split_proposal.recommended is True
+    assert task.metadata.split_proposal.child_count == 2
+    assert task.metadata.split_proposal.path == "SPLIT-PROPOSAL.md"
+    assert (task.task_dir / "SPLIT-PROPOSAL.md").exists()
+    payload = json.loads((task.task_dir / "SPLIT-PROPOSAL.json").read_text())
+    assert payload["children"][0]["title"] == "Child one"
+
+
 def test_planner_worker_strips_outer_markdown_fence_before_persisting_plan(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "planner-fenced-plan-task", language="ko")

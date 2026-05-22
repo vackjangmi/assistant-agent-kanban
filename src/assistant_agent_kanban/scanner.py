@@ -23,6 +23,7 @@ AGENT_ACTIVE_STATES = {
 
 TERMINAL_STATES = {
     TaskState.DONE,
+    TaskState.CLOSED,
 }
 
 

@@ -208,6 +208,7 @@ Responsibilities:
 
 - read `requests` tasks
 - produce `PLAN.md`
+- optionally persist `SPLIT-PROPOSAL.md` / `SPLIT-PROPOSAL.json` when the request should be split into independent child requests
 - move tasks to `plan-approving`
 
 When changing this area, also check:
@@ -227,7 +228,7 @@ Responsibilities:
 
 - evaluate generated plans
 - auto-approve low-risk plans into `todos`
-- route uncertain or risky plans to `waiting-check-plans`
+- route uncertain, risky, or split-recommended plans to `waiting-check-plans`
 - write `PLAN-APPROVAL.md` / `PLAN-APPROVAL.json`
 
 When changing this area, also check:

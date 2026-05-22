@@ -573,6 +573,7 @@
           <button type="button" id="resume-reviewer" class="accent-button" hidden>Resume reviewer</button>
           <button type="button" id="resume-review-loop" class="accent-button" hidden>Resume review loop</button>
           <button type="button" id="approve-plan" class="primary" hidden disabled>Approve plan</button>
+          <button type="button" id="split-plan" class="accent-button" hidden disabled>Split request</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>
           <span id="approve-human-review-shell" class="header-action-shell" hidden><button type="button" id="approve-human-review-button" class="primary">Approve</button></span>
           <button type="button" id="delete-task" class="danger-button" hidden>Delete task</button>
@@ -941,6 +942,7 @@
         <button type="button" data-board-phase="plan">Planning</button>
         <button type="button" data-board-phase="implementation" class="active">Implementation</button>
         <button type="button" data-board-phase="final">Completed</button>
+        <button type="button" data-board-phase="closed">Closed</button>
       </div>
       <div id="board"></div>
     </div>

@@ -807,6 +807,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'data-board-phase="plan"' in response.text
     assert 'data-board-phase="implementation"' in response.text
     assert 'data-board-phase="final"' in response.text
+    assert 'data-board-phase="closed"' in response.text
     assert "Settings" in response.text
     assert "Refresh" in response.text
     assert "Acceptance criteria" in response.text
@@ -1119,7 +1120,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "applyBoardSnapshot(message.payload);" in response.text
     assert "function phaseLabel(phase)" in response.text
     assert "let previousBoardTaskPhases = new Map();" in response.text
-    assert "let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0 };" in response.text
+    assert "let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0, closed: 0 };" in response.text
     assert "function boardPhaseForState(state)" in response.text
     assert "function hasTaskMovedFromPlanToImplementation(nextTaskPhases)" in response.text
     assert "previousBoardTaskPhases.get(taskId) === 'plan' && nextPhase === 'implementation'" in response.text
@@ -1225,7 +1226,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".stage-timing-grid { display: grid; gap: 10px; }" in response.text
     assert ".stage-timing-row { display: grid; gap: 10px; grid-template-columns: repeat(var(--stage-columns, 1), minmax(0, 1fr)); }" in response.text
     assert ".stage-timing-card.upcoming { opacity: 0.48; background: rgba(255,255,255,0.62); }" in response.text
-    assert "const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done') : [];" in response.text
+    assert "const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done' && summary.state !== 'closed') : [];" in response.text
     assert "const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];" in response.text
     assert "function formatStageVisitLabel(segment)" in response.text
     assert "function formatStageSegmentEnd(segment)" in response.text
@@ -1239,8 +1240,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const hiddenDurationMs = Array.isArray(stageTiming?.segments)" in response.text
     assert "translateTask('timelineFromHistory')" not in response.text
     assert "translateTask('timelineFromHistoryBody')" not in response.text
-    assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done');" in response.text
-    assert "const summaryIsLive = summary.is_current && summary.state !== 'done';" in response.text
+    assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done' && currentSummary.state !== 'closed');" in response.text
+    assert "const summaryIsLive = summary.is_current && summary.state !== 'done' && summary.state !== 'closed';" in response.text
     assert "const cardStateClass = summary.is_current ? ' current' : reached ? ' reached' : ' upcoming';" in response.text
     assert "<div class=\"stage-timing-row\" style=\"--stage-columns:${states.length}\">${cards}</div>" in response.text
     assert "segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0)" in response.text
@@ -1270,6 +1271,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "let boardTaskSnapshots = new Map();" in response.text
     assert "function setTaskTab(tab, { load = true } = {})" in response.text
     assert "function taskChromeState(state = '')" in response.text
+    assert "changedFilesVisible: state === 'human-verifying'" in response.text
+    assert "const changedFilesVisible = metadata.state !== 'done' && Boolean(detail.changed_files_available || detail.changed_files.length > 0);" in response.text
     assert "hydrateTaskModalChrome(snapshot, { preserveTab });" in response.text
     assert "?include_changed_files=true" in response.text
     assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" not in response.text

@@ -1,11 +1,16 @@
 import json
 
+from assistant_agent_kanban.enums import TaskState
+from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.models import TaskRuntimePin, TaskRuntimeRoleBackends
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.services.task_service import TaskService
+from assistant_agent_kanban.split_proposals import sync_split_proposal_artifacts
+from assistant_agent_kanban.transitions import TransitionManager
 
 from .conftest import create_request_task
+from .test_plan_approval_worker import plan_with_split_proposal, valid_plan_markdown
 
 
 def test_task_service_summary_prefers_empty_target_repo_diff_over_patch_fallback(configured_paths):
@@ -36,6 +41,76 @@ def test_task_service_summary_prefers_empty_target_repo_diff_over_patch_fallback
     summary_text = content.decode("utf-8")
     assert "## Changed Files (0)" in summary_text
     assert "`app.txt` — modified" not in summary_text
+
+
+def test_task_service_split_plan_creates_child_requests_and_closes_parent(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "split-service-parent", plan_auto_approve=True)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task_service = TaskService(
+        scanner,
+        config.runs_dir,
+        config.kanban_root,
+        config.archive_runs_dir,
+        metadata_store=metadata_store,
+        transitions=transitions,
+        locks=locks,
+    )
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    plan_text = plan_with_split_proposal()
+    (planning.task_dir / "PLAN.md").write_text(plan_text)
+    (planning.task_dir / "PLAN.json").write_text(json.dumps({"assistant_text": plan_text}) + "\n")
+    planning.metadata.plan.revision = 1
+    sync_split_proposal_artifacts(planning.task_dir, planning.metadata, plan_text)
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    closed = task_service.split_plan(waiting.metadata.task_id, by="human")
+
+    assert closed.state == TaskState.CLOSED
+    assert closed.metadata.closure.reason == "split_into_children"
+    assert closed.metadata.closure.closed_by == "human"
+    assert len(closed.metadata.closure.child_task_ids) == 2
+    children = [scanner.find_task(task_id) for task_id in closed.metadata.closure.child_task_ids]
+    assert [child.metadata.split_index for child in children] == [1, 2]
+    assert all(child.state == TaskState.REQUESTS for child in children)
+    assert all(child.metadata.parent_task_id == closed.metadata.task_id for child in children)
+    assert all(child.metadata.request.plan_auto_approve is False for child in children)
+    assert "Original Request" in (children[0].task_dir / "REQUEST.md").read_text()
+
+
+def test_task_service_split_plan_requires_split_proposal(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "split-service-no-proposal")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task_service = TaskService(
+        scanner,
+        config.runs_dir,
+        config.kanban_root,
+        config.archive_runs_dir,
+        metadata_store=metadata_store,
+        transitions=transitions,
+        locks=locks,
+    )
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text(valid_plan_markdown())
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    try:
+        task_service.split_plan(waiting.metadata.task_id, by="human")
+    except Exception as exc:
+        assert "split proposal artifact is missing" in str(exc)
+    else:
+        raise AssertionError("split_plan should reject missing split proposal")
 
 
 def test_task_service_summary_includes_assistant_token_usage(configured_paths):

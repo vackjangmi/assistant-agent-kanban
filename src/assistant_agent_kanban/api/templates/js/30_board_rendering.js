@@ -18,6 +18,7 @@
       board.classList.toggle('implementation-board', activeBoardPhase === 'implementation');
       board.classList.toggle('plan-board', activeBoardPhase === 'plan');
       board.classList.toggle('final-board', activeBoardPhase === 'final');
+      board.classList.toggle('closed-board', activeBoardPhase === 'closed');
       if (activeBoardPhase === 'implementation') {
         const columnsByState = new Map(visibleColumns.map((column) => [column.state, column]));
         board.innerHTML = implementationBoardRows.map((states) => `
@@ -54,7 +55,7 @@
     }
 
     function countBoardPhaseTasks(columns) {
-      const counts = { plan: 0, implementation: 0, final: 0 };
+      const counts = { plan: 0, implementation: 0, final: 0, closed: 0 };
       (columns || []).forEach((column) => {
         const phase = boardPhaseForState(column.state);
         if (!phase) return;
@@ -591,6 +592,7 @@
             'completed-reviews': '리뷰 완료',
             'human-verifying': '인간 리뷰중',
             done: '완료',
+            closed: '닫힘',
           }
         : {
             requests: 'Requirements',
@@ -604,6 +606,7 @@
             'completed-reviews': 'Review complete',
             'human-verifying': 'Human review',
             done: 'Done',
+            closed: 'Closed',
           };
       return labels[state] || state;
     }
@@ -621,6 +624,7 @@
         'completed-reviews': '#4f8a5b',
         'human-verifying': '#a55a2a',
         done: '#2f4f3f',
+        closed: '#6f6672',
       };
       return palette[state] || '#7c4f2c';
     }
