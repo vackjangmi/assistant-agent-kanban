@@ -1271,6 +1271,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "let boardTaskSnapshots = new Map();" in response.text
     assert "function setTaskTab(tab, { load = true } = {})" in response.text
     assert "function taskChromeState(state = '')" in response.text
+    assert "changedFilesVisible: state === 'human-verifying'" in response.text
+    assert "const changedFilesVisible = metadata.state !== 'done' && Boolean(detail.changed_files_available || detail.changed_files.length > 0);" in response.text
     assert "hydrateTaskModalChrome(snapshot, { preserveTab });" in response.text
     assert "?include_changed_files=true" in response.text
     assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" not in response.text

@@ -743,7 +743,7 @@
       activeTaskDetail = detail;
       setTaskDetailStale(false);
       const latestError = latestVisibleError(metadata.errors);
-      const changedFilesVisible = Boolean(detail.changed_files_available || detail.changed_files.length > 0);
+      const changedFilesVisible = metadata.state !== 'done' && Boolean(detail.changed_files_available || detail.changed_files.length > 0);
       const qaChecklistVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const reviewerQaVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const reviewNoteVisible = metadata.state === 'human-verifying';

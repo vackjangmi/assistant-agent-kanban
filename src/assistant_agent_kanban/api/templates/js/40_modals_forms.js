@@ -913,7 +913,7 @@
 
     function taskChromeState(state = '') {
       return {
-        changedFilesVisible: state === 'human-verifying' || state === 'done',
+        changedFilesVisible: state === 'human-verifying',
         qaChecklistVisible: state === 'completed-reviews' || state === 'human-verifying',
         reviewerQaVisible: state === 'completed-reviews' || state === 'human-verifying',
         reviewNoteVisible: state === 'human-verifying',
