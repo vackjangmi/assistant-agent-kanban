@@ -35,12 +35,6 @@ Full video: [Watch on YouTube](https://youtu.be/gpdcVGiLxaQ)
 **3. Human Verify**  
 ![Human Verify Demo](./docs/gifs/assistant-agent-kanban-human-verify-demo.gif)
 
-**4. Retry Implement & Review**  
-![Retry Implement and Review Demo](./docs/gifs/assistant-agent-kanban-retry-implement&review-demo.gif)
-
-**5. Human Verify & Complete**  
-![Complete Demo](./docs/gifs/assistant-agent-kanban-complete-demo.gif)
-
 ### Core Goals
 
 - Preserve every stage of work as files and workflow state
@@ -503,12 +497,6 @@ Claude Code, Codex, OpenCode, Gemini CLI 같은 coding agent 도구들은 매우
 
 **3. 사람 검증**  
 ![Human Verify Demo](./docs/gifs/assistant-agent-kanban-human-verify-demo.gif)
-
-**4. 재요청 구현 및 리뷰**  
-![Retry Implement and Review Demo](./docs/gifs/assistant-agent-kanban-retry-implement&review-demo.gif)
-
-**5. 사람 검증 및 완료**  
-![Complete Demo](./docs/gifs/assistant-agent-kanban-complete-demo.gif)
 
 ### 핵심 목표
 
