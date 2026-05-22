@@ -6,6 +6,9 @@ Otherwise write the plan directly in this response.
 Do not call `task()` or delegate helper subtasks.
 If context is incomplete, make the narrowest reasonable planning assumptions from the request instead of spawning background work.
 Do not skip required sections, even when some details remain uncertain.
+If the request is too large or risky for one independent implementation task, keep the required plan sections and append an optional `## Split Proposal` section.
+Only recommend splitting when child requests can be implemented independently without priority or ordering dependencies.
+The split proposal must include one fenced JSON block with `recommended`, `reason`, and `children`; each child should include `title`, `goal`, `scope`, `out_of_scope`, `constraints`, `references`, `acceptance_criteria`, and `independence_notes`.
 
 Use the language requested in the prompt for all section headings and body text.
 Keep the same section order and meaning.

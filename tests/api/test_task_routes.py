@@ -900,7 +900,7 @@ def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
     assert response.status_code == 200
     payload = response.json()
     stage_timing = payload["stage_timing"]
-    assert len(stage_timing["summaries"]) == 11
+    assert len(stage_timing["summaries"]) == 12
     assert len(stage_timing["segments"]) == 4
     assert stage_timing["total_duration_ms"] >= 720000
     assert stage_timing["ai_work_duration_ms"] == 180000

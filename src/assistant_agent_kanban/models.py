@@ -96,6 +96,29 @@ class PlanApprovalInfo(BaseModel):
     human_approvals: list[PlanHumanApprovalRecord] = Field(default_factory=list)
 
 
+class SplitProposalInfo(BaseModel):
+    recommended: bool = False
+    path: str | None = None
+    json_path: str | None = None
+    child_count: int = 0
+    source_plan_revision: int = 0
+
+
+class ClosureInfo(BaseModel):
+    reason: Literal[
+        "split_into_children",
+        "cancelled_by_human",
+        "duplicate",
+        "invalid_request",
+        "out_of_scope",
+        "other",
+    ] | None = None
+    closed_at: datetime | None = None
+    closed_by: str | None = None
+    child_task_ids: list[str] = Field(default_factory=list)
+    note: str | None = None
+
+
 def reset_plan_approval_tracking(plan_approval: PlanApprovalInfo, *, max_attempts: int | None = None) -> None:
     plan_approval.disposition = None
     plan_approval.confidence = None
@@ -280,6 +303,11 @@ class TaskMetadata(BaseModel):
     runtime_pin: TaskRuntimePin | None = None
     plan: PlanInfo = Field(default_factory=PlanInfo)
     plan_approval: PlanApprovalInfo = Field(default_factory=PlanApprovalInfo)
+    split_proposal: SplitProposalInfo = Field(default_factory=SplitProposalInfo)
+    closure: ClosureInfo = Field(default_factory=ClosureInfo)
+    parent_task_id: str | None = None
+    split_index: int | None = None
+    split_count: int | None = None
     cycle: int = 0
     implementation: ImplementationInfo = Field(default_factory=ImplementationInfo)
     review: ReviewInfo = Field(default_factory=ReviewInfo)

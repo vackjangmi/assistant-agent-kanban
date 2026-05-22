@@ -139,6 +139,7 @@
       plan: ['requests', 'planning', 'plan-approving', 'waiting-check-plans'],
       implementation: ['todos', 'implementing', 'waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
       final: ['done'],
+      closed: ['closed'],
     };
     const implementationBoardRows = [
       ['todos', 'implementing'],
@@ -152,6 +153,7 @@
       { phase: 'implementation', states: ['todos', 'implementing', 'waiting-reviews', 'reviewing'] },
       { phase: 'plan', states: ['requests', 'planning'] },
       { phase: 'final', states: ['done'] },
+      { phase: 'closed', states: ['closed'] },
     ];
     const taskChangedFilesPaneWidthStorageKey = 'assistant-agent-kanban.task-changed-files-pane-width';
     const requestComposerDraftStorageKey = 'assistant-agent-kanban.request-composer-draft';
@@ -258,6 +260,7 @@
     const togglePlanEditButton = document.getElementById('toggle-plan-edit');
     const savePlanButton = document.getElementById('save-plan');
     const approvePlanButton = document.getElementById('approve-plan');
+    const splitPlanButton = document.getElementById('split-plan');
     let lastAutoScope = '';
     let lastAutoOutOfScope = '';
     let lastAutoAcceptanceCriteria = '';
@@ -335,7 +338,7 @@
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
     let previousBoardTaskPhases = new Map();
-    let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0 };
+    let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0, closed: 0 };
     let approvalSubmissionInFlight = false;
     let resumePlannerSubmissionInFlight = false;
     let resumeImplementerSubmissionInFlight = false;

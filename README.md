@@ -237,6 +237,7 @@ States:
 - `completed-reviews`
 - `human-verifying`
 - `done`
+- `closed`
 
 Main transitions:
 
@@ -248,6 +249,7 @@ planning -> requests
 plan-approving -> waiting-check-plans
 plan-approving -> todos
 waiting-check-plans -> todos
+waiting-check-plans -> closed
 todos -> implementing
 implementing -> waiting-reviews
 implementing -> todos
@@ -265,9 +267,11 @@ Rules:
 
 - invalid transitions must be blocked in code
 - `plan-approving` may auto-promote directly to `todos` when the plan-approval agent approves; otherwise it falls through to `waiting-check-plans` for a human
+- if the planner recommends splitting a large request, auto-promotion is blocked and a human can either continue as-is or split into child requests; the parent moves to `closed`
 - `completed-reviews` does not mean the target repo is already updated
 - patch apply happens only during `completed-reviews -> human-verifying`
 - final commit happens only during `human-verifying -> done`
+- `closed` is terminal but not a completed implementation or commit
 
 ### Worker Roles
 
@@ -702,6 +706,7 @@ repo-root/
 - `completed-reviews`
 - `human-verifying`
 - `done`
+- `closed`
 
 주요 전이:
 
@@ -713,6 +718,7 @@ planning -> requests
 plan-approving -> waiting-check-plans
 plan-approving -> todos
 waiting-check-plans -> todos
+waiting-check-plans -> closed
 todos -> implementing
 implementing -> waiting-reviews
 implementing -> todos
@@ -730,9 +736,11 @@ human-verifying -> done
 
 - 허용되지 않은 전이는 코드에서 차단
 - `plan-approving`은 자동 승인 시 `todos`로 직접 promote 가능하고, 그렇지 않으면 `waiting-check-plans`로 fallback
+- planner가 큰 요청의 분할을 권장하면 자동 구현 대기로 넘어가지 않고 사람이 원래대로 진행할지, child request로 분할할지 결정하며 parent는 `closed`로 이동
 - `completed-reviews`는 target repo 반영 완료 상태가 아님
 - patch apply는 `completed-reviews -> human-verifying`에서만 수행
 - 최종 commit은 `human-verifying -> done`에서만 수행
+- `closed`는 terminal 상태지만 구현 완료나 commit 완료가 아님
 
 ### Worker 구성
 

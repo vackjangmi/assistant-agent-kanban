@@ -92,6 +92,7 @@ def create_request(
     template: RequestTemplateData,
     target_repo_root: Path,
     base_branch: str | None = None,
+    request_language: str | None = None,
     request_upload_token: str | None = None,
     request_draft_markdown: str | None = None,
 ) -> Path:
@@ -104,7 +105,7 @@ def create_request(
     task_dir.mkdir(parents=True, exist_ok=False)
     try:
         resolved_repo = resolve_safe_target_repo_root(target_repo_root)
-        request_language = runtime_language_code_to_request_language(config.runtime.language)
+        request_language = request_language or runtime_language_code_to_request_language(config.runtime.language)
         finalized_uploads: dict[str, dict[str, str]] = {}
         normalized_template = template.model_copy(
             update={

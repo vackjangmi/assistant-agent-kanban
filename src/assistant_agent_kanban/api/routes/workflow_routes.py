@@ -31,6 +31,16 @@ def register(router: APIRouter) -> None:
         await runtime.rescan_and_publish()
         return moved.metadata
 
+    @router.post("/api/tasks/{task_id}/split-plan")
+    async def split_plan(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            moved = runtime.task_service.split_plan(task_id, by="human")
+        except (TransitionError, TaskNotFoundError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
     @router.post("/api/tasks/{task_id}/resume-review-loop")
     async def resume_review_loop(task_id: str, request: Request, payload: ResumeReviewLoopPayload | None = None):
         runtime = request.app.state.runtime

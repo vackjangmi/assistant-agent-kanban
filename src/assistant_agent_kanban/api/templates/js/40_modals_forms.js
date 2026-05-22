@@ -948,6 +948,8 @@
       savePlanButton.disabled = true;
       approvePlanButton.hidden = state !== 'waiting-check-plans';
       approvePlanButton.disabled = state !== 'waiting-check-plans';
+      splitPlanButton.hidden = !(state === 'waiting-check-plans' && taskHasSplitProposal(snapshot?.metadata));
+      splitPlanButton.disabled = splitPlanButton.hidden;
       startVerificationButton.hidden = state !== 'completed-reviews';
       startVerificationButton.disabled = state !== 'completed-reviews';
       retryVerificationApplyButton.hidden = state !== 'human-verifying';

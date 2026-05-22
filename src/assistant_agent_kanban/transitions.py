@@ -96,5 +96,9 @@ class TransitionManager:
                 context.metadata.plan_approval.resolved_by = by
                 context.metadata.plan_approval.resolved_at = utc_now()
                 reset_review_loop_tracking(context.metadata.review)
+            elif target == TaskState.CLOSED:
+                context.metadata.closure.reason = context.metadata.closure.reason or "other"
+                context.metadata.closure.closed_by = context.metadata.closure.closed_by or by
+                context.metadata.closure.closed_at = context.metadata.closure.closed_at or utc_now()
             clear_retry_gate(context.metadata)
             return self.move(context, target=target, by=by, note="manual approval")

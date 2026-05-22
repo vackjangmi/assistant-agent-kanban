@@ -14,6 +14,7 @@ from ...models import (
     reset_plan_approval_tracking,
     utc_now,
 )
+from ...split_proposals import sync_split_proposal_artifacts
 from ...target_repo_guard import resolve_safe_target_repo_root
 from ...commit_manager import CommitManager
 from ..plan_approval_learning import classify_plan_change, load_plan_baseline_text, plan_text_hash
@@ -234,6 +235,7 @@ class _ArtifactsMixin(_TaskServiceLike):
         task.metadata.plan.approved = False
         reset_plan_approval_tracking(task.metadata.plan_approval)
         task.metadata.plan_approval.auto_progress_at = None
+        sync_split_proposal_artifacts(task.task_dir, task.metadata, current_content)
         self.scanner.metadata_store.save(task.task_dir, task.metadata)
 
 

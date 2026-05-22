@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+from pathlib import Path
+import shutil
 from typing import TYPE_CHECKING, Literal
 
 from ...enums import TaskState
@@ -14,7 +16,9 @@ from ...models import (
     utc_now,
 )
 from ...plan_artifacts import validate_plan_markdown
+from ...request_creator import RequestTemplateData, create_request
 from ...retry_policy import clear_retry_gate
+from ...split_proposals import SplitChildRequest, load_split_proposal
 
 from ._data import PLANNER_RESTART_ARTIFACT
 
@@ -67,6 +71,112 @@ class _ResumeMixin(_TaskServiceLike):
             )
             self.scanner.metadata_store.save(moved.task_dir, moved.metadata)
             return moved
+
+
+    def split_plan(self, task_id: str, *, by: str = "human"):
+        task = self._find_task(task_id)
+        if task.state != TaskState.WAITING_CHECK_PLANS:
+            raise TransitionError("plan splitting is only allowed in waiting-check-plans")
+        if self.transitions is None or self.locks is None:
+            raise TransitionError("plan splitting requires lock manager")
+        try:
+            proposal = load_split_proposal(task.task_dir)
+        except FileNotFoundError as exc:
+            raise TransitionError("split proposal artifact is missing") from exc
+        except ValueError as exc:
+            raise TransitionError(f"split proposal artifact is invalid: {exc}") from exc
+        created_child_dirs: list[Path] = []
+        with self.locks.acquire(task.task_dir, task.metadata, owner=by, run_id="manual-split-plan"):
+            try:
+                child_task_ids: list[str] = []
+                split_count = len(proposal.children)
+                for index, child in enumerate(proposal.children, start=1):
+                    child_dir = create_request(
+                        self.scanner.config,
+                        template=self._split_child_request_template(
+                            task,
+                            child,
+                            split_index=index,
+                            split_count=split_count,
+                            split_reason=proposal.reason,
+                        ),
+                        target_repo_root=Path(task.metadata.target.repo_root),
+                        base_branch=task.metadata.target.base_branch,
+                        request_language=task.metadata.request.language,
+                    )
+                    created_child_dirs.append(child_dir)
+                    self._copy_parent_request_attachments(task.task_dir, child_dir)
+                    self.scanner.scan()
+                    child_task = self.scanner.find_task(child_dir.name)
+                    child_task.metadata.parent_task_id = task.metadata.task_id
+                    child_task.metadata.split_index = index
+                    child_task.metadata.split_count = split_count
+                    self.scanner.metadata_store.save(child_task.task_dir, child_task.metadata)
+                    child_task_ids.append(child_task.metadata.task_id)
+
+                task.metadata.closure.reason = "split_into_children"
+                task.metadata.closure.closed_by = by
+                task.metadata.closure.closed_at = utc_now()
+                task.metadata.closure.child_task_ids = child_task_ids
+                task.metadata.closure.note = proposal.reason.strip() or None
+                task.metadata.plan.approved = False
+                clear_retry_gate(task.metadata)
+                self.scanner.metadata_store.save(task.task_dir, task.metadata)
+                return self.transitions.move(task, target=TaskState.CLOSED, by=by, note="split into child requests")
+            except Exception:
+                for child_dir in created_child_dirs:
+                    shutil.rmtree(child_dir, ignore_errors=True)
+                raise
+
+
+    def _split_child_request_template(
+        self,
+        task: TaskContext,
+        child: SplitChildRequest,
+        *,
+        split_index: int,
+        split_count: int,
+        split_reason: str,
+    ) -> RequestTemplateData:
+        original_request = (task.task_dir / task.metadata.request.path).read_text()
+        background = "\n".join(
+            [
+                f"Derived from parent task `{task.metadata.task_id}` ({split_index}/{split_count}).",
+                "",
+                "This child request must implement only its scoped portion of the original request.",
+                "",
+                "## Parent Split Reason",
+                split_reason.strip() or "(none recorded)",
+                "",
+                "## Original Request",
+                "```markdown",
+                original_request.strip(),
+                "```",
+            ]
+        ).strip()
+        sibling_guard = [
+            "Implement only this child request's scope.",
+            "Do not implement sibling child request scopes unless this child request explicitly includes them.",
+            "Keep the child request independently implementable; do not create ordering dependencies on sibling tasks.",
+        ]
+        return RequestTemplateData(
+            title=child.title,
+            goal=child.goal,
+            background=background,
+            plan_auto_approve=False,
+            scope=child.scope,
+            out_of_scope=child.out_of_scope,
+            constraints=[*child.constraints, *sibling_guard],
+            references=child.references,
+            acceptance_criteria=child.acceptance_criteria,
+        )
+
+
+    def _copy_parent_request_attachments(self, parent_task_dir: Path, child_task_dir: Path) -> None:
+        parent_attachments = parent_task_dir / "_attachments"
+        if not parent_attachments.exists():
+            return
+        shutil.copytree(parent_attachments, child_task_dir / "_attachments", dirs_exist_ok=True)
 
 
     def append_human_reviewer_qa_message(self, task_id: str, *, message: str, by: str = "human") -> TaskContext:

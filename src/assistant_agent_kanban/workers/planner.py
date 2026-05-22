@@ -13,6 +13,7 @@ from ..models import RunResult, reset_plan_approval_tracking
 from ..plan_artifacts import required_plan_heading_lines, validate_plan_markdown
 from ..request_parser import has_required_request_fields
 from ..retry_policy import apply_retry_gate, can_auto_dispatch, clear_retry_gate
+from ..split_proposals import sync_split_proposal_artifacts
 from .base import WorkerBase
 
 
@@ -211,6 +212,7 @@ class PlanningWorker(WorkerBase):
             reset_plan_approval_tracking(planning.metadata.plan_approval)
             plan_path, _ = self.write_result_artifacts(planning.task_dir, "PLAN", finalized_result)
             planning.metadata.plan.path = plan_path
+            sync_split_proposal_artifacts(planning.task_dir, planning.metadata, finalized_result.assistant_text)
             self.metadata_store.save(planning.task_dir, planning.metadata)
             planning.metadata.plan.approved = False
             done = self.transitions.move(planning, TaskState.PLAN_APPROVING, by=self.worker_name)
@@ -436,6 +438,10 @@ class PlanningWorker(WorkerBase):
                 "- Every heading must start with `## ` exactly.",
                 "- Required headings only count when they appear as their own line outside fenced code blocks.",
                 *headings,
+                "- If this request is too large or risky for one independent implementation task, append an optional `## Split Proposal` section after all required headings.",
+                "- A split proposal must contain one fenced JSON block with keys: recommended, reason, children.",
+                "- Each child must include title, goal, scope, out_of_scope, constraints, references, acceptance_criteria, and independence_notes.",
+                "- Only recommend splitting when the children can be implemented independently without priority or ordering dependencies.",
                 "- Return only the final markdown artifact with the required sections.",
             ]
         )

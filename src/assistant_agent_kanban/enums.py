@@ -15,6 +15,7 @@ class TaskState(StrEnum):
     COMPLETED_REVIEWS = "completed-reviews"
     HUMAN_VERIFYING = "human-verifying"
     DONE = "done"
+    CLOSED = "closed"
 
 
 STATE_ORDER = [
@@ -29,13 +30,14 @@ STATE_ORDER = [
     TaskState.COMPLETED_REVIEWS,
     TaskState.HUMAN_VERIFYING,
     TaskState.DONE,
+    TaskState.CLOSED,
 ]
 
 ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.REQUESTS: {TaskState.PLANNING},
     TaskState.PLANNING: {TaskState.REQUESTS, TaskState.PLAN_APPROVING, TaskState.WAITING_CHECK_PLANS},
     TaskState.PLAN_APPROVING: {TaskState.WAITING_CHECK_PLANS, TaskState.TODOS},
-    TaskState.WAITING_CHECK_PLANS: {TaskState.TODOS},
+    TaskState.WAITING_CHECK_PLANS: {TaskState.TODOS, TaskState.CLOSED},
     TaskState.TODOS: {TaskState.IMPLEMENTING},
     TaskState.IMPLEMENTING: {TaskState.TODOS, TaskState.WAITING_REVIEWS},
     TaskState.WAITING_REVIEWS: {TaskState.REVIEWING},
@@ -43,10 +45,12 @@ ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.COMPLETED_REVIEWS: {TaskState.TODOS, TaskState.HUMAN_VERIFYING},
     TaskState.HUMAN_VERIFYING: {TaskState.TODOS, TaskState.DONE},
     TaskState.DONE: set(),
+    TaskState.CLOSED: set(),
 }
 
 MANUAL_TRANSITIONS = {
     (TaskState.WAITING_CHECK_PLANS, TaskState.TODOS),
+    (TaskState.WAITING_CHECK_PLANS, TaskState.CLOSED),
     (TaskState.COMPLETED_REVIEWS, TaskState.HUMAN_VERIFYING),
     (TaskState.HUMAN_VERIFYING, TaskState.TODOS),
     (TaskState.HUMAN_VERIFYING, TaskState.DONE),

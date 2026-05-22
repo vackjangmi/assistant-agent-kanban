@@ -209,6 +209,7 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 - `completed-reviews`
 - `human-verifying`
 - `done`
+- `closed`
 
 ### Allowed Transitions
 
@@ -219,6 +220,7 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 - `plan-approving -> waiting-check-plans`
 - `plan-approving -> todos`
 - `waiting-check-plans -> todos`
+- `waiting-check-plans -> closed`
 - `todos -> implementing`
 - `implementing -> todos`
 - `implementing -> waiting-reviews`
@@ -230,10 +232,12 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 - `completed-reviews -> human-verifying`
 - `human-verifying -> todos`
 - `human-verifying -> done`
+- `closed` has no outgoing transitions
 
 ### Human-Gated Transitions
 
 - `waiting-check-plans -> todos`
+- `waiting-check-plans -> closed`
 - `completed-reviews -> human-verifying`
 - `human-verifying -> done`
 
@@ -242,6 +246,7 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 - `completed-reviews` means **AI review passed**, not that the target repo has already been updated.
 - `human-verifying` means a human is validating the reviewed result in the target repo.
 - `done` means human approval and final commit are both complete.
+- `closed` means the task is no longer being implemented; for split requests, child task ids are recorded in `metadata.closure`.
 
 ## Task Artifact Model
 
@@ -249,6 +254,7 @@ Each task combines documents and metadata.
 
 - `REQUEST.md` — human-authored initial request
 - `PLAN.md` — planner output
+- `SPLIT-PROPOSAL.md` / `SPLIT-PROPOSAL.json` — optional planner recommendation for splitting a large request into independent child requests
 - `PLAN-APPROVAL.md` / `PLAN-HUMAN-APPROVAL.md` — AI or human plan approval record
 - `WORK-{n}.md` — implementation iteration summary
 - `REVIEW-{n}.md` — review iteration summary

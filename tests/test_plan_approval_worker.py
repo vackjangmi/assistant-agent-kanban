@@ -11,6 +11,7 @@ from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.models import utc_now
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.services.task_service import TaskService
+from assistant_agent_kanban.split_proposals import sync_split_proposal_artifacts
 from assistant_agent_kanban.transitions import TransitionManager
 from assistant_agent_kanban.workers.plan_approval import PlanApprovalWorker
 
@@ -47,6 +48,43 @@ def valid_plan_markdown(summary: str = "Historical summary.") -> str:
             "## Open Questions",
             "- None.",
         ]
+    )
+
+
+def plan_with_split_proposal() -> str:
+    return (
+        valid_plan_markdown("large plan")
+        + "\n\n## Split Proposal\n"
+        + "```json\n"
+        + json.dumps(
+            {
+                "recommended": True,
+                "reason": "The request should be split into independent child requests.",
+                "children": [
+                    {
+                        "title": "Split child one",
+                        "goal": "Implement the first independent slice.",
+                        "scope": ["First slice"],
+                        "out_of_scope": ["Second slice"],
+                        "constraints": ["Only touch first slice files"],
+                        "references": [],
+                        "acceptance_criteria": ["First slice works"],
+                        "independence_notes": "Does not depend on child two.",
+                    },
+                    {
+                        "title": "Split child two",
+                        "goal": "Implement the second independent slice.",
+                        "scope": ["Second slice"],
+                        "out_of_scope": ["First slice"],
+                        "constraints": ["Only touch second slice files"],
+                        "references": [],
+                        "acceptance_criteria": ["Second slice works"],
+                        "independence_notes": "Does not depend on child one.",
+                    },
+                ],
+            }
+        )
+        + "\n```"
     )
 
 
@@ -107,6 +145,35 @@ def test_plan_approval_worker_auto_approves_when_request_opted_in(configured_pat
     assert updated.metadata.plan_approval.disposition == "auto_approve"
     assert updated.metadata.plan_approval.risk_signals == ["request_plan_auto_approve"]
     assert len(adapter.run_calls) == 0
+
+
+def test_plan_approval_worker_blocks_auto_approval_when_split_is_recommended(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "request-auto-approve-split", plan_auto_approve=True)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    plan_text = plan_with_split_proposal()
+    (planning.task_dir / "PLAN.md").write_text(plan_text)
+    planning.metadata.plan.revision = 1
+    sync_split_proposal_artifacts(planning.task_dir, planning.metadata, plan_text)
+    metadata_store.save(planning.task_dir, planning.metadata)
+    approving = transitions.move(planning, TaskState.PLAN_APPROVING, by="planner")
+    adapter = FakeAdapter([json.dumps({"disposition": "auto_approve", "confidence": "high", "risk_signals": [], "rationale": "unused"})])
+    worker = PlanApprovalWorker(config, scanner, metadata_store, locks, transitions, EventBus(), adapter=adapter)
+
+    assert asyncio.run(worker.run_once()) is True
+
+    updated = scanner.find_task(approving.metadata.task_id)
+    assert updated.state == TaskState.WAITING_CHECK_PLANS
+    assert updated.metadata.plan.approved is False
+    assert updated.metadata.plan_approval.escalation_reason == "split_proposal"
+    assert updated.metadata.plan_approval.risk_signals == ["split_proposal"]
+    assert len(adapter.run_calls) == 0
+    assert (updated.task_dir / "SPLIT-PROPOSAL.json").exists()
 
 
 def test_plan_approval_worker_auto_approves_recovered_waiting_check_plans_request(configured_paths):

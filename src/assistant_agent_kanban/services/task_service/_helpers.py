@@ -270,6 +270,8 @@ class _HelpersMixin(_TaskServiceLike):
             return (2, 0, 0, filename)
         if filename == "PLAN.md":
             return (3, 0, 0, filename)
+        if filename == "SPLIT-PROPOSAL.md":
+            return (3, 1, 0, filename)
         plan_approval_order = PLAN_APPROVAL_ARTIFACT_ORDER.get(filename)
         if plan_approval_order is not None:
             return (4, plan_approval_order, 0, filename)

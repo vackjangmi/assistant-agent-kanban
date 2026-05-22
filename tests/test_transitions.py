@@ -55,6 +55,26 @@ def test_manual_transition_respects_allowed_edges(configured_paths):
     assert moved.metadata.plan.approved is True
 
 
+def test_waiting_plan_can_close_without_marking_done(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "split-parent-task")
+    scanner = KanbanScanner(config)
+    metadata_store = MetadataStore()
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    closed = transitions.manual_move(waiting.metadata.task_id, TaskState.CLOSED, by="human")
+
+    assert closed.state == TaskState.CLOSED
+    assert closed.task_dir.parent == config.state_dir(TaskState.CLOSED)
+    assert closed.metadata.plan.approved is False
+    assert closed.metadata.closure.reason == "other"
+    assert closed.metadata.closure.closed_by == "human"
+
+
 def test_manual_transition_supports_human_verifying_edges(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-transition-task")
