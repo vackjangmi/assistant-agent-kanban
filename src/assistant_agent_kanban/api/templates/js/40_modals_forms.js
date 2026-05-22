@@ -138,7 +138,10 @@
         clearTimeout(slackReceiveTestPollTimer);
         slackReceiveTestPollTimer = null;
       }
-      if (isOpen) plannerModelSelectInput.focus();
+      if (isOpen) {
+        setSettingsTab('general');
+        plannerModelSelectInput.focus();
+      }
     }
 
     function setSettingsStatus(message, tone = 'neutral') {

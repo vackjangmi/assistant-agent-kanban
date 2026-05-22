@@ -187,49 +187,61 @@
           <button type="button" id="cancel-settings">Close</button>
         </div>
       </div>
+      <div class="task-tabs settings-tabs" role="tablist">
+        <button type="button" id="settings-tab-general" class="active" role="tab" aria-selected="true">General</button>
+        <button type="button" id="settings-tab-slack" role="tab" aria-selected="false">Slack Integration</button>
+        <button type="button" id="settings-tab-roles" role="tab" aria-selected="false">Runtime Roles</button>
+      </div>
       <form id="settings-form" class="modal-scroll-form">
         <div class="modal-scroll-body">
-          <div class="settings-sections">
-          <section class="settings-section">
-            <div class="settings-section-head">
-              <strong id="settings-basics-heading">Basics</strong>
-              <span id="settings-basics-description">Language, theme, repository defaults, and local Slack settings.</span>
-            </div>
-            <div class="settings-grid-basic">
-              <div class="settings-grid-basic-top">
-                <label class="settings-card" for="runtime_language">
-                <strong id="settings-language-title">Language</strong>
-                <span id="settings-language-description">Default for new requests.</span>
-                <select id="runtime_language" name="language">
-                  <option value="EN">English</option>
-                  <option value="KO">Korean</option>
-                </select>
-                <small id="settings-language-note">Only <code>EN</code> and <code>KO</code>.</small>
-                </label>
-                <label class="settings-card" for="runtime_theme">
-                <strong id="settings-theme-title">Theme</strong>
-                <span id="settings-theme-description">Dashboard appearance default.</span>
-                <select id="runtime_theme" name="theme">
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                </select>
-                <small id="settings-theme-note">Light mode is the default.</small>
-                </label>
+          <div id="settings-panel-general" class="settings-panel">
+            <section class="settings-section">
+              <div class="settings-section-head">
+                <strong id="settings-basics-heading">Basics</strong>
+                <span id="settings-basics-description">Language, theme, repository defaults, and local Slack settings.</span>
               </div>
-              <div class="settings-grid-basic-bottom">
-                <label class="settings-card" for="repo_discovery_root">
-                <strong id="settings-repo-root-title">Repo discovery root</strong>
-                <span id="settings-repo-root-description">Where repo suggestions are scanned.</span>
-                <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
-                <small id="settings-repo-root-note">Use <code>../</code> or an absolute path.</small>
-                </label>
-                <label class="settings-card" for="repo_discovery_max_depth">
-                <strong id="settings-repo-depth-title">Repo discovery depth</strong>
-                <span id="settings-repo-depth-description">How deep discovery scans.</span>
-                <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
-                <small id="settings-repo-depth-note">Increase only for nested repos.</small>
-                </label>
-                <div class="settings-card settings-card-span-2">
+              <div class="settings-grid-basic">
+                <div class="settings-grid-basic-top">
+                  <label class="settings-card" for="runtime_language">
+                    <strong id="settings-language-title">Language</strong>
+                    <span id="settings-language-description">Default for new requests.</span>
+                    <select id="runtime_language" name="language">
+                      <option value="EN">English</option>
+                      <option value="KO">Korean</option>
+                    </select>
+                    <small id="settings-language-note">Only <code>EN</code> and <code>KO</code>.</small>
+                  </label>
+                  <label class="settings-card" for="runtime_theme">
+                    <strong id="settings-theme-title">Theme</strong>
+                    <span id="settings-theme-description">Dashboard appearance default.</span>
+                    <select id="runtime_theme" name="theme">
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                    <small id="settings-theme-note">Light mode is the default.</small>
+                  </label>
+                </div>
+                <div class="settings-grid-basic-bottom">
+                  <label class="settings-card" for="repo_discovery_root">
+                    <strong id="settings-repo-root-title">Repo discovery root</strong>
+                    <span id="settings-repo-root-description">Where repo suggestions are scanned.</span>
+                    <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
+                    <small id="settings-repo-root-note">Use <code>../</code> or an absolute path.</small>
+                  </label>
+                  <label class="settings-card" for="repo_discovery_max_depth">
+                    <strong id="settings-repo-depth-title">Repo discovery depth</strong>
+                    <span id="settings-repo-depth-description">How deep discovery scans.</span>
+                    <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
+                    <small id="settings-repo-depth-note">Increase only for nested repos.</small>
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div id="settings-panel-slack" class="settings-panel" hidden>
+            <section class="settings-section">
+              <div class="settings-card settings-card-span-2">
                 <strong id="settings-slack-title">Slack</strong>
                 <span id="settings-slack-description">Local Slack app defaults for notifications and interactions.</span>
                 <div class="settings-slack-shell">
@@ -338,185 +350,187 @@
                     </div>
                   </details>
                 </div>
-                </div>
               </div>
-            </div>
-          </section>
-          <section class="settings-section">
-            <div class="settings-section-head">
-              <strong id="settings-agents-heading">Runtime roles</strong>
-              <span id="settings-agents-description">Assistants, models, token budgets, and parallel slots.</span>
-            </div>
-            <div class="settings-toolbar">
-              <div class="settings-toolbar-cluster">
-                <div class="settings-toolbar-field">
-                  <label id="settings-coding-assistant-label" for="runtime_coding_assistant">Default assistant</label>
-                  <select id="runtime_coding_assistant" name="coding_assistant">
-                    <option value="opencode">OpenCode</option>
-                    <option value="codex">Codex CLI</option>
-                  </select>
-                </div>
-                <div class="settings-toolbar-field" id="settings-live-logs-field">
-                  <select id="worker_live_logs_enabled" name="worker_live_logs_enabled">
-                    <option value="false">DEFAULT LOG</option>
-                    <option value="true">THINK LOG</option>
-                  </select>
-                </div>
-              </div>
-              <div class="settings-toolbar-cluster settings-toolbar-actions">
-                <p id="settings-discovery-summary" hidden aria-hidden="true">Open the panel to load current model options.</p>
-                <button type="button" id="refresh-model-options" class="ghost-button">Refresh models</button>
-              </div>
-            </div>
-            <div class="settings-grid">
-          <div class="settings-card">
-            <strong id="settings-request-draft-title">Request drafting runtime</strong>
-            <span id="settings-request-draft-description">Pre-submit request drafting assistance.</span>
-            <div class="settings-role-inline settings-role-inline-no-agents">
-              <div class="settings-field">
-                <label id="settings-request-draft-assistant-label" for="request_draft_backend">Assistant</label>
-                <select id="request_draft_backend" name="request_draft_backend"></select>
-              </div>
-              <div class="settings-field settings-model-field">
-                <label id="settings-request-draft-model-label" for="request_draft_model_select">Model</label>
-                <div class="settings-model-stack">
-                  <select id="request_draft_model_select"></select>
-                  <input id="request_draft_model" name="request_draft_model" class="settings-model-custom" placeholder="Enter a custom model" list="request_draft_model_options" hidden disabled>
-                  <datalist id="request_draft_model_options"></datalist>
-                </div>
-              </div>
-            </div>
-            <small id="settings-request-draft-note">Assistant override and model for composer-only drafting help.</small>
+            </section>
           </div>
-          <div class="settings-card">
-            <strong id="settings-planner-title">Planner runtime</strong>
-            <span id="settings-planner-description">Planning runs.</span>
-            <div class="settings-role-inline">
-              <div class="settings-field settings-field-compact">
-                <label id="settings-planner-agents-label" for="planner_agent_count">Agent</label>
-                <input id="planner_agent_count" name="planner_agent_count" type="number" min="1" step="1" placeholder="1">
+
+          <div id="settings-panel-roles" class="settings-panel" hidden>
+            <section class="settings-section">
+              <div class="settings-section-head">
+                <strong id="settings-agents-heading">Runtime roles</strong>
+                <span id="settings-agents-description">Assistants, models, token budgets, and parallel slots.</span>
               </div>
-              <div class="settings-field">
-                <label id="settings-planner-assistant-label" for="planner_backend">Assistant</label>
-                <select id="planner_backend" name="planner_backend"></select>
-              </div>
-              <div class="settings-field settings-model-field">
-                <label id="settings-planner-model-label" for="planner_model_select">Model</label>
-                <div class="settings-model-stack">
-                  <select id="planner_model_select"></select>
-                  <input id="planner_model" name="planner_model" class="settings-model-custom" placeholder="Enter a custom model" list="planner_model_options" hidden disabled>
-                  <datalist id="planner_model_options"></datalist>
+              <div class="settings-toolbar">
+                <div class="settings-toolbar-cluster">
+                  <div class="settings-toolbar-field">
+                    <label id="settings-coding-assistant-label" for="runtime_coding_assistant">Default assistant</label>
+                    <select id="runtime_coding_assistant" name="coding_assistant">
+                      <option value="opencode">OpenCode</option>
+                      <option value="codex">Codex CLI</option>
+                    </select>
+                  </div>
+                  <div class="settings-toolbar-field" id="settings-live-logs-field">
+                    <select id="worker_live_logs_enabled" name="worker_live_logs_enabled">
+                      <option value="false">DEFAULT LOG</option>
+                      <option value="true">THINK LOG</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="settings-toolbar-cluster settings-toolbar-actions">
+                  <p id="settings-discovery-summary" hidden aria-hidden="true">Open the panel to load current model options.</p>
+                  <button type="button" id="refresh-model-options" class="ghost-button">Refresh models</button>
                 </div>
               </div>
-              <div class="settings-field settings-field-compact">
-                <label id="settings-planner-token-label" for="planner_session_token_budget">Token</label>
-                <div class="settings-input-with-suffix"><input id="planner_session_token_budget" name="planner_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
-              </div>
-            </div>
-            <small id="settings-planner-note">Assistant override, model, token budget, and parallel agents.</small>
-          </div>
-          <div class="settings-card">
-            <strong id="settings-plan-approval-title">Plan approval runtime</strong>
-            <span id="settings-plan-approval-description">Selective plan gate decisions.</span>
-            <div class="settings-role-inline settings-role-inline-no-agents">
-              <div class="settings-field">
-                <label id="settings-plan-approval-assistant-label" for="plan_approval_backend">Assistant</label>
-                <select id="plan_approval_backend" name="plan_approval_backend"></select>
-              </div>
-              <div class="settings-field settings-model-field">
-                <label id="settings-plan-approval-model-label" for="plan_approval_model_select">Model</label>
-                <div class="settings-model-stack">
-                  <select id="plan_approval_model_select"></select>
-                  <input id="plan_approval_model" name="plan_approval_model" class="settings-model-custom" placeholder="Enter a custom model" list="plan_approval_model_options" hidden disabled>
-                  <datalist id="plan_approval_model_options"></datalist>
+              <div class="settings-grid">
+                <div class="settings-card">
+                  <strong id="settings-request-draft-title">Request drafting runtime</strong>
+                  <span id="settings-request-draft-description">Pre-submit request drafting assistance.</span>
+                  <div class="settings-role-inline settings-role-inline-no-agents">
+                    <div class="settings-field">
+                      <label id="settings-request-draft-assistant-label" for="request_draft_backend">Assistant</label>
+                      <select id="request_draft_backend" name="request_draft_backend"></select>
+                    </div>
+                    <div class="settings-field settings-model-field">
+                      <label id="settings-request-draft-model-label" for="request_draft_model_select">Model</label>
+                      <div class="settings-model-stack">
+                        <select id="request_draft_model_select"></select>
+                        <input id="request_draft_model" name="request_draft_model" class="settings-model-custom" placeholder="Enter a custom model" list="request_draft_model_options" hidden disabled>
+                        <datalist id="request_draft_model_options"></datalist>
+                      </div>
+                    </div>
+                  </div>
+                  <small id="settings-request-draft-note">Assistant override and model for composer-only drafting help.</small>
+                </div>
+                <div class="settings-card">
+                  <strong id="settings-planner-title">Planner runtime</strong>
+                  <span id="settings-planner-description">Planning runs.</span>
+                  <div class="settings-role-inline">
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-planner-agents-label" for="planner_agent_count">Agent</label>
+                      <input id="planner_agent_count" name="planner_agent_count" type="number" min="1" step="1" placeholder="1">
+                    </div>
+                    <div class="settings-field">
+                      <label id="settings-planner-assistant-label" for="planner_backend">Assistant</label>
+                      <select id="planner_backend" name="planner_backend"></select>
+                    </div>
+                    <div class="settings-field settings-model-field">
+                      <label id="settings-planner-model-label" for="planner_model_select">Model</label>
+                      <div class="settings-model-stack">
+                        <select id="planner_model_select"></select>
+                        <input id="planner_model" name="planner_model" class="settings-model-custom" placeholder="Enter a custom model" list="planner_model_options" hidden disabled>
+                        <datalist id="planner_model_options"></datalist>
+                      </div>
+                    </div>
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-planner-token-label" for="planner_session_token_budget">Token</label>
+                      <div class="settings-input-with-suffix"><input id="planner_session_token_budget" name="planner_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+                    </div>
+                  </div>
+                  <small id="settings-planner-note">Assistant override, model, token budget, and parallel agents.</small>
+                </div>
+                <div class="settings-card">
+                  <strong id="settings-plan-approval-title">Plan approval runtime</strong>
+                  <span id="settings-plan-approval-description">Selective plan gate decisions.</span>
+                  <div class="settings-role-inline settings-role-inline-no-agents">
+                    <div class="settings-field">
+                      <label id="settings-plan-approval-assistant-label" for="plan_approval_backend">Assistant</label>
+                      <select id="plan_approval_backend" name="plan_approval_backend"></select>
+                    </div>
+                    <div class="settings-field settings-model-field">
+                      <label id="settings-plan-approval-model-label" for="plan_approval_model_select">Model</label>
+                      <div class="settings-model-stack">
+                        <select id="plan_approval_model_select"></select>
+                        <input id="plan_approval_model" name="plan_approval_model" class="settings-model-custom" placeholder="Enter a custom model" list="plan_approval_model_options" hidden disabled>
+                        <datalist id="plan_approval_model_options"></datalist>
+                      </div>
+                    </div>
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-plan-approval-token-label" for="plan_approval_session_token_budget">Token</label>
+                      <div class="settings-input-with-suffix"><input id="plan_approval_session_token_budget" name="plan_approval_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+                    </div>
+                  </div>
+                  <small id="settings-plan-approval-note">Assistant override, model, and token budget for auto-approve decisions.</small>
+                </div>
+                <div class="settings-card">
+                  <strong id="settings-implementer-title">Implementer runtime</strong>
+                  <span id="settings-implementer-description">Workspace coding runs.</span>
+                  <div class="settings-role-inline">
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-implementer-agents-label" for="implementer_agent_count">Agent</label>
+                      <input id="implementer_agent_count" name="implementer_agent_count" type="number" min="1" step="1" placeholder="1">
+                    </div>
+                    <div class="settings-field">
+                      <label id="settings-implementer-assistant-label" for="implementer_backend">Assistant</label>
+                      <select id="implementer_backend" name="implementer_backend"></select>
+                    </div>
+                    <div class="settings-field settings-model-field">
+                      <label id="settings-implementer-model-label" for="implementer_model_select">Model</label>
+                      <div class="settings-model-stack">
+                        <select id="implementer_model_select"></select>
+                        <input id="implementer_model" name="implementer_model" class="settings-model-custom" placeholder="Enter a custom model" list="implementer_model_options" hidden disabled>
+                        <datalist id="implementer_model_options"></datalist>
+                      </div>
+                    </div>
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-implementer-token-label" for="implementer_session_token_budget">Token</label>
+                      <div class="settings-input-with-suffix"><input id="implementer_session_token_budget" name="implementer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+                    </div>
+                  </div>
+                  <small id="settings-implementer-note">Assistant override, model, token budget, and parallel agents.</small>
+                </div>
+                <div class="settings-card">
+                  <strong id="settings-reviewer-title">Reviewer runtime</strong>
+                  <span id="settings-reviewer-description">Review runs.</span>
+                  <div class="settings-role-inline">
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-reviewer-agents-label" for="reviewer_agent_count">Agent</label>
+                      <input id="reviewer_agent_count" name="reviewer_agent_count" type="number" min="1" step="1" placeholder="1">
+                    </div>
+                    <div class="settings-field">
+                      <label id="settings-reviewer-assistant-label" for="reviewer_backend">Assistant</label>
+                      <select id="reviewer_backend" name="reviewer_backend"></select>
+                    </div>
+                    <div class="settings-field settings-model-field">
+                      <label id="settings-reviewer-model-label" for="reviewer_model_select">Model</label>
+                      <div class="settings-model-stack">
+                        <select id="reviewer_model_select"></select>
+                        <input id="reviewer_model" name="reviewer_model" class="settings-model-custom" placeholder="Enter a custom model" list="reviewer_model_options" hidden disabled>
+                        <datalist id="reviewer_model_options"></datalist>
+                      </div>
+                    </div>
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-reviewer-token-label" for="reviewer_session_token_budget">Token</label>
+                      <div class="settings-input-with-suffix"><input id="reviewer_session_token_budget" name="reviewer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+                    </div>
+                  </div>
+                  <small id="settings-reviewer-note">Assistant override, model, token budget, and parallel agents.</small>
+                </div>
+                <div class="settings-card">
+                  <strong id="settings-commit-title">Commit runtime</strong>
+                  <span id="settings-commit-description">Commit message generation.</span>
+                  <div class="settings-role-inline settings-role-inline-no-agents">
+                    <div class="settings-field">
+                      <label id="settings-commit-assistant-label" for="commit_backend">Assistant</label>
+                      <select id="commit_backend" name="commit_backend"></select>
+                    </div>
+                    <div class="settings-field settings-model-field">
+                      <label id="settings-commit-model-label" for="commit_model_select">Model</label>
+                      <div class="settings-model-stack">
+                        <select id="commit_model_select"></select>
+                        <input id="commit_model" name="commit_model" class="settings-model-custom" placeholder="Enter a custom model" list="commit_model_options" hidden disabled>
+                        <datalist id="commit_model_options"></datalist>
+                      </div>
+                    </div>
+                    <div class="settings-field settings-field-compact">
+                      <label id="settings-commit-token-label" for="commit_session_token_budget">Token</label>
+                      <div class="settings-input-with-suffix"><input id="commit_session_token_budget" name="commit_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
+                    </div>
+                  </div>
+                  <small id="settings-commit-note">Assistant override, model, and token budget.</small>
                 </div>
               </div>
-              <div class="settings-field settings-field-compact">
-                <label id="settings-plan-approval-token-label" for="plan_approval_session_token_budget">Token</label>
-                <div class="settings-input-with-suffix"><input id="plan_approval_session_token_budget" name="plan_approval_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
-              </div>
-            </div>
-            <small id="settings-plan-approval-note">Assistant override, model, and token budget for auto-approve decisions.</small>
+            </section>
           </div>
-          <div class="settings-card">
-            <strong id="settings-implementer-title">Implementer runtime</strong>
-            <span id="settings-implementer-description">Workspace coding runs.</span>
-            <div class="settings-role-inline">
-              <div class="settings-field settings-field-compact">
-                <label id="settings-implementer-agents-label" for="implementer_agent_count">Agent</label>
-                <input id="implementer_agent_count" name="implementer_agent_count" type="number" min="1" step="1" placeholder="1">
-              </div>
-              <div class="settings-field">
-                <label id="settings-implementer-assistant-label" for="implementer_backend">Assistant</label>
-                <select id="implementer_backend" name="implementer_backend"></select>
-              </div>
-              <div class="settings-field settings-model-field">
-                <label id="settings-implementer-model-label" for="implementer_model_select">Model</label>
-                <div class="settings-model-stack">
-                  <select id="implementer_model_select"></select>
-                  <input id="implementer_model" name="implementer_model" class="settings-model-custom" placeholder="Enter a custom model" list="implementer_model_options" hidden disabled>
-                  <datalist id="implementer_model_options"></datalist>
-                </div>
-              </div>
-              <div class="settings-field settings-field-compact">
-                <label id="settings-implementer-token-label" for="implementer_session_token_budget">Token</label>
-                <div class="settings-input-with-suffix"><input id="implementer_session_token_budget" name="implementer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
-              </div>
-            </div>
-            <small id="settings-implementer-note">Assistant override, model, token budget, and parallel agents.</small>
-          </div>
-          <div class="settings-card">
-            <strong id="settings-reviewer-title">Reviewer runtime</strong>
-            <span id="settings-reviewer-description">Review runs.</span>
-            <div class="settings-role-inline">
-              <div class="settings-field settings-field-compact">
-                <label id="settings-reviewer-agents-label" for="reviewer_agent_count">Agent</label>
-                <input id="reviewer_agent_count" name="reviewer_agent_count" type="number" min="1" step="1" placeholder="1">
-              </div>
-              <div class="settings-field">
-                <label id="settings-reviewer-assistant-label" for="reviewer_backend">Assistant</label>
-                <select id="reviewer_backend" name="reviewer_backend"></select>
-              </div>
-              <div class="settings-field settings-model-field">
-                <label id="settings-reviewer-model-label" for="reviewer_model_select">Model</label>
-                <div class="settings-model-stack">
-                  <select id="reviewer_model_select"></select>
-                  <input id="reviewer_model" name="reviewer_model" class="settings-model-custom" placeholder="Enter a custom model" list="reviewer_model_options" hidden disabled>
-                  <datalist id="reviewer_model_options"></datalist>
-                </div>
-              </div>
-              <div class="settings-field settings-field-compact">
-                <label id="settings-reviewer-token-label" for="reviewer_session_token_budget">Token</label>
-                <div class="settings-input-with-suffix"><input id="reviewer_session_token_budget" name="reviewer_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
-              </div>
-            </div>
-            <small id="settings-reviewer-note">Assistant override, model, token budget, and parallel agents.</small>
-          </div>
-          <div class="settings-card">
-            <strong id="settings-commit-title">Commit runtime</strong>
-            <span id="settings-commit-description">Commit message generation.</span>
-            <div class="settings-role-inline settings-role-inline-no-agents">
-              <div class="settings-field">
-                <label id="settings-commit-assistant-label" for="commit_backend">Assistant</label>
-                <select id="commit_backend" name="commit_backend"></select>
-              </div>
-              <div class="settings-field settings-model-field">
-                <label id="settings-commit-model-label" for="commit_model_select">Model</label>
-                <div class="settings-model-stack">
-                  <select id="commit_model_select"></select>
-                  <input id="commit_model" name="commit_model" class="settings-model-custom" placeholder="Enter a custom model" list="commit_model_options" hidden disabled>
-                  <datalist id="commit_model_options"></datalist>
-                </div>
-              </div>
-              <div class="settings-field settings-field-compact">
-                <label id="settings-commit-token-label" for="commit_session_token_budget">Token</label>
-                <div class="settings-input-with-suffix"><input id="commit_session_token_budget" name="commit_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
-              </div>
-            </div>
-            <small id="settings-commit-note">Assistant override, model, and token budget.</small>
-          </div>
-            </div>
-          </section>
         </div>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>
       </form>

@@ -12,15 +12,18 @@ TEMPLATE_PATH = TEMPLATE_DIR / "index.html"
 CSS_PATH = TEMPLATE_DIR / "index.css"
 JS_DIR = TEMPLATE_DIR / "js"
 JS_MANIFEST = [
-    "01_globals.js",
-    "02_translations.js",
-    "03a_utils_settings.js",
-    "03b_board_rendering.js",
-    "04a_modals_forms.js",
-    "04b_diff.js",
-    "04c_request_composer.js",
-    "05_board.js",
-    "06_sse.js",
+    "00_globals.js",
+    "10_translations.js",
+    "20_settings.js",
+    "30_board_rendering.js",
+    "40_modals_forms.js",
+    "50_diff.js",
+    "60_request_composer.js",
+    "70_task_panels.js",
+    "71_task_artifacts.js",
+    "72_task_actions.js",
+    "80_event_wiring.js",
+    "99_sse.js",
 ]
 
 TEMPLATE_DEFAULT_TARGET_REPO = "__DEFAULT_TARGET_REPO__"
