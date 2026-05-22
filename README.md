@@ -98,6 +98,12 @@ Or use:
 ./init.sh
 ```
 
+On first run, you can point repo discovery at the directory that contains your target repositories:
+
+```bash
+./init.sh --root ~/git
+```
+
 `./init.sh` will:
 
 - create `.venv`
@@ -123,6 +129,16 @@ Simplest path:
 ```bash
 ./run.sh
 ```
+
+When `config.yaml` does not exist yet, `./run.sh` prompts for a repo discovery root. Press Enter to keep the default `../`.
+
+Or initialize/update the repo discovery root and run in one step:
+
+```bash
+./run.sh --root ~/git
+```
+
+Use `--kanban-root PATH` when you also want the workflow state directory outside this repository.
 
 Direct CLI usage:
 
@@ -540,6 +556,12 @@ pip install -e .[dev]
 ./init.sh
 ```
 
+처음 실행할 때 대상 repository들이 모여 있는 디렉토리를 repo discovery root로 지정할 수 있습니다.
+
+```bash
+./init.sh --root ~/git
+```
+
 `./init.sh`는 다음을 수행합니다.
 
 - `.venv` 생성
@@ -565,6 +587,16 @@ pip install -e .[dev]
 ```bash
 ./run.sh
 ```
+
+아직 `config.yaml`이 없으면 `./run.sh`가 repo discovery root를 물어봅니다. 기본값 `../`을 그대로 쓰려면 Enter를 누르면 됩니다.
+
+repo discovery root를 지정하고 바로 실행하려면:
+
+```bash
+./run.sh --root ~/git
+```
+
+workflow 상태 디렉토리도 이 repository 밖에 두고 싶다면 `--kanban-root PATH`를 사용하세요.
 
 CLI로 직접 실행:
 
