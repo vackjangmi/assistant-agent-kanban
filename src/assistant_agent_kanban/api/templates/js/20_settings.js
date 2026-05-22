@@ -788,13 +788,11 @@
       if (!preserveInputs) {
         slackBotTokenClearRequested = false;
         slackAppTokenClearRequested = false;
-      }
-      updateSlackTokenStatus(slackBotTokenStatus, data.slack_bot_token_masked, data.slack_bot_token_configured);
-      updateSlackTokenStatus(slackAppTokenStatus, data.slack_app_token_masked, data.slack_app_token_configured);
-      if (!preserveInputs) {
         slackBotTokenInput.value = '';
         slackAppTokenInput.value = '';
       }
+      updateSlackTokenStatus(slackBotTokenStatus, data.slack_bot_token_masked, data.slack_bot_token_configured);
+      updateSlackTokenStatus(slackAppTokenStatus, data.slack_app_token_masked, data.slack_app_token_configured);
       updateSlackReceiveTestStatus(data.slack_runtime || null);
       updateSlackChannelState();
     }

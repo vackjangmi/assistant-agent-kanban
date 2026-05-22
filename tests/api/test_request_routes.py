@@ -886,6 +886,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "slack_app_mention_enabled: slackAppMentionEnabledInput.checked" in response.text
     assert "void loadModelSettings(false, { allowHidden: true }).catch(() => {});" in response.text
     assert "if (!lastSettingsPayload) {" in response.text
+    apply_loaded_start = response.text.index("function applyLoadedModelSettings(data)")
+    assert response.text.index("lastSettingsPayload = data;", apply_loaded_start) < response.text.index(
+        "applyRuntimeSettingsTranslations();", apply_loaded_start
+    )
+    save_settings_start = response.text.index("async function saveModelSettings(event)")
+    assert response.text.index("lastSettingsPayload = data;", save_settings_start) < response.text.index(
+        "applyRuntimeSettingsTranslations();", save_settings_start
+    )
     assert "await navigator.clipboard.writeText(lastSlackReceiveInstruction);" in response.text
     assert "THINK LOG" in response.text
     assert "DEFAULT LOG" in response.text

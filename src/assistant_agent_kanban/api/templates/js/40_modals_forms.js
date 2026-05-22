@@ -236,6 +236,7 @@
       runtimeThemeInput.value = data.theme || 'light';
       applyRuntimeTheme(runtimeThemeInput.value);
       cachedAssistantOptions = resolveAssistantOptions(data);
+      lastSettingsPayload = data;
       renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
       applySlackSettingsData(data);
       plannerBackendInput.value = data.role_backends?.planner || 'default';
@@ -410,6 +411,7 @@
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         cachedAssistantOptions = resolveAssistantOptions(data);
+        lastSettingsPayload = data;
         renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
         const preservePendingChannel = Boolean(normalizeSlackChannelValue(pendingSlackChannel))
           && normalizeSlackChannelValue(pendingSlackChannel) !== normalizeSlackChannelValue(data.slack_default_channel_display || data.slack_default_channel || '');
