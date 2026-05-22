@@ -2,7 +2,7 @@
 set -eu
 
 usage() {
-    printf '%s\n' "Usage: ./init.sh [--config PATH] [--root PATH] [--kanban-root PATH]"
+    printf '%s\n' "Usage: ./init.sh [--config PATH] [--root PATH] [--kanban-root PATH] [--assistant NAME] [--language LANG] [--theme THEME]"
 }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -12,6 +12,9 @@ CONFIG_PATH=${CONFIG_PATH:-}
 CONFIG_PATH_EXPLICIT=0
 REPO_DISCOVERY_ROOT=${ASSISTANT_AGENT_KANBAN_REPO_DISCOVERY_ROOT:-}
 KANBAN_ROOT=${ASSISTANT_AGENT_KANBAN_KANBAN_ROOT:-}
+CODING_ASSISTANT=${ASSISTANT_AGENT_KANBAN_CODING_ASSISTANT:-}
+LANGUAGE=${ASSISTANT_AGENT_KANBAN_LANGUAGE:-}
+THEME=${ASSISTANT_AGENT_KANBAN_THEME:-}
 DEPS_STAMP_FILE="$VENV_DIR/.assistant-agent-kanban-deps-stamp"
 
 while [ "$#" -gt 0 ]; do
@@ -41,6 +44,30 @@ while [ "$#" -gt 0 ]; do
             KANBAN_ROOT=$2
             shift 2
             ;;
+        --assistant)
+            if [ "$#" -lt 2 ]; then
+                printf '%s\n' "Missing value for --assistant" >&2
+                exit 1
+            fi
+            CODING_ASSISTANT=$2
+            shift 2
+            ;;
+        --language)
+            if [ "$#" -lt 2 ]; then
+                printf '%s\n' "Missing value for --language" >&2
+                exit 1
+            fi
+            LANGUAGE=$2
+            shift 2
+            ;;
+        --theme)
+            if [ "$#" -lt 2 ]; then
+                printf '%s\n' "Missing value for --theme" >&2
+                exit 1
+            fi
+            THEME=$2
+            shift 2
+            ;;
         --help|-h)
             usage
             exit 0
@@ -55,6 +82,46 @@ done
 
 if [ -z "$CONFIG_PATH" ]; then
     CONFIG_PATH="$REPO_ROOT/config.yaml"
+fi
+
+FIRST_RUN_LOCAL_MISSING=0
+if [ "$CONFIG_PATH_EXPLICIT" = "0" ] && [ ! -f "$REPO_ROOT/config.local.yaml" ]; then
+    FIRST_RUN_LOCAL_MISSING=1
+fi
+
+. "$REPO_ROOT/lib/firstrun_prompts.sh"
+firstrun_prompts
+
+if [ -n "$CODING_ASSISTANT" ]; then
+    case "$CODING_ASSISTANT" in
+        opencode|codex|gemini|claude) ;;
+        *)
+            printf 'Invalid --assistant value: %s (expected opencode, codex, gemini, or claude)\n' "$CODING_ASSISTANT" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+if [ -n "$LANGUAGE" ]; then
+    case "$LANGUAGE" in
+        EN|en|English|english) LANGUAGE=EN ;;
+        KO|ko|KR|kr|Korean|korean) LANGUAGE=KO ;;
+        *)
+            printf 'Invalid --language value: %s (expected EN or KO)\n' "$LANGUAGE" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+if [ -n "$THEME" ]; then
+    case "$THEME" in
+        light|Light|LIGHT) THEME=light ;;
+        dark|Dark|DARK) THEME=dark ;;
+        *)
+            printf 'Invalid --theme value: %s (expected light or dark)\n' "$THEME" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 if [ -d "$VENV_DIR" ]; then
@@ -84,14 +151,17 @@ if [ ! -f "$CONFIG_PATH" ]; then
 fi
 
 CONFIG_WRITE_PATH=$CONFIG_PATH
-if [ "$CONFIG_PATH_EXPLICIT" = "0" ] && { [ -n "$REPO_DISCOVERY_ROOT" ] || [ -n "$KANBAN_ROOT" ]; }; then
+if [ "$CONFIG_PATH_EXPLICIT" = "0" ] && { [ -n "$REPO_DISCOVERY_ROOT" ] || [ -n "$KANBAN_ROOT" ] || [ -n "$CODING_ASSISTANT" ] || [ -n "$LANGUAGE" ] || [ -n "$THEME" ]; }; then
     CONFIG_WRITE_PATH="$REPO_ROOT/config.local.yaml"
 fi
 
-if [ -n "$REPO_DISCOVERY_ROOT" ] || [ -n "$KANBAN_ROOT" ]; then
+if [ -n "$REPO_DISCOVERY_ROOT" ] || [ -n "$KANBAN_ROOT" ] || [ -n "$CODING_ASSISTANT" ] || [ -n "$LANGUAGE" ] || [ -n "$THEME" ]; then
     ASSISTANT_AGENT_KANBAN_CONFIG_WRITE=$CONFIG_WRITE_PATH \
     ASSISTANT_AGENT_KANBAN_REPO_DISCOVERY_ROOT=$REPO_DISCOVERY_ROOT \
     ASSISTANT_AGENT_KANBAN_KANBAN_ROOT=$KANBAN_ROOT \
+    ASSISTANT_AGENT_KANBAN_CODING_ASSISTANT=$CODING_ASSISTANT \
+    ASSISTANT_AGENT_KANBAN_LANGUAGE=$LANGUAGE \
+    ASSISTANT_AGENT_KANBAN_THEME=$THEME \
         "$PYTHON_BIN" - <<'PY'
 import os
 from pathlib import Path, PurePosixPath
@@ -101,6 +171,9 @@ import yaml
 config_path = Path(os.environ["ASSISTANT_AGENT_KANBAN_CONFIG_WRITE"])
 root_dir = os.environ.get("ASSISTANT_AGENT_KANBAN_REPO_DISCOVERY_ROOT") or ""
 kanban_root = os.environ.get("ASSISTANT_AGENT_KANBAN_KANBAN_ROOT") or ""
+coding_assistant = os.environ.get("ASSISTANT_AGENT_KANBAN_CODING_ASSISTANT") or ""
+language = os.environ.get("ASSISTANT_AGENT_KANBAN_LANGUAGE") or ""
+theme = os.environ.get("ASSISTANT_AGENT_KANBAN_THEME") or ""
 
 if config_path.exists():
     data = yaml.safe_load(config_path.read_text()) or {}
@@ -122,6 +195,17 @@ if kanban_root:
         workspace = {}
         data["workspace"] = workspace
     workspace["root"] = str(PurePosixPath(kanban_root) / "_runtime" / "workspaces")
+if coding_assistant or language or theme:
+    runtime = data.get("runtime")
+    if not isinstance(runtime, dict):
+        runtime = {}
+        data["runtime"] = runtime
+    if coding_assistant:
+        runtime["coding_assistant"] = coding_assistant
+    if language:
+        runtime["language"] = language
+    if theme:
+        runtime["theme"] = theme
 
 config_path.parent.mkdir(parents=True, exist_ok=True)
 config_path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=False))
@@ -142,5 +226,14 @@ if [ -n "$REPO_DISCOVERY_ROOT" ]; then
 fi
 if [ -n "$KANBAN_ROOT" ]; then
     printf 'kanban root: %s\n' "$KANBAN_ROOT"
+fi
+if [ -n "$CODING_ASSISTANT" ]; then
+    printf 'coding assistant: %s\n' "$CODING_ASSISTANT"
+fi
+if [ -n "$LANGUAGE" ]; then
+    printf 'language: %s\n' "$LANGUAGE"
+fi
+if [ -n "$THEME" ]; then
+    printf 'theme: %s\n' "$THEME"
 fi
 printf 'next: ./run.sh\n'

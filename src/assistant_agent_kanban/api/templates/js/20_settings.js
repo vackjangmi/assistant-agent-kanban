@@ -202,6 +202,10 @@
 
     function applyRuntimeSettingsTranslations() {
       openSettingsButton.textContent = translateSettings('openSettings');
+      const openOnboardingButton = document.getElementById('open-onboarding');
+      if (openOnboardingButton) {
+        openOnboardingButton.textContent = translateSettings('openOnboarding');
+      }
       setSettingsText('settings-modal-title', 'settingsTitle');
       setSettingsText('settings-modal-description', 'settingsDescription');
       setSettingsText('settings-tab-general', 'settingsTabGeneral');
@@ -234,6 +238,17 @@
       setSettingsText('settings-repo-depth-title', 'repoDepthTitle');
       setSettingsText('settings-repo-depth-description', 'repoDepthDescription');
       setSettingsHtml('settings-repo-depth-note', 'repoDepthNote');
+      setSettingsText('settings-help-heading', 'settingsHelpHeading');
+      setSettingsText('settings-help-description', 'settingsHelpDescription');
+      setSettingsText('settings-help-card-title', 'settingsHelpCardTitle');
+      setSettingsText('settings-help-card-desc', 'settingsHelpCardDesc');
+      const restartBtn = document.getElementById('restart-onboarding-btn');
+      if (restartBtn) restartBtn.textContent = translateSettings('settingsHelpCardBtn');
+      if (btnBrowseRepoRoot) btnBrowseRepoRoot.textContent = translateSettings('dirPickerOpen');
+      setSettingsText('directory-picker-title', 'dirPickerTitle');
+      setSettingsText('directory-picker-description', 'dirPickerDesc');
+      if (btnDirectoryPickerSelect) btnDirectoryPickerSelect.textContent = translateSettings('dirPickerSelect');
+      if (btnDirectoryPickerClose) btnDirectoryPickerClose.textContent = translateSettings('dirPickerClose');
       setSettingsText('settings-slack-title', 'slackTitle');
       setSettingsText('settings-slack-description', 'slackDescription');
       setSettingsText('settings-slack-basics-title', 'slackBasicsTitle');
@@ -356,6 +371,9 @@
       sendRequestDraftButton.textContent = translateRequest('draftSend');
       cancelComposerButton.textContent = translateRequest('close');
       submitButton.textContent = translateRequest('submit');
+      if (btnBrowseTargetRepo) {
+        btnBrowseTargetRepo.textContent = translateSettings('dirPickerOpen');
+      }
       renderRequestDrafts();
       updateRequestDraftPanel();
     }
@@ -372,9 +390,10 @@
 
     function resolveAssistantOptions(payload) {
       const defaults = [
-        { value: 'opencode', label: 'OpenCode' },
         { value: 'codex', label: 'Codex CLI' },
+        { value: 'claude', label: 'Claude Code' },
         { value: 'gemini', label: 'Gemini CLI' },
+        { value: 'opencode', label: 'OpenCode' },
       ];
       const configured = Array.isArray(payload?.available_assistants) ? payload.available_assistants : [];
       const availabilityByBackend = payload?.backend_availability_by_backend;
@@ -780,13 +799,11 @@
       if (!preserveInputs) {
         slackBotTokenClearRequested = false;
         slackAppTokenClearRequested = false;
-      }
-      updateSlackTokenStatus(slackBotTokenStatus, data.slack_bot_token_masked, data.slack_bot_token_configured);
-      updateSlackTokenStatus(slackAppTokenStatus, data.slack_app_token_masked, data.slack_app_token_configured);
-      if (!preserveInputs) {
         slackBotTokenInput.value = '';
         slackAppTokenInput.value = '';
       }
+      updateSlackTokenStatus(slackBotTokenStatus, data.slack_bot_token_masked, data.slack_bot_token_configured);
+      updateSlackTokenStatus(slackAppTokenStatus, data.slack_app_token_masked, data.slack_app_token_configured);
       updateSlackReceiveTestStatus(data.slack_runtime || null);
       updateSlackChannelState();
     }
@@ -794,6 +811,7 @@
     function restoreSettingsState(state) {
       if (!state) return;
       runtimeLanguageInput.value = state.language || initialRuntimeLanguage;
+      runtimeLanguageInput.dispatchEvent(new Event('change'));
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions(cachedAssistantOptions, state.coding_assistant || 'opencode');
@@ -845,6 +863,7 @@
       if (restore) restoreSettingsState(lastLoadedSettingsState);
       setSettingsModalOpen(false);
     }
+    window.closeSettingsModal = closeSettingsModal;
 
     function phaseLabel(phase) {
       const labels = currentUiLanguage() === 'KO'
@@ -861,10 +880,30 @@
       return labels[phase] || phase;
     }
 
+    function boardPhaseForState(state) {
+      return Object.entries(boardPhaseStates).find(([, states]) => states.includes(state))?.[0] || '';
+    }
+
+    function shouldShowBoardPhaseCount(phase) {
+      return phase === 'plan' || phase === 'implementation';
+    }
+
+    function boardPhaseCountLabel(phase, count) {
+      if (currentUiLanguage() === 'KO') {
+        return `${phaseLabel(phase)}에 ${count}개 태스크`;
+      }
+      return `${count} ${count === 1 ? 'task' : 'tasks'} in ${phaseLabel(phase)}`;
+    }
+
     function renderBoardPhaseTabs() {
       boardPhaseTabs.querySelectorAll('[data-board-phase]').forEach((button) => {
         const phase = button.dataset.boardPhase;
-        button.textContent = phaseLabel(phase);
+        const label = phaseLabel(phase);
+        const count = boardPhaseTaskCounts[phase] || 0;
+        button.innerHTML = shouldShowBoardPhaseCount(phase)
+          ? `<span class="board-phase-tab-label">${escapeHtml(label)}</span><span class="board-phase-tab-count" aria-hidden="true">${escapeHtml(String(count))}</span>`
+          : escapeHtml(label);
+        button.setAttribute('aria-label', shouldShowBoardPhaseCount(phase) ? boardPhaseCountLabel(phase, count) : label);
         button.classList.toggle('active', phase === activeBoardPhase);
       });
     }
@@ -893,9 +932,15 @@
           panelEl.hidden = !active;
         }
       });
+      // Auto-scroll settings modal body to top on tab change
+      const settingsScrollBody = document.querySelector('#settings-modal .modal-scroll-body');
+      if (settingsScrollBody) {
+        settingsScrollBody.scrollTop = 0;
+      }
     }
+    window.setSettingsTab = setSettingsTab;
+
 
     document.getElementById('settings-tab-general').addEventListener('click', () => setSettingsTab('general'));
     document.getElementById('settings-tab-slack').addEventListener('click', () => setSettingsTab('slack'));
     document.getElementById('settings-tab-roles').addEventListener('click', () => setSettingsTab('roles'));
-

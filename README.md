@@ -130,12 +130,19 @@ Simplest path:
 ./run.sh
 ```
 
-When `config.yaml` does not exist yet, `./run.sh` prompts for a repo discovery root. Press Enter to keep the default `../`.
+On first run (when `config.local.yaml` does not exist yet), `./run.sh` and `./init.sh` both prompt for:
 
-Or initialize/update the repo discovery root and run in one step:
+- a **repo discovery root** (press Enter to keep the default `../`)
+- a **default coding assistant** — only CLIs found on `PATH` (from `opencode`, `codex`, `gemini`, `claude`) are listed; if exactly one is installed it is auto-selected, and if none are detected the built-in default is kept
+- a **UI language** (`EN` / `KO`)
+- a **UI theme** (`light` / `dark`)
+
+All answers are written to `config.local.yaml`.
+
+Or set values up front (any combination) and skip the corresponding prompts:
 
 ```bash
-./run.sh --root ~/git
+./run.sh --root ~/git --assistant claude --language KO --theme dark
 ```
 
 Use `--kanban-root PATH` when you also want the workflow state directory outside this repository.
@@ -588,12 +595,19 @@ pip install -e .[dev]
 ./run.sh
 ```
 
-아직 `config.yaml`이 없으면 `./run.sh`가 repo discovery root를 물어봅니다. 기본값 `../`을 그대로 쓰려면 Enter를 누르면 됩니다.
+최초 실행 시 (`config.local.yaml`이 아직 없을 때) `./run.sh`와 `./init.sh` 둘 다 다음을 물어봅니다:
 
-repo discovery root를 지정하고 바로 실행하려면:
+- **repo discovery root** (기본값 `../`을 그대로 쓰려면 Enter)
+- **기본 coding assistant** — `PATH`에서 찾은 CLI(`opencode`, `codex`, `gemini`, `claude`)만 목록에 표시합니다. 하나만 설치되어 있으면 자동 선택되고, 하나도 없으면 기본값을 유지합니다
+- **UI 언어** (`EN` / `KO`)
+- **UI 테마** (`light` / `dark`)
+
+모든 답변은 `config.local.yaml`에 저장됩니다.
+
+값을 미리 지정하고 해당 프롬프트를 건너뛰려면:
 
 ```bash
-./run.sh --root ~/git
+./run.sh --root ~/git --assistant claude --language KO --theme dark
 ```
 
 workflow 상태 디렉토리도 이 repository 밖에 두고 싶다면 `--kanban-root PATH`를 사용하세요.

@@ -49,6 +49,57 @@ def register(router: APIRouter) -> None:
         view_config, snapshots_by_backend = await _resolve_settings_snapshots(runtime, refresh=refresh, assistant=assistant)
         return _settings_response(runtime, snapshots_by_backend, view_config=view_config)
 
+    @router.get("/api/browse-directories")
+    async def browse_directories(request: Request, path: str | None = None) -> Mapping[str, object]:
+        import os
+        from pathlib import Path
+
+        runtime = request.app.state.runtime
+
+        try:
+            resolved_root = runtime.config.resolve_repo_discovery_root()
+        except Exception:
+            resolved_root = Path.cwd()
+
+        if path:
+            target_path = Path(path).expanduser()
+            if not target_path.is_absolute():
+                target_path = (resolved_root / target_path).resolve()
+            else:
+                target_path = target_path.resolve()
+        else:
+            target_path = resolved_root.resolve()
+
+        if not target_path.exists() or not target_path.is_dir():
+            if resolved_root.exists() and resolved_root.is_dir():
+                target_path = resolved_root.resolve()
+            else:
+                target_path = Path.cwd().resolve()
+
+        directories = []
+        error_msg = None
+        try:
+            for entry in os.scandir(target_path):
+                if entry.is_dir() and not entry.name.startswith('.') and entry.name != "__pycache__":
+                    directories.append({
+                        "name": entry.name,
+                        "path": str(Path(entry.path).resolve())
+                    })
+        except Exception as exc:
+            error_msg = str(exc)
+
+        directories.sort(key=lambda x: x["name"].lower())
+        parent_path = str(target_path.parent) if target_path.parent != target_path else None
+
+        res = {
+            "current_path": str(target_path),
+            "parent_path": parent_path,
+            "directories": directories,
+        }
+        if error_msg is not None:
+            res["error"] = error_msg
+        return res
+
     @router.put("/api/settings/models")
     async def update_model_settings(payload: ModelSettingsPayload, request: Request) -> Mapping[str, object]:
         runtime = request.app.state.runtime

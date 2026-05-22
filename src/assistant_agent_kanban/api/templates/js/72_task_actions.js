@@ -308,7 +308,6 @@
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Request creation failed.');
-        persistLastTargetRepo(payload.target_repo);
         clearRequestComposerDraftState();
         requestDraftId = '';
         resetFormState();
@@ -325,4 +324,3 @@
         submitButton.textContent = translateRequest('submit');
       }
     }
-

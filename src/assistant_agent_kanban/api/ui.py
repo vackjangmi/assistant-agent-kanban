@@ -17,6 +17,7 @@ JS_MANIFEST = [
     "20_settings.js",
     "30_board_rendering.js",
     "40_modals_forms.js",
+    "45_onboarding.js",
     "50_diff.js",
     "60_request_composer.js",
     "70_task_panels.js",

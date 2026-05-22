@@ -93,6 +93,7 @@
     }
 
     function renderTaskLogs(logs, { preserveSelection = true } = {}) {
+      const scrollState = preserveSelection ? captureTaskLogScrollState() : null;
       activeTaskLogs = logs;
       const entries = Array.isArray(logs?.entries) ? logs.entries : [];
       const fallbackLogName = entries[entries.length - 1]?.name || null;
@@ -110,6 +111,9 @@
       taskLogName.textContent = activeEntry?.name || translateTask('noLogSelected');
       taskLogStatus.textContent = activeEntry ? translateTask('viewingLog', { name: activeEntry.name }) : translateTask('selectRuntimeLog');
       taskLogViewer.textContent = activeEntry ? displayTaskLogContent(activeEntry) : translateTask('selectRuntimeLog');
+      if (scrollState) {
+        restoreTaskLogScrollState(scrollState);
+      }
     }
 
     function displayTaskLogContent(entry) {
@@ -164,12 +168,13 @@
       const nextMax = Math.max(0, taskLogViewer.scrollHeight - taskLogViewer.clientHeight);
       if (state.wasNearBottom || (!state.hadScrollableOverflow && nextMax > 0)) {
         taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
+        taskLogViewerPinnedToBottom = true;
         return;
       }
-      const previousMax = Math.max(0, state.scrollHeight - taskLogViewer.clientHeight);
-      const relativeOffset = previousMax - state.scrollTop;
-      taskLogViewer.scrollTop = Math.max(0, nextMax - relativeOffset);
+      taskLogViewer.scrollTop = state.scrollTop;
+      taskLogViewerPinnedToBottom = false;
     }
+
 
     function scrollTaskLogViewerToBottom() {
       taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
@@ -552,9 +557,44 @@
       }
     }
 
+    function captureArtifactViewerScrollState() {
+      const state = {
+        hostScrollTop: taskViewerHost.scrollTop,
+        childScrolls: [],
+      };
+      const nodes = taskViewerHost.querySelectorAll('.toastui-editor-contents, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .log-viewer');
+      nodes.forEach((node, index) => {
+        state.childScrolls.push({
+          index: index,
+          className: node.className,
+          scrollTop: node.scrollTop,
+        });
+      });
+      return state;
+    }
+
+    function restoreArtifactViewerScrollState(state) {
+      if (!state) return;
+      taskViewerHost.scrollTop = state.hostScrollTop;
+      const nodes = taskViewerHost.querySelectorAll('.toastui-editor-contents, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container, .log-viewer');
+      state.childScrolls.forEach((item) => {
+        if (nodes[item.index] && nodes[item.index].className === item.className) {
+          nodes[item.index].scrollTop = item.scrollTop;
+        } else {
+          const matches = Array.from(nodes).filter((n) => n.className === item.className);
+          if (matches.length === 1) {
+            matches[0].scrollTop = item.scrollTop;
+          }
+        }
+      });
+    }
+
     async function loadMarkdownArtifact(taskId, filename = null) {
       if (!activeTaskDetail || !activeTaskDetail.markdown_files.length) return;
       const resolvedArtifactName = filename && activeTaskDetail.markdown_files.includes(filename) ? filename : preferredArtifact(activeTaskDetail.markdown_files);
+      const isSameArtifact = (activeArtifactName === resolvedArtifactName);
+      const scrollState = isSameArtifact ? captureArtifactViewerScrollState() : null;
+
       const requestToken = ++activeArtifactRequestToken;
       activeArtifactName = resolvedArtifactName;
       renderArtifactButtons(activeTaskDetail.markdown_files);
@@ -575,7 +615,11 @@
         setArtifactMode(editable);
         updatePlanActionState();
         setTaskEditorMessage('');
-        requestAnimationFrame(resetArtifactViewerScroll);
+        if (isSameArtifact && scrollState) {
+          requestAnimationFrame(() => restoreArtifactViewerScrollState(scrollState));
+        } else {
+          requestAnimationFrame(resetArtifactViewerScroll);
+        }
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
