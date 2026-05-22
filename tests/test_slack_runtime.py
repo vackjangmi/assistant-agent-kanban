@@ -5,7 +5,7 @@ import json
 import logging
 from typing import Any, cast
 
-import assistant_agent_kanban.runtime as runtime_module
+import assistant_agent_kanban.runtime._slack as runtime_slack
 from assistant_agent_kanban.api.app import create_app
 from assistant_agent_kanban.config import AppConfig
 from assistant_agent_kanban.enums import TaskState
@@ -548,7 +548,7 @@ def test_slack_request_draft_flow_posts_review_message_when_placeholder_update_f
         ],
     )
 
-    original_call = runtime_module._slack.slack_api_call
+    original_call = runtime_slack.slack_api_call
 
     def fail_placeholder_update(method: str, *, token: str, body=None):
         if method == "chat.update" and isinstance(body, dict) and body.get("text") == "Assistant draft 1 ready for review.":
@@ -597,7 +597,7 @@ def test_slack_request_draft_flow_logs_when_review_fallback_post_fails(configure
         ],
     )
 
-    original_call = runtime_module._slack.slack_api_call
+    original_call = runtime_slack.slack_api_call
 
     def fail_update_and_post(method: str, *, token: str, body=None):
         if method == "chat.update" and isinstance(body, dict) and body.get("text") == "Assistant draft 1 ready for review.":
