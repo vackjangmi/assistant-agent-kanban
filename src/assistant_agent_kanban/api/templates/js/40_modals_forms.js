@@ -131,7 +131,9 @@
       }
       if (isOpen) {
         setSettingsTab('general');
-        plannerModelSelectInput.focus();
+        if (runtimeLanguageInput) {
+          runtimeLanguageInput.focus();
+        }
       }
     }
 
@@ -233,6 +235,7 @@
 
     function applyLoadedModelSettings(data) {
       runtimeLanguageInput.value = data.language || 'EN';
+      runtimeLanguageInput.dispatchEvent(new Event('change'));
       runtimeThemeInput.value = data.theme || 'light';
       applyRuntimeTheme(runtimeThemeInput.value);
       cachedAssistantOptions = resolveAssistantOptions(data);
@@ -310,6 +313,7 @@
       }
       void pollSlackReceiveTestStatus().catch(() => {});
     }
+    window.openSettingsModal = openSettingsModal;
 
     async function runSlackSettingsTest() {
       testSlackSettingsButton.disabled = true;
@@ -408,6 +412,7 @@
         const data = await response.json();
         if (!response.ok) throw new Error(formatSettingsApiError(data.detail));
         runtimeLanguageInput.value = data.language || 'EN';
+        runtimeLanguageInput.dispatchEvent(new Event('change'));
         runtimeThemeInput.value = data.theme || 'light';
         applyRuntimeTheme(runtimeThemeInput.value);
         cachedAssistantOptions = resolveAssistantOptions(data);

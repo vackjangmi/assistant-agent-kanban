@@ -202,6 +202,10 @@
 
     function applyRuntimeSettingsTranslations() {
       openSettingsButton.textContent = translateSettings('openSettings');
+      const openOnboardingButton = document.getElementById('open-onboarding');
+      if (openOnboardingButton) {
+        openOnboardingButton.textContent = translateSettings('openOnboarding');
+      }
       setSettingsText('settings-modal-title', 'settingsTitle');
       setSettingsText('settings-modal-description', 'settingsDescription');
       setSettingsText('settings-tab-general', 'settingsTabGeneral');
@@ -234,6 +238,12 @@
       setSettingsText('settings-repo-depth-title', 'repoDepthTitle');
       setSettingsText('settings-repo-depth-description', 'repoDepthDescription');
       setSettingsHtml('settings-repo-depth-note', 'repoDepthNote');
+      setSettingsText('settings-help-heading', 'settingsHelpHeading');
+      setSettingsText('settings-help-description', 'settingsHelpDescription');
+      setSettingsText('settings-help-card-title', 'settingsHelpCardTitle');
+      setSettingsText('settings-help-card-desc', 'settingsHelpCardDesc');
+      const restartBtn = document.getElementById('restart-onboarding-btn');
+      if (restartBtn) restartBtn.textContent = translateSettings('settingsHelpCardBtn');
       if (btnBrowseRepoRoot) btnBrowseRepoRoot.textContent = translateSettings('dirPickerOpen');
       setSettingsText('directory-picker-title', 'dirPickerTitle');
       setSettingsText('directory-picker-description', 'dirPickerDesc');
@@ -801,6 +811,7 @@
     function restoreSettingsState(state) {
       if (!state) return;
       runtimeLanguageInput.value = state.language || initialRuntimeLanguage;
+      runtimeLanguageInput.dispatchEvent(new Event('change'));
       runtimeThemeInput.value = state.theme || initialRuntimeTheme;
       applyRuntimeTheme(runtimeThemeInput.value);
       renderAssistantOptions(cachedAssistantOptions, state.coding_assistant || 'opencode');
@@ -852,6 +863,7 @@
       if (restore) restoreSettingsState(lastLoadedSettingsState);
       setSettingsModalOpen(false);
     }
+    window.closeSettingsModal = closeSettingsModal;
 
     function phaseLabel(phase) {
       const labels = currentUiLanguage() === 'KO'
@@ -920,7 +932,14 @@
           panelEl.hidden = !active;
         }
       });
+      // Auto-scroll settings modal body to top on tab change
+      const settingsScrollBody = document.querySelector('#settings-modal .modal-scroll-body');
+      if (settingsScrollBody) {
+        settingsScrollBody.scrollTop = 0;
+      }
     }
+    window.setSettingsTab = setSettingsTab;
+
 
     document.getElementById('settings-tab-general').addEventListener('click', () => setSettingsTab('general'));
     document.getElementById('settings-tab-slack').addEventListener('click', () => setSettingsTab('slack'));

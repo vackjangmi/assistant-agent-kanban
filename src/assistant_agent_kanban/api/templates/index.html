@@ -19,6 +19,7 @@
     <div class="header-actions">
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Settings</button>
+      <button id="open-onboarding" class="ghost-button">Guide</button>
       <button id="refresh">Refresh</button>
     </div>
   </header>
@@ -191,8 +192,8 @@
       </div>
       <div class="task-tabs settings-tabs" role="tablist">
         <button type="button" id="settings-tab-general" class="active" role="tab" aria-selected="true">General</button>
-        <button type="button" id="settings-tab-slack" role="tab" aria-selected="false">Slack Integration</button>
         <button type="button" id="settings-tab-roles" role="tab" aria-selected="false">Runtime Roles</button>
+        <button type="button" id="settings-tab-slack" role="tab" aria-selected="false">Slack Integration</button>
       </div>
       <form id="settings-form" class="modal-scroll-form">
         <div class="modal-scroll-body">
@@ -239,6 +240,20 @@
                     <input id="repo_discovery_max_depth" name="repo_discovery_max_depth" type="number" min="1" step="1">
                     <small id="settings-repo-depth-note">Increase only for nested repos.</small>
                   </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-section settings-help-section" style="margin-top: 24px; border-top: 1px solid rgba(99, 102, 241, 0.1); padding-top: 24px;">
+              <div class="settings-section-head">
+                <strong id="settings-help-heading">Help & Guides</strong>
+                <span id="settings-help-description">Access onboarding tutorials and interactive walkthroughs.</span>
+              </div>
+              <div class="settings-grid-basic">
+                <div class="settings-card" style="grid-column: span 2; display: flex; flex-direction: column; gap: 8px;">
+                  <strong id="settings-help-card-title">Onboarding Tour</strong>
+                  <span id="settings-help-card-desc">Re-run the interactive setup walkthrough to learn about models, settings, and Slack integration.</span>
+                  <button type="button" id="restart-onboarding-btn" class="accent-button" style="margin-top: 8px; width: fit-content; align-self: start; padding: 8px 16px; border-radius: 8px; font-weight: 600;">Start Onboarding Tour</button>
                 </div>
               </div>
             </section>
@@ -934,5 +949,62 @@
   <script>
     /* {{ INJECT_JS }} */
   </script>
+  <!-- Onboarding Overlay -->
+  <div id="onboarding-overlay" class="onboarding-overlay" hidden>
+    <div class="onboarding-card">
+      <button type="button" class="onboarding-minimize-btn" id="onboarding-minimize-btn" title="Minimize/Expand guide">−</button>
+      <button type="button" class="onboarding-skip-btn" id="onboarding-skip-btn" title="Skip onboarding">&times;</button>
+      <div class="onboarding-collapsed-indicator" style="display: none;">
+        <button type="button" class="onboarding-collapsed-nav-btn prev" id="onboarding-collapsed-prev-btn" title="Previous step">‹</button>
+        <span id="onboarding-collapsed-text">✨ 도움말 1/5</span>
+        <button type="button" class="onboarding-collapsed-nav-btn next" id="onboarding-collapsed-next-btn" title="Next step">›</button>
+      </div>
+      <div class="onboarding-steps-container">
+        <!-- Step 1: Welcome -->
+        <div class="onboarding-step" data-step="1">
+          <div class="onboarding-icon">👋</div>
+          <h3 class="onboarding-title" id="onboarding-title-1">환영합니다!</h3>
+          <p class="onboarding-desc" id="onboarding-desc-1">Assistant Agent Kanban의 설정 및 새 요청 등록 방법을 쉽고 빠르게 알려드릴게요.</p>
+        </div>
+        <!-- Step 2: Runtime Roles -->
+        <div class="onboarding-step" data-step="2" hidden>
+          <div class="onboarding-icon">🤖</div>
+          <h3 class="onboarding-title" id="onboarding-title-2">런타임 역할 별 모델</h3>
+          <p class="onboarding-desc" id="onboarding-desc-2">각 워커에 적합한 AI 모델과 어시스턴트를 지정하고 효율적인 토큰 예산을 배정합니다.</p>
+        </div>
+        <!-- Step 3: Slack Integration -->
+        <div class="onboarding-step" data-step="3" hidden>
+          <div class="onboarding-icon">💬</div>
+          <h3 class="onboarding-title" id="onboarding-title-3">슬랙 연동</h3>
+          <p class="onboarding-desc" id="onboarding-desc-3">작업 상태 변화나 에러 알림 등을 슬랙 채널을 통해 실시간으로 받아보세요.</p>
+        </div>
+        <!-- Step 4: New Request -->
+        <div class="onboarding-step" data-step="4" hidden>
+          <div class="onboarding-icon">🚀</div>
+          <h3 class="onboarding-title" id="onboarding-title-4">새 요청 등록</h3>
+          <p class="onboarding-desc" id="onboarding-desc-4">모든 준비가 완료되었습니다! 이제 대시보드 상단의 '새 요청' 버튼을 통해 새로운 작업을 시작해 보세요.</p>
+        </div>
+        <!-- Step 5: Draft Refinement -->
+        <div class="onboarding-step" data-step="5" hidden>
+          <div class="onboarding-icon">✍️</div>
+          <h3 class="onboarding-title" id="onboarding-title-5">어시스턴트 초안 다듬기</h3>
+          <p class="onboarding-desc" id="onboarding-desc-5">자연어로 요구사항을 입력하면, AI 어시스턴트가 분석하여 정교한 요청서 초안을 완성해 줍니다.</p>
+        </div>
+      </div>
+      <div class="onboarding-footer">
+        <div class="onboarding-dots">
+          <span class="onboarding-dot active" data-step-dot="1"></span>
+          <span class="onboarding-dot" data-step-dot="2"></span>
+          <span class="onboarding-dot" data-step-dot="3"></span>
+          <span class="onboarding-dot" data-step-dot="4"></span>
+          <span class="onboarding-dot" data-step-dot="5"></span>
+        </div>
+        <div class="onboarding-actions">
+          <button type="button" class="onboarding-nav-btn prev-btn" id="onboarding-prev-btn" disabled>이전</button>
+          <button type="button" class="onboarding-nav-btn next-btn" id="onboarding-next-btn">다음</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

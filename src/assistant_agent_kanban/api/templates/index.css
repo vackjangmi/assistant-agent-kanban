@@ -1076,7 +1076,7 @@ body[data-theme="dark"] .card-button:hover { background-color: rgba(255, 255, 25
 .error-text { min-height: 1.1em; color: var(--danger); font-size: 0.9rem; }
 .form-error { margin-bottom: 12px; padding: 10px 12px; border: 1px solid rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
 .form-error[hidden] { display: none; }
-.stacked-modal-panel { display: flex; flex-direction: column; overflow: hidden; height: min(86vh, calc(100vh - 64px)); }
+.stacked-modal-panel { display: flex; flex-direction: column; overflow: hidden; height: min(86vh, calc(100vh - 64px)); width: min(1160px, calc(100vw - 48px)); }
 .stacked-modal-panel .modal-head { margin-bottom: 0; padding-bottom: 14px; flex: 0 0 auto; border-bottom: 1px solid rgba(24,32,38,0.08); }
 .modal-scroll-form { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; overflow: hidden; padding-top: 14px; }
 .modal-scroll-body { min-height: 0; overflow: auto; padding-right: 4px; display: grid; gap: 18px; }
@@ -1295,17 +1295,29 @@ body[data-theme="dark"] .settings-slack-advanced-body { border-top-color: rgba(1
   .settings-slack-token-grid, .settings-slack-basic-grid, .settings-slack-advanced-grid { grid-template-columns: 1fr; }
   .settings-toggle-group { grid-template-columns: 1fr; }
 }
-.settings-role-inline { display: grid; grid-template-columns: 64px 132px minmax(0, 1fr) 110px; gap: 10px; align-items: end; }
-.settings-role-inline-no-agents { grid-template-columns: 132px minmax(0, 1fr) 110px; }
+.settings-role-inline { display: grid; grid-template-columns: 64px 132px minmax(0, 1fr) 96px; gap: 10px; align-items: end; }
+.settings-role-inline-no-agents { grid-template-columns: 132px minmax(0, 1fr) 96px; }
 .settings-field-compact input { text-align: center; }
 .settings-field { display: grid; gap: 5px; }
 .settings-field label { font-size: 0.83rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
 .settings-model-field { align-content: start; }
 .settings-model-stack { display: grid; gap: 8px; }
 .settings-model-custom[hidden] { display: none; }
-.settings-input-with-suffix { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
-.settings-input-with-suffix input { border-right: 0; text-align: center; }
-.settings-input-suffix { display: inline-flex; align-items: center; justify-content: center; min-width: 42px; padding: 0 12px; border: 1px solid var(--border); background: rgba(124,79,44,0.1); color: var(--accent-strong); font-size: 0.9rem; font-weight: 700; }
+.settings-input-with-suffix { display: grid; grid-template-columns: minmax(0, 1fr) 28px; align-items: stretch; justify-self: start; width: 96px; max-width: 100%; min-width: 0; border-radius: 10px; }
+.settings-input-with-suffix input { min-width: 0; border-right: 0; border-radius: 10px 0 0 10px; text-align: right; font-variant-numeric: tabular-nums; }
+.settings-input-with-suffix input::-webkit-outer-spin-button,
+.settings-input-with-suffix input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+.settings-input-with-suffix input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.settings-input-suffix { display: inline-flex; align-items: center; justify-content: center; min-width: 0; width: 28px; padding: 0; border: 1px solid var(--border); border-left: 0; border-radius: 0 10px 10px 0; background: rgba(99,102,241,0.08); color: var(--accent-strong); font-size: 0.9rem; font-weight: 700; }
+.settings-input-with-suffix:focus-within { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12); }
+.settings-input-with-suffix:focus-within input,
+.settings-input-with-suffix:focus-within .settings-input-suffix { border-color: var(--accent); }
+@media (max-width: 640px) {
+  .settings-role-inline,
+  .settings-role-inline-no-agents { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-role-inline .settings-model-field,
+  .settings-role-inline-no-agents .settings-model-field { grid-column: 1 / -1; }
+}
 .settings-status { padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.85); color: var(--muted); }
 .settings-status[data-tone="success"] { border-color: rgba(33,115,73,0.25); background: rgba(33,115,73,0.09); color: var(--success); }
 .settings-status[data-tone="error"] { border-color: rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
@@ -1802,4 +1814,702 @@ body[data-theme="dark"] .directory-picker-list {
   background: var(--accent);
   color: #ffffff;
   border-color: var(--accent-strong);
+}
+
+/* ==========================================================================
+   PREMIUM SETTINGS CARD & INPUT STYLES (AESTHETICS OVERRIDES)
+   ========================================================================== */
+.settings-card {
+  border: 1px solid rgba(99, 102, 241, 0.12) !important;
+  background: var(--panel-strong) !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 300ms cubic-bezier(0.16, 1, 0.3, 1), border-color 300ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  backdrop-filter: blur(10px);
+}
+
+body[data-theme="dark"] .settings-card {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.settings-card:hover, .settings-card:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 15px 35px rgba(99, 102, 241, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+body[data-theme="dark"] .settings-card:hover, body[data-theme="dark"] .settings-card:focus-within {
+  box-shadow: 0 15px 35px rgba(99, 102, 241, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.settings-card input, .settings-card select {
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  padding: 11px 14px !important;
+  border-radius: 10px !important;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.02) !important;
+  transition: border-color 200ms ease, box-shadow 200ms ease, background 200ms ease !important;
+}
+
+body[data-theme="dark"] .settings-card input, body[data-theme="dark"] .settings-card select {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.settings-card input:focus, .settings-card select:focus {
+  border-color: var(--accent) !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.16) !important;
+}
+
+body[data-theme="dark"] .settings-card input:focus, body[data-theme="dark"] .settings-card select:focus {
+  background: rgba(15, 23, 42, 0.9) !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.3) !important;
+}
+
+.settings-card .settings-input-with-suffix input {
+  border-right: 0 !important;
+  border-radius: 10px 0 0 10px !important;
+  padding: 11px 6px 11px 8px !important;
+  text-align: right !important;
+}
+
+.settings-card .settings-input-with-suffix input:focus {
+  box-shadow: none !important;
+}
+
+.settings-card .settings-input-with-suffix:focus-within {
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.16) !important;
+}
+
+body[data-theme="dark"] .settings-card .settings-input-with-suffix:focus-within {
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Modal Title Details */
+#settings-modal-title {
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 800;
+  font-size: 1.8rem;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--accent-strong), #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+}
+
+/* ==========================================================================
+   ELEGANT INTERACTIVE ONBOARDING WIZARD OVERLAY
+   ========================================================================== */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: opacity 400ms ease;
+  pointer-events: auto;
+}
+
+body[data-theme="dark"] .onboarding-overlay {
+  background: rgba(2, 6, 23, 0.65);
+}
+
+.onboarding-overlay.minimal-backdrop {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+
+/* Onboarding Wizard Card Container */
+.onboarding-card {
+  position: fixed;
+  width: 400px;
+  max-width: 90vw;
+  padding: 30px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 30px 60px rgba(15, 23, 42, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 80px rgba(99, 102, 241, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 10001;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: all 650ms cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  pointer-events: auto !important;
+}
+
+body[data-theme="dark"] .onboarding-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 80px rgba(99, 102, 241, 0.15);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Standardized and vertically aligned top-right control buttons */
+.onboarding-minimize-btn,
+.onboarding-skip-btn {
+  position: absolute;
+  top: 20px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10002;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.onboarding-minimize-btn {
+  right: 56px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-normal);
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.onboarding-skip-btn {
+  right: 20px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-normal);
+  font-size: 20px;
+  line-height: 1;
+}
+
+body[data-theme="dark"] .onboarding-minimize-btn,
+body[data-theme="dark"] .onboarding-skip-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.onboarding-minimize-btn:hover,
+.onboarding-skip-btn:hover {
+  background: var(--accent);
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.onboarding-minimize-btn:active,
+.onboarding-skip-btn:active {
+  transform: scale(0.95);
+}
+
+.onboarding-collapsed-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+}
+
+#onboarding-collapsed-text {
+  animation: pulse-onboarding 2s infinite ease-in-out;
+}
+
+@keyframes pulse-onboarding {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.7; }
+}
+
+.onboarding-collapsed-nav-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--accent-strong);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.onboarding-collapsed-nav-btn:hover {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent);
+}
+
+.onboarding-collapsed-nav-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.onboarding-card.collapsed {
+  width: 236px !important;
+  height: 52px !important;
+  min-height: 0 !important;
+  padding: 10px 18px !important;
+  overflow: hidden !important;
+  border-radius: 26px !important;
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.25) !important;
+  border-color: var(--accent) !important;
+  gap: 0 !important;
+}
+
+.onboarding-card.collapsed .onboarding-steps-container,
+.onboarding-card.collapsed .onboarding-footer,
+.onboarding-card.collapsed .onboarding-skip-btn {
+  display: none !important;
+}
+
+.onboarding-card.collapsed .onboarding-minimize-btn {
+  right: 12px;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+}
+
+/* Responsive adjustments for onboarding wizard */
+@media (max-width: 900px) {
+  .onboarding-card {
+    width: calc(100vw - 24px) !important;
+    left: 12px !important;
+    bottom: 12px !important;
+    right: 12px !important;
+    top: auto !important;
+    transform: none !important;
+    padding: 18px 20px !important;
+    gap: 12px !important;
+    border-radius: 18px !important;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .onboarding-card.collapsed {
+    width: 160px !important;
+    height: 46px !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    right: auto !important;
+    padding: 8px 14px !important;
+  }
+  .onboarding-card .onboarding-skip-btn {
+    top: 14px !important;
+    right: 14px !important;
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 16px !important;
+  }
+  .onboarding-card .onboarding-minimize-btn {
+    top: 14px !important;
+    right: 46px !important;
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 14px !important;
+  }
+  .onboarding-pointer-badge {
+    font-size: 9px !important;
+    padding: 4px 8px !important;
+  }
+}
+
+/* Dynamic placement based on active step */
+.onboarding-card.step-1 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow:
+    0 30px 60px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 50px rgba(99, 102, 241, 0.25);
+}
+
+.onboarding-card.step-2 {
+  bottom: 30px;
+  left: 30px;
+  top: auto;
+  right: auto;
+  transform: translate(0, 0);
+  width: 440px;
+  border-color: rgba(139, 92, 246, 0.45);
+  box-shadow:
+    0 30px 60px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 50px rgba(139, 92, 246, 0.25);
+}
+
+/* Step 3 Slack integration — same position as Step 2 on wide screens for visual continuity */
+.onboarding-card.step-3 {
+  bottom: 30px;
+  left: 30px;
+  top: auto;
+  right: auto;
+  transform: translate(0, 0);
+  width: 440px;
+  border-color: rgba(224, 30, 90, 0.45);
+  box-shadow:
+    0 30px 60px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 50px rgba(224, 30, 90, 0.25);
+}
+/* JS-driven repositioning when card overlaps with pointer badges */
+.onboarding-card.step-3.reposition-right {
+  left: auto;
+  right: 30px;
+}
+
+.onboarding-card.step-4 {
+  top: 80px;
+  right: 30px;
+  bottom: auto;
+  left: auto;
+  transform: translate(0, 0);
+  width: 420px;
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow:
+    0 30px 60px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 50px rgba(16, 185, 129, 0.25);
+}
+
+/* Step 5 AI Assistant drafting placement */
+.onboarding-card.step-5 {
+  top: 120px;
+  left: 30px;
+  bottom: auto;
+  right: auto;
+  transform: translate(0, 0);
+  width: 440px;
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow:
+    0 30px 60px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 50px rgba(59, 130, 246, 0.25);
+}
+
+body[data-theme="dark"] .onboarding-card.step-1 {
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 50px rgba(99, 102, 241, 0.2);
+}
+
+body[data-theme="dark"] .onboarding-card.step-2 {
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 50px rgba(139, 92, 246, 0.2);
+}
+
+body[data-theme="dark"] .onboarding-card.step-3 {
+  border-color: rgba(224, 30, 90, 0.3);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 50px rgba(224, 30, 90, 0.2);
+}
+
+body[data-theme="dark"] .onboarding-card.step-4 {
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 50px rgba(16, 185, 129, 0.2);
+}
+
+body[data-theme="dark"] .onboarding-card.step-5 {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 50px rgba(59, 130, 246, 0.2);
+}
+
+.onboarding-steps-container {
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.onboarding-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: onboarding-fade-in 350ms ease forwards;
+}
+
+.onboarding-step[hidden] {
+  display: none !important;
+}
+
+.onboarding-icon {
+  font-size: 3rem;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.onboarding-title {
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text);
+}
+
+.onboarding-desc {
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+  white-space: normal;
+}
+
+/* Onboarding Footer & Navigation Controls */
+.onboarding-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  padding-top: 20px;
+}
+body[data-theme="dark"] .onboarding-footer {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+}
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.15);
+  transition: all 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+body[data-theme="dark"] .onboarding-dot {
+  background: rgba(255, 255, 255, 0.2);
+}
+.onboarding-dot.active {
+  width: 24px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.onboarding-nav-btn {
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+.onboarding-nav-btn:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.2);
+}
+.onboarding-nav-btn.next-btn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+}
+.onboarding-nav-btn.next-btn:hover {
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+}
+.onboarding-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+body[data-theme="dark"] .onboarding-nav-btn {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.9);
+}
+body[data-theme="dark"] .onboarding-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+body[data-theme="dark"] .onboarding-nav-btn.next-btn {
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.2);
+}
+
+/* ==========================================================================
+   NEON PULSE HIGHLIGHT EFFECT FOR KEY TARGET NODES
+   ========================================================================== */
+@keyframes onboarding-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(99, 102, 241, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+.onboarding-target-highlight {
+  position: relative !important;
+  z-index: 10002 !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.35) !important;
+  animation: onboarding-pulse 1.8s infinite !important;
+  pointer-events: auto !important; /* Make sure the target remains interactive! */
+  transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Animations */
+@keyframes onboarding-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Pointing pointer badges styled with premium micro-animations */
+.onboarding-pointer-badge {
+  position: absolute;
+  z-index: 10005;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.4), 0 0 0 3px rgba(20, 184, 166, 0.15);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.onboarding-pointer-badge::before {
+  content: "";
+  position: absolute;
+  border-width: 6px;
+  border-style: solid;
+  border-color: transparent;
+}
+
+.onboarding-pointer-badge.direction-left {
+  animation: pointer-bounce-left 1.2s infinite ease-in-out;
+}
+.onboarding-pointer-badge.direction-left::before {
+  left: -12px;
+  top: calc(50% - 6px);
+  border-right-color: #14b8a6;
+}
+
+.onboarding-pointer-badge.direction-right {
+  animation: pointer-bounce-right 1.2s infinite ease-in-out;
+}
+.onboarding-pointer-badge.direction-right::before {
+  right: -12px;
+  top: calc(50% - 6px);
+  border-left-color: #0d9488;
+}
+
+.onboarding-pointer-badge.direction-top {
+  animation: pointer-bounce-top 1.2s infinite ease-in-out;
+}
+.onboarding-pointer-badge.direction-top::before {
+  top: -12px;
+  left: calc(50% - 6px);
+  border-bottom-color: #14b8a6;
+}
+
+.onboarding-pointer-badge.direction-bottom {
+  animation: pointer-bounce-bottom 1.2s infinite ease-in-out;
+}
+.onboarding-pointer-badge.direction-bottom::before {
+  bottom: -12px;
+  left: calc(50% - 6px);
+  border-top-color: #0d9488;
+}
+
+@keyframes pointer-bounce-left {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-6px); }
+}
+
+@keyframes pointer-bounce-right {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(6px); }
+}
+
+@keyframes pointer-bounce-top {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pointer-bounce-bottom {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+
+/* Beautiful Onboarding Guide Lists */
+.onboarding-guide-list {
+  margin: 12px 0 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onboarding-guide-list li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--text-normal);
+}
+
+.onboarding-guide-list li::before {
+  content: "•";
+  position: absolute;
+  left: 6px;
+  color: #6366f1;
+  font-weight: bold;
+}
+
+.onboarding-guide-list li.custom-bullet {
+  padding-left: 0;
+}
+
+.onboarding-guide-list li.custom-bullet::before {
+  content: none;
 }
