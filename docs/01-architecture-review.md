@@ -8,7 +8,7 @@ This document is the **architecture reference** for the current repository.
 
 ## One-Line Summary
 
-Assistant Agent Kanban is a filesystem-backed AI workflow orchestrator that uses **state directories + `metadata.json`** as the source of truth and provides a planning → implementation/review loop → human verification → done flow through a FastAPI + SSE dashboard.
+Assistant Agent Kanban is a filesystem-backed AI workflow orchestrator that uses **state directories + `metadata.json`** as the source of truth and provides a planning → plan approval → implementation/review loop → human verification → done flow through a FastAPI + SSE dashboard.
 
 ## System Overview
 
@@ -16,7 +16,7 @@ The high-level flow is:
 
 1. A human creates `REQUEST.md`.
 2. The planner generates `PLAN.md`.
-3. A human reviews the plan and moves it into implementation.
+3. The plan-approval worker either auto-approves the plan or routes it to a human.
 4. The implementer and reviewer iterate on the task.
 5. After review passes, a human starts verification in the target repo.
 6. Reject returns the task to `todos`; approve creates the final commit and finishes the task.
@@ -27,7 +27,7 @@ The high-level flow is:
 These rules are the core architectural constraints of the system.
 
 1. The source of truth for workflow state is **directory state + `metadata.json`**.
-2. OpenCode / oh-my-opencode internal state files are never used as the source of truth.
+2. OpenCode, Codex, Claude, Gemini, and oh-my-opencode internal state files are never used as the source of truth.
 3. Task directories and real code workspaces are separate.
 4. State transitions always happen under a lock.
 5. The target repo must not be patched before review passes.
@@ -50,7 +50,8 @@ This is the kanban root and its per-task directories.
 
 This is the isolated code-editing area.
 
-- Location: `_runtime/workspaces/{task_id}`
+- Workspace root: `_runtime/workspaces/{task_id}`
+- Editable repository checkout: `_runtime/workspaces/{task_id}/repo`
 - Strategy: `clone-overlay`
 - Implementer edits code only here
 
@@ -64,6 +65,7 @@ This is the workflow engine.
 - transitions
 - workers
 - recovery
+- optional Slack runtime
 
 ### 4. FastAPI + SSE Layer
 
@@ -71,6 +73,7 @@ This is the user-facing control and visibility layer.
 
 - board snapshot API
 - task detail and log APIs
+- settings and request-draft APIs
 - SSE live updates
 - single HTML + vanilla JS UI
 
@@ -80,6 +83,7 @@ This is the user-facing control and visibility layer.
 
 - `requests`
 - `planning`
+- `plan-approving`
 - `waiting-check-plans`
 - `todos`
 - `implementing`
@@ -92,14 +96,20 @@ This is the user-facing control and visibility layer.
 ### Allowed Transitions
 
 - `requests -> planning`
+- `planning -> requests`
+- `planning -> plan-approving`
 - `planning -> waiting-check-plans`
+- `plan-approving -> waiting-check-plans`
+- `plan-approving -> todos`
 - `waiting-check-plans -> todos`
 - `todos -> implementing`
 - `implementing -> todos`
 - `implementing -> waiting-reviews`
 - `waiting-reviews -> reviewing`
+- `reviewing -> waiting-reviews`
 - `reviewing -> todos`
 - `reviewing -> completed-reviews`
+- `completed-reviews -> todos`
 - `completed-reviews -> human-verifying`
 - `human-verifying -> todos`
 - `human-verifying -> done`
@@ -122,11 +132,18 @@ Each task combines documents and metadata.
 
 - `REQUEST.md` — human-authored initial request
 - `PLAN.md` — planner output
+- `PLAN-APPROVAL.md` / `PLAN-HUMAN-APPROVAL.md` — AI or human plan approval record
 - `WORK-{n}.md` — implementation iteration summary
 - `REVIEW-{n}.md` — review iteration summary
+- `HUMAN-QA-{n}.md` — reviewer-provided human QA checklist
+- `REVIEWER-QA-{n}.md` — optional reviewer Q&A thread
+- `HUMAN-VERIFY-{n}.md` — human verification notes and verdict
+- `HUMAN-VERIFY-{n}.comments.json` — inline human verification comments
 - `COMMIT.md` — final commit information
 - `*.json` — raw machine-readable results
 - `metadata.json` — state, history, lease, integration, errors
+
+The target repo summary is not `SUMMARY.md` in the task directory. It is written during final approval under `target_repo_docs_root/YYYY/MM/DD/{task_id}-{branch-summary}-summary.md`.
 
 Interpretation rules:
 
@@ -146,14 +163,24 @@ Minimum required fields:
 - `state`
 - `created_at`
 - `updated_at`
+- `request`
+- `human_verification`
+- `target`
+- `runtime_pin`
 - `plan`
+- `plan_approval`
+- `cycle`
 - `implementation`
 - `review`
 - `integration`
 - `commit`
+- `slack`
+- `retry_gate`
 - `lease`
 - `history`
 - `errors`
+
+The current schema also carries `version` and optional grouping fields such as `completed_group_override`.
 
 Design rules:
 
@@ -167,6 +194,8 @@ Design rules:
 The default workspace strategy is `clone-overlay`.
 
 - Start from a local clone
+- Keep the workspace root under `_runtime/workspaces/{task_id}` by default
+- Keep the editable repository checkout under `_runtime/workspaces/{task_id}/repo`
 - Add overlay copy or symlink support for needed ignored/untracked files
 - Do not copy full build outputs by default
 
@@ -190,6 +219,8 @@ Operating assumptions:
 
 - The target repo must be clean before verification begins.
 - The target repo is not the active implementation workspace before verification.
+- Approval requires a successful verification apply, no human verification note, completed or skipped required QA items, and no unresolved inline comments.
+- Approval can finalize onto a new final branch or directly onto the target branch, depending on the selected completion mode.
 
 ## Locking And Recovery
 
@@ -212,6 +243,7 @@ On startup, the server inspects in-progress tasks.
 Default recovery policy:
 
 - orphaned `planning` → `requests`
+- orphaned `plan-approving` → `waiting-check-plans`
 - orphaned `implementing` → `todos`
 - orphaned `reviewing` → `waiting-reviews`
 

@@ -13,16 +13,19 @@ It is meant to answer:
 The repository currently includes:
 
 - filesystem-backed state machine
-- planner / implementer / reviewer / commit workflow
+- planner / plan-approval / implementer / reviewer / commit workflow
+- request drafting
+- OpenCode / Codex / Claude / Gemini runtime adapters
 - clone-overlay workspaces
 - human verification flow
+- optional Slack integration
 - retrospective support
 - FastAPI + SSE dashboard
 - request creation, task detail, markdown artifact viewing/editing, and verification-related API/UI
 
 ## Package Layout
 
-The current Python package lives under `src/assistant_agent_kanban/`.
+The Python package lives under `src/assistant_agent_kanban/`. The tree below is a maintenance map of important current modules rather than a promise that every helper file is listed.
 
 ```text
 src/assistant_agent_kanban/
@@ -31,34 +34,53 @@ src/assistant_agent_kanban/
 ├─ config.py
 ├─ models.py
 ├─ enums.py
+├─ exceptions.py
 ├─ scanner.py
 ├─ metadata_store.py
 ├─ locks.py
 ├─ transitions.py
 ├─ events.py
+├─ language.py
+├─ retry_policy.py
+├─ plan_artifacts.py
 ├─ assistant_adapter.py
 ├─ assistant_factory.py
 ├─ opencode_adapter.py
 ├─ codex_adapter.py
+├─ claude_adapter.py
+├─ gemini_adapter.py
 ├─ workspace_manager.py
 ├─ integration_manager.py
 ├─ commit_manager.py
+├─ target_repo_guard.py
+├─ runtime.py
 ├─ recovery.py
+├─ markdown_attachments.py
 ├─ request_creator.py
+├─ request_drafting.py
+├─ request_draft_store.py
 ├─ request_parser.py
 ├─ repo_discovery.py
 ├─ repo_branches.py
 ├─ log_parser.py
+├─ omo_config.py
 ├─ agent_materializer.py
+├─ slack_api.py
+├─ slack_channel_matcher.py
+├─ slack_notifications.py
+├─ slack_runtime.py
+├─ slack_settings_test.py
 ├─ services/
 │  ├─ board_service.py
 │  ├─ task_service.py
 │  ├─ task_deletion_service.py
 │  ├─ human_verification_service.py
+│  ├─ plan_approval_learning.py
 │  └─ retrospective_service.py
 ├─ workers/
 │  ├─ base.py
 │  ├─ planner.py
+│  ├─ plan_approval.py
 │  ├─ implementer.py
 │  ├─ reviewer.py
 │  └─ committer.py
@@ -104,7 +126,8 @@ Responsibilities:
 
 - load base configuration
 - bootstrap `kanban_root` and runtime directories
-- define runtime backend settings for OpenCode / Codex
+- define runtime backend settings for OpenCode / Codex / Claude / Gemini
+- define per-role backend/model settings and optional Slack settings
 - maintain workspace, lock, and repo discovery settings
 
 Maintenance note:
@@ -158,12 +181,14 @@ Relevant files:
 - `src/assistant_agent_kanban/assistant_adapter.py`
 - `src/assistant_agent_kanban/opencode_adapter.py`
 - `src/assistant_agent_kanban/codex_adapter.py`
+- `src/assistant_agent_kanban/claude_adapter.py`
+- `src/assistant_agent_kanban/gemini_adapter.py`
 - `src/assistant_agent_kanban/assistant_factory.py`
 - `src/assistant_agent_kanban/agent_materializer.py`
 
 Responsibilities:
 
-- invoke OpenCode / Codex
+- invoke OpenCode / Codex / Claude / Gemini
 - capture raw results
 - extract final assistant text
 - wire role-specific adapters
@@ -183,13 +208,33 @@ Responsibilities:
 
 - read `requests` tasks
 - produce `PLAN.md`
-- move tasks to `waiting-check-plans`
+- move tasks to `plan-approving`
 
 When changing this area, also check:
 
 - `PLAN.md` document format
-- plan approval UI
+- plan approval worker/UI
 - task detail artifact viewer/editor behavior
+
+### Plan Approval Worker
+
+Relevant files:
+
+- `src/assistant_agent_kanban/workers/plan_approval.py`
+- `src/assistant_agent_kanban/services/plan_approval_learning.py`
+
+Responsibilities:
+
+- evaluate generated plans
+- auto-approve low-risk plans into `todos`
+- route uncertain or risky plans to `waiting-check-plans`
+- write `PLAN-APPROVAL.md` / `PLAN-APPROVAL.json`
+
+When changing this area, also check:
+
+- plan edit tracking
+- manual approval artifacts
+- Slack plan approval notifications
 
 ### Workspace And Implementer Worker
 
@@ -202,12 +247,14 @@ Responsibilities:
 
 - prepare workspaces
 - apply clone-overlay strategy
+- keep the workspace root under `_runtime/workspaces/{task_id}` and the editable repository checkout under `_runtime/workspaces/{task_id}/repo`
 - run implementation iterations
 - record `WORK-{n}.md`
 
 When changing this area, also check:
 
 - workspace root location
+- editable repository subdirectory (`repo`)
 - no-op implementation handling
 - transition rules for review readiness
 
@@ -223,7 +270,8 @@ Responsibilities:
 
 - generate review verdicts
 - decide entry into `completed-reviews`
-- prepare integration/patch application before human verification
+- write `HUMAN-QA-{n}.md` for human verification
+- support reviewer Q&A artifacts
 
 Key contracts:
 
@@ -264,8 +312,8 @@ Responsibilities:
 
 - serve board snapshots
 - expose task detail, logs, and markdown artifact APIs
-- provide request creation UI
-- provide plan editor, review note, and verification UI
+- provide request creation and assistant-drafted request UI
+- provide settings, plan editor, review note, reviewer Q&A, QA checklist, and verification UI
 - stream SSE updates
 
 When changing this area, also check:
@@ -277,18 +325,38 @@ When changing this area, also check:
 
 ## Test Map
 
-Major tests include:
+Representative major tests include:
 
 - `tests/test_scanner.py`
 - `tests/test_metadata_store.py`
+- `tests/test_config.py`
 - `tests/test_transitions.py`
 - `tests/test_locks.py`
+- `tests/test_runtime.py`
 - `tests/test_planner_worker.py`
+- `tests/test_plan_approval_worker.py`
+- `tests/test_plan_approval_learning.py`
 - `tests/test_implementer_worker.py`
 - `tests/test_reviewer_worker.py`
 - `tests/test_human_verification_service.py`
+- `tests/test_api_approve_verification.py`
 - `tests/test_retrospective_service.py`
 - `tests/test_api.py`
+- `tests/test_task_service.py`
+- `tests/test_task_deletion_service.py`
+- `tests/test_request_drafting.py`
+- `tests/test_request_draft_store.py`
+- `tests/test_request_cli.py`
+- `tests/test_target_repo_guard.py`
+- `tests/test_opencode_adapter.py`
+- `tests/test_codex_adapter.py`
+- `tests/test_claude_adapter.py`
+- `tests/test_gemini_adapter.py`
+- `tests/test_slack_api.py`
+- `tests/test_slack_runtime.py`
+- `tests/test_slack_notifications.py`
+- `tests/test_slack_settings_test.py`
+- `tests/test_board_service.py`
 - `tests/test_main.py`
 
 Maintenance rules:

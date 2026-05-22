@@ -9,6 +9,11 @@ opencode:
   planner_agent: fs-kanban-planner
   planner_model: openai/gpt-5.4
   planner_session_token_budget: 250000
+  request_draft_agent: fs-kanban-request-draft
+  request_draft_model: null
+  plan_approval_agent: fs-kanban-plan-approval
+  plan_approval_model: null
+  plan_approval_session_token_budget: 250000
   implementer_agent: fs-kanban-implementer
   implementer_model: openai/gpt-5.3-codex
   implementer_session_token_budget: 250000
@@ -24,11 +29,44 @@ codex:
   binary: codex
   planner_model: gpt-5.4
   planner_session_token_budget: 250000
+  request_draft_model: null
+  plan_approval_model: null
+  plan_approval_session_token_budget: 250000
   implementer_model: gpt-5.3-codex
   implementer_session_token_budget: 250000
   reviewer_model: gpt-5.4
   reviewer_session_token_budget: 250000
   commit_model: gpt-5.3-codex
+  commit_session_token_budget: 250000
+  timeout_seconds: 1800
+
+gemini:
+  binary: gemini
+  planner_model: null
+  planner_session_token_budget: 250000
+  request_draft_model: null
+  plan_approval_model: null
+  plan_approval_session_token_budget: 250000
+  implementer_model: null
+  implementer_session_token_budget: 250000
+  reviewer_model: null
+  reviewer_session_token_budget: 250000
+  commit_model: null
+  commit_session_token_budget: 250000
+  timeout_seconds: 1800
+
+claude:
+  binary: claude
+  planner_model: null
+  planner_session_token_budget: 250000
+  request_draft_model: null
+  plan_approval_model: null
+  plan_approval_session_token_budget: 250000
+  implementer_model: null
+  implementer_session_token_budget: 250000
+  reviewer_model: null
+  reviewer_session_token_budget: 250000
+  commit_model: null
   commit_session_token_budget: 250000
   timeout_seconds: 1800
 
@@ -47,7 +85,15 @@ runtime:
   poll_interval_seconds: 0.2
   auto_dispatch: true
   language: EN
+  theme: light
   coding_assistant: opencode
+  role_backends:
+    planner: null
+    request_draft: null
+    plan_approval: null
+    implementer: null
+    reviewer: null
+    commit: null
   planner_agent_count: 1
   implementer_agent_count: 1
   reviewer_agent_count: 1
@@ -55,3 +101,12 @@ runtime:
 repo_discovery:
   root: ../
   max_depth: 1
+
+slack:
+  enabled: false
+  socket_mode_enabled: true
+  bot_token: null
+  app_token: null
+  default_channel: null
+  default_channel_display: null
+  app_mention_enabled: false

@@ -16,9 +16,12 @@ If `AGENTS.md` is the short rules document, this file explains the boundaries an
 This repository covers:
 
 - filesystem-backed workflow state management
-- planner / implementer / reviewer / committer orchestration
+- planner / plan-approval / implementer / reviewer / committer orchestration
+- request drafting before task creation
+- OpenCode / Codex / Claude / Gemini runtime support
 - clone-overlay workspace isolation
 - human verification flow
+- optional Slack notifications and request drafting
 - web dashboard and task detail modal
 - retrospective support
 
@@ -30,7 +33,7 @@ Never break the following rules while working here.
 2. Perform state transitions only under a lock.
 3. Do not remove human approval stages.
 4. The source of truth is the state directory + `metadata.json`.
-5. Do not use OpenCode / oh-my-opencode internal state files as workflow truth.
+5. Do not use OpenCode, Codex, Claude, Gemini, or oh-my-opencode internal state files as workflow truth.
 6. Do not touch the target repo before review passes.
 7. Apply target repo patches only when human verification starts.
 8. Create the final commit only during `human-verifying -> done`.
@@ -43,6 +46,9 @@ Never break the following rules while working here.
 
 ### `planning`
 - planner is running
+
+### `plan-approving`
+- plan-approval worker is deciding whether the generated plan can proceed automatically
 
 ### `waiting-check-plans`
 - human reviews or edits the plan
@@ -76,16 +82,24 @@ This stores task state documents and metadata.
 
 - `REQUEST.md`
 - `PLAN.md`
+- `PLAN-APPROVAL.md` or `PLAN-HUMAN-APPROVAL.md`
 - `WORK-{n}.md`
 - `REVIEW-{n}.md`
+- `HUMAN-QA-{n}.md`
+- `REVIEWER-QA-{n}.md`
+- `HUMAN-VERIFY-{n}.md`
+- `HUMAN-VERIFY-{n}.comments.json`
 - `COMMIT.md`
 - `metadata.json`
+
+The final target repo summary is written into the target repository under `target_repo_docs_root/YYYY/MM/DD/{task_id}-{branch-summary}-summary.md`, not as `SUMMARY.md` in the task directory.
 
 ### Workspace
 
 This is where real code edits happen.
 
-- `_runtime/workspaces/{task_id}`
+- Workspace root: `_runtime/workspaces/{task_id}`
+- Editable repository checkout: `_runtime/workspaces/{task_id}/repo`
 
 ### Target Repo
 

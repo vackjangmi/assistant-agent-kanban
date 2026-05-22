@@ -21,7 +21,7 @@ This repository implements **filesystem-backed workflow state + AI worker orches
 Always keep these rules intact.
 
 1. The source of truth for workflow state is **the state directory location + `metadata.json`**.
-2. Never use OpenCode or oh-my-opencode internal state files as the source of truth.
+2. Never use OpenCode, Codex, Claude, Gemini, or oh-my-opencode internal state files as the source of truth.
 3. Keep the task directory separate from the real code workspace.
 4. Perform implementation only inside the workspace.
 5. Never change task state without a lock.
@@ -35,6 +35,7 @@ Always keep these rules intact.
 
 - `requests` — initial request state
 - `planning` — planner is generating a plan
+- `plan-approving` — plan-approval worker is deciding whether the plan can proceed automatically
 - `waiting-check-plans` — human reviews or edits the plan
 - `todos` — waiting for implementation
 - `implementing` — implementer is working in the workspace
@@ -47,14 +48,20 @@ Always keep these rules intact.
 ### Allowed Transitions
 
 - `requests -> planning`
+- `planning -> requests`
+- `planning -> plan-approving`
 - `planning -> waiting-check-plans`
+- `plan-approving -> waiting-check-plans`
+- `plan-approving -> todos`
 - `waiting-check-plans -> todos`
 - `todos -> implementing`
 - `implementing -> todos`
 - `implementing -> waiting-reviews`
 - `waiting-reviews -> reviewing`
+- `reviewing -> waiting-reviews`
 - `reviewing -> todos`
 - `reviewing -> completed-reviews`
+- `completed-reviews -> todos`
 - `completed-reviews -> human-verifying`
 - `human-verifying -> todos`
 - `human-verifying -> done`
@@ -76,13 +83,25 @@ These are the main decision points that require human judgment.
 - Input state: `requests`
 - Input document: `REQUEST.md`
 - Output document: `PLAN.md`
-- Result state: `waiting-check-plans`
+- Result state: `plan-approving`
 - Planner should remain a read-only document producer by default.
+
+### PlanApprovalWorker
+
+- Input state: `plan-approving`
+- Input document: `PLAN.md`
+- Output document: `PLAN-APPROVAL.md`
+- Result state: `todos` on auto approval, otherwise `waiting-check-plans`
+
+### RequestDraftAgent
+
+- Drafts request content before a task is created.
+- Draft state lives under `_runtime/request-drafts`.
 
 ### ImplementerWorker
 
 - Input state: `todos`
-- Work location: workspace under `_runtime/workspaces/{task_id}`
+- Work location: editable repository under `_runtime/workspaces/{task_id}/repo`
 - Output document: `WORK-{n}.md`
 - Result state: `waiting-reviews` if there are changes, otherwise `todos`
 
@@ -90,7 +109,7 @@ These are the main decision points that require human judgment.
 
 - Input state: `waiting-reviews`
 - Output document: `REVIEW-{n}.md`
-- Result state: `completed-reviews` on `PASS`, otherwise `todos`
+- Result state: `completed-reviews` on `PASS`, otherwise `todos` or `waiting-reviews` depending on the review loop
 
 ### Commit / Human Verification Flow
 
@@ -102,7 +121,8 @@ These are the main decision points that require human judgment.
 ## Workspace Rules
 
 - Default strategy: `clone-overlay`
-- Always place the workspace under `_runtime/workspaces/{task_id}`.
+- Always place the workspace root under `_runtime/workspaces/{task_id}`.
+- Always place the editable repository checkout under `_runtime/workspaces/{task_id}/repo`.
 - Never place the full repo workspace inside the task directory.
 - The target repo is not the active implementation area before human verification.
 
@@ -118,11 +138,19 @@ Minimum required fields:
 - `state`
 - `created_at`
 - `updated_at`
+- `request`
+- `human_verification`
+- `target`
+- `runtime_pin`
 - `plan`
+- `plan_approval`
+- `cycle`
 - `implementation`
 - `review`
 - `integration`
 - `commit`
+- `slack`
+- `retry_gate`
 - `lease`
 - `history`
 - `errors`
@@ -133,9 +161,9 @@ Additional rules:
 - Place lock files in a stable runtime path, not inside a moving task directory.
 - `metadata.state` must always match the actual directory state.
 
-## OpenCode / Codex Runtime Rules
+## OpenCode / Codex / Claude / Gemini Runtime Rules
 
-- OpenCode and Codex CLI are the execution engines.
+- OpenCode, Codex CLI, Claude Code, and Gemini CLI are execution engines.
 - The Python application is the workflow and state machine engine.
 - Planner and reviewer should stay focused on producing markdown results.
 - Implementer edits real code inside the workspace.
@@ -156,6 +184,7 @@ Minimum test areas:
 - transitions
 - locks
 - planner worker
+- plan-approval worker
 - implementer worker
 - reviewer worker
 - recovery
@@ -177,6 +206,8 @@ Work in this repository should keep at least these outputs in place.
 The real prompt contract sources for each role are these files.
 
 - `.opencode/agents/fs-kanban-planner.md`
+- `.opencode/agents/fs-kanban-plan-approval.md`
+- `.opencode/agents/fs-kanban-request-draft.md`
 - `.opencode/agents/fs-kanban-implementer.md`
 - `.opencode/agents/fs-kanban-reviewer.md`
 - `.opencode/agents/fs-kanban-committer.md`
