@@ -1272,8 +1272,14 @@ body[data-theme="dark"] .settings-slack-advanced-body { border-top-color: rgba(1
 .qa-checklist-item { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); }
 .qa-checklist-item.is-complete { border-color: rgba(33,115,73,0.2); background: rgba(244,250,246,0.9); }
 .qa-checklist-item-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-.qa-checklist-title { display: grid; gap: 4px; min-width: 0; }
-.qa-checklist-title strong { overflow-wrap: anywhere; }
+.qa-checklist-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.qa-checklist-title strong { overflow-wrap: anywhere; font-size: 1.02rem; }
+.qa-checklist-title .diff-badges { display: inline-flex; justify-content: flex-start; gap: 6px; margin-left: 0; }
+.qa-checklist-title .diff-badge { font-size: 0.76rem; padding: 2px 7px; border-radius: 4px; line-height: 1.2; font-weight: 500; }
+.qa-checklist-title .diff-badge[data-qa-badge-type="required"] { background: rgba(239, 68, 68, 0.07); border-color: rgba(239, 68, 68, 0.18); color: #ef4444; font-weight: 600; }
+.qa-checklist-title .diff-badge[data-qa-badge-type="optional"] { background: rgba(100, 116, 139, 0.07); border-color: rgba(100, 116, 139, 0.18); color: #64748b; }
+.qa-checklist-title .diff-badge[data-qa-badge-type="id"] { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: rgba(241, 245, 249, 0.95); border-color: rgba(203, 213, 225, 0.9); color: #475569; }
+body[data-theme="dark"] .qa-checklist-title .diff-badge[data-qa-badge-type="id"] { background: rgba(30, 41, 59, 0.85); border-color: rgba(71, 85, 105, 0.85); color: #94a3b8; }
 .qa-checklist-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .qa-checklist-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.78); color: var(--muted); font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
 .qa-checklist-toggle input { margin: 0; }

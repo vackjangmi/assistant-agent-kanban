@@ -1332,8 +1332,8 @@
               <div class="qa-checklist-title">
                 <strong>${escapeHtml(item.title || item.id)}</strong>
                 <div class="diff-badges">
-                  <span class="diff-badge">${escapeHtml(item.required ? translateHumanReview('qaChecklistRequired') : translateHumanReview('qaChecklistOptional'))}</span>
-                  <span class="diff-badge">${escapeHtml(item.id)}</span>
+                  <span class="diff-badge" data-qa-badge-type="${item.required ? 'required' : 'optional'}">${escapeHtml(item.required ? translateHumanReview('qaChecklistRequired') : translateHumanReview('qaChecklistOptional'))}</span>
+                  <span class="diff-badge" data-qa-badge-type="id">${escapeHtml(item.id)}</span>
                 </div>
               </div>
               <div class="qa-checklist-actions">
