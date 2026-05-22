@@ -131,7 +131,8 @@ src/assistant_agent_kanban/
 │   └── templates/                 # static assets concatenated into one <script>
 │       ├── index.html
 │       ├── index.css
-│       └── js/                    # 01_globals → 06_sse (load order matters)
+│       └── js/                    # 00_globals → 99_sse (load order matters;
+│                                   # prefixes spaced in tens for extensibility)
 ├── core utilities (top-level)
 │   ├── config.py                  # AppConfig + load_config
 │   ├── models.py                  # Pydantic state / artifact models
