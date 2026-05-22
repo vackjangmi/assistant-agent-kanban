@@ -204,6 +204,9 @@
       openSettingsButton.textContent = translateSettings('openSettings');
       setSettingsText('settings-modal-title', 'settingsTitle');
       setSettingsText('settings-modal-description', 'settingsDescription');
+      setSettingsText('settings-tab-general', 'settingsTabGeneral');
+      setSettingsText('settings-tab-slack', 'settingsTabSlack');
+      setSettingsText('settings-tab-roles', 'settingsTabRoles');
       cancelSettingsButton.textContent = translateSettings('closeSettings');
       setSettingsText('settings-copy-title', 'settingsCopyTitle');
       setSettingsHtml('settings-copy-body', 'settingsCopyBody');
@@ -875,4 +878,24 @@
       }
       return 'plan';
     }
+
+    function setSettingsTab(tab) {
+      const panels = ['general', 'slack', 'roles'];
+      panels.forEach(p => {
+        const active = p === tab;
+        const tabEl = document.getElementById(`settings-tab-${p}`);
+        const panelEl = document.getElementById(`settings-panel-${p}`);
+        if (tabEl) {
+          tabEl.classList.toggle('active', active);
+          tabEl.setAttribute('aria-selected', String(active));
+        }
+        if (panelEl) {
+          panelEl.hidden = !active;
+        }
+      });
+    }
+
+    document.getElementById('settings-tab-general').addEventListener('click', () => setSettingsTab('general'));
+    document.getElementById('settings-tab-slack').addEventListener('click', () => setSettingsTab('slack'));
+    document.getElementById('settings-tab-roles').addEventListener('click', () => setSettingsTab('roles'));
 
