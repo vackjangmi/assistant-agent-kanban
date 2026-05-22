@@ -869,10 +869,30 @@
       return labels[phase] || phase;
     }
 
+    function boardPhaseForState(state) {
+      return Object.entries(boardPhaseStates).find(([, states]) => states.includes(state))?.[0] || '';
+    }
+
+    function shouldShowBoardPhaseCount(phase) {
+      return phase === 'plan' || phase === 'implementation';
+    }
+
+    function boardPhaseCountLabel(phase, count) {
+      if (currentUiLanguage() === 'KO') {
+        return `${phaseLabel(phase)}에 ${count}개 태스크`;
+      }
+      return `${count} ${count === 1 ? 'task' : 'tasks'} in ${phaseLabel(phase)}`;
+    }
+
     function renderBoardPhaseTabs() {
       boardPhaseTabs.querySelectorAll('[data-board-phase]').forEach((button) => {
         const phase = button.dataset.boardPhase;
-        button.textContent = phaseLabel(phase);
+        const label = phaseLabel(phase);
+        const count = boardPhaseTaskCounts[phase] || 0;
+        button.innerHTML = shouldShowBoardPhaseCount(phase)
+          ? `<span class="board-phase-tab-label">${escapeHtml(label)}</span><span class="board-phase-tab-count" aria-hidden="true">${escapeHtml(String(count))}</span>`
+          : escapeHtml(label);
+        button.setAttribute('aria-label', shouldShowBoardPhaseCount(phase) ? boardPhaseCountLabel(phase, count) : label);
         button.classList.toggle('active', phase === activeBoardPhase);
       });
     }

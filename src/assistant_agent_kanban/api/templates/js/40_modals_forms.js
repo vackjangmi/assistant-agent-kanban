@@ -828,6 +828,47 @@
       }
     }
 
+    async function openComposerWithRepo(repoPath) {
+      clearMessages();
+      applyRequestTranslations();
+
+      const raw = window.localStorage.getItem(requestComposerDraftStorageKey);
+      let hasExistingDraftContent = false;
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw);
+          const draftId = (saved?.request_draft_id || '').trim();
+          if (draftId) {
+            const response = await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`);
+            if (response.ok) {
+              const draftData = await response.json();
+              const hasContent = requestComposerDraftHasContent(draftData);
+              const isDifferentRepo = draftData.target_repo && normalizeRepoPath(draftData.target_repo) !== normalizeRepoPath(repoPath);
+              if (hasContent || isDifferentRepo) {
+                hasExistingDraftContent = true;
+              }
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      if (hasExistingDraftContent) {
+        const confirmMsg = currentUiLanguage() === 'KO'
+          ? '현재 작성 중인 임시 요청서가 존재합니다. 이를 지우고 선택한 저장소 기준으로 새 요청을 작성하시겠습니까?'
+          : 'There is an active draft in progress. Would you like to discard it and start a new request for this repository?';
+        if (!window.confirm(confirmMsg)) return;
+      }
+
+      resetFormState({ clearSavedDraft: true });
+      targetRepoInput.value = repoPath;
+      targetRepoInput.dataset.autofilled = 'true';
+      applyRepoDefaults();
+      setModalOpen(true);
+      await loadTargetRepoBranches();
+    }
+
     function escapeHtml(value) {
       return (value || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
     }

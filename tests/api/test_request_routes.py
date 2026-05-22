@@ -1110,6 +1110,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "source.addEventListener('board_snapshot', (event) => {" in response.text
     assert "applyBoardSnapshot(message.payload);" in response.text
     assert "function phaseLabel(phase)" in response.text
+    assert "let previousBoardTaskPhases = new Map();" in response.text
+    assert "let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0 };" in response.text
+    assert "function boardPhaseForState(state)" in response.text
+    assert "function hasTaskMovedFromPlanToImplementation(nextTaskPhases)" in response.text
+    assert "previousBoardTaskPhases.get(taskId) === 'plan' && nextPhase === 'implementation'" in response.text
+    assert "boardPhaseTaskCounts = countBoardPhaseTasks(columns);" in response.text
+    assert 'class="board-phase-tab-count" aria-hidden="true"' in response.text
+    assert ".board-phase-tab-count { display: inline-grid;" in response.text
     assert "function repoTagTone(path)" in response.text
     assert "function renderFinalBoard(columns)" in response.text
     assert "function renderFinalProjectColumn(projectPath, items)" in response.text

@@ -293,6 +293,16 @@ body[data-theme="dark"] .board-phase-tabs button.active {
   color: #ffffff;
   box-shadow: 0 10px 24px rgba(0,0,0,0.22);
 }
+body[data-theme="dark"] .board-phase-tab-count {
+  background: rgba(129, 140, 248, 0.16);
+  border-color: rgba(129, 140, 248, 0.26);
+  color: #c7d2fe;
+}
+body[data-theme="dark"] .board-phase-tabs button.active .board-phase-tab-count {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+}
 body[data-theme="dark"] .task-tabs button:hover,
 body[data-theme="dark"] .task-tabs button:focus-visible,
 body[data-theme="dark"] .board-phase-tabs button:hover,
@@ -908,7 +918,11 @@ button:disabled { opacity: 0.7; cursor: progress; }
 .main-dashboard { display: flex; flex-direction: column; gap: 18px; padding: 0 20px 12px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .board-phase-shell { flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; overflow: hidden; }
 .board-phase-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+.board-phase-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; }
 .board-phase-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent-strong); }
+.board-phase-tab-label { display: inline-block; min-width: 0; }
+.board-phase-tab-count { display: inline-grid; place-items: center; min-width: 1.45rem; height: 1.35rem; padding: 0 6px; margin-right: -4px; border-radius: 999px; border: 1px solid rgba(99, 102, 241, 0.24); background: rgba(99, 102, 241, 0.10); color: var(--accent-strong); font-size: 0.74rem; font-weight: 800; line-height: 1; }
+.board-phase-tabs button.active .board-phase-tab-count { background: rgba(255, 255, 255, 0.24); border-color: rgba(255, 255, 255, 0.34); color: #fff; }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 #board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 0 0 20px; width: 100%; min-height: 0; overflow: hidden; }
 #board.implementation-board { grid-template-columns: 1fr; flex: 1 1 auto; min-height: 0; height: 100%; align-items: stretch; grid-template-rows: repeat(2, minmax(0, 1fr)); }
@@ -922,8 +936,12 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; ove
 .column h2 { margin-top: 0; }
 .final-project-column { border-top: 6px solid var(--repo-accent, var(--accent)); background: var(--panel); }
 body[data-theme="dark"] .final-project-column { border-top-color: var(--repo-accent-dark, var(--repo-accent, var(--accent-strong))); }
-.final-project-heading { margin-bottom: 10px; }
+.final-project-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
 .final-project-title { display: inline-block; margin: 0; }
+.final-project-new-request { padding: 4px 10px; font-size: 0.72rem; font-weight: 600; border-radius: 6px; cursor: pointer; white-space: nowrap; background: linear-gradient(135deg, #6366f1, #4f46e5); border: 1px solid rgba(99, 102, 241, 0.35); color: #fff; box-shadow: 0 2px 5px rgba(99, 102, 241, 0.12); transition: all 0.15s ease; }
+.final-project-new-request:hover, .final-project-new-request:focus-visible { background: linear-gradient(135deg, #818cf8, #6366f1); border-color: rgba(99, 102, 241, 0.45); box-shadow: 0 3px 8px rgba(99, 102, 241, 0.2); }
+body[data-theme="dark"] .final-project-new-request { background: linear-gradient(135deg, #4f46e5, #4338ca); border-color: rgba(99, 102, 241, 0.45); }
+body[data-theme="dark"] .final-project-new-request:hover { background: linear-gradient(135deg, #6366f1, #4f46e5); }
 .final-project-branches { display: grid; gap: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
 .target-branch-group { display: grid; gap: 0; padding: 0; border: 1px solid var(--border); background: var(--panel); box-shadow: inset 0 1px 0 rgba(255,255,255,0.55); overflow: hidden; }
 .target-branch-group[data-expanded="false"] .column-cards { display: none; }

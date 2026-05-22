@@ -1,12 +1,20 @@
     function applyBoardSnapshot(data) {
       saveBoardScrollPositions();
-      boardTaskSnapshots = new Map(data.columns.flatMap((column) => (column.items || []).map((item) => [item.task_id, item])));
-      if (!boardPhaseManuallySelected) {
-        activeBoardPhase = selectDefaultBoardPhase(data.columns);
+      const columns = data.columns || [];
+      const nextTaskPhases = boardTaskPhasesFromColumns(columns);
+      const movedFromPlanToImplementation = hasTaskMovedFromPlanToImplementation(nextTaskPhases);
+      boardPhaseTaskCounts = countBoardPhaseTasks(columns);
+      boardTaskSnapshots = new Map(columns.flatMap((column) => (column.items || []).map((item) => [item.task_id, item])));
+      previousBoardTaskPhases = nextTaskPhases;
+      if (movedFromPlanToImplementation) {
+        activeBoardPhase = 'implementation';
+        boardPhaseManuallySelected = true;
+      } else if (!boardPhaseManuallySelected) {
+        activeBoardPhase = selectDefaultBoardPhase(columns);
       }
       renderBoardPhaseTabs();
       const visibleStates = new Set(boardPhaseStates[activeBoardPhase] || []);
-      const visibleColumns = data.columns.filter((column) => visibleStates.has(column.state));
+      const visibleColumns = columns.filter((column) => visibleStates.has(column.state));
       board.classList.toggle('implementation-board', activeBoardPhase === 'implementation');
       board.classList.toggle('plan-board', activeBoardPhase === 'plan');
       board.classList.toggle('final-board', activeBoardPhase === 'final');
@@ -24,6 +32,35 @@
       refreshRunningClocks();
       refreshActiveTaskFromBoardSnapshot();
       restoreBoardScrollPositions();
+    }
+
+    function boardTaskPhasesFromColumns(columns) {
+      return new Map((columns || []).flatMap((column) => {
+        const phase = boardPhaseForState(column.state);
+        if (!phase) return [];
+        return (column.items || [])
+          .filter((item) => item.task_id)
+          .map((item) => [item.task_id, phase]);
+      }));
+    }
+
+    function hasTaskMovedFromPlanToImplementation(nextTaskPhases) {
+      for (const [taskId, nextPhase] of nextTaskPhases.entries()) {
+        if (previousBoardTaskPhases.get(taskId) === 'plan' && nextPhase === 'implementation') {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function countBoardPhaseTasks(columns) {
+      const counts = { plan: 0, implementation: 0, final: 0 };
+      (columns || []).forEach((column) => {
+        const phase = boardPhaseForState(column.state);
+        if (!phase) return;
+        counts[phase] = (counts[phase] || 0) + (Array.isArray(column.items) ? column.items.length : 0);
+      });
+      return counts;
     }
 
     function refreshActiveTaskFromBoardSnapshot() {
@@ -371,6 +408,7 @@
         <section class="column final-project-column" data-project-path="${escapeHtml(projectPath)}" style="${columnStyle}">
           <div class="final-project-heading">
             <h2 class="final-project-title" title="${escapeHtml(projectPath)}">${escapeHtml(projectLabel)}</h2>
+            <button type="button" class="final-project-new-request" data-project-path="${escapeHtml(projectPath)}">${escapeHtml(translateRequest('openComposer'))}</button>
           </div>
           <div class="final-project-branches">${branchGroups.map(([branch, branchItems], index) => `
             <section class="target-branch-group" data-branch="${escapeHtml(branch)}" data-expanded="${index === 0 ? 'true' : 'false'}">
@@ -1044,4 +1082,3 @@
         setRequestDraftsStatus(error.message, 'error');
       }
     }
-

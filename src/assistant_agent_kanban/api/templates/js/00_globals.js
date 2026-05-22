@@ -334,6 +334,8 @@
     let lastSlackReceiveInstruction = '';
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
+    let previousBoardTaskPhases = new Map();
+    let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0 };
     let approvalSubmissionInFlight = false;
     let resumePlannerSubmissionInFlight = false;
     let resumeImplementerSubmissionInFlight = false;
@@ -348,4 +350,3 @@
       { role: 'reviewer', backendInput: reviewerBackendInput, modelInput: reviewerModelInput, modelSelectInput: reviewerModelSelectInput, modelOptionsInput: reviewerModelOptionsInput },
       { role: 'commit', backendInput: commitBackendInput, modelInput: commitModelInput, modelSelectInput: commitModelSelectInput, modelOptionsInput: commitModelOptionsInput },
     ];
-

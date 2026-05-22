@@ -145,6 +145,11 @@
       });
     });
     board.addEventListener('click', (event) => {
+      const newRequestBtn = event.target.closest('.final-project-new-request');
+      if (newRequestBtn) {
+        openComposerWithRepo(newRequestBtn.dataset.projectPath || '').catch(console.error);
+        return;
+      }
       const retrospectiveButton = event.target.closest('.target-branch-retrospective');
       if (retrospectiveButton) {
         openRetrospectiveModal(retrospectiveButton.dataset.targetRepo || '', retrospectiveButton.dataset.baseBranch || '').catch((error) => {
