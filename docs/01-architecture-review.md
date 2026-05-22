@@ -77,6 +77,122 @@ This is the user-facing control and visibility layer.
 - SSE live updates
 - single HTML + vanilla JS UI
 
+## Module Layout
+
+```
+src/assistant_agent_kanban/
+├── adapters (top-level *_adapter.py)
+│   ├── assistant_adapter.py       # base AssistantAdapter contract + backend manager
+│   ├── opencode_adapter.py
+│   ├── codex_adapter.py
+│   ├── claude_adapter.py
+│   └── gemini_adapter.py
+├── assistant_factory.py           # build_adapter_registry + per-role wiring
+├── workers/                       # one worker per workflow stage
+│   ├── base.py                    # shared lifecycle + dispatch protocol
+│   ├── planner.py
+│   ├── plan_approval.py
+│   ├── implementer.py
+│   ├── reviewer.py
+│   └── committer.py
+├── services/                      # stateful domain operations callable from many places
+│   ├── board_service.py
+│   ├── task_service/              # split into mixins (service, token_usage,
+│   │   ├── _service.py            # artifacts, changed_files, resume, helpers)
+│   │   ├── _token_usage.py
+│   │   ├── _artifacts.py
+│   │   ├── _changed_files.py
+│   │   ├── _resume.py
+│   │   ├── _helpers.py
+│   │   ├── _data.py
+│   │   └── _protocol.py
+│   ├── human_verification_service.py
+│   ├── task_deletion_service.py
+│   ├── retrospective_service.py
+│   └── plan_approval_learning.py
+├── runtime/                       # workflow supervisor (split from monolithic runtime.py)
+│   ├── _supervisor.py             # core: __init__, lifecycle, dispatch, recovery
+│   ├── _slack.py                  # Slack interaction handlers (mixin)
+│   ├── _protocol.py               # type-only stub for the Slack mixin
+│   └── __init__.py
+├── api/                           # FastAPI surface
+│   ├── app.py                     # create_app + server lock
+│   ├── main.py                    # uvicorn entry point
+│   ├── routes/                    # split by domain
+│   │   ├── settings_routes.py
+│   │   ├── task_routes.py
+│   │   ├── request_routes.py
+│   │   ├── workflow_routes.py
+│   │   ├── _payloads.py
+│   │   ├── _helpers.py
+│   │   └── _build.py
+│   ├── sse.py                     # SSE event stream
+│   ├── ui.py                      # /  → renders single-page HTML
+│   └── templates/                 # static assets concatenated into one <script>
+│       ├── index.html
+│       ├── index.css
+│       └── js/                    # 01_globals → 06_sse (load order matters)
+├── core utilities (top-level)
+│   ├── config.py                  # AppConfig + load_config
+│   ├── models.py                  # Pydantic state / artifact models
+│   ├── enums.py                   # TaskState + STATE_ORDER
+│   ├── metadata_store.py          # atomic metadata.json writes
+│   ├── locks.py                   # per-task FileLocks
+│   ├── transitions.py             # TransitionManager (state machine enforcement)
+│   ├── scanner.py                 # KanbanScanner: filesystem → TaskContext
+│   ├── recovery.py                # startup orphan recovery
+│   └── workspace_manager.py       # clone-overlay workspaces
+└── Slack / integrations
+    ├── slack_runtime.py           # socket-mode listener
+    ├── slack_api.py               # raw Web API calls
+    ├── slack_notifications.py     # milestone publishing
+    └── integration_manager.py     # patch apply + final commit
+```
+
+## Layer Responsibilities And Dependency Direction
+
+The codebase enforces a one-way dependency arrow:
+
+```
+adapter  →  worker  →  service  →  api
+                       ↑
+                    runtime  (composes services + workers + Slack)
+```
+
+- **adapter** (`*_adapter.py`): each implements the `AssistantAdapter` contract — invoke a CLI tool, parse `run` output, expose `discover_models` and `cancel_task`. Adapters do not know about workflow state.
+- **worker** (`workers/`): one worker per workflow stage. A worker selects candidate tasks, acquires a lock via `TransitionManager`, dispatches an adapter, and writes artifacts. Workers do not call services.
+- **service** (`services/`): pure domain operations — read/write task artifacts, resolve changed files, approve plans, verify completion. Services accept the supervisor's collaborators by injection.
+- **runtime** (`runtime/`): wires workers + services + adapters together, owns the asyncio dispatch loop, and brokers Slack interactions. `runtime.build_runtime()` is the single composition root.
+- **api** (`api/`): exposes services and workers through FastAPI routes plus SSE. The API never calls adapters directly.
+
+Module boundaries are checked informally — there is no enforced linter rule — but every PR that adds a cross-layer call (e.g. an adapter importing a service) is a smell worth questioning.
+
+## Extension Points
+
+### Adding A New Assistant Backend
+
+1. Create `src/assistant_agent_kanban/{name}_adapter.py` that subclasses `AssistantAdapter` (see `claude_adapter.py` for a minimal reference implementation).
+2. Register the backend's display label in `SUPPORTED_RUNTIME_ASSISTANTS` (`config.py`).
+3. Add a `*Config` section to `AppConfig` if the backend has runtime knobs (model defaults, tool flags). Update `assistant_factory.build_adapter_registry` to instantiate the new adapter from that config.
+4. Wire role selection: `config.backend_for_role(role)` already understands any string that appears in `SUPPORTED_RUNTIME_ASSISTANTS`; ensure the settings UI option list is unchanged (it pulls from `available_assistants` in `routes/_helpers.py:_settings_response`).
+5. Add unit tests under `tests/test_{name}_adapter.py` covering: `run`, `discover_models`, and error paths.
+
+### Adding A New API Route
+
+1. Decide which group the new route belongs to (`settings_routes`, `task_routes`, `request_routes`, `workflow_routes`) and add the handler inside its `register(router)` function.
+2. Define request payloads in `api/routes/_payloads.py`; share helpers in `api/routes/_helpers.py`.
+3. Add tests under the matching file in `tests/api/`.
+
+### Adding A New Workflow Stage
+
+Avoid this unless you change the state machine in `enums.py` + `transitions.py` together. Any new state needs:
+
+- a new entry in `TaskState` + `STATE_ORDER`
+- an allowed-transition pair in `transitions.py`
+- a new worker (if AI-driven) or human gate (if human-driven)
+- a recovery policy in `recovery.py`
+- a board column rendering rule in the frontend
+
 ## State Machine
 
 ### States
