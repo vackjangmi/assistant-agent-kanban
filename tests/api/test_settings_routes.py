@@ -267,7 +267,7 @@ def test_api_runs_slack_settings_test_with_posted_values(configured_paths, monke
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     monkeypatch.setattr(
-        "assistant_agent_kanban.api.routes.run_slack_settings_test",
+        "assistant_agent_kanban.api.routes.settings_routes.run_slack_settings_test",
         lambda slack_config, *, uses_posted_values: type(
             "SlackResult",
             (),
@@ -343,7 +343,7 @@ def test_api_slack_settings_test_reports_failure(configured_paths, monkeypatch):
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
     monkeypatch.setattr(
-        "assistant_agent_kanban.api.routes.run_slack_settings_test",
+        "assistant_agent_kanban.api.routes.settings_routes.run_slack_settings_test",
         lambda slack_config, *, uses_posted_values: type(
             "SlackResult",
             (),
