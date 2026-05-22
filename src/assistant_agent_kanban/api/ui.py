@@ -14,8 +14,11 @@ JS_DIR = TEMPLATE_DIR / "js"
 JS_MANIFEST = [
     "01_globals.js",
     "02_translations.js",
-    "03_utils.js",
-    "04_diff.js",
+    "03a_utils_settings.js",
+    "03b_board_rendering.js",
+    "04a_modals_forms.js",
+    "04b_diff.js",
+    "04c_request_composer.js",
     "05_board.js",
     "06_sse.js",
 ]
