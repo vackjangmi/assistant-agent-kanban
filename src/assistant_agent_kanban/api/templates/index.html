@@ -52,9 +52,11 @@
               </div>
               <div class="field compact">
                 <label id="request-target-repo-label" for="target_repo">Target repo</label>
-                <span id="request-target-repo-description">Choose a nearby repo from the dropdown or type any path manually.</span>
-                <input id="target_repo" name="target_repo" list="target-repo-options" required>
-                <datalist id="target-repo-options"></datalist>
+                <span id="request-target-repo-description">Browse to choose the repository used for this request.</span>
+                <div class="settings-input-group">
+                  <input id="target_repo" name="target_repo" required readonly autocomplete="off" spellcheck="false">
+                  <button type="button" id="btn-browse-target-repo" class="settings-browse-button">Browse</button>
+                </div>
                 <div class="error-text" data-error-for="target_repo"></div>
               </div>
               <div class="field">
@@ -225,7 +227,10 @@
                   <label class="settings-card" for="repo_discovery_root">
                     <strong id="settings-repo-root-title">Repo discovery root</strong>
                     <span id="settings-repo-root-description">Where repo suggestions are scanned.</span>
-                    <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
+                    <div class="settings-input-group">
+                      <input id="repo_discovery_root" name="repo_discovery_root" placeholder="../">
+                      <button type="button" id="btn-browse-repo-root" class="settings-browse-button">Browse</button>
+                    </div>
                     <small id="settings-repo-root-note">Use <code>../</code> or an absolute path.</small>
                   </label>
                   <label class="settings-card" for="repo_discovery_max_depth">
@@ -880,6 +885,29 @@
           </section>
         </div>
         <div id="resume-reviewer-choice-status" class="approval-choice-status" hidden></div>
+      </div>
+    </div>
+  </section>
+  <section id="directory-picker-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel directory-picker-panel" role="dialog" aria-modal="true" aria-labelledby="directory-picker-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="directory-picker-title">Select Search Root Folder</h2>
+          <p id="directory-picker-description">Browse folders on your PC to set the repository discovery scan base directory.</p>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="btn-directory-picker-select" class="primary">Select Current Folder</button>
+          <button type="button" id="btn-directory-picker-close">Close</button>
+        </div>
+      </div>
+      <div class="directory-picker-shell">
+        <div class="directory-picker-path-container">
+          <input type="text" id="directory-picker-current-path-display" readonly>
+        </div>
+        <div class="directory-picker-body">
+          <div id="directory-picker-status" class="directory-picker-status" hidden></div>
+          <div id="directory-picker-list" class="directory-picker-list"></div>
+        </div>
       </div>
     </div>
   </section>

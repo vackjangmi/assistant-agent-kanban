@@ -234,6 +234,11 @@
       setSettingsText('settings-repo-depth-title', 'repoDepthTitle');
       setSettingsText('settings-repo-depth-description', 'repoDepthDescription');
       setSettingsHtml('settings-repo-depth-note', 'repoDepthNote');
+      if (btnBrowseRepoRoot) btnBrowseRepoRoot.textContent = translateSettings('dirPickerOpen');
+      setSettingsText('directory-picker-title', 'dirPickerTitle');
+      setSettingsText('directory-picker-description', 'dirPickerDesc');
+      if (btnDirectoryPickerSelect) btnDirectoryPickerSelect.textContent = translateSettings('dirPickerSelect');
+      if (btnDirectoryPickerClose) btnDirectoryPickerClose.textContent = translateSettings('dirPickerClose');
       setSettingsText('settings-slack-title', 'slackTitle');
       setSettingsText('settings-slack-description', 'slackDescription');
       setSettingsText('settings-slack-basics-title', 'slackBasicsTitle');
@@ -356,6 +361,9 @@
       sendRequestDraftButton.textContent = translateRequest('draftSend');
       cancelComposerButton.textContent = translateRequest('close');
       submitButton.textContent = translateRequest('submit');
+      if (btnBrowseTargetRepo) {
+        btnBrowseTargetRepo.textContent = translateSettings('dirPickerOpen');
+      }
       renderRequestDrafts();
       updateRequestDraftPanel();
     }

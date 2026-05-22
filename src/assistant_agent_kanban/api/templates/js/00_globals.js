@@ -39,8 +39,9 @@
     const requestComposerPanelAssistant = document.getElementById('request-composer-panel-assistant');
     const requestComposerTabs = document.getElementById('request-composer-tabs');
     const targetRepoInput = document.getElementById('target_repo');
-    const targetRepoOptions = document.getElementById('target-repo-options');
     const baseBranchInput = document.getElementById('base_branch');
+    let cachedResolvedRepoDiscoveryRoot = '';
+    let cachedRepoDiscoveryMaxDepth = 2;
     const baseBranchOptions = document.getElementById('base-branch-options');
     const baseBranchHelp = document.getElementById('base-branch-help');
     const requestDraftStatus = document.getElementById('request-draft-status');
@@ -53,6 +54,18 @@
     const sendRequestDraftButton = document.getElementById('send-request-draft');
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
+    const btnBrowseRepoRoot = document.getElementById('btn-browse-repo-root');
+    const btnBrowseTargetRepo = document.getElementById('btn-browse-target-repo');
+    const directoryPickerModal = document.getElementById('directory-picker-modal');
+    const directoryPickerTitle = document.getElementById('directory-picker-title');
+    const directoryPickerDescription = document.getElementById('directory-picker-description');
+    const btnDirectoryPickerSelect = document.getElementById('btn-directory-picker-select');
+    const btnDirectoryPickerClose = document.getElementById('btn-directory-picker-close');
+    const directoryPickerCurrentPathDisplay = document.getElementById('directory-picker-current-path-display');
+    const directoryPickerStatus = document.getElementById('directory-picker-status');
+    const directoryPickerList = document.getElementById('directory-picker-list');
+    let activeDirectoryPickerPath = null;
+    let directoryPickerTargetInput = null;
     const slackEnabledInput = document.getElementById('slack_enabled');
     const slackSocketModeEnabledInput = document.getElementById('slack_socket_mode_enabled');
     const slackAppMentionEnabledInput = document.getElementById('slack_app_mention_enabled');
@@ -140,8 +153,6 @@
       { phase: 'plan', states: ['requests', 'planning'] },
       { phase: 'final', states: ['done'] },
     ];
-    const lastTargetRepoStorageKey = 'assistant-agent-kanban.last-target-repo';
-    const legacyLastTargetRepoStorageKey = 'fs-kanban-agent.last-target-repo';
     const taskChangedFilesPaneWidthStorageKey = 'assistant-agent-kanban.task-changed-files-pane-width';
     const requestComposerDraftStorageKey = 'assistant-agent-kanban.request-composer-draft';
     const requestComposerDraftSyncDelayMs = 250;

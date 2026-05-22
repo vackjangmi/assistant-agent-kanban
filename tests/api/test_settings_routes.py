@@ -1046,3 +1046,63 @@ github-copilot/gpt-5
 """
 
     assert _parse_discovered_models(verbose_output) == ["openai/gpt-5.4", "github-copilot/gpt-5"]
+
+
+def test_api_browse_directories(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+
+    # Create test directories
+    test_dir = tmp_path / "test_discovery_root"
+    test_dir.mkdir()
+
+    sub1 = test_dir / "subdir1"
+    sub1.mkdir()
+
+    sub2 = test_dir / "subdir2"
+    sub2.mkdir()
+
+    hidden_sub = test_dir / ".hidden_subdir"
+    hidden_sub.mkdir()
+
+    pycache_sub = test_dir / "__pycache__"
+    pycache_sub.mkdir()
+
+    file_item = test_dir / "some_file.txt"
+    file_item.write_text("not a directory")
+
+    # Update config discovery root to test_dir
+    config.repo_discovery.root = str(test_dir)
+
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        # Test default/no path
+        response = client.get("/api/browse-directories")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["current_path"] == str(test_dir.resolve())
+        assert payload["parent_path"] == str(test_dir.resolve().parent)
+
+        # Hidden and pycache and files should be excluded, subdirectories included
+        dirs = payload["directories"]
+        assert len(dirs) == 2
+        assert dirs[0]["name"] == "subdir1"
+        assert dirs[0]["path"] == str(sub1.resolve())
+        assert dirs[1]["name"] == "subdir2"
+        assert dirs[1]["path"] == str(sub2.resolve())
+
+        # Test specific path
+        response2 = client.get(f"/api/browse-directories?path={sub1}")
+        assert response2.status_code == 200
+        payload2 = response2.json()
+        assert payload2["current_path"] == str(sub1.resolve())
+        assert payload2["parent_path"] == str(test_dir.resolve())
+        assert len(payload2["directories"]) == 0
+
+        # Test non-existent path fallback
+        non_existent = test_dir / "does_not_exist"
+        response3 = client.get(f"/api/browse-directories?path={non_existent}")
+        assert response3.status_code == 200
+        payload3 = response3.json()
+        # Should fallback to discovery root
+        assert payload3["current_path"] == str(test_dir.resolve())

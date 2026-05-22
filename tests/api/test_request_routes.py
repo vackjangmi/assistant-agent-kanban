@@ -813,7 +813,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "JSON files" in response.text
     assert "/api/requests" in response.text
     assert "/api/settings/models" in response.text
-    assert "target-repo-options" in response.text
+    assert "target_repo" in response.text
+    assert '<input id="target_repo" name="target_repo" required readonly autocomplete="off" spellcheck="false">' in response.text
+    assert "Browse to choose the repository used for this request." in response.text
     assert "base-branch-options" in response.text
     assert "request-modal" in response.text
     assert "settings-modal" in response.text
@@ -1093,9 +1095,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function buildAcceptanceCriteriaDefaults()" in response.text
     assert "이 요청으로 추가하거나 변경한 코드의 모든 케이스를 테스트해야 하며, 그 변경 범위의 테스트 커버리지는 100%여야 한다." in response.text
     assert "저장소 전체 커버리지 100%를 요구하는 뜻은 아니며, 전체 테스트 suite 는 작업 범위와 별개로 수행에 성공해야 한다." in response.text
-    assert "assistant-agent-kanban.last-target-repo" in response.text
-    assert "window.localStorage.setItem(lastTargetRepoStorageKey, normalized)" in response.text
-    assert "applyTargetRepoAutofill(currentTargetRepoOptions())" in response.text
+    assert "targetRepoInput.value = '';" in response.text
+    assert "applyTargetRepoAutofill" not in response.text
+    assert "lastTargetRepoStorageKey" not in response.text
+    assert "if (targetInput === 'target_repo' && !cachedResolvedRepoDiscoveryRoot)" in response.text
+    assert "await loadTargetRepoOptions().catch(() => {});" in response.text
     assert "if (!await restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });" in response.text
     assert "void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false);" in response.text
     assert "let activeRequestComposerTab = 'assistant';" in response.text
@@ -1419,7 +1423,7 @@ def test_dashboard_page_includes_korean_runtime_settings_translations(configured
 
 
 
-def test_dashboard_page_uses_custom_discovery_root_as_default_target(configured_paths, tmp_path):
+def test_dashboard_page_keeps_target_repo_empty_with_custom_discovery_root(configured_paths, tmp_path):
     config, _, _ = configured_paths
     config.repo_discovery.root = str(tmp_path / "custom-root")
     Path(config.repo_discovery.root).mkdir()

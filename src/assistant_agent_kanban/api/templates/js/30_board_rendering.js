@@ -759,8 +759,8 @@
       const response = await fetch('/api/target-repos');
       if (!response.ok) return;
       const data = await response.json();
-      targetRepoOptions.innerHTML = data.items.map((item) => `<option value="${item}"></option>`).join('');
-      applyTargetRepoAutofill(data.items || []);
+      cachedResolvedRepoDiscoveryRoot = data.resolved_root || '';
+      cachedRepoDiscoveryMaxDepth = Number(data.max_depth) || 2;
       targetRepoOptionsLoaded = true;
     }
 
@@ -770,28 +770,6 @@
 
     function replaceBaseBranchSuggestions(items) {
       baseBranchOptions.innerHTML = items.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
-    }
-
-    function readLastTargetRepo() {
-      try {
-        const current = normalizeRepoPath(window.localStorage.getItem(lastTargetRepoStorageKey));
-        if (current) return current;
-        const legacy = normalizeRepoPath(window.localStorage.getItem(legacyLastTargetRepoStorageKey));
-        if (!legacy) return '';
-        window.localStorage.setItem(lastTargetRepoStorageKey, legacy);
-        return legacy;
-      } catch (_error) {
-        return '';
-      }
-    }
-
-    function persistLastTargetRepo(value) {
-      const normalized = normalizeRepoPath(value);
-      if (!normalized) return;
-      try {
-        window.localStorage.setItem(lastTargetRepoStorageKey, normalized);
-      } catch (_error) {
-      }
     }
 
     function serializeRequestDraftArtifactMarkdown() {

@@ -49,27 +49,18 @@
 
     syncTaskChangedFilesPaneWidth();
 
-    function currentTargetRepoOptions() {
-      return Array.from(targetRepoOptions.querySelectorAll('option')).map((option) => option.value).filter(Boolean);
+    function normalizePath(p) {
+      if (!p) return '';
+      return p.replace(/\\/g, '/').replace(/\/$/, '');
     }
 
-    function applyTargetRepoAutofill(items) {
-      const options = Array.isArray(items) ? items : [];
-      const currentValue = normalizeRepoPath(targetRepoInput.value);
-      const canAutofill = !currentValue || targetRepoInput.dataset.autofilled === 'true';
-      if (!canAutofill) return;
-      const storedTargetRepo = readLastTargetRepo();
-      const nextValue = storedTargetRepo || options[0] || defaultTargetRepo;
-      targetRepoInput.value = nextValue;
-      targetRepoInput.dataset.autofilled = nextValue ? 'true' : 'false';
-      if (!nextValue) {
-        invalidateBranchLookup();
-        replaceBaseBranchSuggestions([]);
-        updateBaseBranchHelp(translateRequest('baseBranchHelp'));
-        return;
-      }
-      applyRepoDefaults();
-      queueTargetRepoBranchLookup();
+    function getRelativeDepth(root, current) {
+      const r = normalizePath(root);
+      const c = normalizePath(current);
+      if (r === c) return 0;
+      if (!c.startsWith(r + '/')) return -1;
+      const relative = c.substring(r.length + 1);
+      return relative.split('/').filter(Boolean).length;
     }
 
     function invalidateBranchLookup() {
@@ -448,9 +439,7 @@
         syncNumericSettingInput(reviewerAgentCountInput, data.reviewer_agent_count, 1);
         setRoleModelValue('commit', data.commit_model || '');
         syncNumericSettingInput(commitSessionTokenBudgetInput, data.commit_session_token_budget, 250);
-        if (!targetRepoOptionsLoaded) {
-          void loadTargetRepoOptions().catch(() => {});
-        }
+        void loadTargetRepoOptions().catch(() => {});
         updateModelDiscoverySummary(data);
         renderAllRoleModelOptions();
         setSettingsStatus(translateSettings('statusSaved'), 'success');
@@ -625,7 +614,7 @@
     }
 
     function syncBodyModalState() {
-      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden || !directoryPickerModal.hidden);
     }
 
     function renderRetrospectiveMeta(record) {
@@ -820,8 +809,8 @@
       void cleanupRequestUploads(previousUploadToken);
       requestForm.reset();
       setRequestGoalEditorContent('', { initialize: false });
-      targetRepoInput.value = defaultTargetRepo;
-      targetRepoInput.dataset.autofilled = defaultTargetRepo ? 'true' : 'false';
+      targetRepoInput.value = '';
+      targetRepoInput.dataset.autofilled = 'false';
       baseBranchInput.value = defaultBaseBranch;
       baseBranchInput.dataset.autofilled = 'true';
       lastAutoBaseBranch = defaultBaseBranch;
@@ -830,7 +819,6 @@
       scopeField.dataset.autofilled = 'true';
       outOfScopeField.dataset.autofilled = 'true';
       acceptanceCriteriaField.dataset.autofilled = 'true';
-      applyTargetRepoAutofill(currentTargetRepoOptions());
       applyRepoDefaults();
       resetRequestDraftState();
       setRequestComposerTab('assistant');
@@ -1012,3 +1000,122 @@
         </div>`;
     }
 
+    function setDirectoryPickerModalOpen(isOpen) {
+      if (directoryPickerModal) {
+        directoryPickerModal.hidden = !isOpen;
+        directoryPickerModal.setAttribute('aria-hidden', String(!isOpen));
+        syncBodyModalState();
+      }
+    }
+
+    async function openDirectoryPicker(targetInput = 'repo_discovery_root') {
+      setDirectoryPickerModalOpen(true);
+      const inputEl = targetInput === 'target_repo' ? targetRepoInput : repoDiscoveryRootInput;
+      directoryPickerTargetInput = inputEl;
+      if (targetInput === 'target_repo' && !cachedResolvedRepoDiscoveryRoot) {
+        await loadTargetRepoOptions().catch(() => {});
+      }
+      let path = inputEl ? inputEl.value : '';
+      if (targetInput === 'target_repo') {
+        const initialDepth = getRelativeDepth(cachedResolvedRepoDiscoveryRoot, path);
+        if (!path || path.trim() === '' || initialDepth === -1) {
+          path = cachedResolvedRepoDiscoveryRoot;
+        }
+      }
+      await loadPickerDirectory(path);
+    }
+
+    async function loadPickerDirectory(path) {
+      if (directoryPickerStatus) {
+        directoryPickerStatus.hidden = false;
+        directoryPickerStatus.dataset.tone = 'neutral';
+        directoryPickerStatus.textContent = translateSettings('dirPickerLoading') || 'Loading folders...';
+      }
+      if (directoryPickerList) {
+        directoryPickerList.innerHTML = '';
+      }
+
+      try {
+        const url = new URL('/api/browse-directories', window.location.origin);
+        if (path) {
+          url.searchParams.set('path', path);
+        }
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || 'Failed to fetch directories');
+        }
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        activeDirectoryPickerPath = data.current_path;
+        if (directoryPickerCurrentPathDisplay) {
+          directoryPickerCurrentPathDisplay.value = data.current_path;
+        }
+
+        if (directoryPickerStatus) {
+          directoryPickerStatus.hidden = true;
+        }
+
+        const relativeDepth = getRelativeDepth(cachedResolvedRepoDiscoveryRoot, data.current_path);
+        const isTargetRepoPicker = directoryPickerTargetInput === targetRepoInput;
+
+        let html = '';
+        const shouldShowParent = !isTargetRepoPicker || relativeDepth > 0;
+        if (data.parent_path && shouldShowParent) {
+          const upText = translateSettings('dirPickerUp') || '📁 Up one level (..)';
+          html += `<div class="directory-picker-item parent-dir" data-path="${escapeHtml(data.parent_path)}">
+            <span class="dir-icon">📁</span>
+            <span class="dir-name">${escapeHtml(upText)}</span>
+          </div>`;
+        }
+
+        const shouldShowSubdirs = !isTargetRepoPicker || relativeDepth < cachedRepoDiscoveryMaxDepth;
+        if (data.directories && data.directories.length > 0 && shouldShowSubdirs) {
+          data.directories.forEach(dir => {
+            html += `<div class="directory-picker-item" data-path="${escapeHtml(dir.path)}">
+              <span class="dir-icon">📁</span>
+              <span class="dir-name">${escapeHtml(dir.name)}</span>
+            </div>`;
+          });
+        }
+
+        if (directoryPickerList) {
+          directoryPickerList.innerHTML = html;
+        }
+
+        if (btnDirectoryPickerSelect) {
+          if (isTargetRepoPicker) {
+            const isValidDepth = relativeDepth >= 1 && relativeDepth <= cachedRepoDiscoveryMaxDepth;
+            btnDirectoryPickerSelect.disabled = !isValidDepth;
+          } else {
+            btnDirectoryPickerSelect.disabled = false;
+          }
+        }
+      } catch (error) {
+        if (directoryPickerStatus) {
+          directoryPickerStatus.hidden = false;
+          directoryPickerStatus.dataset.tone = 'error';
+          const errorPattern = translateSettings('dirPickerError') || 'Could not load folder contents: {error}';
+          directoryPickerStatus.textContent = errorPattern.replace('{error}', error.message);
+        }
+      }
+    }
+
+    function selectDirectoryPickerCurrent() {
+      if (activeDirectoryPickerPath && directoryPickerTargetInput) {
+        if (directoryPickerTargetInput === targetRepoInput) {
+          const relativeDepth = getRelativeDepth(cachedResolvedRepoDiscoveryRoot, activeDirectoryPickerPath);
+          if (relativeDepth < 1 || relativeDepth > cachedRepoDiscoveryMaxDepth) {
+            return;
+          }
+        }
+        directoryPickerTargetInput.value = activeDirectoryPickerPath;
+        directoryPickerTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+        directoryPickerTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      setDirectoryPickerModalOpen(false);
+    }

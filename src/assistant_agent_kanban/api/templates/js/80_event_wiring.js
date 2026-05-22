@@ -31,7 +31,7 @@
     });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } if (event.key === 'Escape' && directoryPickerModal && !directoryPickerModal.hidden) { setDirectoryPickerModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     requestForm.addEventListener('input', () => void syncRequestComposerDraftState({ silent: true }));
     requestForm.addEventListener('change', () => void syncRequestComposerDraftState({ silent: true }));
@@ -392,6 +392,28 @@
     requestGoalEditorFallback.addEventListener('blur', validateForm);
     scopeField.addEventListener('input', () => { scopeField.dataset.autofilled = 'false'; });
     outOfScopeField.addEventListener('input', () => { outOfScopeField.dataset.autofilled = 'false'; });
+    if (btnBrowseRepoRoot) {
+      btnBrowseRepoRoot.addEventListener('click', () => openDirectoryPicker('repo_discovery_root'));
+    }
+    if (btnBrowseTargetRepo) {
+      btnBrowseTargetRepo.addEventListener('click', () => openDirectoryPicker('target_repo'));
+    }
+    if (btnDirectoryPickerClose) {
+      btnDirectoryPickerClose.addEventListener('click', () => setDirectoryPickerModalOpen(false));
+    }
+    if (btnDirectoryPickerSelect) {
+      btnDirectoryPickerSelect.addEventListener('click', selectDirectoryPickerCurrent);
+    }
+    if (directoryPickerList) {
+      directoryPickerList.addEventListener('click', (event) => {
+        const item = event.target.closest('.directory-picker-item');
+        if (item && item.dataset.path) {
+          loadPickerDirectory(item.dataset.path).catch((err) => {
+            console.error(err);
+          });
+        }
+      });
+    }
     resetFormState();
     applyRuntimeTheme(initialRuntimeTheme);
     void loadModelSettings(false, { allowHidden: true }).catch(() => {});
