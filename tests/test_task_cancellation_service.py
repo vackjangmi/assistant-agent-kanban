@@ -53,7 +53,9 @@ def test_task_cancellation_archives_workspace_changes_and_removes_workspace(conf
     assert not workspace_root.exists()
     archive_dir = cancelled.task_dir / "CANCELLED-WORKSPACE"
     assert (archive_dir / "README.md").exists()
-    assert "Cancelled workspace changes" in cancelled.metadata.closure.note
+    closure_note = cancelled.metadata.closure.note
+    assert closure_note is not None
+    assert "Cancelled workspace changes" in closure_note
     assert "changed by cancelled work" in (archive_dir / "changes.patch").read_text()
     assert (archive_dir / "files" / "notes.txt").read_text() == "untracked note\n"
 
