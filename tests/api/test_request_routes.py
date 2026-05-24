@@ -1031,6 +1031,13 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const rawResponseText = await response.text();" in response.text
     assert "payload = JSON.parse(rawResponseText);" in response.text
     assert "if (!response.ok) throw new Error(rawResponseText.trim() || translateRequest('draftReplyError'));" in response.text
+    assert "draftTargetRepoRequired: 'Select a target project before drafting with the assistant.'" in response.text
+    assert "draftTargetRepoRequired: '어시스턴트 초안을 작성하기 전에 대상 프로젝트를 먼저 선택하세요.'" in response.text
+    assert "function notifyRequestDraftTargetRepoRequired()" in response.text
+    assert "if (!normalizeRepoPath(targetRepoInput.value)) {" in response.text
+    assert "targetRepoField.classList.add('field-attention');" in response.text
+    assert "targetRepoField.scrollIntoView({ behavior: 'smooth', block: 'center' });" in response.text
+    assert ".field.field-attention .settings-input-group" in response.text
     assert "Please help turn these notes into a crisp request. Tighten the goal, highlight missing constraints, and suggest clearer acceptance criteria." in response.text
     assert 'class="editor-textarea reviewer-qa-input"' in response.text
     assert 'class="reviewer-qa-send"' in response.text
@@ -1050,6 +1057,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'id="task-panel-qa-checklist"' in response.text
     assert "const taskQaChecklistTitle = document.getElementById('task-qa-checklist-title');" in response.text
     assert "taskQaChecklistTitle.textContent = translateHumanReview('qaChecklistTitle');" in response.text
+    assert "function captureQaChecklistScrollState()" in response.text
+    assert "function rememberQaChecklistScrollState()" in response.text
+    assert "function renderQaChecklistPanel({ preserveScroll = false, scrollState = null } = {})" in response.text
+    assert "const scrollState = consumeQaChecklistScrollState();" in response.text
+    assert "setQaChecklistItemState(activeTaskId, itemId, patch, { scrollState })" in response.text
     assert 'id="task-tab-review-note"' in response.text
     assert 'id="task-panel-review-note"' in response.text
     assert "/^(WORK|REVIEW|HUMAN-QA|HUMAN-VERIFY)-([0-9]{3})\\.md$/" in response.text
