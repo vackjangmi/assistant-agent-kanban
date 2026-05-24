@@ -266,6 +266,16 @@
       return true;
     }
 
+    async function parseTaskLogsResponse(response) {
+      const text = await response.text();
+      if (!text.trim()) return {};
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        return { detail: response.ok ? translateTask('failedLoadLogs') : translateTask('unableLoadLogs') };
+      }
+    }
+
     async function loadTaskLogs(taskId, { preserveSelection = true } = {}) {
       const requestToken = ++activeTaskLogRequestToken;
       const shouldScrollToBottomAfterLoad = !preserveSelection || !activeTaskLogs || !activeLogName;
@@ -276,7 +286,7 @@
       }
       try {
         const response = await fetch(`/api/tasks/${taskId}/logs`);
-        const payload = await response.json();
+        const payload = await parseTaskLogsResponse(response);
         if (!response.ok) throw new Error(payload.detail || translateTask('failedLoadLogs'));
         if (requestToken !== activeTaskLogRequestToken || taskId !== activeTaskId) return;
         renderTaskLogs(payload, { preserveSelection });

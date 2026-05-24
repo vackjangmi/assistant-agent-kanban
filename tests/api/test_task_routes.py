@@ -111,6 +111,37 @@ def test_api_renders_default_format_runtime_logs_for_task(configured_paths):
     assert payload["entries"][0]["rendered_content"] == "## Summary\n\nplan line"
 
 
+def test_api_renders_pretty_json_runtime_logs_for_task(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "pretty-json-log-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+    log_dir = config.runs_dir / task.metadata.task_id
+    log_dir.mkdir(parents=True)
+    (log_dir / "reviewer-001.jsonl").write_text(
+        '\n'.join(
+            [
+                "```json",
+                "{",
+                '  "verdict": "PASS",',
+                '  "markdown": "Verdict: PASS"',
+                "}",
+                "```",
+            ]
+        )
+        + "\n"
+    )
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{task.metadata.task_id}/logs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entries"][0]["name"] == "reviewer-001.jsonl"
+    assert '"verdict": "PASS",' in payload["entries"][0]["rendered_content"]
+
+
 
 def test_api_exposes_debug_runtime_log_metadata_for_task(configured_paths):
     config, _, _ = configured_paths
