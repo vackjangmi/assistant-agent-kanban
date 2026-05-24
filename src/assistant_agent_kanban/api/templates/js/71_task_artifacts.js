@@ -432,6 +432,32 @@
       }
     }
 
+    async function cancelTask() {
+      if (!activeTaskId || !activeTaskDetail) return;
+      const state = activeTaskDetail.metadata.state;
+      if (state === 'done' || state === 'closed') return;
+      const confirmed = window.confirm(translateTask('cancelConfirm', { title: activeTaskDetail.metadata.title, taskId: activeTaskId }));
+      if (!confirmed) return;
+      cancelTaskButton.disabled = true;
+      deleteTaskButton.disabled = true;
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/cancel`, { method: 'POST' });
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        if (!response.ok) throw new Error(payload && payload.detail ? payload.detail : translateTask('failedCancelTask'));
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        updateTaskDeleteState();
+      }
+    }
+
     async function loadChangedFile(taskId, changedFileId = null, silent = false) {
       if (!activeTaskDetail) return;
       if (!activeTaskDetail.changed_files.length) {

@@ -139,6 +139,7 @@
       resumeReviewLoopButton.textContent = translateTask('resumeReviewLoop');
       approvePlanButton.textContent = translateTask('approvePlan');
       splitPlanButton.textContent = translateTask('splitPlan');
+      cancelTaskButton.textContent = translateTask('cancelTask');
       deleteTaskButton.textContent = translateTask('deleteTask');
       closeTaskModalButton.textContent = translateTask('close');
       closeTaskModalButton.setAttribute('aria-label', translateTask('closeAria'));

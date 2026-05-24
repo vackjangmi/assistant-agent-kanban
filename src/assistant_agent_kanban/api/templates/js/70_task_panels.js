@@ -510,6 +510,9 @@
     function updateTaskDeleteState() {
       const state = activeTaskDetail?.metadata?.state;
       const available = Boolean(state);
+      const canCancel = available && state !== 'done' && state !== 'closed';
+      cancelTaskButton.hidden = !canCancel;
+      cancelTaskButton.disabled = !canCancel || taskDetailStale;
       deleteTaskButton.hidden = !available;
       deleteTaskButton.disabled = !available || taskDetailStale;
     }

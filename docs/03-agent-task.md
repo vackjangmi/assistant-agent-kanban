@@ -75,7 +75,7 @@ Never break the following rules while working here.
 - final approval and commit are complete
 
 ### `closed`
-- the task is terminal but was not implemented or committed, such as a parent request split into child requests
+- the task is terminal but was not implemented or committed, such as a parent request split into child requests or a human-cancelled task
 
 ## Code And Workspace Boundaries
 
@@ -93,6 +93,7 @@ This stores task state documents and metadata.
 - `HUMAN-QA-{n}.md`
 - `REVIEWER-QA-{n}.md`
 - `HUMAN-VERIFY-{n}.md`
+- `CANCELLED-WORKSPACE/` — cancellation archive for changed workspace work, when present
 - `HUMAN-VERIFY-{n}.comments.json`
 - `COMMIT.md`
 - `metadata.json`

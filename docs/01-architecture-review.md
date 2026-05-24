@@ -215,30 +215,40 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 ### Allowed Transitions
 
 - `requests -> planning`
+- `requests -> closed`
 - `planning -> requests`
 - `planning -> plan-approving`
 - `planning -> waiting-check-plans`
+- `planning -> closed`
 - `plan-approving -> waiting-check-plans`
 - `plan-approving -> todos`
+- `plan-approving -> closed`
 - `waiting-check-plans -> todos`
 - `waiting-check-plans -> closed`
 - `todos -> implementing`
+- `todos -> closed`
 - `implementing -> todos`
 - `implementing -> waiting-reviews`
+- `implementing -> closed`
 - `waiting-reviews -> reviewing`
+- `waiting-reviews -> closed`
 - `reviewing -> waiting-reviews`
 - `reviewing -> todos`
 - `reviewing -> completed-reviews`
+- `reviewing -> closed`
 - `completed-reviews -> todos`
 - `completed-reviews -> human-verifying`
+- `completed-reviews -> closed`
 - `human-verifying -> todos`
 - `human-verifying -> done`
+- `human-verifying -> closed`
 - `closed` has no outgoing transitions
 
 ### Human-Gated Transitions
 
 - `waiting-check-plans -> todos`
 - `waiting-check-plans -> closed`
+- any nonterminal state except `done` can be cancelled by a human into `closed`
 - `completed-reviews -> human-verifying`
 - `human-verifying -> done`
 
@@ -247,7 +257,7 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 - `completed-reviews` means **AI review passed**, not that the target repo has already been updated.
 - `human-verifying` means a human is validating the reviewed result in the target repo.
 - `done` means human approval and final commit are both complete.
-- `closed` means the task is no longer being implemented; for split requests, child task ids are recorded in `metadata.closure`.
+- `closed` means the task is no longer being implemented; for split requests, child task ids are recorded in `metadata.closure`, and for cancellations the reason is `cancelled_by_human`.
 
 ## Task Artifact Model
 

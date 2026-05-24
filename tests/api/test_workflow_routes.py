@@ -97,6 +97,40 @@ def test_api_split_plan_creates_children_and_closes_parent(configured_paths):
     assert all(child.state == TaskState.REQUESTS for child in children)
 
 
+def test_api_cancel_task_moves_to_closed_and_removes_workspace(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "api-cancel-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+    task = next(task for task in scanner.scan() if task.metadata.title == "api-cancel-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    workspace_root = config.workspace.root / todo.metadata.task_id
+    repo_dir = workspace_root / "repo"
+    repo_dir.mkdir(parents=True)
+    (repo_dir / "scratch.txt").write_text("scratch\n")
+    todo.metadata.implementation.workspace = str(repo_dir)
+    metadata_store.save(todo.task_dir, todo.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{todo.metadata.task_id}/cancel")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "closed"
+    assert payload["closure"]["reason"] == "cancelled_by_human"
+    assert not workspace_root.exists()
+    closed = scanner.find_task(todo.metadata.task_id)
+    assert closed.state == TaskState.CLOSED
+
+
 
 def test_api_resumes_planner_from_requests_retry_gate_with_message(configured_paths):
     config, _, _ = configured_paths
