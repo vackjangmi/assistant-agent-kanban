@@ -94,9 +94,13 @@ firstrun_prompts
 
 if [ -n "$CODING_ASSISTANT" ]; then
     case "$CODING_ASSISTANT" in
-        opencode|codex|gemini|claude) ;;
+        opencode|codex|gemini|claude|antigravity|agy)
+            if [ "$CODING_ASSISTANT" = "agy" ]; then
+                CODING_ASSISTANT=antigravity
+            fi
+            ;;
         *)
-            printf 'Invalid --assistant value: %s (expected opencode, codex, gemini, or claude)\n' "$CODING_ASSISTANT" >&2
+            printf 'Invalid --assistant value: %s (expected opencode, codex, gemini, claude, or antigravity)\n' "$CODING_ASSISTANT" >&2
             exit 1
             ;;
     esac

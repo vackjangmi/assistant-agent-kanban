@@ -171,7 +171,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         )
         raise NoSupportedAssistantError(
             "No supported assistant CLI is available. Install and authenticate at least one of: "
-            "opencode, codex, gemini, claude."
+            "agy, opencode, codex, gemini, claude."
             f" Availability errors: {details}"
         )
 

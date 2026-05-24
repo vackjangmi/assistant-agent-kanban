@@ -15,7 +15,7 @@ The repository currently includes:
 - filesystem-backed state machine
 - planner / plan-approval / implementer / reviewer / commit workflow
 - request drafting
-- OpenCode / Codex / Claude / Gemini runtime adapters
+- Antigravity / OpenCode / Codex / Claude / Gemini runtime adapters
 - clone-overlay workspaces
 - human verification flow
 - optional Slack integration
@@ -45,6 +45,7 @@ src/assistant_agent_kanban/
 ├─ plan_artifacts.py
 ├─ assistant_adapter.py
 ├─ assistant_factory.py
+├─ antigravity_adapter.py
 ├─ opencode_adapter.py
 ├─ codex_adapter.py
 ├─ claude_adapter.py
@@ -126,7 +127,7 @@ Responsibilities:
 
 - load base configuration
 - bootstrap `kanban_root` and runtime directories
-- define runtime backend settings for OpenCode / Codex / Claude / Gemini
+- define runtime backend settings for Antigravity / OpenCode / Codex / Claude / Gemini
 - define per-role backend/model settings and optional Slack settings
 - maintain workspace, lock, and repo discovery settings
 
@@ -179,6 +180,7 @@ Key contracts:
 Relevant files:
 
 - `src/assistant_agent_kanban/assistant_adapter.py`
+- `src/assistant_agent_kanban/antigravity_adapter.py`
 - `src/assistant_agent_kanban/opencode_adapter.py`
 - `src/assistant_agent_kanban/codex_adapter.py`
 - `src/assistant_agent_kanban/claude_adapter.py`
@@ -188,7 +190,7 @@ Relevant files:
 
 Responsibilities:
 
-- invoke OpenCode / Codex / Claude / Gemini
+- invoke Antigravity / OpenCode / Codex / Claude / Gemini
 - capture raw results
 - extract final assistant text
 - wire role-specific adapters
@@ -349,6 +351,7 @@ Representative major tests include:
 - `tests/test_request_draft_store.py`
 - `tests/test_request_cli.py`
 - `tests/test_target_repo_guard.py`
+- `tests/test_antigravity_adapter.py`
 - `tests/test_opencode_adapter.py`
 - `tests/test_codex_adapter.py`
 - `tests/test_claude_adapter.py`

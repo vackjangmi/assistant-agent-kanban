@@ -4,7 +4,7 @@
 
 ### Overview
 
-`Assistant Agent Kanban` is a filesystem-backed AI workflow orchestration service. It connects Planner, Implementer, Reviewer, and Committer roles built on top of OpenCode, Codex, Claude, or Gemini CLIs, while explicitly preserving human approval gates where they matter.
+`Assistant Agent Kanban` is a filesystem-backed AI workflow orchestration service. It connects Planner, Implementer, Reviewer, and Committer roles built on top of Antigravity, OpenCode, Codex, Claude, or Gemini CLIs, while explicitly preserving human approval gates where they matter.
 
 The project started from hands-on experiments with AI agent-based development in personal side projects. Terminal-first autonomous loops and Ralph-style iteration were powerful, but they did not map cleanly onto the kind of workflow used in real work: writing requirements, reviewing plans, approving stages, iterating on implementation, and performing final human validation.
 
@@ -47,7 +47,7 @@ Full video: [Watch on YouTube](https://youtu.be/gpdcVGiLxaQ)
 
 - Filesystem-backed state machine with `metadata.json` as the source of truth
 - Separate Planner / PlanApproval / Implementer / Reviewer / Committer workers
-- Multi-runtime support: OpenCode, Codex, Claude, Gemini — selectable per role
+- Multi-runtime support: Antigravity, OpenCode, Codex, Claude, Gemini — selectable per role
 - Per-role backend routing (e.g., `planner: claude`, `implementer: codex`, `reviewer: claude`)
 - Per-role model and session token budget configuration
 - Isolated `clone-overlay` workspaces
@@ -74,7 +74,7 @@ Its core design principles are:
 - task directories and real code workspaces remain separate
 - only allowed transitions are permitted
 - humans verify the result in the real target repo only after AI review passes
-- runtime engines (OpenCode/Codex/Claude/Gemini) stay separate from the workflow engine (Python/FastAPI)
+- runtime engines (Antigravity/OpenCode/Codex/Claude/Gemini) stay separate from the workflow engine (Python/FastAPI)
 
 ### Quick Start
 
@@ -111,6 +111,7 @@ Supported assistant CLIs:
 
 | Assistant | Binary | Official link |
 | --- | --- | --- |
+| Antigravity CLI | `agy` | [Google Antigravity CLI overview](https://antigravity.google/docs/cli-overview) |
 | OpenCode | `opencode` | [OpenCode install docs](https://opencode.ai/docs/#install) |
 | Codex CLI | `codex` | [OpenAI Codex CLI quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
 | Claude Code | `claude` | [Anthropic Claude Code native install](https://code.claude.com/docs/en/overview#native-install-recommended) |
@@ -127,7 +128,7 @@ Simplest path:
 On first run (when `config.local.yaml` does not exist yet), `./run.sh` and `./init.sh` both prompt for:
 
 - a **repo discovery root** (press Enter to keep the default `../`)
-- a **default coding assistant** — only CLIs found on `PATH` (from `opencode`, `codex`, `gemini`, `claude`) are listed; if exactly one is installed it is auto-selected, and if none are detected the built-in default is kept
+- a **default coding assistant** — only CLIs found on `PATH` (from `agy`, `opencode`, `codex`, `gemini`, `claude`) are listed; if exactly one is installed it is auto-selected, and if none are detected the built-in default is kept
 - a **UI language** (`EN` / `KO`)
 - a **UI theme** (`light` / `dark`)
 
@@ -364,6 +365,7 @@ Important keys:
 - `base_branch`
 - `target_repo_docs_root`
 - `opencode.*` — per-role agent name, model, and session token budget
+- `antigravity.*` — `agy` binary, temporary settings path override, autonomy flags, per-role model, and session token budget
 - `codex.*` — per-role model and session token budget
 - `claude.*` — per-role model and session token budget
 - `gemini.*` — per-role model and session token budget
@@ -372,6 +374,10 @@ Important keys:
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent counts, auto-dispatch
 - `repo_discovery.*`
 - `slack.*` (optional)
+
+Antigravity CLI does not currently expose a stable `--model` launch flag. When an `antigravity.*_model` is configured, the adapter temporarily writes that model into Antigravity CLI's settings JSON, starts `agy --print`, keeps the model setting in place for 30 seconds so the CLI can finish startup, and then restores the previous model setting. Concurrent Antigravity startups are serialized during that 30-second window to avoid settings races.
+
+Because Antigravity CLI also does not expose a model discovery command, the dashboard seeds Antigravity model options from the current Antigravity Models settings panel and appends any configured custom model values.
 
 Per-role backend routing example:
 
@@ -393,7 +399,7 @@ runtime:
   - `workers/` — planner, plan-approval, implementer, reviewer, committer
   - `services/` — task, board, human verification, retrospective, plan-approval learning, task deletion
   - `api/` — FastAPI app, routes, SSE, templates (HTML, CSS, modular JS)
-  - `*_adapter.py` — OpenCode, Codex, Claude, Gemini adapters
+  - `*_adapter.py` — Antigravity, OpenCode, Codex, Claude, Gemini adapters
   - `slack_*.py` — Slack runtime, notifications, channel matching, settings tests
 - `tests/` — workflow, service, adapter, and API tests
 - `.opencode/agents/` — role prompt contracts
@@ -422,7 +428,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 - Human approval stages are intentional and should not be removed
 - The target repo should be clean when verification begins
 - The full workspace must not live inside the task directory
-- Internal CLI state files (OpenCode/Codex/Claude/Gemini) are not the source of truth
+- Internal CLI state files (Antigravity/OpenCode/Codex/Claude/Gemini) are not the source of truth
 
 ### Known Limitations
 
@@ -436,7 +442,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 
 - Harden packaging and installation paths for non-editable installs
 - Add more deployment guidance and operational safety checks
-- Continue improving role-specific runtime support across OpenCode, Codex, Claude, and Gemini
+- Continue improving role-specific runtime support across Antigravity, OpenCode, Codex, Claude, and Gemini
 - Split larger service, runtime, API, and frontend modules into smaller maintainable units
 - Add more workflow observability around retries, failed runs, and recovery actions
 
@@ -467,7 +473,7 @@ See `CONTRIBUTING.md` for details.
 
 ### 소개
 
-`Assistant Agent Kanban`은 파일시스템 상태를 기반으로 동작하는 AI 작업 오케스트레이션 서비스입니다. OpenCode, Codex, Claude, Gemini CLI 위에서 Planner, Implementer, Reviewer, Committer 역할을 연결하고, 사람 승인 단계가 필요한 구간은 명시적으로 유지합니다.
+`Assistant Agent Kanban`은 파일시스템 상태를 기반으로 동작하는 AI 작업 오케스트레이션 서비스입니다. Antigravity, OpenCode, Codex, Claude, Gemini CLI 위에서 Planner, Implementer, Reviewer, Committer 역할을 연결하고, 사람 승인 단계가 필요한 구간은 명시적으로 유지합니다.
 
 이 프로젝트는 개인 프로젝트에서 AI Agent 기반 개발을 여러 방식으로 실험한 경험에서 출발했습니다. 터미널 중심의 자율 주행 흐름이나 랄프 스타일의 루프는 강력했지만, 실제 업무처럼 요구사항 작성, 계획 검토, 승인, 구현 반복, 인간 최종 검증까지 이어지는 흐름을 한눈에 추적하기는 어려웠습니다.
 
@@ -510,7 +516,7 @@ Claude Code, Codex, OpenCode, Gemini CLI 같은 coding agent 도구들은 매우
 
 - 파일/디렉토리 기반 상태 머신 + `metadata.json`을 source of truth로 사용
 - Planner / PlanApproval / Implementer / Reviewer / Committer를 개별 worker로 분리
-- 멀티 런타임 지원: OpenCode, Codex, Claude, Gemini — 역할별로 선택 가능
+- 멀티 런타임 지원: Antigravity, OpenCode, Codex, Claude, Gemini — 역할별로 선택 가능
 - 역할별 백엔드 라우팅 (예: `planner: claude`, `implementer: codex`, `reviewer: claude`)
 - 역할별 모델·세션 토큰 budget 설정 지원
 - `clone-overlay` 전략 기반의 격리 workspace 생성
@@ -537,7 +543,7 @@ Claude Code, Codex, OpenCode, Gemini CLI 같은 coding agent 도구들은 매우
 - task 디렉토리와 실제 코드 작업 workspace는 분리한다.
 - 허용된 상태 전이만 통과시킨다.
 - AI review를 통과한 뒤에만 사람이 실제 target repo에서 검증한다.
-- 런타임 엔진(OpenCode/Codex/Claude/Gemini)과 워크플로 엔진(Python/FastAPI)을 분리한다.
+- 런타임 엔진(Antigravity/OpenCode/Codex/Claude/Gemini)과 워크플로 엔진(Python/FastAPI)을 분리한다.
 
 ### 빠른 시작
 
@@ -574,6 +580,7 @@ pip install -e .[dev]
 
 | 에이전트 | 실행 파일 | 공식 링크 |
 | --- | --- | --- |
+| Antigravity CLI | `agy` | [Google Antigravity CLI Overview](https://antigravity.google/docs/cli-overview) |
 | OpenCode | `opencode` | [OpenCode 설치 문서](https://opencode.ai/docs/#install) |
 | Codex CLI | `codex` | [OpenAI Codex CLI Quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
 | Claude Code | `claude` | [Anthropic Claude Code Native Install](https://code.claude.com/docs/en/overview#native-install-recommended) |
@@ -590,7 +597,7 @@ pip install -e .[dev]
 최초 실행 시 (`config.local.yaml`이 아직 없을 때) `./run.sh`와 `./init.sh` 둘 다 다음을 물어봅니다:
 
 - **repo discovery root** (기본값 `../`을 그대로 쓰려면 Enter)
-- **기본 coding assistant** — `PATH`에서 찾은 CLI(`opencode`, `codex`, `gemini`, `claude`)만 목록에 표시합니다. 하나만 설치되어 있으면 자동 선택되고, 하나도 없으면 기본값을 유지합니다
+- **기본 coding assistant** — `PATH`에서 찾은 CLI(`agy`, `opencode`, `codex`, `gemini`, `claude`)만 목록에 표시합니다. 하나만 설치되어 있으면 자동 선택되고, 하나도 없으면 기본값을 유지합니다
 - **UI 언어** (`EN` / `KO`)
 - **UI 테마** (`light` / `dark`)
 
@@ -827,6 +834,7 @@ Slack 설정은 config 파일의 `slack:` 섹션에서 관리하며, bot token (
 - `base_branch`
 - `target_repo_docs_root`
 - `opencode.*` — 역할별 agent 이름, 모델, 세션 토큰 budget
+- `antigravity.*` — `agy` binary, 임시 settings path override, 자율 실행 플래그, 역할별 모델, 세션 토큰 budget
 - `codex.*` — 역할별 모델, 세션 토큰 budget
 - `claude.*` — 역할별 모델, 세션 토큰 budget
 - `gemini.*` — 역할별 모델, 세션 토큰 budget
@@ -835,6 +843,10 @@ Slack 설정은 config 파일의 `slack:` 섹션에서 관리하며, bot token (
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent count, auto-dispatch
 - `repo_discovery.*`
 - `slack.*` (선택)
+
+Antigravity CLI는 현재 안정적인 `--model` 실행 플래그를 제공하지 않습니다. `antigravity.*_model`이 설정되어 있으면 어댑터가 Antigravity CLI settings JSON에 모델을 임시로 기록하고 `agy --print`를 시작한 뒤, CLI 초기화가 끝날 수 있도록 30초 동안 유지하고 이전 모델 설정을 복원합니다. 설정 충돌을 막기 위해 Antigravity 시작 구간은 이 30초 동안 직렬화합니다.
+
+Antigravity CLI는 모델 discovery 명령도 제공하지 않기 때문에, 대시보드는 현재 Antigravity Models 설정 패널의 모델 목록을 기본 후보로 보여주고 설정 파일이나 직접 입력으로 저장된 커스텀 모델 값을 뒤에 추가합니다.
 
 역할별 백엔드 라우팅 예시:
 
@@ -856,7 +868,7 @@ runtime:
   - `workers/` — planner, plan-approval, implementer, reviewer, committer
   - `services/` — task, board, human verification, retrospective, plan-approval learning, task deletion
   - `api/` — FastAPI app, route, SSE, template (HTML, CSS, 분리된 JS)
-  - `*_adapter.py` — OpenCode, Codex, Claude, Gemini adapter
+  - `*_adapter.py` — Antigravity, OpenCode, Codex, Claude, Gemini adapter
   - `slack_*.py` — Slack runtime, 알림, 채널 매칭, 설정 테스트
 - `tests/` — workflow, service, adapter, API 테스트
 - `.opencode/agents/` — 역할별 프롬프트 계약
@@ -885,7 +897,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 - 사람이 개입하는 승인 단계는 의도적으로 제거하지 않았습니다.
 - target repo는 verification 시점에 clean 상태여야 합니다.
 - task 디렉토리 안에 전체 workspace를 두지 않습니다.
-- CLI(OpenCode/Codex/Claude/Gemini) 내부 상태 파일은 source of truth로 사용하지 않습니다.
+- CLI(Antigravity/OpenCode/Codex/Claude/Gemini) 내부 상태 파일은 source of truth로 사용하지 않습니다.
 
 ### 현재 한계
 
@@ -899,7 +911,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 
 - editable install이 아닌 일반 설치 환경에서도 안정적으로 동작하도록 packaging 경로 보강
 - 배포 가이드와 운영 안전장치 강화
-- OpenCode, Codex, Claude, Gemini에 대한 역할별 runtime 지원 개선
+- Antigravity, OpenCode, Codex, Claude, Gemini에 대한 역할별 runtime 지원 개선
 - 큰 service, runtime, API, frontend 모듈을 더 작은 단위로 분리
 - retry, 실패한 run, recovery action에 대한 workflow observability 강화
 

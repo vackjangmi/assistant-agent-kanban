@@ -115,7 +115,7 @@ class ModelSettingsPayload(BaseModel):
                 return None
             normalized = normalize_runtime_assistant(value)
             if normalized is None:
-                raise ValueError("role assistant must be OpenCode, Codex CLI, Gemini CLI, or Claude Code")
+                raise ValueError("role assistant must be OpenCode, Codex CLI, Gemini CLI, Claude Code, or Antigravity CLI")
             return normalized
 
     language: str | None = None
@@ -163,7 +163,7 @@ class ModelSettingsPayload(BaseModel):
             return None
         normalized = normalize_runtime_assistant(value)
         if normalized is None:
-            raise ValueError("coding assistant must be OpenCode, Codex CLI, Gemini CLI, or Claude Code")
+            raise ValueError("coding assistant must be OpenCode, Codex CLI, Gemini CLI, Claude Code, or Antigravity CLI")
         return normalized
 
 

@@ -162,6 +162,25 @@ def test_load_config_accepts_claude_runtime_backend(tmp_path):
     assert config.claude.planner_model == "claude-sonnet-4-6"
 
 
+def test_load_config_accepts_antigravity_runtime_backend(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "runtime:",
+                "  coding_assistant: antigravity",
+                "antigravity:",
+                "  planner_model: Gemini 3.5 Flash (High)",
+            ]
+        )
+    )
+
+    config = load_config(config_path)
+
+    assert config.runtime.coding_assistant == "antigravity"
+    assert config.antigravity.planner_model == "Gemini 3.5 Flash (High)"
+
+
 def test_load_config_accepts_role_backend_overrides(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

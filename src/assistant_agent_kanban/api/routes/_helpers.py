@@ -99,7 +99,7 @@ def _normalize_runtime_language(value: str | None) -> str:
 def _normalize_runtime_coding_assistant(value: str | None) -> str:
     normalized = normalize_runtime_assistant(value)
     if normalized is None:
-        raise ValueError("coding assistant must be OpenCode, Codex CLI, Gemini CLI, or Claude Code")
+        raise ValueError("coding assistant must be OpenCode, Codex CLI, Gemini CLI, Claude Code, or Antigravity CLI")
     return normalized
 
 
@@ -111,6 +111,7 @@ def _apply_config_update(target, updated) -> None:
     target.codex = updated.codex
     target.gemini = updated.gemini
     target.claude = updated.claude
+    target.antigravity = updated.antigravity
     target.workspace = updated.workspace
     target.locks = updated.locks
     target.runtime = updated.runtime
@@ -237,12 +238,21 @@ def _settings_model_candidates(*, backend: str, snapshot_models: list[str], conf
     candidates = list(CLAUDE_MODEL_ALIASES) if backend == "claude" else list(snapshot_models)
     if backend == "claude":
         candidates.extend(_configured_claude_models(config))
+    if backend == "antigravity":
+        candidates.extend(_configured_antigravity_models(config))
     return _deduplicate_models(candidates)
 
 
 def _configured_claude_models(config) -> list[str]:
     return _deduplicate_models([
         getattr(config.claude, f"{role}_model")
+        for role in ASSISTANT_ROLES
+    ])
+
+
+def _configured_antigravity_models(config) -> list[str]:
+    return _deduplicate_models([
+        getattr(config.antigravity, f"{role}_model")
         for role in ASSISTANT_ROLES
     ])
 

@@ -74,6 +74,7 @@ def test_server_startup_fails_when_no_supported_assistant_cli_is_available(confi
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
     adapters = {
+        "antigravity": UnavailableAdapter("agy"),
         "opencode": UnavailableAdapter("opencode"),
         "codex": UnavailableAdapter("codex"),
         "gemini": UnavailableAdapter("gemini"),

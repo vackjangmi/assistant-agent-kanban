@@ -17,11 +17,12 @@ DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
-AssistantBackend = Literal["opencode", "codex", "gemini", "claude"]
+AssistantBackend = Literal["opencode", "codex", "gemini", "claude", "antigravity"]
 AssistantRole = Literal["planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit"]
 ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit")
 TASK_RUNTIME_ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
 SUPPORTED_RUNTIME_ASSISTANTS = {
+    "antigravity": "Antigravity CLI",
     "codex": "Codex CLI",
     "claude": "Claude Code",
     "gemini": "Gemini CLI",
@@ -35,7 +36,9 @@ def normalize_runtime_assistant(value: str | None) -> str | None:
     normalized = value.strip().lower()
     if normalized in SUPPORTED_RUNTIME_ASSISTANTS:
         return normalized
-    if normalized in {"opencode", "gemini", "claude"}:
+    if normalized in {"opencode", "gemini", "claude", "agy"}:
+        if normalized == "agy":
+            return "antigravity"
         return normalized
     return None
 
@@ -111,6 +114,25 @@ class ClaudeConfig(BaseModel):
     timeout_seconds: int = 1800
 
 
+class AntigravityConfig(BaseModel):
+    binary: str = "agy"
+    settings_path: Path | None = None
+    dangerously_skip_permissions: bool = True
+    sandbox: bool = False
+    planner_model: str | None = None
+    planner_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    request_draft_model: str | None = None
+    plan_approval_model: str | None = None
+    plan_approval_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    implementer_model: str | None = None
+    implementer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    reviewer_model: str | None = None
+    reviewer_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    commit_model: str | None = None
+    commit_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    timeout_seconds: int = 1800
+
+
 class WorkspaceConfig(BaseModel):
     strategy: str = "clone-overlay"
     root: Path | None = None
@@ -156,7 +178,7 @@ class RuntimeConfig(BaseModel):
     def normalize_coding_assistant_setting(cls, value: str) -> str:
         normalized = normalize_runtime_assistant(value)
         if normalized is None:
-            raise ValueError("runtime coding assistant must be OpenCode, Codex CLI, Gemini CLI, or Claude Code")
+            raise ValueError("runtime coding assistant must be OpenCode, Codex CLI, Gemini CLI, Claude Code, or Antigravity CLI")
         return normalized
 
 
@@ -192,6 +214,7 @@ class AppConfig(BaseModel):
     codex: CodexConfig = Field(default_factory=CodexConfig)
     gemini: GeminiConfig = Field(default_factory=GeminiConfig)
     claude: ClaudeConfig = Field(default_factory=ClaudeConfig)
+    antigravity: AntigravityConfig = Field(default_factory=AntigravityConfig)
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     locks: LocksConfig = Field(default_factory=LocksConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
@@ -273,6 +296,8 @@ class AppConfig(BaseModel):
             return self.gemini
         if resolved_backend == "claude":
             return self.claude
+        if resolved_backend == "antigravity":
+            return self.antigravity
         return self.gemini
 
     def role_agent(self, role: AssistantRole) -> str:

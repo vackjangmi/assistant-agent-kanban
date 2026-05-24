@@ -391,6 +391,7 @@
 
     function resolveAssistantOptions(payload) {
       const defaults = [
+        { value: 'antigravity', label: 'Antigravity CLI' },
         { value: 'codex', label: 'Codex CLI' },
         { value: 'claude', label: 'Claude Code' },
         { value: 'gemini', label: 'Gemini CLI' },

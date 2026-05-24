@@ -27,7 +27,7 @@ The high-level flow is:
 These rules are the core architectural constraints of the system.
 
 1. The source of truth for workflow state is **directory state + `metadata.json`**.
-2. OpenCode, Codex, Claude, Gemini, and oh-my-opencode internal state files are never used as the source of truth.
+2. Antigravity, OpenCode, Codex, Claude, Gemini, and oh-my-opencode internal state files are never used as the source of truth.
 3. Task directories and real code workspaces are separate.
 4. State transitions always happen under a lock.
 5. The target repo must not be patched before review passes.
@@ -83,6 +83,7 @@ This is the user-facing control and visibility layer.
 src/assistant_agent_kanban/
 ├── adapters (top-level *_adapter.py)
 │   ├── assistant_adapter.py       # base AssistantAdapter contract + backend manager
+│   ├── antigravity_adapter.py
 │   ├── opencode_adapter.py
 │   ├── codex_adapter.py
 │   ├── claude_adapter.py
