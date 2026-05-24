@@ -632,6 +632,28 @@ def test_api_returns_to_todos_on_verification_target_repo_drift(configured_paths
     assert refreshed.metadata.retry_gate.reason == "verification-target-repo-drift"
 
 
+def test_api_blocks_human_verification_start_when_target_baseline_is_dirty(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    docs_dir = repo_root / "docs"
+    docs_dir.mkdir()
+    dirty_file = docs_dir / "unrelated.md"
+    dirty_file.write_text("existing note\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "docs/unrelated.md"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "add unrelated doc"], check=True, capture_output=True, text=True)
+    dirty_file.unlink()
+
+    create_request_task(config, "human-verify-dirty-target-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-dirty-target-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+
+    assert start.status_code == 409
+    assert start.json()["detail"] == "target repo must be clean before apply"
+    assert scanner.find_task(completed.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
+
 
 def test_api_rejects_retry_when_verification_apply_is_already_active(configured_paths):
     config, _, _ = configured_paths
