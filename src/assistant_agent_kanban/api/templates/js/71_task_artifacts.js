@@ -266,6 +266,16 @@
       return true;
     }
 
+    async function parseTaskLogsResponse(response) {
+      const text = await response.text();
+      if (!text.trim()) return {};
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        return { detail: response.ok ? translateTask('failedLoadLogs') : translateTask('unableLoadLogs') };
+      }
+    }
+
     async function loadTaskLogs(taskId, { preserveSelection = true } = {}) {
       const requestToken = ++activeTaskLogRequestToken;
       const shouldScrollToBottomAfterLoad = !preserveSelection || !activeTaskLogs || !activeLogName;
@@ -276,7 +286,7 @@
       }
       try {
         const response = await fetch(`/api/tasks/${taskId}/logs`);
-        const payload = await response.json();
+        const payload = await parseTaskLogsResponse(response);
         if (!response.ok) throw new Error(payload.detail || translateTask('failedLoadLogs'));
         if (requestToken !== activeTaskLogRequestToken || taskId !== activeTaskId) return;
         renderTaskLogs(payload, { preserveSelection });
@@ -415,6 +425,32 @@
         if (!response.ok) throw new Error(payload && payload.detail ? payload.detail : 'Failed to delete task.');
         await loadBoard();
         setTaskModalOpen(false);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        updateTaskDeleteState();
+      }
+    }
+
+    async function cancelTask() {
+      if (!activeTaskId || !activeTaskDetail) return;
+      const state = activeTaskDetail.metadata.state;
+      if (state === 'done' || state === 'closed') return;
+      const confirmed = window.confirm(translateTask('cancelConfirm', { title: activeTaskDetail.metadata.title, taskId: activeTaskId }));
+      if (!confirmed) return;
+      cancelTaskButton.disabled = true;
+      deleteTaskButton.disabled = true;
+      try {
+        const response = await fetch(`/api/tasks/${activeTaskId}/cancel`, { method: 'POST' });
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_error) {
+          payload = null;
+        }
+        if (!response.ok) throw new Error(payload && payload.detail ? payload.detail : translateTask('failedCancelTask'));
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true);
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;

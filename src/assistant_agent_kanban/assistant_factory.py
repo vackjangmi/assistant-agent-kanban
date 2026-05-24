@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .antigravity_adapter import SubprocessAntigravityAdapter
 from .assistant_adapter import AssistantAdapter
 from .claude_adapter import SubprocessClaudeAdapter
 from .codex_adapter import SubprocessCodexAdapter
@@ -9,6 +10,8 @@ from .opencode_adapter import SubprocessOpenCodeAdapter
 
 
 def build_adapter(backend: AssistantBackend) -> AssistantAdapter:
+    if backend == "antigravity":
+        return SubprocessAntigravityAdapter()
     if backend == "opencode":
         return SubprocessOpenCodeAdapter()
     if backend == "codex":
@@ -22,6 +25,7 @@ def build_adapter(backend: AssistantBackend) -> AssistantAdapter:
 
 def build_adapter_registry() -> dict[AssistantBackend, AssistantAdapter]:
     return {
+        "antigravity": build_adapter("antigravity"),
         "opencode": build_adapter("opencode"),
         "codex": build_adapter("codex"),
         "gemini": build_adapter("gemini"),

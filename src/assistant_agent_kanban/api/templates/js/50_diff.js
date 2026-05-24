@@ -278,6 +278,8 @@
       return { total: items.length, required: requiredItems.length, completedRequired: completedRequired.length };
     }
 
+    let qaChecklistPendingScrollState = null;
+
     function setApprovalGateNotice({ title = '', body = '', actionLabel = '', action = '' } = {}) {
       if (!taskApprovalGateNotice) return;
       if (!title && !body) {
@@ -295,11 +297,59 @@
       `;
     }
 
-    function renderQaChecklistPanel() {
+    function qaChecklistScrollElements() {
+      const elements = [
+        taskQaChecklistItems,
+        taskPanelQaChecklist,
+        taskQaChecklistPanel,
+        taskModal.querySelector('.task-modal-panel'),
+        document.scrollingElement,
+      ].filter(Boolean);
+      return elements.filter((element, index) => elements.indexOf(element) === index);
+    }
+
+    function captureQaChecklistScrollState() {
+      return qaChecklistScrollElements().map((element) => ({
+        element,
+        scrollTop: element.scrollTop,
+        scrollLeft: element.scrollLeft,
+      }));
+    }
+
+    function rememberQaChecklistScrollState() {
+      qaChecklistPendingScrollState = captureQaChecklistScrollState();
+    }
+
+    function consumeQaChecklistScrollState() {
+      const state = qaChecklistPendingScrollState || captureQaChecklistScrollState();
+      qaChecklistPendingScrollState = null;
+      return state;
+    }
+
+    function restoreQaChecklistScrollState(state) {
+      if (!Array.isArray(state)) return;
+      state.forEach((item) => {
+        if (!item?.element) return;
+        item.element.scrollTop = item.scrollTop;
+        item.element.scrollLeft = item.scrollLeft;
+      });
+    }
+
+    function scheduleQaChecklistScrollRestore(state) {
+      if (!Array.isArray(state)) return;
+      restoreQaChecklistScrollState(state);
+      requestAnimationFrame(() => {
+        restoreQaChecklistScrollState(state);
+        requestAnimationFrame(() => restoreQaChecklistScrollState(state));
+      });
+    }
+
+    function renderQaChecklistPanel({ preserveScroll = false, scrollState = null } = {}) {
       const state = activeTaskDetail?.metadata?.state || '';
       const canToggle = state === 'human-verifying' && !taskDetailStale;
       const items = qaChecklistItems();
       const progress = qaChecklistProgress();
+      const nextScrollState = scrollState || (preserveScroll ? captureQaChecklistScrollState() : null);
       taskQaChecklistPanel.hidden = !(state === 'completed-reviews' || state === 'human-verifying');
       taskQaChecklistStatus.textContent = state === 'human-verifying'
         ? translateHumanReview('qaChecklistInteractive')
@@ -310,6 +360,7 @@
       `;
       if (!items.length) {
         taskQaChecklistItems.innerHTML = `<div class="diff-empty">${escapeHtml(translateHumanReview('qaChecklistEmpty'))}</div>`;
+        scheduleQaChecklistScrollRestore(nextScrollState);
         return;
       }
       taskQaChecklistItems.innerHTML = items.map((item) => {
@@ -341,20 +392,23 @@
             <input class="qa-checklist-note" data-qa-note="${escapeHtml(item.id)}" value="${escapeHtml(item.note || '')}" placeholder="${escapeHtml(translateHumanReview('qaChecklistNotePlaceholder'))}" ${canToggle ? '' : 'disabled'}>
           </article>`;
       }).join('');
+      scheduleQaChecklistScrollRestore(nextScrollState);
     }
 
-    function applyQaChecklistItemUpdate(updated) {
+    function applyQaChecklistItemUpdate(updated, { scrollState = null } = {}) {
       if (!updated || !activeTaskDetail?.human_review?.qa_items) return;
       activeTaskDetail.human_review.qa_items = activeTaskDetail.human_review.qa_items.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
       const progress = qaChecklistProgress();
       activeTaskDetail.human_review.qa_total_count = progress.total;
       activeTaskDetail.human_review.qa_required_count = progress.required;
       activeTaskDetail.human_review.qa_completed_required_count = progress.completedRequired;
-      renderQaChecklistPanel();
+      const nextScrollState = scrollState || captureQaChecklistScrollState();
+      renderQaChecklistPanel({ scrollState: nextScrollState });
       updateHumanReviewPanel();
+      scheduleQaChecklistScrollRestore(nextScrollState);
     }
 
-    async function setQaChecklistItemState(taskId, itemId, patch) {
+    async function setQaChecklistItemState(taskId, itemId, patch, options = {}) {
       const response = await fetch(`/api/tasks/${taskId}/human-qa/${encodeURIComponent(itemId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -362,7 +416,7 @@
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || translateHumanReview('qaChecklistSaveError'));
-      applyQaChecklistItemUpdate(payload);
+      applyQaChecklistItemUpdate(payload, options);
       return payload;
     }
 
@@ -565,4 +619,3 @@
       }
       updateHumanReviewPanel();
     }
-

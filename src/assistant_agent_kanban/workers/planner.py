@@ -226,7 +226,7 @@ class PlanningWorker(WorkerBase):
         return has_required_request_fields(request_path.read_text())
 
     def _planner_include_directories(self, run_config, metadata, planner_cwd: Path) -> list[Path] | None:
-        if run_config.backend_for_role("planner") not in {"gemini", "opencode"}:
+        if run_config.backend_for_role("planner") not in {"antigravity", "gemini", "opencode"}:
             return None
         target_repo_root = Path(metadata.target.repo_root).expanduser().resolve()
         if target_repo_root == planner_cwd:

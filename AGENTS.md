@@ -49,24 +49,33 @@ Always keep these rules intact.
 ### Allowed Transitions
 
 - `requests -> planning`
+- `requests -> closed`
 - `planning -> requests`
 - `planning -> plan-approving`
 - `planning -> waiting-check-plans`
+- `planning -> closed`
 - `plan-approving -> waiting-check-plans`
 - `plan-approving -> todos`
+- `plan-approving -> closed`
 - `waiting-check-plans -> todos`
 - `waiting-check-plans -> closed`
 - `todos -> implementing`
+- `todos -> closed`
 - `implementing -> todos`
 - `implementing -> waiting-reviews`
+- `implementing -> closed`
 - `waiting-reviews -> reviewing`
+- `waiting-reviews -> closed`
 - `reviewing -> waiting-reviews`
 - `reviewing -> todos`
 - `reviewing -> completed-reviews`
+- `reviewing -> closed`
 - `completed-reviews -> todos`
 - `completed-reviews -> human-verifying`
+- `completed-reviews -> closed`
 - `human-verifying -> todos`
 - `human-verifying -> done`
+- `human-verifying -> closed`
 - `closed` has no outgoing transitions
 
 The code must block any transition that is not allowed.
@@ -77,6 +86,7 @@ These are the main decision points that require human judgment.
 
 - `waiting-check-plans -> todos` — approve implementation after reviewing or editing the plan
 - `waiting-check-plans -> closed` — close a parent request after creating split child tasks
+- Any nonterminal state except `done` can be cancelled by a human into `closed`
 - `completed-reviews -> human-verifying` — start verification by applying the reviewed result to the real target repo
 - `human-verifying -> done` — final approval after human verification
 
@@ -130,6 +140,7 @@ These are the main decision points that require human judgment.
 - Always place the editable repository checkout under `_runtime/workspaces/{task_id}/repo`.
 - Never place the full repo workspace inside the task directory.
 - The target repo is not the active implementation area before human verification.
+- On cancellation, remove the managed workspace after archiving changed work under the task directory.
 
 ## Metadata And Lock Rules
 

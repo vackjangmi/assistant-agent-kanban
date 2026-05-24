@@ -67,6 +67,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         }
         assert get_response.json()["worker_live_logs_enabled"] is True
         assert get_response.json()["available_assistants"] == [
+            {"value": "antigravity", "label": "Antigravity CLI"},
             {"value": "codex", "label": "Codex CLI"},
             {"value": "claude", "label": "Claude Code"},
             {"value": "gemini", "label": "Gemini CLI"},
@@ -93,6 +94,7 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["slack_app_token_masked"] is None
         assert get_response.json()["config_path"] == str(local_config_path.resolve())
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
+        assert get_response.json()["available_models_by_backend"]["antigravity"] == ["Gemini 3.5 Flash (High)"]
         assert get_response.json()["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
         assert get_response.json()["available_models_by_backend"]["claude"] == [
@@ -641,6 +643,31 @@ def test_api_accepts_claude_runtime_coding_assistant(configured_paths):
     assert config.claude.planner_model == "claude-sonnet-4-6"
 
 
+def test_api_accepts_antigravity_runtime_coding_assistant(configured_paths):
+    config, _, _ = configured_paths
+    adapter_registry = _settings_adapter_registry(
+        antigravity_adapter=FakeAdapter(["antigravity"], discovery_responses=[["Gemini 3.5 Flash (High)"]])
+    )
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
+
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/settings/models",
+            json={
+                "coding_assistant": "antigravity",
+                "planner_model": "Gemini 3.5 Flash (High)",
+                "planner_session_token_budget": 250,
+                "implementer_session_token_budget": 250,
+                "reviewer_session_token_budget": 250,
+                "commit_session_token_budget": 250,
+            },
+        )
+
+    assert response.status_code == 200
+    assert config.runtime.coding_assistant == "antigravity"
+    assert config.antigravity.planner_model == "Gemini 3.5 Flash (High)"
+
+
 
 def test_api_includes_persisted_claude_custom_models_in_candidates(configured_paths):
     config, _, _ = configured_paths
@@ -839,6 +866,7 @@ def test_api_settings_only_lists_startup_available_assistants(configured_paths):
 
     assert response.status_code == 200
     assert response.json()["available_assistants"] == [
+        {"value": "antigravity", "label": "Antigravity CLI"},
         {"value": "claude", "label": "Claude Code"},
         {"value": "gemini", "label": "Gemini CLI"},
         {"value": "opencode", "label": "OpenCode"},

@@ -18,7 +18,7 @@ This repository covers:
 - filesystem-backed workflow state management
 - planner / plan-approval / implementer / reviewer / committer orchestration
 - request drafting before task creation
-- OpenCode / Codex / Claude / Gemini runtime support
+- Antigravity / OpenCode / Codex / Claude / Gemini runtime support
 - clone-overlay workspace isolation
 - human verification flow
 - optional Slack notifications and request drafting
@@ -33,7 +33,7 @@ Never break the following rules while working here.
 2. Perform state transitions only under a lock.
 3. Do not remove human approval stages.
 4. The source of truth is the state directory + `metadata.json`.
-5. Do not use OpenCode, Codex, Claude, Gemini, or oh-my-opencode internal state files as workflow truth.
+5. Do not use Antigravity, OpenCode, Codex, Claude, Gemini, or oh-my-opencode internal state files as workflow truth.
 6. Do not touch the target repo before review passes.
 7. Apply target repo patches only when human verification starts.
 8. Create the final commit only during `human-verifying -> done`.
@@ -75,7 +75,7 @@ Never break the following rules while working here.
 - final approval and commit are complete
 
 ### `closed`
-- the task is terminal but was not implemented or committed, such as a parent request split into child requests
+- the task is terminal but was not implemented or committed, such as a parent request split into child requests or a human-cancelled task
 
 ## Code And Workspace Boundaries
 
@@ -93,6 +93,7 @@ This stores task state documents and metadata.
 - `HUMAN-QA-{n}.md`
 - `REVIEWER-QA-{n}.md`
 - `HUMAN-VERIFY-{n}.md`
+- `CANCELLED-WORKSPACE/` — cancellation archive for changed workspace work, when present
 - `HUMAN-VERIFY-{n}.comments.json`
 - `COMMIT.md`
 - `metadata.json`

@@ -1069,6 +1069,10 @@ body[data-theme="dark"] .card-button:hover { background-color: rgba(255, 255, 25
 .field input, .field textarea { width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
 .field textarea { min-height: 96px; resize: vertical; }
 .field.compact textarea { min-height: 72px; }
+.field.field-attention label { color: var(--danger); }
+.field.field-attention .settings-input-group { border-radius: 8px; animation: field-attention-pulse 1.2s ease-out 2; box-shadow: 0 0 0 3px rgba(163, 58, 42, 0.12), 0 10px 26px rgba(163, 58, 42, 0.16); }
+.field.field-attention input { border-color: rgba(163, 58, 42, 0.5); background: rgba(255, 251, 247, 0.98); }
+.field.field-attention .settings-browse-button { border-color: rgba(163, 58, 42, 0.4); color: var(--danger); background: rgba(163, 58, 42, 0.08); }
 .field-checkbox { gap: 0; }
 .field-checkbox-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.98); }
 .field-checkbox-row input[type="checkbox"] { width: auto; margin: 3px 0 0; padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
@@ -1076,10 +1080,15 @@ body[data-theme="dark"] .card-button:hover { background-color: rgba(255, 255, 25
 .error-text { min-height: 1.1em; color: var(--danger); font-size: 0.9rem; }
 .form-error { margin-bottom: 12px; padding: 10px 12px; border: 1px solid rgba(163,58,42,0.3); background: rgba(163,58,42,0.08); color: var(--danger); }
 .form-error[hidden] { display: none; }
+@keyframes field-attention-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(163, 58, 42, 0.22), 0 10px 26px rgba(163, 58, 42, 0.16); }
+  70% { box-shadow: 0 0 0 10px rgba(163, 58, 42, 0), 0 10px 26px rgba(163, 58, 42, 0.16); }
+  100% { box-shadow: 0 0 0 3px rgba(163, 58, 42, 0.12), 0 10px 26px rgba(163, 58, 42, 0.16); }
+}
 .stacked-modal-panel { display: flex; flex-direction: column; overflow: hidden; height: min(86vh, calc(100vh - 64px)); width: min(1160px, calc(100vw - 48px)); }
 .stacked-modal-panel .modal-head { margin-bottom: 0; padding-bottom: 14px; flex: 0 0 auto; border-bottom: 1px solid rgba(24,32,38,0.08); }
 .modal-scroll-form { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; overflow: hidden; padding-top: 14px; }
-.modal-scroll-body { min-height: 0; overflow: auto; padding-right: 4px; display: grid; gap: 18px; }
+.modal-scroll-body { min-height: 0; overflow: auto; padding: 4px 8px; display: grid; gap: 18px; }
 
 /* Settings Modal Tabs & Panels */
 .settings-tabs {
@@ -2184,8 +2193,23 @@ body[data-theme="dark"] .onboarding-skip-btn {
     0 0 50px rgba(16, 185, 129, 0.25);
 }
 
-/* Step 5 AI Assistant drafting placement */
+/* Step 5 Target Project placement */
 .onboarding-card.step-5 {
+  top: auto;
+  left: auto;
+  bottom: 40px;
+  right: 40px;
+  transform: translate(0, 0);
+  width: 440px;
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow:
+    0 30px 60px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 50px rgba(245, 158, 11, 0.25);
+}
+
+/* Step 6 AI Assistant drafting placement */
+.onboarding-card.step-6 {
   top: 120px;
   left: 30px;
   bottom: auto;
@@ -2232,6 +2256,14 @@ body[data-theme="dark"] .onboarding-card.step-4 {
 }
 
 body[data-theme="dark"] .onboarding-card.step-5 {
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 50px rgba(245, 158, 11, 0.2);
+}
+
+body[data-theme="dark"] .onboarding-card.step-6 {
   border-color: rgba(59, 130, 246, 0.3);
   box-shadow:
     0 30px 60px rgba(0, 0, 0, 0.5),

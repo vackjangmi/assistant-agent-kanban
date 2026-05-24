@@ -466,10 +466,37 @@
       return preservedValue;
     }
 
+    function notifyRequestDraftTargetRepoRequired() {
+      const message = translateRequest('draftTargetRepoRequired');
+      const targetRepoField = targetRepoInput.closest('.field');
+      const targetRepoError = document.querySelector('[data-error-for="target_repo"]');
+      if (targetRepoError) targetRepoError.textContent = message;
+      formError.hidden = false;
+      formError.textContent = message;
+      updateRequestDraftPanel(message);
+      if (targetRepoField) {
+        targetRepoField.classList.remove('field-attention');
+        void targetRepoField.offsetWidth;
+        targetRepoField.classList.add('field-attention');
+        targetRepoField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      requestAnimationFrame(() => {
+        if (btnBrowseTargetRepo) {
+          btnBrowseTargetRepo.focus();
+          return;
+        }
+        targetRepoInput.focus();
+      });
+    }
+
     async function sendRequestDraftMessage() {
       const message = (requestDraftInput.value || '').trim();
       if (!message || requestDraftMessageInFlight) {
         updateRequestDraftPanel();
+        return;
+      }
+      if (!normalizeRepoPath(targetRepoInput.value)) {
+        notifyRequestDraftTargetRepoRequired();
         return;
       }
       await ensureRequestComposerDraft();

@@ -70,6 +70,24 @@ claude:
   commit_session_token_budget: 250000
   timeout_seconds: 1800
 
+antigravity:
+  binary: agy
+  settings_path: null
+  dangerously_skip_permissions: true
+  sandbox: false
+  planner_model: null
+  planner_session_token_budget: 250000
+  request_draft_model: null
+  plan_approval_model: null
+  plan_approval_session_token_budget: 250000
+  implementer_model: null
+  implementer_session_token_budget: 250000
+  reviewer_model: null
+  reviewer_session_token_budget: 250000
+  commit_model: null
+  commit_session_token_budget: 250000
+  timeout_seconds: 1800
+
 workspace:
   strategy: clone-overlay
   root: ./.kanban-agent/_runtime/workspaces

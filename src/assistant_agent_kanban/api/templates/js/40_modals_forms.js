@@ -969,6 +969,8 @@
       requestChangesShell.hidden = state !== 'human-verifying';
       approveHumanReviewButton.hidden = state !== 'human-verifying';
       approveHumanReviewShell.hidden = state !== 'human-verifying';
+      cancelTaskButton.hidden = !snapshot || state === 'done' || state === 'closed';
+      cancelTaskButton.disabled = cancelTaskButton.hidden;
       deleteTaskButton.hidden = !snapshot;
       deleteTaskButton.disabled = !snapshot;
       if (state === 'waiting-check-plans' || state === 'plan-approving') activeArtifactName = 'PLAN.md';

@@ -63,6 +63,22 @@ def test_render_assistant_log_includes_claude_result_text():
     assert render_assistant_log(raw) == "Not logged in · Please run /login"
 
 
+def test_render_assistant_log_keeps_json_scalar_lines_as_text():
+    raw = '\n'.join(
+        [
+            '```json',
+            '"verdict"',
+            '"PASS"',
+            '```',
+        ]
+    )
+
+    rendered = render_assistant_log(raw)
+
+    assert '"verdict"' in rendered
+    assert '"PASS"' in rendered
+
+
 def test_render_assistant_log_debug_includes_claude_tool_and_token_metadata():
     raw = '\n'.join(
         [

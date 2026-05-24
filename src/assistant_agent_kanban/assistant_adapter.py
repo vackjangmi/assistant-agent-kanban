@@ -267,6 +267,8 @@ def build_backend_manager(*, config: AppConfig, adapter_registry: dict[Assistant
 
 
 def _backend_binary(config: AppConfig, backend: AssistantBackend) -> str:
+    if backend == "antigravity":
+        return config.antigravity.binary
     if backend == "opencode":
         return config.opencode.binary
     if backend == "codex":

@@ -24,6 +24,8 @@ def render_assistant_event_line(raw_line: str, *, debug: bool = False) -> str | 
         payload = json.loads(raw_line.strip())
     except json.JSONDecodeError:
         return line
+    if not isinstance(payload, dict):
+        return line
     event_type = payload.get("type")
     if _looks_like_claude_event(payload):
         return render_claude_event_line(raw_line, debug=debug)
@@ -43,6 +45,8 @@ def render_opencode_event_line(raw_line: str, *, debug: bool = False) -> str | N
     try:
         payload = json.loads(raw_line.strip())
     except json.JSONDecodeError:
+        return line
+    if not isinstance(payload, dict):
         return line
     event_type = payload.get("type")
     if event_type == "step_start":
@@ -81,6 +85,8 @@ def render_codex_event_line(raw_line: str, *, debug: bool = False) -> str | None
     try:
         payload = json.loads(raw_line.strip())
     except json.JSONDecodeError:
+        return line
+    if not isinstance(payload, dict):
         return line
     event_type = payload.get("type")
     if event_type == "item.started":
@@ -129,6 +135,8 @@ def render_claude_event_line(raw_line: str, *, debug: bool = False) -> str | Non
     try:
         payload = json.loads(raw_line.strip())
     except json.JSONDecodeError:
+        return line
+    if not isinstance(payload, dict):
         return line
     event_type = payload.get("type")
     if event_type == "system":

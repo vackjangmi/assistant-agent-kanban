@@ -254,6 +254,15 @@
     }
     taskChangedFiles.addEventListener('change', handleChangedFileViewedToggleChange);
     taskChangedFileSummary.addEventListener('change', handleChangedFileViewedToggleChange);
+    taskQaChecklistItems.addEventListener('pointerdown', (event) => {
+      if (!event.target.closest('[data-qa-check], [data-qa-skip], [data-qa-note]')) return;
+      rememberQaChecklistScrollState();
+    });
+    taskQaChecklistItems.addEventListener('keydown', (event) => {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      if (!event.target.closest('[data-qa-check], [data-qa-skip], [data-qa-note]')) return;
+      rememberQaChecklistScrollState();
+    });
     taskQaChecklistItems.addEventListener('change', (event) => {
       const checkToggle = event.target.closest('[data-qa-check]');
       const skipToggle = event.target.closest('[data-qa-skip]');
@@ -265,10 +274,12 @@
         : skipToggle
           ? { skipped: Boolean(skipToggle.checked), checked: false }
           : { note: noteInput.value || '' };
-      setQaChecklistItemState(activeTaskId, itemId, patch).catch((error) => {
+      const scrollState = consumeQaChecklistScrollState();
+      setQaChecklistItemState(activeTaskId, itemId, patch, { scrollState }).catch((error) => {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
-        renderQaChecklistPanel();
+        renderQaChecklistPanel({ scrollState });
+        scheduleQaChecklistScrollRestore(scrollState);
       });
     });
     taskDiffShell.addEventListener('click', (event) => {
@@ -381,9 +392,19 @@
     resumeReviewerChoicePinnedButton.addEventListener('click', () => { resumeReviewer('pinned'); });
     resumeReviewerChoiceCurrentButton.addEventListener('click', () => { resumeReviewer('current-settings'); });
     resumeReviewLoopButton.addEventListener('click', resumeReviewLoop);
+    cancelTaskButton.addEventListener('click', cancelTask);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
-    targetRepoInput.addEventListener('input', () => { targetRepoInput.dataset.autofilled = 'false'; });
+    targetRepoInput.addEventListener('input', () => {
+      targetRepoInput.dataset.autofilled = 'false';
+      if (!normalizeRepoPath(targetRepoInput.value)) return;
+      targetRepoInput.closest('.field')?.classList.remove('field-attention');
+      clearRequestFieldError('target_repo');
+      if (formError.textContent === translateRequest('draftTargetRepoRequired')) {
+        formError.hidden = true;
+        formError.textContent = '';
+      }
+    });
     targetRepoInput.addEventListener('input', applyRepoDefaults);
     targetRepoInput.addEventListener('input', queueTargetRepoBranchLookup);
     targetRepoInput.addEventListener('change', applyRepoDefaults);

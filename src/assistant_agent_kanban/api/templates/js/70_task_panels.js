@@ -510,6 +510,9 @@
     function updateTaskDeleteState() {
       const state = activeTaskDetail?.metadata?.state;
       const available = Boolean(state);
+      const canCancel = available && state !== 'done' && state !== 'closed';
+      cancelTaskButton.hidden = !canCancel;
+      cancelTaskButton.disabled = !canCancel || taskDetailStale;
       deleteTaskButton.hidden = !available;
       deleteTaskButton.disabled = !available || taskDetailStale;
     }
@@ -740,6 +743,7 @@
 
     function renderTaskOverview(detail) {
       const metadata = detail.metadata;
+      const qaScrollState = activeTaskTab === 'qa-checklist' ? captureQaChecklistScrollState() : null;
       activeTaskDetail = detail;
       setTaskDetailStale(false);
       const latestError = latestVisibleError(metadata.errors);
@@ -771,7 +775,7 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
-      renderQaChecklistPanel();
+      renderQaChecklistPanel({ scrollState: qaScrollState });
       setReviewerQaTranscript(detail.human_review?.reviewer_qa_markdown || '', { preserveScroll: true });
       setHumanReviewEditorContent(detail.human_review?.note_markdown || '');
       updateReviewerQaPanel();
@@ -803,4 +807,5 @@
       });
       updateCompletedGroupControls();
       restoreBoardScrollPositions();
+      scheduleQaChecklistScrollRestore(qaScrollState);
     }

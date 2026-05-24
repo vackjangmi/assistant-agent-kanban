@@ -72,14 +72,18 @@ firstrun_prompts() {
     if [ -z "${CODING_ASSISTANT:-}" ]; then
         _installed=
         _count=0
-        for _tool in opencode codex gemini claude; do
-            if command -v "$_tool" >/dev/null 2>&1; then
+        for _tool in antigravity opencode codex gemini claude; do
+            _binary=$_tool
+            if [ "$_tool" = "antigravity" ]; then
+                _binary=agy
+            fi
+            if command -v "$_binary" >/dev/null 2>&1; then
                 _installed="${_installed:+$_installed }$_tool"
                 _count=$((_count + 1))
             fi
         done
         if [ "$_count" -eq 0 ]; then
-            printf '%s\n' "No coding assistant CLI detected (opencode/codex/gemini/claude). Keeping the default; install one and re-run with --assistant <name> to update."
+            printf '%s\n' "No coding assistant CLI detected (agy/opencode/codex/gemini/claude). Keeping the default; install one and re-run with --assistant <name> to update."
         elif [ "$_count" -eq 1 ]; then
             CODING_ASSISTANT=$_installed
             printf 'Coding assistant: %s (only one detected, selected automatically)\n' "$CODING_ASSISTANT"

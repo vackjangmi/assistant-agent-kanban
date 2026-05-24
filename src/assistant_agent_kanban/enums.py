@@ -34,19 +34,21 @@ STATE_ORDER = [
 ]
 
 ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
-    TaskState.REQUESTS: {TaskState.PLANNING},
-    TaskState.PLANNING: {TaskState.REQUESTS, TaskState.PLAN_APPROVING, TaskState.WAITING_CHECK_PLANS},
-    TaskState.PLAN_APPROVING: {TaskState.WAITING_CHECK_PLANS, TaskState.TODOS},
+    TaskState.REQUESTS: {TaskState.PLANNING, TaskState.CLOSED},
+    TaskState.PLANNING: {TaskState.REQUESTS, TaskState.PLAN_APPROVING, TaskState.WAITING_CHECK_PLANS, TaskState.CLOSED},
+    TaskState.PLAN_APPROVING: {TaskState.WAITING_CHECK_PLANS, TaskState.TODOS, TaskState.CLOSED},
     TaskState.WAITING_CHECK_PLANS: {TaskState.TODOS, TaskState.CLOSED},
-    TaskState.TODOS: {TaskState.IMPLEMENTING},
-    TaskState.IMPLEMENTING: {TaskState.TODOS, TaskState.WAITING_REVIEWS},
-    TaskState.WAITING_REVIEWS: {TaskState.REVIEWING},
-    TaskState.REVIEWING: {TaskState.TODOS, TaskState.WAITING_REVIEWS, TaskState.COMPLETED_REVIEWS},
-    TaskState.COMPLETED_REVIEWS: {TaskState.TODOS, TaskState.HUMAN_VERIFYING},
-    TaskState.HUMAN_VERIFYING: {TaskState.TODOS, TaskState.DONE},
+    TaskState.TODOS: {TaskState.IMPLEMENTING, TaskState.CLOSED},
+    TaskState.IMPLEMENTING: {TaskState.TODOS, TaskState.WAITING_REVIEWS, TaskState.CLOSED},
+    TaskState.WAITING_REVIEWS: {TaskState.REVIEWING, TaskState.CLOSED},
+    TaskState.REVIEWING: {TaskState.TODOS, TaskState.WAITING_REVIEWS, TaskState.COMPLETED_REVIEWS, TaskState.CLOSED},
+    TaskState.COMPLETED_REVIEWS: {TaskState.TODOS, TaskState.HUMAN_VERIFYING, TaskState.CLOSED},
+    TaskState.HUMAN_VERIFYING: {TaskState.TODOS, TaskState.DONE, TaskState.CLOSED},
     TaskState.DONE: set(),
     TaskState.CLOSED: set(),
 }
+
+CANCELABLE_STATES = set(STATE_ORDER) - {TaskState.DONE, TaskState.CLOSED}
 
 MANUAL_TRANSITIONS = {
     (TaskState.WAITING_CHECK_PLANS, TaskState.TODOS),

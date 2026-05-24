@@ -17,6 +17,7 @@ from ..scanner import KanbanScanner
 from ..services.board_service import BoardService
 from ..services.human_verification_service import HumanVerificationService
 from ..services.retrospective_service import RetrospectiveService
+from ..services.task_cancellation_service import TaskCancellationService
 from ..services.task_deletion_service import TaskDeletionService
 from ..services.task_service import TaskService
 from ..transitions import TransitionManager
@@ -89,6 +90,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         self.scanner = scanner
         self.board_service = board_service
         self.verification_service = verification_service
+        self.cancellation_service: Any = None
         self.deletion_service = deletion_service
         self.task_service = task_service
         self.retrospective_service = retrospective_service
@@ -160,6 +162,10 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         await self.cancel_task(task_id)
         await asyncio.to_thread(self.deletion_service.delete, task_id, by=by)
 
+    async def cancel_workflow(self, task_id: str, *, by: str, note: str | None = None) -> TaskContext:
+        await self.cancel_task(task_id)
+        return await asyncio.to_thread(self.cancellation_service.cancel, task_id, by=by, note=note)
+
     def _raise_if_no_supported_assistant(self) -> None:
         if not self.backend_availability:
             return
@@ -171,7 +177,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         )
         raise NoSupportedAssistantError(
             "No supported assistant CLI is available. Install and authenticate at least one of: "
-            "opencode, codex, gemini, claude."
+            "agy, opencode, codex, gemini, claude."
             f" Availability errors: {details}"
         )
 
@@ -370,6 +376,7 @@ def build_runtime(
     committer = CommitWorker(config, scanner, metadata_store, locks, transitions, events, adapter=commit_adapter)
     board_service = BoardService(scanner)
     verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter, adapter_registry=cast(dict[str | AssistantBackend, AssistantAdapter], registry))
+    cancellation_service = TaskCancellationService(config, scanner, locks, transitions, integration_manager)
     deletion_service = TaskDeletionService(config, scanner, locks, integration_manager)
     task_service = TaskService(
         scanner,
@@ -401,6 +408,7 @@ def build_runtime(
         model_registry,
     )
     runtime.adapter_registry = registry
+    runtime.cancellation_service = cancellation_service
     runtime.slack_runtime = SlackRuntime(
         config,
         events,

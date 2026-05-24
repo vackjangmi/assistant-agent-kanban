@@ -97,6 +97,40 @@ def test_api_split_plan_creates_children_and_closes_parent(configured_paths):
     assert all(child.state == TaskState.REQUESTS for child in children)
 
 
+def test_api_cancel_task_moves_to_closed_and_removes_workspace(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "api-cancel-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+    task = next(task for task in scanner.scan() if task.metadata.title == "api-cancel-task")
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    todo = transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    workspace_root = config.workspace.root / todo.metadata.task_id
+    repo_dir = workspace_root / "repo"
+    repo_dir.mkdir(parents=True)
+    (repo_dir / "scratch.txt").write_text("scratch\n")
+    todo.metadata.implementation.workspace = str(repo_dir)
+    metadata_store.save(todo.task_dir, todo.metadata)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{todo.metadata.task_id}/cancel")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "closed"
+    assert payload["closure"]["reason"] == "cancelled_by_human"
+    assert not workspace_root.exists()
+    closed = scanner.find_task(todo.metadata.task_id)
+    assert closed.state == TaskState.CLOSED
+
+
 
 def test_api_resumes_planner_from_requests_retry_gate_with_message(configured_paths):
     config, _, _ = configured_paths
@@ -631,6 +665,28 @@ def test_api_returns_to_todos_on_verification_target_repo_drift(configured_paths
     assert refreshed.metadata.commit.status == "pending"
     assert refreshed.metadata.retry_gate.reason == "verification-target-repo-drift"
 
+
+def test_api_blocks_human_verification_start_when_target_baseline_is_dirty(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    docs_dir = repo_root / "docs"
+    docs_dir.mkdir()
+    dirty_file = docs_dir / "unrelated.md"
+    dirty_file.write_text("existing note\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "docs/unrelated.md"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "add unrelated doc"], check=True, capture_output=True, text=True)
+    dirty_file.unlink()
+
+    create_request_task(config, "human-verify-dirty-target-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-dirty-target-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+
+    assert start.status_code == 409
+    assert start.json()["detail"] == "target repo must be clean before apply"
+    assert scanner.find_task(completed.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
 
 
 def test_api_rejects_retry_when_verification_apply_is_already_active(configured_paths):
