@@ -156,6 +156,17 @@ body[data-theme="dark"] .danger-button {
   border-color: rgba(239, 68, 68, 0.4);
   color: #fff8f6;
 }
+body[data-theme="dark"] .task-cancel-button {
+  background: linear-gradient(135deg, #475569, #334155);
+  border-color: rgba(148, 163, 184, 0.34);
+  color: #f8fafc;
+}
+body[data-theme="dark"] .task-cancel-button:hover,
+body[data-theme="dark"] .task-cancel-button:focus-visible {
+  background: linear-gradient(135deg, #64748b, #475569);
+  border-color: rgba(203, 213, 225, 0.42);
+  color: #ffffff;
+}
 body[data-theme="dark"] .card {
   box-shadow: 0 12px 28px rgba(0,0,0,0.26);
   border: 1px solid rgba(186, 200, 214, 0.08);
@@ -1390,6 +1401,8 @@ body[data-theme="dark"] .settings-slack-advanced-body { border-top-color: rgba(1
 .verification-actions[hidden] { display: none; }
 .task-danger-actions { border: 1px solid rgba(163,58,42,0.24); background: rgba(163,58,42,0.08); padding: 14px; margin-bottom: 14px; }
 .task-danger-actions[hidden] { display: none; }
+.task-cancel-button { background: linear-gradient(135deg, #64748b, #475569); border-color: rgba(71, 85, 105, 0.32); color: #fff; box-shadow: 0 4px 10px rgba(71, 85, 105, 0.12); }
+.task-cancel-button:hover, .task-cancel-button:focus-visible { background: linear-gradient(135deg, #94a3b8, #64748b); border-color: rgba(71, 85, 105, 0.42); color: #fff; }
 .danger-button { background: var(--danger); border-color: var(--danger); color: #fff; }
  .verification-actions textarea { width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border); background: rgba(255,255,255,0.98); padding: 10px 12px; font: inherit; color: var(--text); }
  .log-file-list { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; padding: 5px 4px 0 0; }

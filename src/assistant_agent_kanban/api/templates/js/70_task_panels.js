@@ -511,6 +511,9 @@
       const state = activeTaskDetail?.metadata?.state;
       const available = Boolean(state);
       const canCancel = available && state !== 'done' && state !== 'closed';
+      const canRerequest = available && state === 'closed' && activeTaskDetail?.metadata?.closure?.reason === 'cancelled_by_human';
+      rerequestTaskButton.hidden = !canRerequest;
+      rerequestTaskButton.disabled = !canRerequest || taskDetailStale;
       cancelTaskButton.hidden = !canCancel;
       cancelTaskButton.disabled = !canCancel || taskDetailStale;
       deleteTaskButton.hidden = !available;

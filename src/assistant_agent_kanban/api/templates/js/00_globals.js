@@ -196,6 +196,7 @@
     const resumeReviewerChoiceCurrentButton = document.getElementById('resume-reviewer-choice-current-button');
     const resumeReviewerChoiceStatus = document.getElementById('resume-reviewer-choice-status');
     const resumeReviewLoopButton = document.getElementById('resume-review-loop');
+    const rerequestTaskButton = document.getElementById('rerequest-task');
     const cancelTaskButton = document.getElementById('cancel-task');
     const deleteTaskButton = document.getElementById('delete-task');
     const taskChangedFiles = document.getElementById('task-changed-files');

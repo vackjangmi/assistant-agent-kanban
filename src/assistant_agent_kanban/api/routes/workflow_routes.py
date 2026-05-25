@@ -110,6 +110,17 @@ def register(router: APIRouter) -> None:
         await runtime.rescan_and_publish()
         return moved.metadata
 
+    @router.post("/api/tasks/{task_id}/rerequest")
+    async def rerequest_task(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            moved = await runtime.rerequest_task(task_id, by="human")
+        except (TransitionError, TaskNotFoundError) as exc:
+            status_code = 404 if isinstance(exc, TaskNotFoundError) else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
     @router.post("/api/tasks/{task_id}/start-verification")
     async def start_verification(task_id: str, request: Request):
         runtime = request.app.state.runtime
