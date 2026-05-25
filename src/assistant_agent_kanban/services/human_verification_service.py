@@ -457,6 +457,8 @@ class HumanVerificationService:
                     check=False,
                 )
                 if apply_result.returncode != 0:
+                    subprocess.run(["git", "-C", str(workspace_path), "reset", "--hard"], capture_output=True, text=True, check=False)
+                    subprocess.run(["git", "-C", str(workspace_path), "clean", "-fd"], capture_output=True, text=True, check=False)
                     raise IntegrationError(apply_result.stderr.strip() or "failed to apply reviewed code back into workspace")
         finally:
             patch_path.unlink(missing_ok=True)

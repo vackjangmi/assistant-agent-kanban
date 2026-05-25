@@ -1068,6 +1068,53 @@ def test_implementer_worker_rejects_unrequested_new_file_only_changes(configured
     assert updated.metadata.retry_gate.reason == "implementation-non-code-changes"
 
 
+def test_implementer_worker_allows_new_files_for_empty_non_git_target(configured_paths):
+    config, repo_root, _ = configured_paths
+    empty_target = repo_root.parent / "empty-target"
+    empty_target.mkdir()
+    create_request_task(
+        config,
+        "implement-empty-target-task",
+        target_repo_root=empty_target,
+        body="기능을 구현한다.",
+    )
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("기능을 구현한다.\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def create_new_source(cwd):
+        src_dir = cwd / "src"
+        src_dir.mkdir()
+        (src_dir / "app.py").write_text("print('hello')\n")
+
+    worker = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(implementer_cycle_responses(), side_effect=create_new_source),
+        workspace_manager=WorkspaceManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.WAITING_REVIEWS
+    assert updated.metadata.implementation.last_result == "success"
+    assert updated.metadata.retry_gate.reason is None
+    assert updated.metadata.implementation.target_repo_baseline is not None
+    assert updated.metadata.implementation.target_repo_baseline.head_sha is None
+    assert (updated.task_dir / "WORK-001.md").exists()
+
+
 def test_implementer_worker_rejects_new_file_only_when_new_file_intent_is_negated(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "implement-negated-new-file-task", body="Do not add new files. Update the existing implementation.")

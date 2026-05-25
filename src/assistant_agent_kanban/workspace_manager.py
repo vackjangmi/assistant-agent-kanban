@@ -25,6 +25,7 @@ class WorkspaceManager:
                 self._clone_task_repo(target_repo_root, repo_dir, metadata)
             else:
                 shutil.copytree(target_repo_root, repo_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", ".kanban-agent"))
+                self._initialize_plain_workspace_repo(repo_dir, metadata.target.base_branch, metadata.task_id)
         elif (target_repo_root / ".git").exists():
             self._refresh_git_workspace(repo_dir, target_repo_root, metadata)
         self._apply_overlays(repo_dir, target_repo_root)
@@ -52,6 +53,54 @@ class WorkspaceManager:
         )
         if checkout.returncode != 0:
             raise WorkspaceSyncError(checkout.stderr.strip() or "git checkout failed")
+
+    def _initialize_plain_workspace_repo(self, repo_dir: Path, base_branch: str, task_id: str) -> None:
+        init = subprocess.run(["git", "init", "-b", base_branch, str(repo_dir)], capture_output=True, text=True, check=False)
+        if init.returncode != 0:
+            raise WorkspaceSyncError(init.stderr.strip() or "git init failed")
+        self._ensure_local_git_identity(repo_dir)
+        add_all = subprocess.run(["git", "-C", str(repo_dir), "add", "-A"], capture_output=True, text=True, check=False)
+        if add_all.returncode != 0:
+            raise WorkspaceSyncError(add_all.stderr.strip() or "failed to stage plain workspace baseline")
+        commit = subprocess.run(
+            ["git", "-C", str(repo_dir), "commit", "--allow-empty", "-m", "chore: capture plain target baseline"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if commit.returncode != 0:
+            raise WorkspaceSyncError(commit.stderr.strip() or "failed to commit plain workspace baseline")
+        checkout = subprocess.run(
+            ["git", "-C", str(repo_dir), "checkout", "-B", f"task/{task_id.lower()}", base_branch],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if checkout.returncode != 0:
+            raise WorkspaceSyncError(checkout.stderr.strip() or "git checkout failed")
+
+    def _ensure_local_git_identity(self, repo_dir: Path) -> None:
+        defaults = {
+            "user.name": "Assistant Agent Kanban",
+            "user.email": "assistant-agent-kanban@localhost",
+        }
+        for key, value in defaults.items():
+            existing = subprocess.run(
+                ["git", "-C", str(repo_dir), "config", "--get", key],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if existing.returncode == 0 and existing.stdout.strip():
+                continue
+            configured = subprocess.run(
+                ["git", "-C", str(repo_dir), "config", key, value],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if configured.returncode != 0:
+                raise WorkspaceSyncError(configured.stderr.strip() or f"failed to configure {key}")
 
     def _refresh_git_workspace(self, repo_dir: Path, target_repo_root: Path, metadata: TaskMetadata) -> None:
         workspace_dir = repo_dir.parent

@@ -205,6 +205,7 @@ class IntegrationInfo(BaseModel):
     review_branch: str | None = None
     final_branch_summary: str | None = None
     final_branch: str | None = None
+    initialized_target_repo: bool = False
 
 
 class CommitInfo(BaseModel):

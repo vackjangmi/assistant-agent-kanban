@@ -120,7 +120,7 @@ class ImplementerWorker(WorkerBase):
                     return True
                 changes = self.workspace_changes(workspace_repo)
                 has_changes = bool(changes)
-                has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, changes)
+                has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, implementing.metadata, changes)
                 has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
                 success = result.ok and has_changes and has_substantive_changes and not has_local_commits
                 implementing.metadata.implementation.iteration = implementing.metadata.cycle
@@ -252,7 +252,7 @@ class ImplementerWorker(WorkerBase):
                 return True
             changes = self.workspace_changes(workspace_repo)
             has_changes = bool(changes)
-            has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, changes)
+            has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, implementing.metadata, changes)
             has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
             success = live_result.ok and has_changes and has_substantive_changes and not has_local_commits
             implementing.metadata.implementation.iteration = implementing.metadata.cycle
@@ -443,13 +443,19 @@ class ImplementerWorker(WorkerBase):
             raise AdapterRunError(f"{backend} backend is unavailable for implementer: {availability_error}")
         return adapter
 
-    def _has_allowed_implementation_changes(self, task_dir: Path, changes) -> bool:
+    def _has_allowed_implementation_changes(self, task_dir: Path, metadata, changes) -> bool:
         substantive_changes = [change for change in changes if not self._is_non_implementation_artifact(change.path)]
         if not substantive_changes:
             return self._task_allows_docs_only_changes(task_dir)
         if all(change.is_new_file for change in substantive_changes):
+            if self._target_started_without_git_baseline(metadata):
+                return True
             return self._task_allows_new_files(task_dir)
         return True
+
+    def _target_started_without_git_baseline(self, metadata) -> bool:
+        baseline = metadata.implementation.target_repo_baseline
+        return baseline is not None and baseline.head_sha is None
 
     def _is_non_implementation_artifact(self, path: Path) -> bool:
         normalized = path.as_posix().strip("/")

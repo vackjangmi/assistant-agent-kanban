@@ -758,6 +758,65 @@ def test_api_rejects_retry_when_verification_apply_is_already_active(configured_
     assert "verification apply has already succeeded" in retry.json()["detail"]
 
 
+def test_api_supports_human_verification_start_into_empty_non_git_target(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    empty_target = config.kanban_root.parent / "empty-target"
+    empty_target.mkdir()
+    create_request_task(
+        config,
+        "human-verify-empty-target-task",
+        target_repo_root=empty_target,
+        body="Create a new file named app.txt.",
+    )
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-empty-target-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+
+    assert start.status_code == 200
+    payload = start.json()
+    assert payload["state"] == TaskState.HUMAN_VERIFYING.value
+    assert payload["integration"]["initialized_target_repo"] is True
+    assert (empty_target / ".git").exists()
+    assert (empty_target / "app.txt").read_text() == "review me\n"
+    branch = subprocess.run(["git", "-C", str(empty_target), "branch", "--show-current"], check=True, capture_output=True, text=True)
+    assert branch.stdout.strip() == f"review/{completed.metadata.task_id.lower()}"
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.patch_path
+    assert "new file mode" in open(refreshed.metadata.integration.patch_path).read()
+
+
+def test_api_reject_restores_empty_non_git_target(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    empty_target = config.kanban_root.parent / "empty-target"
+    empty_target.mkdir()
+    create_request_task(
+        config,
+        "human-verify-empty-target-reject-task",
+        target_repo_root=empty_target,
+        body="Create a new file named app.txt.",
+    )
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-empty-target-reject-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        assert start.status_code == 200
+        reject = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/reject-verification",
+            json={"note": "Need another pass."},
+        )
+
+    assert reject.status_code == 200
+    assert reject.json()["state"] == TaskState.TODOS.value
+    assert list(empty_target.iterdir()) == []
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.initialized_target_repo is False
+
+
 
 def test_api_blocks_reject_without_note_or_line_comment(configured_paths):
     config, _, _ = configured_paths
