@@ -1405,6 +1405,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'id="task-panel-timeline"' not in response.text
     assert "setTaskTab('timeline')" not in response.text
     assert "const taskTabTimeline = document.getElementById('task-tab-timeline');" not in response.text
+    assert 'id="rerequest-task" class="accent-button"' in response.text
+    assert 'id="cancel-task" class="task-cancel-button"' in response.text
+    assert 'id="delete-task" class="danger-button"' in response.text
+    assert "Re-request task" in response.text
+    assert "/api/tasks/${activeTaskId}/rerequest" in response.text
+    assert "moved directly to planning" in response.text
     assert "Delete task" in response.text
     assert "This stops any running task work and removes managed artifacts" in response.text
     assert "method: 'DELETE'" in response.text

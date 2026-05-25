@@ -131,6 +131,59 @@ def test_api_cancel_task_moves_to_closed_and_removes_workspace(configured_paths)
     assert closed.state == TaskState.CLOSED
 
 
+def test_api_rerequests_cancelled_task_from_original_request(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    task_dir = create_request_task(config, "api-rerequest-task", body="Implement again.\n\n![shot](_attachments/shot.png)")
+    attachments_dir = task_dir / "_attachments"
+    attachments_dir.mkdir()
+    (attachments_dir / "shot.png").write_bytes(b"png")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    scanner = runtime.task_service.scanner
+    task = next(task for task in scanner.scan() if task.metadata.title == "api-rerequest-task")
+    closed = runtime.cancellation_service.cancel(task.metadata.task_id, by="human")
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{closed.metadata.task_id}/rerequest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_id"] != closed.metadata.task_id
+    assert payload["title"] == "api-rerequest-task"
+    assert payload["state"] == "planning"
+    rerequested = scanner.find_task(payload["task_id"])
+    assert rerequested.state == TaskState.PLANNING
+    assert (rerequested.task_dir / "REQUEST.md").read_text() == (closed.task_dir / "REQUEST.md").read_text()
+    assert (rerequested.task_dir / "_attachments" / "shot.png").read_bytes() == b"png"
+    assert scanner.find_task(closed.metadata.task_id).state == TaskState.CLOSED
+
+
+def test_api_rerequest_rejects_non_cancelled_closed_task(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "api-rerequest-blocked-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    runtime = app.state.runtime
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+    locks = runtime.task_service.locks
+    metadata_store = runtime.task_service.metadata_store
+    task = next(task for task in scanner.scan() if task.metadata.title == "api-rerequest-blocked-task")
+    with locks.acquire(task.task_dir, task.metadata, owner="human", run_id="manual-close"):
+        task.metadata.closure.reason = "other"
+        task.metadata.closure.closed_by = "human"
+        task.metadata.closure.closed_at = utc_now()
+        metadata_store.save(task.task_dir, task.metadata)
+        closed = transitions.move(task, TaskState.CLOSED, by="human")
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/tasks/{closed.metadata.task_id}/rerequest")
+
+    assert response.status_code == 409
+    assert "human-cancelled" in response.json()["detail"]
+
+
 
 def test_api_resumes_planner_from_requests_retry_gate_with_message(configured_paths):
     config, _, _ = configured_paths

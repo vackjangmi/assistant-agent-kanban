@@ -19,6 +19,7 @@ from ..services.human_verification_service import HumanVerificationService
 from ..services.retrospective_service import RetrospectiveService
 from ..services.task_cancellation_service import TaskCancellationService
 from ..services.task_deletion_service import TaskDeletionService
+from ..services.task_rerequest_service import TaskRerequestService
 from ..services.task_service import TaskService
 from ..transitions import TransitionManager
 from ..assistant_adapter import AssistantAdapter, build_backend_manager
@@ -80,6 +81,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         recovery: RecoveryProvider,
         events: EventBus,
         model_registry: ModelRegistryProvider,
+        rerequest_service: Any | None = None,
     ) -> None:
         self.config = config
         self.planner = planner
@@ -94,6 +96,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         self.deletion_service = deletion_service
         self.task_service = task_service
         self.retrospective_service = retrospective_service
+        self.rerequest_service: Any = rerequest_service
         self.recovery = recovery
         self.events = events
         self.model_registry = model_registry
@@ -165,6 +168,9 @@ class RuntimeSupervisor(_SlackHandlersMixin):
     async def cancel_workflow(self, task_id: str, *, by: str, note: str | None = None) -> TaskContext:
         await self.cancel_task(task_id)
         return await asyncio.to_thread(self.cancellation_service.cancel, task_id, by=by, note=note)
+
+    async def rerequest_task(self, task_id: str, *, by: str) -> TaskContext:
+        return await asyncio.to_thread(self.rerequest_service.rerequest, task_id, by=by)
 
     def _raise_if_no_supported_assistant(self) -> None:
         if not self.backend_availability:
@@ -378,6 +384,7 @@ def build_runtime(
     verification_service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, integration_manager, commit_manager, branch_summary_adapter=branch_summary_adapter, adapter_registry=cast(dict[str | AssistantBackend, AssistantAdapter], registry))
     cancellation_service = TaskCancellationService(config, scanner, locks, transitions, integration_manager)
     deletion_service = TaskDeletionService(config, scanner, locks, integration_manager)
+    rerequest_service = TaskRerequestService(config, scanner, metadata_store, locks, transitions)
     task_service = TaskService(
         scanner,
         config.runs_dir,
@@ -406,6 +413,7 @@ def build_runtime(
         recovery,
         events,
         model_registry,
+        rerequest_service=rerequest_service,
     )
     runtime.adapter_registry = registry
     runtime.cancellation_service = cancellation_service

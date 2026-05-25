@@ -139,6 +139,7 @@
       resumeReviewLoopButton.textContent = translateTask('resumeReviewLoop');
       approvePlanButton.textContent = translateTask('approvePlan');
       splitPlanButton.textContent = translateTask('splitPlan');
+      rerequestTaskButton.textContent = translateTask('rerequestTask');
       cancelTaskButton.textContent = translateTask('cancelTask');
       deleteTaskButton.textContent = translateTask('deleteTask');
       closeTaskModalButton.textContent = translateTask('close');

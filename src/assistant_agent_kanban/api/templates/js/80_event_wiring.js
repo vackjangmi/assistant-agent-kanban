@@ -392,6 +392,7 @@
     resumeReviewerChoicePinnedButton.addEventListener('click', () => { resumeReviewer('pinned'); });
     resumeReviewerChoiceCurrentButton.addEventListener('click', () => { resumeReviewer('current-settings'); });
     resumeReviewLoopButton.addEventListener('click', resumeReviewLoop);
+    rerequestTaskButton.addEventListener('click', rerequestTask);
     cancelTaskButton.addEventListener('click', cancelTask);
     deleteTaskButton.addEventListener('click', deleteTask);
     ['title', 'target_repo', 'base_branch'].forEach((name) => { requestForm.elements[name].addEventListener('blur', validateForm); });
