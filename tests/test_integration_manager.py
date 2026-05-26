@@ -65,24 +65,60 @@ def test_push_review_branch_uses_token_without_git_credential_fallback(monkeypat
     assert metadata.integration.remote_push_error == "Authentication failed for [redacted]"
 
 
-def test_push_review_branch_rejects_ssh_remote_when_token_is_provided(monkeypatch, tmp_path):
+def test_push_review_branch_converts_ssh_remote_when_token_is_provided(monkeypatch, tmp_path):
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.review_branch_remote.enabled = True
+    config.review_branch_remote.require_push_success = True
     metadata = _metadata_with_review_branch(config.repo_root)
+    calls: list[dict[str, object]] = []
 
     def fake_run(command, *, capture_output, text, check, env=None):
+        calls.append({"command": command, "env": env})
         if command[3:] == ["remote", "get-url", "origin"]:
             return subprocess.CompletedProcess(command, 0, stdout="git@git.example.com:group/repo.git\n", stderr="")
+        if command[3] == "push":
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
         raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(integration_manager_module.subprocess, "run", fake_run)
 
-    with pytest.raises(IntegrationError, match="HTTP\\(S\\) remote URL"):
-        IntegrationManager(config).push_review_branch(
-            metadata,
-            git_token="token",
-            git_token_username="git-user",
-        )
+    IntegrationManager(config).push_review_branch(
+        metadata,
+        git_token="token",
+        git_token_username="git-user",
+    )
+
+    push_call = next(call for call in calls if call["command"][3] == "push")
+    push_command = push_call["command"]
+    assert push_command[5] == "https://git-user:token@git.example.com/group/repo.git"
+    assert metadata.integration.remote_name == "origin"
+    assert metadata.integration.remote_review_branch == "review/abc123"
+
+
+def test_push_review_branch_converts_ssh_scheme_remote_when_token_is_provided(monkeypatch, tmp_path):
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.review_branch_remote.enabled = True
+    metadata = _metadata_with_review_branch(config.repo_root)
+    calls: list[list[str]] = []
+
+    def fake_run(command, *, capture_output, text, check, env=None):
+        calls.append(command)
+        if command[3:] == ["remote", "get-url", "origin"]:
+            return subprocess.CompletedProcess(command, 0, stdout="ssh://git@git.example.com/group/repo.git\n", stderr="")
+        if command[3] == "push":
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(integration_manager_module.subprocess, "run", fake_run)
+
+    IntegrationManager(config).push_review_branch(
+        metadata,
+        git_token="token",
+        git_token_username="git-user",
+    )
+
+    push_command = next(command for command in calls if command[3] == "push")
+    assert push_command[5] == "https://git-user:token@git.example.com/group/repo.git"
 
 
 def test_extracts_merge_request_url_from_push_output(tmp_path):

@@ -872,17 +872,35 @@ class IntegrationManager:
         if remote_url.returncode != 0:
             raise IntegrationError(remote_url.stderr.strip() or f"failed to resolve git remote '{remote_name}'")
         url = remote_url.stdout.strip()
+        url = self._https_push_url_for_token(url) or url
         split = urlsplit(url)
         if split.scheme not in {"http", "https"} or not split.netloc:
             if self._looks_like_remote_ssh_url(url):
                 raise IntegrationError(
-                    f"Git token can only be used with an HTTP(S) remote URL for '{remote_name}'"
+                    f"Git token can only be used with an HTTP(S) remote URL for '{remote_name}', and the SSH URL could not be converted"
                 )
             return remote_name
         username = quote((git_token_username or "x-access-token").strip() or "x-access-token", safe="")
         password = quote(git_token, safe="")
         netloc = split.netloc.split("@", 1)[-1]
         return urlunsplit((split.scheme, f"{username}:{password}@{netloc}", split.path, split.query, split.fragment))
+
+    def _https_push_url_for_token(self, url: str) -> str | None:
+        split = urlsplit(url)
+        if split.scheme in {"http", "https"} and split.netloc:
+            netloc = split.netloc.split("@", 1)[-1]
+            return urlunsplit((split.scheme, netloc, split.path, split.query, split.fragment))
+        if split.scheme in {"ssh", "git+ssh"} and split.hostname and split.path:
+            path = split.path.lstrip("/")
+            if path:
+                return f"https://{split.hostname}/{path}"
+        scp_match = re.match(r"^(?:[^@/\s]+@)?([^:/\s]+):(.+)$", url)
+        if scp_match:
+            host = scp_match.group(1)
+            path = scp_match.group(2).lstrip("/")
+            if host and path:
+                return f"https://{host}/{path}"
+        return None
 
     def _available_remote_branch(self, repo_root: Path, repository: str, preferred_branch: str, *, env: dict[str, str] | None) -> str:
         if not self._remote_branch_exists(repo_root, repository, preferred_branch, env=env):
