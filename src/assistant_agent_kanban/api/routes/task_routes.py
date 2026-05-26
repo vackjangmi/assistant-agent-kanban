@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from ...exceptions import IntegrationError, TaskNotFoundError, TransitionError
+from ._helpers import _require_task_actor
 from ._payloads import (
     CreateLineCommentPayload,
     UpdateChangedFileViewedPayload,
@@ -43,6 +44,7 @@ def register(router: APIRouter) -> None:
     @router.post("/api/tasks/{task_id}/changed-files/{changed_file_id}/viewed")
     async def update_changed_file_viewed(task_id: str, changed_file_id: str, payload: UpdateChangedFileViewedPayload, request: Request):
         runtime = request.app.state.runtime
+        _require_task_actor(request, task_id)
         try:
             summary = await asyncio.to_thread(
                 runtime.task_service.set_changed_file_viewed,
@@ -60,6 +62,7 @@ def register(router: APIRouter) -> None:
     @router.post("/api/tasks/{task_id}/human-qa/{item_id}")
     async def update_human_qa_item(task_id: str, item_id: str, payload: UpdateHumanQaChecklistItemPayload, request: Request):
         runtime = request.app.state.runtime
+        _require_task_actor(request, task_id)
         try:
             item = await asyncio.to_thread(
                 runtime.task_service.set_human_qa_item_state,
@@ -79,6 +82,7 @@ def register(router: APIRouter) -> None:
     @router.post("/api/tasks/{task_id}/changed-files/{changed_file_id}/comments")
     async def create_line_comment(task_id: str, changed_file_id: str, payload: CreateLineCommentPayload, request: Request):
         runtime = request.app.state.runtime
+        _require_task_actor(request, task_id)
         try:
             await asyncio.to_thread(
                 runtime.verification_service.add_line_comment,
@@ -101,6 +105,7 @@ def register(router: APIRouter) -> None:
     @router.delete("/api/tasks/{task_id}/changed-files/{changed_file_id}/comments/{comment_id}")
     async def delete_line_comment(task_id: str, changed_file_id: str, comment_id: str, request: Request):
         runtime = request.app.state.runtime
+        _require_task_actor(request, task_id)
         try:
             await asyncio.to_thread(
                 runtime.verification_service.delete_line_comment,
@@ -127,6 +132,7 @@ def register(router: APIRouter) -> None:
     @router.put("/api/tasks/{task_id}/artifacts/{filename}")
     async def update_task_markdown_artifact(task_id: str, filename: str, payload: UpdateMarkdownPayload, request: Request):
         runtime = request.app.state.runtime
+        _require_task_actor(request, task_id)
         try:
             runtime.task_service.update_markdown_artifact(task_id, filename, payload.content, by="human")
         except (TaskNotFoundError, TransitionError) as exc:
@@ -138,6 +144,7 @@ def register(router: APIRouter) -> None:
     @router.post("/api/tasks/{task_id}/attachments")
     async def upload_task_attachment(task_id: str, request: Request, artifact: str, file: UploadFile = File(...)):
         runtime = request.app.state.runtime
+        _require_task_actor(request, task_id)
         data = await file.read()
         try:
             saved = runtime.task_service.save_attachment(task_id, artifact, file.filename or "image", file.content_type, data)

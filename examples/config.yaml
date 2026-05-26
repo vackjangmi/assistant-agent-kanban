@@ -129,3 +129,17 @@ slack:
   default_channel: null
   default_channel_display: null
   app_mention_enabled: false
+
+auth:
+  enabled: false
+  database_path: null
+  encryption_key_path: null
+  session_cookie_name: assistant_agent_kanban_session
+  session_ttl_seconds: 1209600
+  require_admin_for_common_settings: true
+
+review_branch_remote:
+  enabled: false
+  remote_name: origin
+  require_push_success: true
+  delete_on_cleanup: true

@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .config import AppConfig
-from .request_drafting import RequestDraftPayload, RequestDraftTranscriptEntry
+from .request_drafting import ALLOWED_DRAFT_UPDATE_FIELDS, RequestDraftPayload, RequestDraftTranscriptEntry
 
 
 class StoredRequestDraftTranscriptEntry(BaseModel):
@@ -22,6 +22,8 @@ class StoredRequestDraft(BaseModel):
     draft_id: str
     created_at: str = Field(default_factory=lambda: utc_now().isoformat())
     updated_at: str = Field(default_factory=lambda: utc_now().isoformat())
+    created_by_user_id: str = ""
+    created_by_username: str = ""
     title: str = ""
     goal: str = ""
     background: str = ""
@@ -132,7 +134,7 @@ class RequestDraftStore:
         )
 
     def load(self, draft_id: str) -> StoredRequestDraft:
-        return StoredRequestDraft.model_validate_json(self._path(draft_id).read_text())
+        return _with_missing_transcript_field_updates(StoredRequestDraft.model_validate_json(self._path(draft_id).read_text()))
 
     def save(self, draft: StoredRequestDraft) -> StoredRequestDraft:
         path = self._path(draft.draft_id)
@@ -147,7 +149,7 @@ class RequestDraftStore:
         drafts: list[StoredRequestDraft] = []
         for path in sorted(self._config.request_drafts_dir.glob("*.json")):
             try:
-                drafts.append(StoredRequestDraft.model_validate_json(path.read_text()))
+                drafts.append(_with_missing_transcript_field_updates(StoredRequestDraft.model_validate_json(path.read_text())))
             except Exception:
                 continue
         return sorted(drafts, key=lambda draft: draft.updated_at, reverse=True)
@@ -224,6 +226,37 @@ def _merge_draft(draft: StoredRequestDraft, data: dict[str, object]) -> StoredRe
         **draft.model_dump(mode="json"),
         **_normalize_update_data(data),
     })
+
+
+def _with_missing_transcript_field_updates(draft: StoredRequestDraft) -> StoredRequestDraft:
+    updates: dict[str, str] = {}
+    for entry in draft.transcript:
+        if entry.role != "assistant" or not entry.field_updates:
+            continue
+        for field_name, value in entry.field_updates.items():
+            if field_name not in ALLOWED_DRAFT_UPDATE_FIELDS:
+                continue
+            normalized = _normalize_field_update_value(value)
+            if normalized:
+                updates[field_name] = normalized
+    if not updates:
+        return draft
+    data = draft.model_dump(mode="json")
+    changed = False
+    for field_name, value in updates.items():
+        if str(data.get(field_name) or "").strip():
+            continue
+        data[field_name] = value
+        changed = True
+    if not changed:
+        return draft
+    return StoredRequestDraft.model_validate(data)
+
+
+def _normalize_field_update_value(value: str | list[str]) -> str:
+    if isinstance(value, list):
+        return "\n".join(item.strip() for item in value if item.strip())
+    return str(value).strip()
 
 
 def utc_now():

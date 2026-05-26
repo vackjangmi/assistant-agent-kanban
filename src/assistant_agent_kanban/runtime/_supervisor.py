@@ -350,11 +350,12 @@ def build_runtime(
     commit_adapter: AssistantAdapter | None = None,
     branch_summary_adapter: AssistantAdapter | None = None,
     adapter_registry: dict[AssistantBackend, AssistantAdapter] | None = None,
+    user_settings_store: Any | None = None,
 ):
     metadata_store = MetadataStore()
     scanner = KanbanScanner(config, metadata_store)
     locks = TaskLockManager(config, metadata_store)
-    slack_notifier = SlackMilestoneNotifier(config, metadata_store)
+    slack_notifier = SlackMilestoneNotifier(config, metadata_store, settings_store=user_settings_store)
     transitions = TransitionManager(config, metadata_store, scanner, locks, slack_notifier=slack_notifier)
     events = EventBus()
     from ..workspace_manager import WorkspaceManager

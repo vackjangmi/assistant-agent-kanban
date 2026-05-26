@@ -17,10 +17,12 @@
   <header>
     <h1>Assistant Agent Kanban</h1>
     <div class="header-actions">
+      <span id="auth-user-label" class="muted" hidden></span>
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Settings</button>
       <button id="open-onboarding" class="ghost-button">Guide</button>
       <button id="refresh">Refresh</button>
+      <button id="logout-button" class="ghost-button" hidden>Logout</button>
     </div>
   </header>
   <section id="request-modal" class="modal" hidden aria-hidden="true">
@@ -192,8 +194,12 @@
       </div>
       <div class="task-tabs settings-tabs" role="tablist">
         <button type="button" id="settings-tab-general" class="active" role="tab" aria-selected="true">General</button>
+        <button type="button" id="settings-tab-git" role="tab" aria-selected="false" hidden>Git credentials</button>
+        <button type="button" id="settings-tab-repositories" role="tab" aria-selected="false" hidden>Repositories</button>
         <button type="button" id="settings-tab-roles" role="tab" aria-selected="false">Runtime Roles</button>
-        <button type="button" id="settings-tab-slack" role="tab" aria-selected="false">Slack Integration</button>
+        <button type="button" id="settings-tab-slack" role="tab" aria-selected="false">Slack connection settings</button>
+        <button type="button" id="settings-tab-slack-channel" role="tab" aria-selected="false">Slack channel settings</button>
+        <button type="button" id="settings-tab-users" role="tab" aria-selected="false" hidden>Users</button>
       </div>
       <form id="settings-form" class="modal-scroll-form">
         <div class="modal-scroll-body">
@@ -201,7 +207,7 @@
             <section class="settings-section">
               <div class="settings-section-head">
                 <strong id="settings-basics-heading">Basics</strong>
-                <span id="settings-basics-description">Language, theme, repository defaults, and local Slack settings.</span>
+                <span id="settings-basics-description">Language, theme, and user-specific local settings.</span>
               </div>
               <div class="settings-grid-basic">
                 <div class="settings-grid-basic-top">
@@ -224,6 +230,56 @@
                     <small id="settings-theme-note">Light mode is the default.</small>
                   </label>
                 </div>
+              </div>
+            </section>
+
+            <section class="settings-section settings-help-section" style="margin-top: 24px; border-top: 1px solid rgba(99, 102, 241, 0.1); padding-top: 24px;">
+              <div class="settings-section-head">
+                <strong id="settings-help-heading">Help & Guides</strong>
+                <span id="settings-help-description">Access onboarding tutorials and interactive walkthroughs.</span>
+              </div>
+              <div class="settings-grid-basic">
+                <div class="settings-card" style="grid-column: span 2; display: flex; flex-direction: column; gap: 8px;">
+                  <strong id="settings-help-card-title">Onboarding Tour</strong>
+                  <span id="settings-help-card-desc">Re-run the interactive setup walkthrough to learn about models, settings, and Slack integration.</span>
+                  <button type="button" id="restart-onboarding-btn" class="accent-button" style="margin-top: 8px; width: fit-content; align-self: start; padding: 8px 16px; border-radius: 8px; font-weight: 600;">Start Onboarding Tour</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div id="settings-panel-git" class="settings-panel" hidden>
+            <section class="settings-section settings-git-section">
+              <div class="settings-section-head">
+                <strong id="settings-git-heading">Git Credentials</strong>
+                <span id="settings-git-description">Configure Git authentication for remote HTTPS operations.</span>
+              </div>
+              <div class="settings-grid-basic">
+                <div class="settings-grid-basic-bottom" style="grid-template-columns: repeat(2, minmax(260px, 1fr));">
+                  <label class="settings-card" for="git_token_username">
+                    <strong id="settings-git-token-username-title">Git HTTP username</strong>
+                    <span id="settings-git-token-username-description">HTTP Basic username sent together with the token.</span>
+                    <input id="git_token_username" name="git_token_username" placeholder="x-access-token" autocomplete="off" spellcheck="false">
+                    <small id="settings-git-token-username-note">Leave empty to use <code>x-access-token</code>.</small>
+                  </label>
+                  <label class="settings-card" for="git_token">
+                    <strong id="settings-git-token-title">Git token</strong>
+                    <span id="settings-git-token-description">Stored securely on this local server.</span>
+                    <input id="git_token" name="git_token" type="password" placeholder="ghp_..." autocomplete="off" spellcheck="false">
+                    <small id="git-token-status">No user Git token configured.</small>
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div id="settings-panel-repositories" class="settings-panel" hidden>
+            <section class="settings-section">
+              <div class="settings-section-head">
+                <strong id="settings-repositories-heading">Repositories</strong>
+                <span id="settings-repositories-description">Admin-only repository discovery settings used by request project suggestions.</span>
+              </div>
+              <div class="settings-grid-basic">
                 <div class="settings-grid-basic-bottom">
                   <label class="settings-card" for="repo_discovery_root">
                     <strong id="settings-repo-root-title">Repo discovery root</strong>
@@ -243,135 +299,202 @@
                 </div>
               </div>
             </section>
+          </div>
 
-            <section class="settings-section settings-help-section" style="margin-top: 24px; border-top: 1px solid rgba(99, 102, 241, 0.1); padding-top: 24px;">
+          <div id="settings-panel-users" class="settings-panel" hidden>
+            <section class="settings-section">
               <div class="settings-section-head">
-                <strong id="settings-help-heading">Help & Guides</strong>
-                <span id="settings-help-description">Access onboarding tutorials and interactive walkthroughs.</span>
+                <strong id="settings-users-heading">Users</strong>
+                <span id="settings-users-description">Create local login accounts for this kanban server.</span>
               </div>
-              <div class="settings-grid-basic">
-                <div class="settings-card" style="grid-column: span 2; display: flex; flex-direction: column; gap: 8px;">
-                  <strong id="settings-help-card-title">Onboarding Tour</strong>
-                  <span id="settings-help-card-desc">Re-run the interactive setup walkthrough to learn about models, settings, and Slack integration.</span>
-                  <button type="button" id="restart-onboarding-btn" class="accent-button" style="margin-top: 8px; width: fit-content; align-self: start; padding: 8px 16px; border-radius: 8px; font-weight: 600;">Start Onboarding Tour</button>
+              <div class="settings-user-container">
+                <div class="settings-card settings-user-create-card">
+                  <strong id="settings-new-user-heading" class="settings-card-title-main">Add New User</strong>
+                  <div class="settings-user-fields-grid">
+                    <div class="settings-user-field">
+                      <label id="settings-new-user-title" for="new-user-username">New user</label>
+                      <input id="new-user-username" type="text" autocomplete="off" spellcheck="false" placeholder="Username">
+                      <span id="settings-new-user-description" class="field-help-text">Username is normalized to lowercase.</span>
+                    </div>
+                    <div class="settings-user-field">
+                      <label id="settings-new-user-password-title" for="new-user-password">Password</label>
+                      <input id="new-user-password" type="password" autocomplete="new-password" placeholder="••••••••">
+                      <span id="settings-new-user-password-description" class="field-help-text">Stored as a salted hash.</span>
+                    </div>
+                  </div>
+                  <div class="settings-user-actions-row">
+                    <div class="settings-toggle compact-toggle">
+                      <div class="settings-toggle-copy">
+                        <label id="settings-new-user-admin-label" for="new-user-is-admin">Admin</label>
+                        <span id="settings-new-user-admin-description">Admins can edit common settings and create users.</span>
+                      </div>
+                      <label class="settings-switch" for="new-user-is-admin">
+                        <input id="new-user-is-admin" type="checkbox" role="switch">
+                        <span class="settings-switch-ui" aria-hidden="true"></span>
+                      </label>
+                    </div>
+                    <div class="settings-user-submit-area">
+                      <button type="button" id="create-user-button" class="primary">Create user</button>
+                    </div>
+                  </div>
+                  <div id="create-user-status" class="settings-status" hidden></div>
+                </div>
+                <div class="settings-card settings-user-list-card">
+                  <strong id="settings-user-list-title">Existing users</strong>
+                  <span id="settings-user-list-description" class="settings-card-subtitle">Accounts that can sign in to this local kanban database.</span>
+                  <div id="settings-user-list" class="settings-user-grid"></div>
+                  <div class="settings-user-danger-zone">
+                    <div>
+                      <strong id="settings-delete-all-users-title">Disable login mode</strong>
+                      <span id="settings-delete-all-users-description">Delete every user account and return this server to localhost-only admin mode.</span>
+                    </div>
+                    <button type="button" id="delete-all-users-button" class="settings-user-delete-all">Delete all users</button>
+                  </div>
                 </div>
               </div>
             </section>
           </div>
 
           <div id="settings-panel-slack" class="settings-panel" hidden>
-            <section class="settings-section">
-              <div class="settings-card settings-card-span-2">
-                <strong id="settings-slack-title">Slack</strong>
-                <span id="settings-slack-description">Local Slack app defaults for notifications and interactions.</span>
-                <div class="settings-slack-shell">
-                  <section class="settings-slack-section" aria-labelledby="settings-slack-basics-title">
-                    <div class="settings-slack-section-head">
-                      <strong id="settings-slack-basics-title">Basics</strong>
-                      <span id="settings-slack-basics-description">Turn Slack on, add a bot token, choose the default channel, then run one test to activate it.</span>
+            <div class="settings-slack-shell-premium">
+              <section id="settings-slack-admin-section" class="settings-section settings-slack-panel-section" hidden>
+                <div class="settings-section-head">
+                  <strong id="settings-slack-auth-title">Slack connection settings</strong>
+                  <span id="settings-slack-auth-description">Turn Slack on, set the bot display name, and manage shared app tokens.</span>
+                </div>
+                <div class="settings-slack-credentials-card settings-slack-connection-card">
+                  <div class="settings-slack-enable-row">
+                    <div class="settings-slack-enable-copy">
+                      <label id="settings-slack-enabled-label" for="slack_enabled">Slack Enabled</label>
+                      <span>Activate background notifications and automated workflow updates.</span>
                     </div>
-                    <div class="settings-slack-basic-grid">
-                      <div class="settings-slack-basic-main">
-                        <div class="settings-toggle-group settings-toggle-group-single">
-                          <div class="settings-toggle">
-                            <div class="settings-toggle-copy">
-                              <label id="settings-slack-enabled-label" for="slack_enabled">Slack Enabled</label>
+                    <label class="settings-switch" for="slack_enabled">
+                      <input id="slack_enabled" name="slack_enabled" type="checkbox" role="switch">
+                      <span class="settings-switch-ui" aria-hidden="true"></span>
+                    </label>
+                  </div>
+
+                  <div class="settings-slack-card-divider"></div>
+
+                  <div class="settings-slack-credentials-grid">
+                    <div class="settings-field-premium">
+                      <label id="settings-slack-bot-name-label" for="slack_bot_name">Bot display name</label>
+                      <input id="slack_bot_name" name="slack_bot_name" type="text" placeholder="@kanban-bot" autocomplete="off" spellcheck="false">
+                      <small id="settings-slack-bot-name-note" class="field-help-text">Shown to users so they know which bot to invite to personal channels.</small>
+                    </div>
+
+                    <div class="settings-field-premium">
+                      <label id="settings-slack-bot-token-label" for="slack_bot_token">Bot token</label>
+                      <div class="settings-input-wrapper-premium">
+                        <input id="slack_bot_token" name="slack_bot_token" type="text" placeholder="xoxb-..." autocomplete="off" spellcheck="false">
+                        <button type="button" id="clear-slack-bot-token" class="clear-token-btn-premium">Clear</button>
+                      </div>
+                      <small id="settings-slack-bot-token-status" class="token-status-badge">Not configured.</small>
+                    </div>
+                  </div>
+
+                  <div id="settings-slack-advanced" class="settings-slack-advanced-premium">
+                    <div class="settings-slack-advanced-summary-premium">
+                      <span class="settings-slack-advanced-summary-copy-premium">
+                        <span id="settings-slack-advanced-title">Advanced inbound controls</span>
+                        <small id="settings-slack-advanced-description">Socket Mode, app mentions, receive-test tools, and listener diagnostics.</small>
+                      </span>
+                      <span id="settings-slack-listener-status" class="status-listener-badge">Listener idle</span>
+                    </div>
+
+                    <div class="settings-slack-advanced-body-premium">
+                      <div class="settings-slack-advanced-grid-premium">
+                        <div class="settings-slack-toggles-container">
+                          <div class="settings-toggle-premium">
+                            <div class="settings-toggle-copy-premium">
+                              <label id="settings-slack-socket-mode-label" for="slack_socket_mode_enabled">Socket Mode</label>
+                              <span>Receive events directly via WebSocket without webhook URLs.</span>
                             </div>
-                            <label class="settings-switch" for="slack_enabled">
-                              <input id="slack_enabled" name="slack_enabled" type="checkbox" role="switch">
+                            <label class="settings-switch" for="slack_socket_mode_enabled">
+                              <input id="slack_socket_mode_enabled" name="slack_socket_mode_enabled" type="checkbox" role="switch">
+                              <span class="settings-switch-ui" aria-hidden="true"></span>
+                            </label>
+                          </div>
+
+                          <div class="settings-toggle-premium">
+                            <div class="settings-toggle-copy-premium">
+                              <label id="settings-slack-mention-label" for="slack_app_mention_enabled">App mentions</label>
+                              <span>Only trigger workflow creation when the bot is explicitly @mentioned.</span>
+                            </div>
+                            <label class="settings-switch" for="slack_app_mention_enabled">
+                              <input id="slack_app_mention_enabled" name="slack_app_mention_enabled" type="checkbox" role="switch">
                               <span class="settings-switch-ui" aria-hidden="true"></span>
                             </label>
                           </div>
                         </div>
-                        <div class="settings-slack-section-head">
-                          <strong id="settings-slack-auth-title">Slack credentials</strong>
-                          <span id="settings-slack-auth-description">Leave token fields blank to keep the saved value. Use the clear button if you want to remove a saved token.</span>
-                        </div>
-                        <div class="settings-slack-token-grid">
-                          <div class="settings-field">
-                            <label id="settings-slack-bot-token-label" for="slack_bot_token">Bot token</label>
-                            <input id="slack_bot_token" name="slack_bot_token" type="text" placeholder="xoxb-..." autocomplete="off" spellcheck="false">
-                            <small id="settings-slack-bot-token-status">Not configured.</small>
-                            <button type="button" id="clear-slack-bot-token" class="ghost-button">Clear saved token</button>
-                          </div>
-                        </div>
-                        <div class="settings-slack-channel-field">
-                          <label id="settings-slack-channel-label" for="slack_default_channel">Default channel</label>
-                          <span id="settings-slack-channel-description">Enter a human-friendly Slack channel. A new default only becomes active after a successful Slack test resolves and saves it.</span>
-                          <input id="slack_default_channel" name="slack_default_channel" placeholder="#agent-alerts" spellcheck="false">
-                          <small id="settings-slack-channel-note">Use a channel name like <code>#agent-alerts</code>. The active channel stays unchanged until <strong>Test Slack</strong> succeeds.</small>
-                        </div>
-                        <div class="settings-slack-callout">
-                          <strong id="settings-slack-save-note-title">Activation flow</strong>
-                          <span id="settings-slack-save-note">Save stores Slack settings only. Use the Slack test to verify the bot and activate the channel shown above.</span>
-                        </div>
-                        <div class="settings-slack-actions">
-                          <div class="settings-slack-actions-row">
-                            <button type="button" id="test-slack-settings" class="primary">Test Slack &amp; activate channel</button>
-                          </div>
-                          <div class="settings-slack-primary-note">
-                            <p id="settings-slack-test-description">Send a real test message from the current form values. A successful test resolves and saves the effective default channel.</p>
-                          </div>
-                          <div id="settings-slack-test-status" class="approval-choice-status" hidden></div>
-                        </div>
-                      </div>
-                      <div class="settings-slack-channel-summary">
-                        <div class="settings-slack-channel-meta">
-                          <strong id="settings-slack-effective-channel-label">Active channel</strong>
-                          <code id="settings-slack-effective-channel-value">Not configured.</code>
-                          <small id="settings-slack-effective-channel-help">This is the saved channel currently used for default Slack messages.</small>
-                        </div>
-                        <div id="settings-slack-pending-channel-status" class="settings-status" hidden>No pending channel change.</div>
-                        <small id="settings-slack-note">Slack values stay in your local config file and are never written into task metadata.</small>
-                      </div>
-                    </div>
-                  </section>
-                  <details id="settings-slack-advanced" class="settings-slack-advanced">
-                    <summary>
-                      <span class="settings-slack-advanced-summary-copy">
-                        <span id="settings-slack-advanced-title">Advanced inbound controls</span>
-                        <small id="settings-slack-advanced-description">Socket Mode, app mentions, receive-test tools, and listener diagnostics.</small>
-                      </span>
-                      <span id="settings-slack-listener-status" class="settings-slack-advanced-state">Listener idle</span>
-                    </summary>
-                    <div class="settings-slack-advanced-body">
-                      <div class="settings-slack-advanced-grid">
-                        <div class="settings-toggle">
-                          <div class="settings-toggle-copy">
-                            <label id="settings-slack-socket-mode-label" for="slack_socket_mode_enabled">Socket Mode</label>
-                          </div>
-                          <label class="settings-switch" for="slack_socket_mode_enabled">
-                            <input id="slack_socket_mode_enabled" name="slack_socket_mode_enabled" type="checkbox" role="switch">
-                            <span class="settings-switch-ui" aria-hidden="true"></span>
-                          </label>
-                        </div>
-                        <div class="settings-toggle">
-                          <div class="settings-toggle-copy">
-                            <label id="settings-slack-mention-label" for="slack_app_mention_enabled">App mentions</label>
-                          </div>
-                          <label class="settings-switch" for="slack_app_mention_enabled">
-                            <input id="slack_app_mention_enabled" name="slack_app_mention_enabled" type="checkbox" role="switch">
-                            <span class="settings-switch-ui" aria-hidden="true"></span>
-                          </label>
-                        </div>
-                        <div class="settings-field">
+
+                        <div class="settings-field-premium">
                           <label id="settings-slack-app-token-label" for="slack_app_token">App token</label>
-                          <input id="slack_app_token" name="slack_app_token" type="text" placeholder="xapp-..." autocomplete="off" spellcheck="false">
-                          <small id="settings-slack-app-token-status">Not configured.</small>
-                          <button type="button" id="clear-slack-app-token" class="ghost-button">Clear saved token</button>
+                          <div class="settings-input-wrapper-premium">
+                            <input id="slack_app_token" name="slack_app_token" type="text" placeholder="xapp-..." autocomplete="off" spellcheck="false">
+                            <button type="button" id="clear-slack-app-token" class="clear-token-btn-premium">Clear</button>
+                          </div>
+                          <small id="settings-slack-app-token-status" class="token-status-badge">Not configured.</small>
                         </div>
                       </div>
-                      <p id="settings-slack-advanced-note" class="settings-slack-advanced-note">Receive test uses saved Slack listener settings. Save first if you changed Socket Mode, app mentions, or queued token clears.</p>
-                      <div class="settings-slack-actions-row">
-                        <button type="button" id="start-slack-receive-test" class="ghost-button">Start receive test</button>
-                        <button type="button" id="copy-slack-receive-test" class="ghost-button" hidden>Copy message</button>
+
+                      <div class="settings-slack-card-divider"></div>
+
+                      <div class="settings-slack-receive-test-section">
+                        <p id="settings-slack-advanced-note" class="field-help-text">Receive test uses saved Slack listener settings. Save first if you changed Socket Mode, app mentions, or queued token clears.</p>
+                        <div class="settings-slack-receive-actions-row">
+                          <button type="button" id="start-slack-receive-test" class="primary compact-button">Start receive test</button>
+                          <button type="button" id="copy-slack-receive-test" class="accent-button compact-button" hidden>Copy message</button>
+                        </div>
+                        <div id="settings-slack-receive-test-status" class="approval-choice-status" hidden></div>
                       </div>
-                      <div id="settings-slack-receive-test-status" class="approval-choice-status" hidden></div>
                     </div>
-                  </details>
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
+          </div>
+
+          <div id="settings-panel-slack-channel" class="settings-panel" hidden>
+            <div class="settings-slack-shell-premium">
+              <section class="settings-section settings-slack-panel-section">
+                <div class="settings-section-head">
+                  <strong id="settings-slack-basics-title">Slack channel settings</strong>
+                  <span id="settings-slack-basics-description">Choose your default channel, then test to activate it.</span>
+                </div>
+                <div class="settings-slack-credentials-card settings-slack-channel-settings-card">
+                  <div id="settings-slack-notice-banner" class="settings-slack-notice-banner"></div>
+
+                  <div class="settings-slack-channel-card-body">
+                    <div class="settings-slack-field-header">
+                      <label id="settings-slack-channel-label" for="slack_default_channel">Default channel</label>
+                      <span id="settings-slack-channel-description">Enter a human-friendly Slack channel name.</span>
+                    </div>
+
+                    <div class="settings-slack-input-row">
+                      <input id="slack_default_channel" name="slack_default_channel" placeholder="#agent-alerts" spellcheck="false">
+                      <button type="button" id="test-slack-settings" class="primary">Test Slack &amp; activate channel</button>
+                    </div>
+
+                    <div class="settings-slack-status-row">
+                      <div class="settings-slack-status-item">
+                        <span id="settings-slack-effective-channel-label" class="status-label">Active channel</span>
+                        <span id="settings-slack-effective-channel-value" class="status-badge">Not configured.</span>
+                      </div>
+                      <div id="settings-slack-pending-channel-status" class="settings-status" hidden>No pending channel change.</div>
+                    </div>
+
+                    <small id="settings-slack-channel-note" class="field-help-text">Use a channel name like <code>#agent-alerts</code>.</small>
+
+                    <div id="settings-slack-test-status" class="approval-choice-status" hidden></div>
+                    <p id="settings-slack-test-description" style="display:none;"></p>
+                    <small id="settings-slack-effective-channel-help" style="display:none;"></small>
+                  </div>
+                </div>
+              </section>
+
+              <small id="settings-slack-note" class="settings-slack-global-note">Slack values stay in your local config file and are never written into task metadata.</small>
+            </div>
           </div>
 
           <div id="settings-panel-roles" class="settings-panel" hidden>
@@ -958,7 +1081,7 @@
   <div id="onboarding-overlay" class="onboarding-overlay" hidden>
     <div class="onboarding-card">
       <button type="button" class="onboarding-minimize-btn" id="onboarding-minimize-btn" title="Minimize/Expand guide">−</button>
-      <button type="button" class="onboarding-skip-btn" id="onboarding-skip-btn" title="Skip onboarding">&times;</button>
+      <button type="button" class="onboarding-skip-btn" id="onboarding-skip-btn" title="Don't show onboarding again" aria-label="Don't show onboarding again">&times;</button>
       <div class="onboarding-collapsed-indicator" style="display: none;">
         <button type="button" class="onboarding-collapsed-nav-btn prev" id="onboarding-collapsed-prev-btn" title="Previous step">‹</button>
         <span id="onboarding-collapsed-text">✨ 도움말 1/6</span>
@@ -1001,6 +1124,12 @@
           <h3 class="onboarding-title" id="onboarding-title-6">어시스턴트 초안 다듬기</h3>
           <p class="onboarding-desc" id="onboarding-desc-6">자연어로 요구사항을 입력하면, AI 어시스턴트가 분석하여 정교한 요청서 초안을 완성해 줍니다.</p>
         </div>
+        <!-- Step 7: Draft Refinement (for 7-step Admin flow) -->
+        <div class="onboarding-step" data-step="7" hidden>
+          <div class="onboarding-icon">✍️</div>
+          <h3 class="onboarding-title" id="onboarding-title-7">어시스턴트 초안 다듬기</h3>
+          <p class="onboarding-desc" id="onboarding-desc-7">자연어로 요구사항을 입력하면, AI 어시스턴트가 분석하여 정교한 요청서 초안을 완성해 줍니다.</p>
+        </div>
       </div>
       <div class="onboarding-footer">
         <div class="onboarding-dots">
@@ -1010,6 +1139,7 @@
           <span class="onboarding-dot" data-step-dot="4"></span>
           <span class="onboarding-dot" data-step-dot="5"></span>
           <span class="onboarding-dot" data-step-dot="6"></span>
+          <span class="onboarding-dot" data-step-dot="7"></span>
         </div>
         <div class="onboarding-actions">
           <button type="button" class="onboarding-nav-btn prev-btn" id="onboarding-prev-btn" disabled>이전</button>

@@ -68,6 +68,23 @@ def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effe
     return scanner, service, completed
 
 
+def _verification_repo(context) -> Path:
+    repo_root = context.metadata.integration.verification_repo_root
+    assert repo_root is not None
+    path = Path(repo_root)
+    assert path.exists()
+    return path
+
+
+def _git_text(repo_root: Path, ref: str, path: str) -> str:
+    return subprocess.run(["git", "-C", str(repo_root), "show", f"{ref}:{path}"], check=True, capture_output=True, text=True).stdout
+
+
+def _git_ref_exists(repo_root: Path, ref: str) -> bool:
+    result = subprocess.run(["git", "-C", str(repo_root), "rev-parse", "--verify", "--quiet", ref], capture_output=True, text=True, check=False)
+    return result.returncode == 0
+
+
 def test_human_verification_start_applies_patch_and_moves_state(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-start-task")
@@ -77,9 +94,13 @@ def test_human_verification_start_applies_patch_and_moves_state(configured_paths
 
     assert moved.state == TaskState.HUMAN_VERIFYING
     assert scanner.find_task(completed.metadata.task_id).state == TaskState.HUMAN_VERIFYING
-    assert (repo_root / "app.txt").read_text() == "review me\n"
-    current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     updated = scanner.find_task(completed.metadata.task_id)
+    verification_repo = _verification_repo(updated)
+    assert (repo_root / "app.txt").read_text() == "hello\n"
+    assert (verification_repo / "app.txt").read_text() == "review me\n"
+    target_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    current_branch = subprocess.run(["git", "-C", str(verification_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert target_branch == "main"
     assert current_branch == f"review/{updated.metadata.task_id.lower()}"
     assert updated.metadata.integration.original_branch == "main"
     assert updated.metadata.integration.review_branch == current_branch
@@ -89,8 +110,139 @@ def test_human_verification_start_applies_patch_and_moves_state(configured_paths
     assert updated.metadata.commit.status == "review-committed"
     assert updated.metadata.commit.review_sha is not None
     assert updated.metadata.commit.sha == updated.metadata.commit.review_sha
-    status = subprocess.run(["git", "-C", str(repo_root), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
+    status = subprocess.run(["git", "-C", str(verification_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
     assert status == ""
+
+
+def test_human_verification_start_pushes_and_reject_keeps_remote_review_branch(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    config.review_branch_remote.enabled = True
+    create_request_task(config, "verify-remote-review-branch-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    started = service.start(completed.metadata.task_id, by="human")
+    remote_branch_ref = f"refs/heads/review/{started.metadata.task_id.lower()}"
+
+    show_ref = subprocess.run(["git", "--git-dir", str(remote_repo), "show-ref", "--verify", remote_branch_ref], capture_output=True, text=True, check=False)
+    assert show_ref.returncode == 0
+    assert started.metadata.integration.remote_review_branch == f"review/{started.metadata.task_id.lower()}"
+
+    service.reject(started.metadata.task_id, by="human", note="Need another pass.")
+
+    show_ref_after = subprocess.run(["git", "--git-dir", str(remote_repo), "show-ref", "--verify", remote_branch_ref], capture_output=True, text=True, check=False)
+    assert show_ref_after.returncode == 0
+    rejected = scanner.find_task(started.metadata.task_id)
+    assert rejected.metadata.integration.remote_review_branch == f"review/{started.metadata.task_id.lower()}"
+
+
+def test_human_verification_reverification_fast_forwards_existing_remote_review_branch(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    config.review_branch_remote.enabled = True
+    create_request_task(config, "verify-remote-review-continuity-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    started = service.start(completed.metadata.task_id, by="human")
+    review_branch = f"review/{started.metadata.task_id.lower()}"
+    remote_branch_ref = f"refs/heads/{review_branch}"
+    first_remote_sha = subprocess.run(["git", "--git-dir", str(remote_repo), "rev-parse", remote_branch_ref], check=True, capture_output=True, text=True).stdout.strip()
+
+    service.reject(started.metadata.task_id, by="human", note="Need another pass.")
+    todos = scanner.find_task(started.metadata.task_id)
+    workspace_repo = Path(todos.metadata.implementation.workspace or "")
+    (workspace_repo / "app.txt").write_text("second review\n")
+    implementing = service.transitions.move(todos, TaskState.IMPLEMENTING, by="implementer")
+    waiting = service.transitions.move(implementing, TaskState.WAITING_REVIEWS, by="implementer")
+    reviewing = service.transitions.move(waiting, TaskState.REVIEWING, by="reviewer")
+    service.transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
+
+    service.start(started.metadata.task_id, by="human")
+
+    second_remote_sha = subprocess.run(["git", "--git-dir", str(remote_repo), "rev-parse", remote_branch_ref], check=True, capture_output=True, text=True).stdout.strip()
+    assert second_remote_sha != first_remote_sha
+    assert subprocess.run(["git", "--git-dir", str(remote_repo), "merge-base", "--is-ancestor", first_remote_sha, second_remote_sha], check=False).returncode == 0
+
+
+def test_human_verification_reject_recaptures_remote_review_branch_changes(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    remote_edit_repo = tmp_path / "remote-edit"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    config.review_branch_remote.enabled = True
+    create_request_task(config, "verify-remote-recapture-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    started = service.start(completed.metadata.task_id, by="human")
+    review_branch = f"review/{started.metadata.task_id.lower()}"
+    subprocess.run(["git", "clone", str(remote_repo), str(remote_edit_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "switch", review_branch], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "config", "user.name", "Remote User"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "config", "user.email", "remote@example.com"], check=True, capture_output=True, text=True)
+    (remote_edit_repo / "app.txt").write_text("remote human edit\n")
+    subprocess.run(["git", "-C", str(remote_edit_repo), "commit", "-am", "remote human edit"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "push", "origin", review_branch], check=True, capture_output=True, text=True)
+
+    rejected = service.reject(started.metadata.task_id, by="human", note="Use the pushed review branch changes.")
+
+    assert rejected.state == TaskState.TODOS
+    refreshed = scanner.find_task(started.metadata.task_id)
+    workspace_repo = Path(refreshed.metadata.implementation.workspace or "")
+    assert (workspace_repo / "app.txt").read_text() == "remote human edit\n"
+
+
+def test_human_verification_reject_recaptures_rewritten_remote_review_branch(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    remote_edit_repo = tmp_path / "remote-edit"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    config.review_branch_remote.enabled = True
+    create_request_task(config, "verify-remote-rewrite-recapture-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+
+    started = service.start(completed.metadata.task_id, by="human")
+    review_branch = f"review/{started.metadata.task_id.lower()}"
+    subprocess.run(["git", "clone", str(remote_repo), str(remote_edit_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "switch", review_branch], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "config", "user.name", "Remote User"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "config", "user.email", "remote@example.com"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "reset", "--hard", "HEAD~1"], check=True, capture_output=True, text=True)
+    (remote_edit_repo / "app.txt").write_text("remote rewritten human edit\n")
+    subprocess.run(["git", "-C", str(remote_edit_repo), "commit", "-am", "remote rewritten human edit"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(remote_edit_repo), "push", "--force", "origin", review_branch], check=True, capture_output=True, text=True)
+
+    rejected = service.reject(started.metadata.task_id, by="human", note="Use the rewritten pushed review branch changes.")
+
+    assert rejected.state == TaskState.TODOS
+    refreshed = scanner.find_task(started.metadata.task_id)
+    workspace_repo = Path(refreshed.metadata.implementation.workspace or "")
+    assert (workspace_repo / "app.txt").read_text() == "remote rewritten human edit\n"
+
+
+def test_human_verification_reject_blocks_when_remote_review_branch_sync_fails(configured_paths, tmp_path, monkeypatch):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    config.review_branch_remote.enabled = True
+    create_request_task(config, "verify-remote-sync-failure-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    started = service.start(completed.metadata.task_id, by="human")
+
+    def fail_sync(*args, **kwargs):
+        raise IntegrationError("failed to fetch remote review branch")
+
+    monkeypatch.setattr(service.integration_manager, "sync_remote_review_branch", fail_sync)
+
+    with pytest.raises(IntegrationError, match="failed to fetch remote review branch"):
+        service.reject(started.metadata.task_id, by="human", note="Use the pushed review branch changes.")
+
+    assert scanner.find_task(started.metadata.task_id).state == TaskState.HUMAN_VERIFYING
 
 
 def test_human_verification_start_includes_untracked_files(configured_paths):
@@ -105,7 +257,7 @@ def test_human_verification_start_includes_untracked_files(configured_paths):
     moved = service.start(completed.metadata.task_id, by="human")
 
     assert moved.state == TaskState.HUMAN_VERIFYING
-    assert (repo_root / "new-file.txt").read_text() == "brand new\n"
+    assert (_verification_repo(scanner.find_task(completed.metadata.task_id)) / "new-file.txt").read_text() == "brand new\n"
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
     detail = task_service.get_task(completed.metadata.task_id)
     added_file = next(file for file in detail.changed_files if file.path == "new-file.txt")
@@ -184,11 +336,13 @@ def test_human_verification_start_does_not_auto_reject_other_review_branch_dirt(
     subprocess.run(["git", "-C", str(repo_root), "switch", "-c", "review/other-task"], check=True, capture_output=True, text=True)
     (repo_root / "app.txt").write_text("human review edits\n")
 
-    with pytest.raises(IntegrationError, match="target repo must be clean before apply"):
-        service.start(completed.metadata.task_id, by="human")
+    moved = service.start(completed.metadata.task_id, by="human")
 
     refreshed = scanner.find_task(completed.metadata.task_id)
-    assert refreshed.state == TaskState.COMPLETED_REVIEWS
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    assert refreshed.state == TaskState.HUMAN_VERIFYING
+    assert (repo_root / "app.txt").read_text() == "human review edits\n"
+    assert (_verification_repo(refreshed) / "app.txt").read_text() == "review me\n"
     assert not any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
 
 
@@ -209,7 +363,8 @@ def test_human_verification_start_uses_absolute_patch_path_from_relative_config(
     assert updated.metadata.integration.patch_path == str(
         (tmp_path / ".kanban-agent" / "_runtime" / "runs" / updated.metadata.task_id / "review-001.patch").resolve()
     )
-    assert (target_repo / "app.txt").read_text() == "review me\n"
+    assert (target_repo / "app.txt").read_text() == "hello\n"
+    assert (_verification_repo(updated) / "app.txt").read_text() == "review me\n"
 
 
 def test_human_verification_start_rechecks_state_after_lock_for_duplicate_requests(configured_paths):
@@ -464,11 +619,13 @@ def test_human_verification_reject_discards_review_branch_even_when_patch_file_i
     create_request_task(config, "verify-reject-missing-patch-task")
     scanner, service, completed = _task_ready_for_human_verification(config)
     service.start(completed.metadata.task_id, by="human")
+    verifying = scanner.find_task(completed.metadata.task_id)
+    verification_repo = _verification_repo(verifying)
     task = scanner.find_task(completed.metadata.task_id)
     patch_path = Path(task.metadata.integration.patch_path or "")
     patch_path.unlink()
-    (repo_root / "app.txt").write_text("review me\nmanual tweak\n")
-    (repo_root / "notes.txt").write_text("temporary review note\n")
+    (verification_repo / "app.txt").write_text("review me\nmanual tweak\n")
+    (verification_repo / "notes.txt").write_text("temporary review note\n")
 
     moved = service.reject(completed.metadata.task_id, by="human", note="Patch artifact disappeared.")
 
@@ -494,9 +651,10 @@ def test_human_verification_reject_preserves_human_reviewed_code_in_workspace(tm
     create_request_task(config, "verify-reject-preserve-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
     service.start(completed.metadata.task_id, by="human")
+    verification_repo = _verification_repo(scanner.find_task(completed.metadata.task_id))
 
-    (target_repo / "app.txt").write_text("review me\nhuman tweak\n")
-    (target_repo / "extra.txt").write_text("keep this for next iteration\n")
+    (verification_repo / "app.txt").write_text("review me\nhuman tweak\n")
+    (verification_repo / "extra.txt").write_text("keep this for next iteration\n")
 
     moved = service.reject(completed.metadata.task_id, by="human", note="carry these edits forward")
 
@@ -681,6 +839,28 @@ def test_human_verification_reject_falls_back_when_review_recaputure_fails(confi
     assert current_branch == "main"
 
 
+def test_human_verification_reject_does_not_sync_remote_without_remote_review_branch(configured_paths, monkeypatch):
+    config, _, _ = configured_paths
+    config.review_branch_remote.enabled = False
+    create_request_task(config, "verify-local-recapture-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    started = service.start(completed.metadata.task_id, by="human")
+    with service.locks.acquire_by_task_id(started.metadata.task_id, owner="tester", run_id="clear-remote"):
+        context = scanner.find_task(started.metadata.task_id)
+        context.metadata.integration.remote_review_branch = None
+        context.metadata.integration.remote_name = None
+        scanner.metadata_store.save(context.task_dir, context.metadata)
+
+    def fail_sync(*args, **kwargs):
+        raise AssertionError("remote sync should not run without a remote review branch")
+
+    monkeypatch.setattr(service.integration_manager, "sync_remote_review_branch", fail_sync)
+
+    moved = service.reject(started.metadata.task_id, by="human", note="Use local review checkout.")
+
+    assert moved.state == TaskState.TODOS
+
+
 def test_human_verification_approval_is_blocked_when_review_note_exists(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-approval-blocked-by-note-task")
@@ -851,15 +1031,16 @@ def test_human_verification_start_cleans_up_review_branch_on_apply_failure(confi
 
     original_apply = service.integration_manager.apply_workspace
 
-    def fail_after_branch(metadata, workspace_repo):
+    def fail_after_branch(metadata, workspace_repo, **kwargs):
         integration = service.integration_manager
-        original_branch = integration._current_branch(repo_root) or metadata.target.base_branch
+        verification_repo, _ = integration._prepare_verification_repo(metadata)
+        original_branch = integration._current_branch(verification_repo) or metadata.target.base_branch
         review_branch = integration._review_branch_name(metadata)
-        integration._switch_to_review_branch(repo_root, original_branch, review_branch)
+        integration._switch_to_review_branch(verification_repo, original_branch, review_branch)
         metadata.integration.original_branch = original_branch
         metadata.integration.review_branch = review_branch
-        integration._restore_original_branch(repo_root, original_branch)
-        integration._delete_branch(repo_root, review_branch)
+        integration._restore_original_branch(verification_repo, original_branch)
+        integration._delete_branch(verification_repo, review_branch)
         metadata.integration.original_branch = None
         metadata.integration.review_branch = None
         raise IntegrationError("failed to apply patch")
@@ -877,6 +1058,7 @@ def test_human_verification_start_cleans_up_review_branch_on_apply_failure(confi
     assert refreshed.state == TaskState.COMPLETED_REVIEWS
     assert refreshed.metadata.integration.original_branch is None
     assert refreshed.metadata.integration.review_branch is None
+    assert refreshed.metadata.integration.verification_repo_root is None
     service.integration_manager.apply_workspace = original_apply
 
 
@@ -1052,6 +1234,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     assert done.metadata.integration.final_branch == expected_final_branch
     assert done.metadata.integration.review_branch is None
     assert done.metadata.integration.original_branch is None
+    assert done.metadata.integration.verification_repo_root is None
     assert done.metadata.implementation.workspace is None
     assert not workspace_root.exists()
     assert not live_runs_dir.exists()
@@ -1071,16 +1254,16 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     )
     assert done.metadata.commit.prepared_message == expected_message
     assert (done.task_dir / "COMMIT.md").read_text().strip() == expected_message
-    git_message = subprocess.run(["git", "-C", str(target_repo), "log", "-1", "--pretty=%B"], check=True, capture_output=True, text=True).stdout.strip()
+    git_message = subprocess.run(["git", "-C", str(target_repo), "log", "-1", "--pretty=%B", expected_final_branch], check=True, capture_output=True, text=True).stdout.strip()
     assert git_message == expected_message
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
-    assert current_branch == expected_final_branch
+    assert current_branch == "main"
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     review_date = datetime.now(timezone.utc)
     summary_path = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=scanner.metadata_store).target_repo_summary_path(done.metadata, created_at=review_date)
-    assert summary_path.exists()
-    summary_text = summary_path.read_text()
+    summary_relative_path = str(summary_path.relative_to(target_repo))
+    summary_text = _git_text(target_repo, expected_final_branch, summary_relative_path)
     assert f"# Task Summary: {done.metadata.title}" in summary_text
     assert "- Repo:" not in summary_text
     assert "- Base branch:" not in summary_text
@@ -1095,6 +1278,38 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     ]
     changed_file = next(file for file in detail.changed_files if file.path == "app.txt")
     assert task_service.get_changed_file(done.metadata.task_id, changed_file.id).summary.path == "app.txt"
+
+
+def test_human_verification_remote_approve_pushes_final_branch_without_local_final_commit(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    config.review_branch_remote.enabled = True
+    create_request_task(config, "verify-remote-approve-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    started = service.start(completed.metadata.task_id, by="human")
+    review_branch = f"review/{started.metadata.task_id.lower()}"
+
+    moved = service.approve(started.metadata.task_id, by="human", completion_mode="target-branch")
+
+    assert moved.state == TaskState.DONE
+    done = scanner.find_task(started.metadata.task_id)
+    expected_final_branch = f"feature/{done.metadata.task_id.lower()}-{done.metadata.slug}"
+    final_ref = f"refs/heads/{expected_final_branch}"
+    review_ref = f"refs/heads/{review_branch}"
+    assert subprocess.run(["git", "--git-dir", str(remote_repo), "show-ref", "--verify", final_ref], capture_output=True, text=True, check=False).returncode == 0
+    assert subprocess.run(["git", "--git-dir", str(remote_repo), "show-ref", "--verify", review_ref], capture_output=True, text=True, check=False).returncode != 0
+    assert subprocess.run(["git", "-C", str(repo_root), "branch", "--list", expected_final_branch], check=True, capture_output=True, text=True).stdout.strip() == ""
+    assert subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip() == "main"
+    assert (repo_root / "app.txt").read_text() == "hello\n"
+    assert done.metadata.integration.final_branch == expected_final_branch
+    assert done.metadata.integration.final_remote_branch == expected_final_branch
+    assert done.metadata.integration.final_remote_name == "origin"
+    assert done.metadata.integration.remote_review_branch is None
+    assert done.metadata.integration.verification_repo_root is None
+    assert done.metadata.commit.sha == done.metadata.commit.review_sha
+    assert done.metadata.implementation.workspace is None
 
 
 def test_human_verification_approve_switches_back_to_review_branch_before_commit(tmp_path):
@@ -1112,7 +1327,9 @@ def test_human_verification_approve_switches_back_to_review_branch_before_commit
 
     assert moved.state == TaskState.DONE
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
-    assert current_branch == f"feature/{moved.metadata.task_id.lower()}-{moved.metadata.slug}"
+    expected_final_branch = f"feature/{moved.metadata.task_id.lower()}-{moved.metadata.slug}"
+    assert current_branch == "main"
+    assert _git_ref_exists(target_repo, expected_final_branch)
 
 
 def test_human_verification_approve_can_commit_to_target_branch(tmp_path):
@@ -1160,8 +1377,9 @@ def test_human_verification_approve_uses_configured_target_docs_root(tmp_path):
     review_date = datetime.now(timezone.utc)
     docs_root = target_repo / "records" / "kanban-docs" / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
     summary_path = TaskService(KanbanScanner(config, MetadataStore()), config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=MetadataStore()).target_repo_summary_path(moved.metadata, created_at=review_date)
-    assert summary_path.exists()
     assert summary_path.parent == docs_root
+    summary_relative_path = str(summary_path.relative_to(target_repo))
+    assert _git_ref_exists(target_repo, f"{moved.metadata.integration.final_branch}:{summary_relative_path}")
 
 
 def test_human_verification_approve_writes_summary_without_copying_attachments_bundle(tmp_path):
@@ -1189,8 +1407,8 @@ def test_human_verification_approve_writes_summary_without_copying_attachments_b
     review_date = datetime.now(timezone.utc)
     docs_root = config.resolve_target_repo_docs_root(target_repo) / f"{review_date.year:04d}" / f"{review_date.month:02d}" / f"{review_date.day:02d}"
     summary_path = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=scanner.metadata_store).target_repo_summary_path(moved.metadata, created_at=review_date)
-    assert summary_path.exists()
-    assert attachment_name not in summary_path.read_text()
+    summary_text = _git_text(target_repo, moved.metadata.integration.final_branch or "HEAD", str(summary_path.relative_to(target_repo)))
+    assert attachment_name not in summary_text
     assert not (docs_root / "_attachments").exists()
 
 
@@ -1204,19 +1422,21 @@ def test_human_verification_approve_migrates_legacy_summary_filename(tmp_path):
     scanner, service, completed = _task_ready_for_human_verification(config)
     service.start(completed.metadata.task_id, by="human")
     refreshed = scanner.find_task(completed.metadata.task_id)
+    verification_repo = _verification_repo(refreshed)
     task_service = TaskService(scanner, config.runs_dir, config.kanban_root, config.archive_runs_dir, metadata_store=scanner.metadata_store)
     review_date = datetime.now(timezone.utc)
     legacy_summary_path = task_service.legacy_target_repo_summary_path(refreshed.metadata, created_at=review_date)
     new_summary_path = task_service.target_repo_summary_path(refreshed.metadata, created_at=review_date)
-    legacy_summary_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_summary_path.write_text("legacy summary\n")
+    legacy_verification_path = verification_repo / legacy_summary_path.relative_to(target_repo)
+    legacy_verification_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_verification_path.write_text("legacy summary\n")
 
     moved = service.approve(completed.metadata.task_id, by="human")
 
     assert moved.state == TaskState.DONE
-    assert new_summary_path.exists()
-    assert not legacy_summary_path.exists()
-    assert f"# Task Summary: {moved.metadata.title}" in new_summary_path.read_text()
+    final_branch = moved.metadata.integration.final_branch or "HEAD"
+    assert f"# Task Summary: {moved.metadata.title}" in _git_text(target_repo, final_branch, str(new_summary_path.relative_to(target_repo)))
+    assert not _git_ref_exists(target_repo, f"{final_branch}:{legacy_summary_path.relative_to(target_repo)}")
 
 
 def test_human_verification_approve_stages_manual_review_changes_before_commit(tmp_path):
@@ -1228,17 +1448,20 @@ def test_human_verification_approve_stages_manual_review_changes_before_commit(t
     create_request_task(config, "verify-approve-manual-edit-task", target_repo_root=target_repo)
     scanner, service, completed = _task_ready_for_human_verification(config)
     service.start(completed.metadata.task_id, by="human")
-    tracked_file = target_repo / "app.txt"
+    verification_repo = _verification_repo(scanner.find_task(completed.metadata.task_id))
+    tracked_file = verification_repo / "app.txt"
     tracked_file.write_text("review me\nmanual tweak\n")
-    new_file = target_repo / "notes.txt"
+    new_file = verification_repo / "notes.txt"
     new_file.write_text("human review note\n")
 
     moved = service.approve(completed.metadata.task_id, by="human")
 
     assert moved.state == TaskState.DONE
-    show = subprocess.run(["git", "-C", str(target_repo), "show", "--stat", "--format=%B", "HEAD"], check=True, capture_output=True, text=True).stdout
-    assert "manual tweak" in (target_repo / "app.txt").read_text()
+    final_branch = moved.metadata.integration.final_branch or "HEAD"
+    show = subprocess.run(["git", "-C", str(target_repo), "show", "--stat", "--format=%B", final_branch], check=True, capture_output=True, text=True).stdout
+    assert "manual tweak" in _git_text(target_repo, final_branch, "app.txt")
     assert "notes.txt" in show
+    assert (target_repo / "app.txt").read_text() == "hello\n"
     status = subprocess.run(["git", "-C", str(target_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
     assert status == ""
 
@@ -1257,7 +1480,7 @@ def test_human_verification_approve_returns_to_todos_on_rebase_conflict(tmp_path
     subprocess.run(["git", "-C", str(target_repo), "add", "app.txt"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(target_repo), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
 
-    moved = service.approve(completed.metadata.task_id, by="human")
+    moved = service.approve(completed.metadata.task_id, by="human", completion_mode="target-branch")
 
     assert moved.state == TaskState.TODOS
     refreshed = scanner.find_task(completed.metadata.task_id)

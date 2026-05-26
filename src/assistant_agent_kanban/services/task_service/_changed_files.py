@@ -232,10 +232,15 @@ class _ChangedFilesMixin(_TaskServiceLike):
 
 
     def _target_repo_diff_against_base(self, metadata: TaskMetadata, *, ref: str | None) -> str | None:
-        try:
-            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
-        except ValueError:
-            return None
+        if metadata.integration.verification_repo_root:
+            target_repo_root = Path(metadata.integration.verification_repo_root).expanduser().resolve()
+            if not target_repo_root.exists():
+                return None
+        else:
+            try:
+                target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+            except ValueError:
+                return None
         range_spec = metadata.target.base_branch if ref is None else f"{metadata.target.base_branch}..{ref}"
         command = ["git", "-C", str(target_repo_root), "diff", "--binary", range_spec]
         diff = subprocess.run(command, capture_output=True, text=True, check=False)

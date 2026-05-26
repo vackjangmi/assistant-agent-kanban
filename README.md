@@ -384,6 +384,12 @@ Important keys:
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent counts, auto-dispatch
 - `repo_discovery.*`
 - `slack.*` (optional)
+- `auth.*` — optional login/session support backed by local SQLite. The first admin account is created from `/login` when auth is enabled and the user table is empty.
+- `review_branch_remote.*` — optional push/delete policy for `review/{task_id}` branches during human verification.
+
+When `auth.enabled` is true, user preferences, project overrides, and user Git tokens are stored in the local SQLite database under the kanban runtime directory by default. Once the local user table contains any account, login is required for every browser/API client regardless of whether it is connecting from localhost or another machine. Admin users can edit the same common settings that local mode can edit. Passwords are stored as salted PBKDF2 hashes. Git and Slack tokens, including user and project Slack credentials, are encrypted with a local Fernet key generated under `_runtime/secrets`; keep that key private and backed up if you need to retain access to encrypted tokens. Admins can delete all user accounts from the Users settings tab; when the user table becomes empty again, the server falls back to login-free local admin mode and only accepts `localhost`, `127.0.0.1`, or other loopback clients.
+
+Remote review branches are created only when human verification starts. In login/multi-user mode, the app always pushes the local `review/{task_id}` branch to the configured remote after the review commit is created, and the acting user must have a Git token configured in the Git credentials settings tab before starting verification. In login-free local mode, this push remains controlled by `review_branch_remote.enabled`. Pushed review branches are deleted on reject, close/delete cleanup, and completion when cleanup is enabled.
 
 Antigravity CLI does not currently expose a stable `--model` launch flag. When an `antigravity.*_model` is configured, the adapter temporarily writes that model into Antigravity CLI's settings JSON, starts `agy --print`, keeps the model setting in place for 30 seconds so the CLI can finish startup, and then restores the previous model setting. Concurrent Antigravity startups are serialized during that 30-second window to avoid settings races.
 
@@ -455,6 +461,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 - Continue improving role-specific runtime support across Antigravity, OpenCode, Codex, Claude, and Gemini
 - Split larger service, runtime, API, and frontend modules into smaller maintainable units
 - Add more workflow observability around retries, failed runs, and recovery actions
+- Revisit target web application startup during human verification after the remote multi-user workflow is stabilized
 
 ### Contributing
 
@@ -863,6 +870,12 @@ Slack 설정은 config 파일의 `slack:` 섹션에서 관리하며, bot token (
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent count, auto-dispatch
 - `repo_discovery.*`
 - `slack.*` (선택)
+- `auth.*` — local SQLite 기반 로그인/session 설정. auth가 켜져 있고 사용자가 없으면 `/login`에서 첫 admin 계정을 생성합니다.
+- `review_branch_remote.*` — human verification 중 `review/{task_id}` 브랜치의 remote push/delete 정책
+
+`auth.enabled`가 true이면 사용자 선호 설정, 프로젝트별 override, 사용자 Git token은 기본적으로 kanban runtime 디렉터리의 local SQLite DB에 저장됩니다. local user table에 계정이 하나라도 생긴 뒤에는 localhost 접속이든 다른 PC 접속이든 모든 browser/API client가 로그인해야 합니다. admin 사용자는 local mode에서 수정할 수 있던 공통 설정을 그대로 수정할 수 있습니다. 비밀번호는 salted PBKDF2 hash로 저장되고, 사용자/프로젝트 Slack 자격 정보를 포함한 Git/Slack token은 `_runtime/secrets` 아래 생성되는 local Fernet key로 암호화됩니다. 암호화된 token을 계속 사용해야 한다면 이 key를 안전하게 보관해야 합니다. admin은 사용자 설정 탭에서 전체 사용자 계정을 삭제할 수 있고, user table이 다시 비면 서버는 로그인 없는 local admin mode로 돌아가며 `localhost`, `127.0.0.1` 같은 loopback client만 허용합니다.
+
+Remote review branch는 human verification을 시작할 때만 생성됩니다. 로그인/다중 사용자 모드에서는 review commit 생성 후 로컬 `review/{task_id}` 브랜치를 설정된 remote로 항상 push하며, 검증을 시작하는 사용자는 Git 자격 증명 탭에 Git token을 먼저 설정해야 합니다. 로그인 없는 local mode에서는 이 push가 계속 `review_branch_remote.enabled` 설정을 따릅니다. cleanup이 켜져 있으면 reject/close/delete/complete cleanup 시 해당 remote branch 삭제를 시도합니다.
 
 Antigravity CLI는 현재 안정적인 `--model` 실행 플래그를 제공하지 않습니다. `antigravity.*_model`이 설정되어 있으면 어댑터가 Antigravity CLI settings JSON에 모델을 임시로 기록하고 `agy --print`를 시작한 뒤, CLI 초기화가 끝날 수 있도록 30초 동안 유지하고 이전 모델 설정을 복원합니다. 설정 충돌을 막기 위해 Antigravity 시작 구간은 이 30초 동안 직렬화합니다.
 
@@ -934,6 +947,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 - Antigravity, OpenCode, Codex, Claude, Gemini에 대한 역할별 runtime 지원 개선
 - 큰 service, runtime, API, frontend 모듈을 더 작은 단위로 분리
 - retry, 실패한 run, recovery action에 대한 workflow observability 강화
+- remote 다중 사용자 workflow가 안정화된 뒤 human verification 중 대상 web application 구동 방식 재검토
 
 ### 기여 안내
 

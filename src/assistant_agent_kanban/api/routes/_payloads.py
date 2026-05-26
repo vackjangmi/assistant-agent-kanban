@@ -143,8 +143,11 @@ class ModelSettingsPayload(BaseModel):
     slack_socket_mode_enabled: bool | None = None
     slack_bot_token: str | None = None
     slack_app_token: str | None = None
+    slack_bot_name: str | None = None
     slack_default_channel: str | None = None
     slack_app_mention_enabled: bool | None = None
+    git_token: str | None = None
+    git_token_username: str | None = None
 
     @field_validator("language", mode="before")
     @classmethod
@@ -172,6 +175,7 @@ class SlackSettingsTestPayload(BaseModel):
     slack_socket_mode_enabled: bool | None = None
     slack_bot_token: str | None = None
     slack_app_token: str | None = None
+    slack_bot_name: str | None = None
     slack_default_channel: str | None = None
     slack_app_mention_enabled: bool | None = None
 

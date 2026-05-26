@@ -14,6 +14,7 @@ from assistant_agent_kanban.config import PROJECT_ROOT
 from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.exceptions import AdapterRunError
 from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.user_settings_store import ProjectSettings, RuntimePreferenceSettings
 
 from ..conftest import FakeAdapter
 
@@ -40,6 +41,43 @@ def test_api_creates_request_with_plan_auto_approve_flag(configured_paths):
     task = KanbanScanner(config).scan()[0]
     assert task.metadata.request.plan_auto_approve is True
     assert "plan_auto_approve: true" in (task.task_dir / "REQUEST.md").read_text()
+
+
+def test_api_request_creation_records_creator_and_initial_slack_channel(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    config.slack.default_channel = "C-common"
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    admin = app.state.user_settings_store.create_user("admin", "admin-password", is_admin=True)
+    member = app.state.user_settings_store.create_user("member", "member-password", is_admin=False)
+    app.state.user_settings_store.update_user_settings(member.user_id, RuntimePreferenceSettings(slack_default_channel="C-user"))
+    app.state.user_settings_store.update_project_settings(
+        ProjectSettings(repo_root=str(config.repo_root), runtime=RuntimePreferenceSettings(slack_default_channel="C-project"))
+    )
+
+    with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"username": "member", "password": "member-password"}).status_code == 200
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "notify owner",
+                "goal": "Record task ownership and notification channel.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "plan_auto_approve": True,
+            },
+        )
+
+    assert response.status_code == 200
+    task = KanbanScanner(config).scan()[0]
+    assert task.metadata.created_by_user_id == member.user_id
+    assert task.metadata.created_by_username == "member"
+    assert task.metadata.slack.channel == "C-project"
+    snapshot = KanbanScanner(config).board_snapshot()
+    request_item = next(item for column in snapshot.columns for item in column.items if item.task_id == task.metadata.task_id)
+    assert request_item.created_by_user_id == member.user_id
+    assert request_item.created_by_username == "member"
+    assert admin.username == "admin"
 
 
 
@@ -129,6 +167,11 @@ def test_api_drafts_request_without_creating_task_dirs(configured_paths):
         stored = client.get(f"/api/request-drafts/{payload['request_draft_id']}")
         assert stored.status_code == 200
         assert stored.json()["transcript"][0]["content"] == "Please tighten the goal and acceptance criteria."
+        assert stored.json()["goal"].startswith("Implement an AI-assisted drafting flow")
+        assert stored.json()["acceptance_criteria"] == (
+            "Users can chat with the drafting assistant in the composer.\n"
+            "Suggested field updates are optional and applied per field."
+        )
         after = sorted(path.name for path in config.state_dir(TaskState.REQUESTS).iterdir())
         assert after == before
 
@@ -178,7 +221,55 @@ def test_api_can_create_load_update_and_delete_request_draft_state(configured_pa
 
         missing = client.get(f"/api/request-drafts/{draft_id}")
         assert missing.status_code == 404
-        assert not (config.request_uploads_dir / "server-draft-token").exists()
+    assert not (config.request_uploads_dir / "server-draft-token").exists()
+
+
+def test_api_request_drafts_are_scoped_to_creator_and_admin(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    app.state.user_settings_store.create_user("admin", "admin-password", is_admin=True)
+    owner = app.state.user_settings_store.create_user("owner", "owner-password", is_admin=False)
+    app.state.user_settings_store.create_user("other", "other-password", is_admin=False)
+
+    with TestClient(app) as owner_client:
+        assert owner_client.post("/api/auth/login", json={"username": "owner", "password": "owner-password"}).status_code == 200
+        created = owner_client.post(
+            "/api/request-drafts/state",
+            json={
+                "title": "Private draft",
+                "goal": "Only the creator should see this draft.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+            },
+        )
+        assert created.status_code == 200
+        draft_id = created.json()["draft_id"]
+        assert created.json()["created_by_user_id"] == owner.user_id
+        assert created.json()["created_by_username"] == "owner"
+
+        listing = owner_client.get("/api/request-drafts")
+        assert listing.status_code == 200
+        assert [item["draft_id"] for item in listing.json()["items"]] == [draft_id]
+
+    with TestClient(app) as other_client:
+        assert other_client.post("/api/auth/login", json={"username": "other", "password": "other-password"}).status_code == 200
+        listing = other_client.get("/api/request-drafts")
+        assert listing.status_code == 200
+        assert listing.json()["items"] == []
+        assert other_client.get(f"/api/request-drafts/{draft_id}").status_code == 403
+        assert other_client.put(f"/api/request-drafts/{draft_id}", json={"goal": "take over"}).status_code == 403
+        assert other_client.delete(f"/api/request-drafts/{draft_id}").status_code == 403
+
+    with TestClient(app) as admin_client:
+        assert admin_client.post("/api/auth/login", json={"username": "admin", "password": "admin-password"}).status_code == 200
+        listing = admin_client.get("/api/request-drafts")
+        assert listing.status_code == 200
+        assert [item["draft_id"] for item in listing.json()["items"]] == [draft_id]
+        assert listing.json()["items"][0]["created_by_username"] == "owner"
+        loaded = admin_client.get(f"/api/request-drafts/{draft_id}")
+        assert loaded.status_code == 200
+        assert loaded.json()["created_by_username"] == "owner"
 
 
 
@@ -948,6 +1039,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function ensureRequestComposerDraft(options = {})" in response.text
     assert "function loadRequestDrafts()" in response.text
     assert "function renderRequestDrafts()" in response.text
+    assert "function draftOwnerLabel(draft)" in response.text
+    assert "draft?.created_by_username" in response.text
     assert "function serializeRequestDraftArtifactMarkdown()" in response.text
     assert "Assistant updates merge into the form automatically" in response.text
     assert "function applyRequestDraftFieldUpdates(fieldUpdates, options = {})" in response.text
@@ -985,7 +1078,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "backendInput.value = roleOptions.some((item) => item.value === nextValue) ? nextValue : 'default';" in response.text
     assert "Refresh models" in response.text
     assert "Save settings" in response.text
-    assert "Slack credentials" in response.text
+    assert "Slack connection settings" in response.text
     assert "Test Slack" in response.text
     assert "Start receive test" in response.text
     assert "/api/settings/slack-test" in response.text

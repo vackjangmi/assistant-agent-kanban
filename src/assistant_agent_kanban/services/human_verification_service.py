@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import inspect
 import json
 import os
 import re
@@ -52,7 +53,15 @@ class HumanVerificationService:
         self.branch_summary_adapter = branch_summary_adapter
         self.adapter_registry = dict(adapter_registry or {})
 
-    def start(self, task_id: str, *, by: str) -> TaskContext:
+    def start(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> TaskContext:
         with self._acquire_current_task_lease(task_id, owner=by, run_id="manual-human-verifying") as context:
             if context.state != TaskState.COMPLETED_REVIEWS:
                 raise TransitionError("human verification can only start from completed-reviews")
@@ -62,13 +71,22 @@ class HumanVerificationService:
                 context.metadata.errors.append(TaskErrorInfo(code="verification-target-repo-drift", message=drift_note))
                 self.metadata_store.save(context.task_dir, context.metadata)
                 return self.transitions.move(context, TaskState.TODOS, by=by, note=drift_note)
-            self._run_verification_apply(context)
+            self._invoke_run_verification_apply(
+                context,
+                git_token=git_token,
+                git_token_username=git_token_username,
+                operation_config=operation_config,
+            )
             self.metadata_store.save(context.task_dir, context.metadata)
             try:
                 return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
             except Exception:
                 if context.metadata.integration.applied:
-                    self.integration_manager.rollback_workspace(context.metadata)
+                    self._integration_manager(operation_config).rollback_workspace(
+                        context.metadata,
+                        git_token=git_token,
+                        git_token_username=git_token_username,
+                    )
                     context.metadata.commit.status = "pending"
                     context.metadata.commit.sha = None
                     context.metadata.commit.review_sha = None
@@ -92,14 +110,27 @@ class HumanVerificationService:
                 refreshed.metadata.lease.heartbeat_at = None
                 self.metadata_store.save(refreshed.task_dir, refreshed.metadata)
 
-    def retry_apply(self, task_id: str, *, by: str) -> TaskContext:
+    def retry_apply(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("verification apply retry is only allowed from human-verifying")
         if context.metadata.integration.applied:
             raise TransitionError("verification apply has already succeeded")
         with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-verifying-retry"):
-            self._run_verification_apply(context)
+            self._invoke_run_verification_apply(
+                context,
+                git_token=git_token,
+                git_token_username=git_token_username,
+                operation_config=operation_config,
+            )
             self.metadata_store.save(context.task_dir, context.metadata)
             return context
 
@@ -174,7 +205,16 @@ class HumanVerificationService:
             self.metadata_store.save(context.task_dir, context.metadata)
             return context
 
-    def reject(self, task_id: str, *, by: str, note: str = "") -> TaskContext:
+    def reject(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        note: str = "",
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("human verification rejection is only allowed from human-verifying")
@@ -186,12 +226,29 @@ class HumanVerificationService:
                 context.metadata.human_verification.note_markdown = normalized.rstrip()
             recapture_error: str | None = None
             if context.metadata.integration.applied:
+                remote_sync_required = False
                 try:
+                    integration_manager = self._integration_manager(operation_config)
+                    remote_sync_required = bool(context.metadata.integration.remote_review_branch and integration_manager.config.review_branch_remote.enabled)
+                    if remote_sync_required:
+                        integration_manager.sync_remote_review_branch(
+                            context.metadata,
+                            git_token=git_token,
+                            git_token_username=git_token_username,
+                        )
                     self._capture_review_branch_to_workspace(context.metadata)
                 except IntegrationError as exc:
+                    if remote_sync_required:
+                        raise
                     recapture_error = str(exc)
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="REQUEST_CHANGES")
-            self.integration_manager.rollback_workspace(context.metadata)
+            self._integration_manager(operation_config).rollback_workspace(
+                context.metadata,
+                git_token=git_token,
+                git_token_username=git_token_username,
+                delete_remote_review_branch=False,
+                preserve_remote_review_branch=True,
+            )
             context.metadata.commit.status = "pending"
             context.metadata.commit.sha = None
             context.metadata.commit.review_sha = None
@@ -205,7 +262,15 @@ class HumanVerificationService:
             self.metadata_store.save(context.task_dir, context.metadata)
             return self.transitions.move(context, TaskState.TODOS, by=by, note=summary or "human verification requested changes")
 
-    def rerequest_from_reviewer_qa(self, task_id: str, *, by: str) -> TaskContext:
+    def rerequest_from_reviewer_qa(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> TaskContext:
         context = self._find_task(task_id)
         if context.state not in {TaskState.COMPLETED_REVIEWS, TaskState.HUMAN_VERIFYING}:
             raise TransitionError("reviewer Q&A re-request is only allowed from completed-reviews or human-verifying")
@@ -213,11 +278,33 @@ class HumanVerificationService:
         if not note:
             raise TransitionError("reviewer Q&A re-request requires at least one completed reviewer answer")
         if context.state == TaskState.COMPLETED_REVIEWS:
-            self.start(task_id, by=by)
+            self.start(
+                task_id,
+                by=by,
+                git_token=git_token,
+                git_token_username=git_token_username,
+                operation_config=operation_config,
+            )
         self.save_note(task_id, by=by, content=note)
-        return self.reject(task_id, by=by, note="")
+        return self.reject(
+            task_id,
+            by=by,
+            note="",
+            git_token=git_token,
+            git_token_username=git_token_username,
+            operation_config=operation_config,
+        )
 
-    def approve(self, task_id: str, *, by: str, completion_mode: str = "new-branch") -> TaskContext:
+    def approve(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        completion_mode: str = "new-branch",
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> TaskContext:
         context = self._find_task(task_id)
         if context.state != TaskState.HUMAN_VERIFYING:
             raise TransitionError("human verification approval is only allowed from human-verifying")
@@ -246,27 +333,62 @@ class HumanVerificationService:
                     count = len(unresolved_comments)
                     raise TransitionError(f"approval is blocked until all inline comments are removed ({count} remaining)")
                 self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="APPROVED")
-                summary_markdown = self._sync_task_documents_to_target_repo(context.task_dir, context.metadata)
-                self.commit_manager.prepare_commit_message(
-                    context.task_dir,
-                    context.metadata,
-                    summary_markdown=summary_markdown,
+                integration_manager = self._integration_manager(operation_config)
+                remote_completion = bool(
+                    context.metadata.integration.remote_review_branch
+                    and integration_manager.config.review_branch_remote.enabled
                 )
-                sha = self.commit_manager.finalize_review_branch(
-                    context.task_dir,
-                    context.metadata,
-                    completion_mode=completion_mode,
-                )
-                self.integration_manager.finalize_workspace(context.metadata)
+                if remote_completion:
+                    integration_manager.sync_remote_review_branch(
+                        context.metadata,
+                        git_token=git_token,
+                        git_token_username=git_token_username,
+                    )
+                    sha = integration_manager.push_final_review_branch(
+                        context.metadata,
+                        final_branch=self.commit_manager.preferred_final_branch(context.metadata),
+                        git_token=git_token,
+                        git_token_username=git_token_username,
+                    )
+                    context.metadata.commit.review_sha = sha
+                    integration_manager.finalize_remote_workspace(
+                        context.metadata,
+                        git_token=git_token,
+                        git_token_username=git_token_username,
+                    )
+                else:
+                    summary_markdown = self._sync_task_documents_to_target_repo(context.task_dir, context.metadata)
+                    self.commit_manager.prepare_commit_message(
+                        context.task_dir,
+                        context.metadata,
+                        summary_markdown=summary_markdown,
+                    )
+                    sha = self.commit_manager.finalize_review_branch(
+                        context.task_dir,
+                        context.metadata,
+                        completion_mode=completion_mode,
+                    )
+                    integration_manager.finalize_workspace(
+                        context.metadata,
+                        git_token=git_token,
+                        git_token_username=git_token_username,
+                    )
                 context.metadata.commit.status = "committed"
                 context.metadata.commit.sha = sha
-                completion_label = "new branch" if completion_mode == "new-branch" else "target branch"
+                if remote_completion:
+                    completion_label = "remote branch"
+                else:
+                    completion_label = "new branch" if completion_mode == "new-branch" else "target branch"
                 done_context = self.transitions.move(context, TaskState.DONE, by=by, note=f"human verification approved ({completion_label})")
             except TransitionError:
                 raise
             except Exception as exc:
                 try:
-                    self.integration_manager.rollback_workspace(context.metadata)
+                    self._integration_manager(operation_config).rollback_workspace(
+                        context.metadata,
+                        git_token=git_token,
+                        git_token_username=git_token_username,
+                    )
                 except Exception as cleanup_exc:
                     raise IntegrationError(f"{exc}; cleanup failed: {cleanup_exc}") from exc
                 context.metadata.commit.status = "pending"
@@ -283,6 +405,30 @@ class HumanVerificationService:
             return self.scanner.find_task(task_id)
         except FileNotFoundError as exc:
             raise TaskNotFoundError(task_id) from exc
+
+    def _integration_manager(self, operation_config: AppConfig | None) -> IntegrationManager:
+        if operation_config is None:
+            return self.integration_manager
+        return IntegrationManager(operation_config)
+
+    def _invoke_run_verification_apply(
+        self,
+        context: TaskContext,
+        *,
+        git_token: str | None,
+        git_token_username: str | None,
+        operation_config: AppConfig | None,
+    ) -> None:
+        signature = inspect.signature(self._run_verification_apply)
+        if "operation_config" not in signature.parameters:
+            self._run_verification_apply(context)
+            return
+        self._run_verification_apply(
+            context,
+            git_token=git_token,
+            git_token_username=git_token_username,
+            operation_config=operation_config,
+        )
 
     def _build_reviewer_qa_rerequest_note(self, context: TaskContext) -> str:
         latest_exchange = self._latest_reviewer_qa_exchange(context)
@@ -415,10 +561,7 @@ class HumanVerificationService:
         workspace_repo = metadata.implementation.workspace
         if not workspace_repo:
             return
-        try:
-            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
-        except ValueError as exc:
-            raise IntegrationError(str(exc)) from exc
+        target_repo_root = self._verification_repo_root(metadata)
         stage_target = subprocess.run(["git", "-C", str(target_repo_root), "add", "-A"], capture_output=True, text=True, check=False)
         if stage_target.returncode != 0:
             raise IntegrationError(stage_target.stderr.strip() or "failed to stage reviewed code")
@@ -463,6 +606,17 @@ class HumanVerificationService:
         finally:
             patch_path.unlink(missing_ok=True)
 
+    def _verification_repo_root(self, metadata) -> Path:
+        if metadata.integration.verification_repo_root:
+            repo_root = Path(metadata.integration.verification_repo_root).expanduser().resolve()
+            if not repo_root.exists():
+                raise IntegrationError("verification repository is missing")
+            return repo_root
+        try:
+            return resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+
     def _resolve_workspace_base_ref(self, workspace_path: Path, base_branch: str) -> str:
         for candidate in (base_branch, f"origin/{base_branch}"):
             probe = subprocess.run(
@@ -477,9 +631,11 @@ class HumanVerificationService:
 
     def _sync_task_documents_to_target_repo(self, task_dir: Path, metadata) -> str:
         try:
-            resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
+        verification_repo_root = self._verification_repo_root(metadata)
+        self._stage_verification_repo_for_summary(verification_repo_root)
         try:
             task_service = TaskService(
                 self.scanner,
@@ -490,10 +646,12 @@ class HumanVerificationService:
                 transitions=self.transitions,
                 locks=self.locks,
             )
-            summary_path = task_service.target_repo_summary_path(metadata)
-            legacy_summary_path = task_service.legacy_target_repo_summary_path(metadata)
+            target_summary_path = task_service.target_repo_summary_path(metadata)
+            target_legacy_summary_path = task_service.legacy_target_repo_summary_path(metadata)
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
+        summary_path = verification_repo_root / target_summary_path.relative_to(target_repo_root)
+        legacy_summary_path = verification_repo_root / target_legacy_summary_path.relative_to(target_repo_root)
         docs_root = summary_path.parent
         docs_root.mkdir(parents=True, exist_ok=True)
         legacy_task_dir = docs_root / metadata.task_id
@@ -506,6 +664,11 @@ class HumanVerificationService:
         if legacy_summary_path != summary_path and legacy_summary_path.exists() and legacy_summary_path.is_file():
             legacy_summary_path.unlink(missing_ok=True)
         return content.decode("utf-8")
+
+    def _stage_verification_repo_for_summary(self, repo_root: Path) -> None:
+        staged = subprocess.run(["git", "-C", str(repo_root), "add", "-A"], capture_output=True, text=True, check=False)
+        if staged.returncode != 0:
+            raise IntegrationError(staged.stderr.strip() or "failed to stage verification repository")
 
     def _default_comments_path(self, metadata) -> str:
         note_path = metadata.human_verification.note_path or f"HUMAN-VERIFY-{metadata.cycle:03d}.md"
@@ -595,7 +758,14 @@ class HumanVerificationService:
         self.metadata_store.save(context.task_dir, metadata)
         self._delete_workspace_root(metadata, workspace_path)
 
-    def _run_verification_apply(self, context: TaskContext) -> None:
+    def _run_verification_apply(
+        self,
+        context: TaskContext,
+        *,
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> None:
         workspace_repo = context.metadata.implementation.workspace
         if workspace_repo is None:
             raise IntegrationError("workspace path missing")
@@ -605,15 +775,30 @@ class HumanVerificationService:
         if not context.metadata.integration.final_branch_summary:
             context.metadata.integration.final_branch_summary = self._generate_branch_summary(context)
         try:
-            self.integration_manager.apply_workspace(context.metadata, Path(workspace_repo))
+            integration_manager = self._integration_manager(operation_config)
+            integration_manager.apply_workspace(
+                context.metadata,
+                Path(workspace_repo),
+                git_token=git_token,
+                git_token_username=git_token_username,
+            )
             self.commit_manager.prepare_commit_message(context.task_dir, context.metadata)
             review_sha = self.commit_manager.commit_task(context.task_dir, context.metadata)
+            integration_manager.push_review_branch(
+                context.metadata,
+                git_token=git_token,
+                git_token_username=git_token_username,
+            )
             context.metadata.commit.status = "review-committed"
             context.metadata.commit.review_sha = review_sha
             context.metadata.commit.sha = review_sha
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
         except IntegrationConflictError as exc:
-            self.integration_manager.rollback_workspace(context.metadata)
+            self._integration_manager(operation_config).rollback_workspace(
+                context.metadata,
+                git_token=git_token,
+                git_token_username=git_token_username,
+            )
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="CONFLICT")
             context.metadata.errors.append(TaskErrorInfo(code="integration-conflict", message=str(exc)))
             context.metadata.commit.status = "pending"
@@ -622,7 +807,11 @@ class HumanVerificationService:
             clear_retry_gate(context.metadata)
         except Exception as exc:
             try:
-                self.integration_manager.rollback_workspace(context.metadata)
+                self._integration_manager(operation_config).rollback_workspace(
+                    context.metadata,
+                    git_token=git_token,
+                    git_token_username=git_token_username,
+                )
             except Exception as cleanup_exc:
                 raise IntegrationError(f"{exc}; cleanup failed: {cleanup_exc}") from exc
             context.metadata.commit.status = "pending"

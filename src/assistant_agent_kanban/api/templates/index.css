@@ -180,6 +180,7 @@ body[data-theme="dark"] .mode-pill {
   color: var(--tag-text-dark, var(--text));
 }
 body[data-theme="dark"] .card-tag-id { --tag-bg: rgba(99, 102, 241, 0.12); --tag-border: rgba(129, 140, 248, 0.2); --tag-text: #a5b4fc; --tag-bg-dark: rgba(99, 102, 241, 0.16); --tag-border-dark: rgba(129, 140, 248, 0.24); --tag-text-dark: #c7d2fe; }
+body[data-theme="dark"] .card-tag-owner { --tag-bg: rgba(28, 132, 128, 0.2); --tag-border: rgba(94, 234, 212, 0.18); --tag-text: #99f6e4; --tag-bg-dark: rgba(28, 132, 128, 0.26); --tag-border-dark: rgba(94, 234, 212, 0.24); --tag-text-dark: #ccfbf1; }
 body[data-theme="dark"] .card-tag-branch { --tag-bg: rgba(74, 92, 109, 0.44); --tag-border: rgba(186, 200, 214, 0.14); --tag-text: #d9e3eb; --tag-bg-dark: rgba(74, 92, 109, 0.5); --tag-border-dark: rgba(186, 200, 214, 0.18); --tag-text-dark: #e2ebf2; }
 body[data-theme="dark"] .card-tag-final-branch { --tag-bg: rgba(99, 132, 114, 0.28); --tag-border: rgba(114, 200, 154, 0.18); --tag-text: #d8f3e4; --tag-bg-dark: rgba(99, 132, 114, 0.34); --tag-border-dark: rgba(114, 200, 154, 0.26); --tag-text-dark: #e3f7ec; }
 body[data-theme="dark"] .card-meta,
@@ -857,10 +858,10 @@ body[data-theme="dark"] .column { background: rgba(26, 36, 47, 0.74); box-shadow
 body[data-theme="dark"] .final-project-column { background: rgba(28, 39, 50, 0.82); }
 body[data-theme="dark"] .target-branch-group { background: rgba(22, 31, 40, 0.9); box-shadow: none; }
 body[data-theme="dark"] .target-branch-label {
-  background: linear-gradient(180deg, rgba(37, 49, 62, 0.96), rgba(31, 42, 54, 0.92));
+  background: linear-gradient(180deg, #253240, #1b2632);
   color: #d9e3eb;
   border-bottom-color: rgba(186, 200, 214, 0.08);
-  box-shadow: none;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
 }
 body[data-theme="dark"] .target-branch-label:hover,
 body[data-theme="dark"] .target-branch-label:focus-visible { background: linear-gradient(180deg, rgba(43, 56, 70, 0.98), rgba(34, 47, 60, 0.94)); }
@@ -953,10 +954,10 @@ body[data-theme="dark"] .final-project-column { border-top-color: var(--repo-acc
 .final-project-new-request:hover, .final-project-new-request:focus-visible { background: linear-gradient(135deg, #818cf8, #6366f1); border-color: rgba(99, 102, 241, 0.45); box-shadow: 0 3px 8px rgba(99, 102, 241, 0.2); }
 body[data-theme="dark"] .final-project-new-request { background: linear-gradient(135deg, #4f46e5, #4338ca); border-color: rgba(99, 102, 241, 0.45); }
 body[data-theme="dark"] .final-project-new-request:hover { background: linear-gradient(135deg, #6366f1, #4f46e5); }
-.final-project-branches { display: grid; gap: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
-.target-branch-group { display: grid; gap: 0; padding: 0; border: 1px solid var(--border); background: var(--panel); box-shadow: inset 0 1px 0 rgba(255,255,255,0.55); overflow: hidden; }
+.final-project-branches { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; position: relative; }
+.target-branch-group { display: flex; flex-direction: column; border: 1px solid var(--border); background: var(--panel); box-shadow: inset 0 1px 0 rgba(255,255,255,0.55); overflow: visible; position: relative; }
 .target-branch-group[data-expanded="false"] .column-cards { display: none; }
-.target-branch-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; padding: 11px 12px; border-bottom: 1px solid rgba(82,96,107,0.12); background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.96)); color: var(--text); box-shadow: inset 0 -1px 0 rgba(255,255,255,0.42); cursor: pointer; }
+.target-branch-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; padding: 11px 12px; border-bottom: 1px solid rgba(82,96,107,0.12); background: linear-gradient(180deg, #ffffff, #f8fafc); color: var(--text); box-shadow: inset 0 -1px 0 rgba(255,255,255,0.42), 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); cursor: pointer; position: sticky; top: 0; z-index: 10; }
 .target-branch-label:hover, .target-branch-label:focus-visible { background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.92)); }
 .target-branch-label:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .target-branch-label-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; }
@@ -993,8 +994,10 @@ body[data-theme="dark"] .card-button:hover { background-color: rgba(255, 255, 25
 .card-tag-label { flex: 0 0 auto; opacity: 0.72; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.68rem; }
 .card-tag-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-tag-id { --tag-bg: rgba(99, 102, 241, 0.08); --tag-border: rgba(99, 102, 241, 0.18); --tag-text: #4f46e5; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; }
+.card-tag-owner { --tag-bg: rgba(20, 184, 166, 0.09); --tag-border: rgba(13, 148, 136, 0.18); --tag-text: #0f766e; }
 .card-task-id-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
 .card-repo-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
+.card-user-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
 .card-tag-branch { --tag-bg: rgba(82,96,107,0.1); --tag-border: rgba(82,96,107,0.18); --tag-text: #45525d; }
 .card-tag-final-branch { --tag-bg: rgba(124,79,44,0.14); --tag-border: rgba(124,79,44,0.26); --tag-text: #6c3b16; }
 .card-history-icon { flex: 0 0 auto; width: 12px; height: 12px; color: currentColor; opacity: 0.92; }
@@ -1268,32 +1271,393 @@ body[data-theme="dark"] .settings-card select {
 .settings-switch input[type="checkbox"]:checked + .settings-switch-ui::before { transform: translateX(22px); background: linear-gradient(180deg, #ffffff, #f1f5f9); }
 .settings-switch input[type="checkbox"]:checked + .settings-switch-ui::after { content: 'ON'; right: auto; left: 9px; color: rgba(255, 255, 255, 0.95); }
 .settings-switch input[type="checkbox"]:focus-visible + .settings-switch-ui { outline: 3px solid rgba(99, 102, 241, 0.24); outline-offset: 3px; }
-.settings-slack-channel-field { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
-.settings-slack-channel-field label { font-size: 0.8rem; font-weight: 700; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
-.settings-slack-channel-field > span { color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
-.settings-slack-channel-summary { display: grid; gap: 8px; }
-.settings-slack-channel-meta { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.84); border-radius: 12px; }
-.settings-slack-channel-meta strong { font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-strong); }
-.settings-slack-channel-meta code { display: block; overflow-wrap: anywhere; font-size: 0.95rem; color: var(--text); }
-.settings-slack-channel-meta small { color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
-.settings-slack-channel-summary .settings-status { white-space: normal; }
-.settings-slack-token-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.settings-slack-callout { padding: 12px 14px; border: 1px solid rgba(99, 102, 241, 0.18); background: rgba(99, 102, 241, 0.04); color: var(--text); line-height: 1.5; border-radius: 12px; }
-.settings-slack-callout strong { display: block; margin-bottom: 4px; font-size: 0.86rem; color: var(--accent-strong); letter-spacing: 0.04em; text-transform: uppercase; }
-.settings-slack-actions { display: grid; gap: 10px; align-items: start; }
-.settings-slack-actions-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.settings-slack-actions-row .primary { min-width: 220px; }
-.settings-slack-primary-note { color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
-.settings-slack-primary-note p { margin: 0; }
-.settings-slack-advanced { border: 1px solid var(--border); background: rgba(255,255,255,0.74); border-radius: 12px; }
-.settings-slack-advanced summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; font-weight: 700; color: var(--text); list-style: none; }
-.settings-slack-advanced summary::-webkit-details-marker { display: none; }
-.settings-slack-advanced-summary-copy { display: grid; gap: 4px; }
-.settings-slack-advanced-summary-copy small { color: var(--muted); font-size: 0.82rem; font-weight: 400; }
-.settings-slack-advanced-state { color: var(--muted); font-size: 0.82rem; font-weight: 600; text-align: right; }
-.settings-slack-advanced-body { display: grid; gap: 12px; padding: 0 14px 14px; border-top: 1px solid var(--border); }
-.settings-slack-advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.settings-slack-advanced-note { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+/* Unified Slack layout */
+.settings-slack-unified-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+.settings-slack-channel-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+.settings-slack-channel-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+}
+.settings-slack-field-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-slack-field-header label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.settings-slack-field-header span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.settings-slack-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.settings-slack-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+.settings-slack-input-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 10px 20px;
+}
+.settings-slack-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+.settings-slack-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-slack-status-item .status-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.settings-slack-status-item .status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  font-family: monospace;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--accent-strong);
+  border: 1px solid rgba(99, 102, 241, 0.16);
+}
+.settings-slack-global-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 0;
+  padding-left: 4px;
+}
+/* Premium Slack Admin styles */
+.settings-slack-shell-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+#settings-slack-admin-section {
+  display: grid;
+  gap: 12px;
+}
+#settings-slack-admin-section[hidden] {
+  display: none !important;
+}
+.slack-bot-highlight {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: var(--font-mono, SFMono-Regular, Consolas, monospace);
+  font-size: 0.88em;
+  font-weight: 700;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  display: inline-block;
+}
+body[data-theme="dark"] .slack-bot-highlight {
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+.settings-slack-notice-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  margin-top: 0;
+}
+.settings-slack-notice-banner span {
+  font-size: 0.86rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+body[data-theme="dark"] .settings-slack-notice-banner {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+.settings-slack-credentials-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,245,249,0.96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+.settings-slack-credentials-card input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.02);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+.settings-slack-credentials-card input:focus {
+  border-color: var(--accent);
+  background: #ffffff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+.settings-slack-panel-section {
+  min-width: 0;
+}
+.settings-slack-panel-section + .settings-slack-panel-section {
+  padding-top: 6px;
+}
+.settings-slack-enable-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.settings-slack-enable-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-slack-enable-copy label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.settings-slack-enable-copy span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.settings-slack-card-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  width: 100%;
+}
+.settings-slack-section-head-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-slack-section-head-premium strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.settings-slack-section-head-premium span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.settings-slack-credentials-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.settings-field-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-field-premium label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.settings-input-wrapper-premium {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.settings-input-wrapper-premium input {
+  width: 100%;
+  padding-right: 12px !important;
+}
+.clear-token-btn-premium {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.16) !important;
+  cursor: pointer;
+  transition: all 150ms ease;
+  line-height: 1.2;
+  min-height: 42px;
+  white-space: nowrap;
+}
+.clear-token-btn-premium:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.2);
+}
+.clear-token-btn-premium:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.token-status-badge {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-family: monospace;
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--muted);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-slack-advanced-premium {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.74);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.01);
+}
+.settings-slack-advanced-summary-premium {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  cursor: default;
+  list-style: none;
+  background: rgba(0, 0, 0, 0.01);
+}
+.settings-slack-advanced-summary-premium::-webkit-details-marker {
+  display: none;
+}
+.settings-slack-advanced-summary-copy-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-slack-advanced-summary-copy-premium span {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.settings-slack-advanced-summary-copy-premium small {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 400;
+}
+.status-listener-badge {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--accent-strong);
+  border: 1px solid rgba(99, 102, 241, 0.16);
+}
+.settings-slack-advanced-body-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.3);
+}
+.settings-slack-advanced-grid-premium {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.settings-slack-toggles-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-toggle-premium {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+}
+.settings-toggle-copy-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-toggle-copy-premium label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.settings-toggle-copy-premium span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.3;
+}
+.settings-slack-receive-test-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-slack-receive-actions-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.compact-button {
+  padding: 8px 16px !important;
+  font-size: 0.84rem !important;
+  width: fit-content !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+}
 body[data-theme="dark"] .settings-toggle { background: linear-gradient(180deg, rgba(38,50,62,0.98), rgba(28,39,50,0.96)); border-color: rgba(186, 200, 214, 0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.18); }
 body[data-theme="dark"] .settings-toggle-copy label { color: var(--accent); }
 body[data-theme="dark"] .settings-switch-ui { border-color: rgba(186, 200, 214, 0.16); background: linear-gradient(180deg, rgba(91,107,121,0.98), rgba(67,81,94,0.98)); box-shadow: inset 0 1px 2px rgba(0,0,0,0.28), 0 6px 16px rgba(0,0,0,0.26); }
@@ -1302,17 +1666,99 @@ body[data-theme="dark"] .settings-switch-ui::after { color: rgba(238,244,248,0.6
 body[data-theme="dark"] .settings-switch input[type="checkbox"]:checked + .settings-switch-ui { border-color: rgba(99, 102, 241, 0.42); background: linear-gradient(180deg, var(--accent), var(--accent-strong)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 10px 22px rgba(0,0,0,0.3); }
 body[data-theme="dark"] .settings-switch input[type="checkbox"]:checked + .settings-switch-ui::after { color: #1a232c; }
 body[data-theme="dark"] .settings-switch input[type="checkbox"]:focus-visible + .settings-switch-ui { outline-color: rgba(99, 102, 241, 0.28); }
-body[data-theme="dark"] .settings-slack-channel-field { background: linear-gradient(180deg, rgba(38,50,62,0.98), rgba(28,39,50,0.96)); border-color: rgba(186, 200, 214, 0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.18); }
-body[data-theme="dark"] .settings-slack-channel-field label,
-body[data-theme="dark"] .settings-slack-channel-meta strong { color: var(--accent); }
-body[data-theme="dark"] .settings-slack-channel-meta { border-color: rgba(186, 200, 214, 0.14); background: rgba(17, 25, 33, 0.38); }
-body[data-theme="dark"] .settings-slack-callout { border-color: rgba(99, 102, 241, 0.22); background: rgba(99, 102, 241, 0.08); }
-body[data-theme="dark"] .settings-slack-callout strong { color: var(--accent); }
-body[data-theme="dark"] .settings-slack-advanced { background: rgba(17, 25, 33, 0.28); border-color: rgba(186, 200, 214, 0.14); }
-body[data-theme="dark"] .settings-slack-advanced-body { border-top-color: rgba(186, 200, 214, 0.14); }
+body[data-theme="dark"] .settings-slack-channel-card {
+  background: linear-gradient(180deg, rgba(38,50,62,0.98), rgba(28,39,50,0.96));
+  border-color: rgba(186, 200, 214, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.18);
+}
+body[data-theme="dark"] .settings-slack-field-header label {
+  color: var(--accent);
+}
+body[data-theme="dark"] .settings-slack-status-row {
+  border-top-color: rgba(255, 255, 255, 0.04);
+}
+body[data-theme="dark"] .settings-slack-status-item .status-badge {
+  background: rgba(99, 102, 241, 0.14);
+  color: var(--accent);
+  border-color: rgba(99, 102, 241, 0.28);
+}
+/* Dark mode overrides for Slack Admin premium */
+body[data-theme="dark"] .settings-slack-credentials-card {
+  background: linear-gradient(180deg, rgba(38,50,62,0.98), rgba(28,39,50,0.96));
+  border-color: rgba(186, 200, 214, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 24px rgba(0,0,0,0.18);
+}
+body[data-theme="dark"] .settings-slack-credentials-card input {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+}
+body[data-theme="dark"] .settings-slack-credentials-card input:focus {
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.26);
+}
+body[data-theme="dark"] .settings-slack-enable-copy label,
+body[data-theme="dark"] .settings-field-premium label,
+body[data-theme="dark"] .settings-toggle-copy-premium label {
+  color: var(--accent);
+}
+body[data-theme="dark"] .settings-slack-card-divider {
+  background: rgba(255, 255, 255, 0.06);
+}
+body[data-theme="dark"] .clear-token-btn-premium {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(239, 68, 68, 0.28) !important;
+}
+body[data-theme="dark"] .clear-token-btn-premium:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+body[data-theme="dark"] .token-status-badge {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+body[data-theme="dark"] .settings-slack-advanced-premium {
+  background: rgba(17, 25, 33, 0.28);
+  border-color: rgba(186, 200, 214, 0.14);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+body[data-theme="dark"] .settings-slack-advanced-summary-premium {
+  background: rgba(255, 255, 255, 0.02);
+}
+body[data-theme="dark"] .status-listener-badge {
+  background: rgba(99, 102, 241, 0.14);
+  color: var(--accent);
+  border-color: rgba(99, 102, 241, 0.28);
+}
+body[data-theme="dark"] .settings-slack-advanced-body-premium {
+  border-top-color: rgba(186, 200, 214, 0.14);
+  background: rgba(17, 25, 33, 0.18);
+}
+body[data-theme="dark"] .settings-toggle-premium {
+  border-color: rgba(186, 200, 214, 0.1);
+  background: rgba(17, 25, 33, 0.38);
+}
+@media (max-width: 720px) {
+  .settings-input-wrapper-premium,
+  .settings-slack-input-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .settings-input-wrapper-premium button,
+  .settings-slack-input-row button {
+    width: 100%;
+  }
+}
 @media (max-width: 960px) {
   .settings-toolbar-actions { justify-content: flex-start; margin-left: 0; }
-  .settings-slack-token-grid, .settings-slack-basic-grid, .settings-slack-advanced-grid { grid-template-columns: 1fr; }
+  .settings-slack-token-grid,
+  .settings-slack-basic-grid,
+  .settings-slack-advanced-grid,
+  .settings-slack-credentials-grid,
+  .settings-slack-advanced-grid-premium {
+    grid-template-columns: 1fr;
+  }
   .settings-toggle-group { grid-template-columns: 1fr; }
 }
 .settings-role-inline { display: grid; grid-template-columns: 64px 132px minmax(0, 1fr) 96px; gap: 10px; align-items: end; }
@@ -1555,15 +2001,28 @@ body[data-theme="dark"] .request-draft-suggestions-title { color: #f2cfaa; }
 body[data-theme="dark"] .request-draft-suggestion { border-color: var(--review-border); background: linear-gradient(180deg, rgba(31, 43, 54, 0.98), rgba(23, 32, 41, 0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
 .human-review-approval-status { padding: 8px 10px; border: 1px solid rgba(24,32,38,0.08); background: rgba(247,242,232,0.72); color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
 .human-review-approval-status[data-tone="warning"] { border-color: rgba(163,58,42,0.2); background: rgba(163,58,42,0.08); color: var(--danger); }
-.approval-gate-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid rgba(163,58,42,0.2); background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(163,58,42,0.08)); color: var(--text); box-shadow: 0 12px 28px rgba(24,32,38,0.08); }
+.approval-gate-notice { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid rgba(163,58,42,0.2); background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(163,58,42,0.08)); color: var(--text); box-shadow: 0 12px 28px rgba(24,32,38,0.08); }
 .approval-gate-notice[hidden] { display: none; }
 .approval-gate-copy { display: grid; gap: 3px; min-width: 0; }
 .approval-gate-copy strong { color: var(--accent-strong); font-size: 0.95rem; }
 .approval-gate-copy span { color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+.approval-gate-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.approval-gate-title-branch { display: inline-flex; align-items: center; gap: 4px; max-width: min(280px, 100%); padding: 2px 3px 2px 8px; border: 1px solid rgba(92,130,115,0.18); background: rgba(255,255,255,0.72); color: var(--text); font-size: 0.78rem; font-weight: 650; }
+.approval-gate-title-branch span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; font-size: inherit; line-height: 1.2; }
+.approval-gate-actions { display: grid; justify-items: end; gap: 8px; flex: 0 0 auto; min-width: 0; }
+.approval-copy-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: 6px; flex: 0 0 auto; }
+.approval-gate-title-branch .approval-copy-button { width: 24px; height: 24px; border-radius: 5px; background: transparent; }
+.approval-copy-button svg { width: 15px; height: 15px; display: block; }
 .approval-gate-notice button { white-space: nowrap; }
 body[data-theme="dark"] .approval-gate-notice { border-color: rgba(240,148,134,0.28); background: linear-gradient(135deg, rgba(56,47,38,0.98), rgba(102,44,38,0.28)); box-shadow: 0 14px 34px rgba(0,0,0,0.28); }
 body[data-theme="dark"] .approval-gate-copy strong { color: #f2cfaa; }
 body[data-theme="dark"] .approval-gate-copy span { color: #c4d0da; }
+body[data-theme="dark"] .approval-gate-title-branch { border-color: rgba(240,148,134,0.2); background: rgba(19,27,32,0.74); color: #f3f7f8; }
+@media (max-width: 760px) {
+  .approval-gate-notice { display: grid; }
+  .approval-gate-actions { justify-items: stretch; min-width: 0; width: 100%; }
+  .approval-gate-actions > button { width: 100%; }
+}
 .human-review-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .approval-choice-panel { width: min(860px, 100%); }
 .approval-choice-shell { display: grid; gap: 14px; }
@@ -2557,4 +3016,513 @@ body[data-theme="dark"] .onboarding-nav-btn.next-btn {
 
 .onboarding-guide-list li.custom-bullet::before {
   content: none;
+}
+
+/* --- User Management Redesign --- */
+.settings-user-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.settings-card-title-main {
+  font-size: 1.15rem !important;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.settings-card-subtitle {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.settings-user-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 14px;
+  margin-bottom: 16px;
+}
+
+.settings-user-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-user-field label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-user-field .field-help-text {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.settings-user-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+.compact-toggle {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+  flex: 1;
+}
+
+.settings-user-submit-area {
+  display: flex;
+  align-items: center;
+}
+
+.settings-user-submit-area button {
+  min-width: 140px;
+}
+
+.settings-user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.settings-user-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(163,58,42,0.18);
+}
+
+.settings-user-danger-zone > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-user-danger-zone strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.settings-user-danger-zone span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.settings-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(24,32,38,0.03);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.settings-user-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.08);
+  border-color: var(--accent);
+}
+
+body[data-theme="dark"] .settings-user-card {
+  background: rgba(30, 41, 59, 0.35);
+  border-color: rgba(99, 102, 241, 0.12);
+}
+
+body[data-theme="dark"] .settings-user-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.user-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  text-transform: uppercase;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
+  flex-shrink: 0;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.user-username {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.user-badge-admin {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent-strong);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+}
+
+.user-badge-member {
+  background: rgba(82, 96, 107, 0.1);
+  color: var(--muted);
+  border: 1px solid rgba(82, 96, 107, 0.18);
+}
+
+.settings-user-delete {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid rgba(163,58,42,0.24);
+  background: rgba(163,58,42,0.06);
+  color: var(--danger);
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.settings-user-delete:hover,
+.settings-user-delete:focus-visible {
+  background: rgba(163,58,42,0.12) !important;
+  border-color: rgba(163,58,42,0.36) !important;
+  color: var(--danger) !important;
+}
+
+.settings-user-delete:disabled {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+}
+
+.settings-user-delete-all {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid rgba(163,58,42,0.34);
+  background: rgba(163,58,42,0.08);
+  color: var(--danger);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.settings-user-delete-all:hover,
+.settings-user-delete-all:focus-visible {
+  background: rgba(163,58,42,0.14) !important;
+  border-color: rgba(163,58,42,0.46) !important;
+  color: var(--danger) !important;
+}
+
+.settings-user-delete-all:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+body[data-theme="dark"] .user-badge-admin {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+body[data-theme="dark"] .user-badge-member {
+  background: rgba(255, 255, 255, 0.08);
+  color: #aebcca;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 768px) {
+  .settings-user-fields-grid {
+    grid-template-columns: 1fr;
+  }
+  .settings-user-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .settings-user-submit-area button {
+    width: 100%;
+    margin-top: 8px;
+  }
+  .settings-user-danger-zone {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .settings-user-delete-all {
+    width: 100%;
+  }
+}
+
+/* --- Header User Profile Design --- */
+#auth-user-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.04);
+  border: 1px solid rgba(99, 102, 241, 0.08);
+  border-radius: 20px;
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+#auth-user-label:hover {
+  background: rgba(99, 102, 241, 0.07);
+  border-color: rgba(99, 102, 241, 0.18);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.04);
+}
+
+body[data-theme="dark"] #auth-user-label {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+body[data-theme="dark"] #auth-user-label:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.header-user-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: #fff;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.15);
+  flex-shrink: 0;
+}
+
+.header-username {
+  font-weight: 600;
+  font-size: 0.84rem;
+  color: var(--text);
+}
+
+.header-user-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.header-user-badge.badge-admin {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-strong);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+}
+
+.header-user-badge.badge-member {
+  background: rgba(82, 96, 107, 0.08);
+  color: var(--muted);
+  border: 1px solid rgba(82, 96, 107, 0.14);
+}
+
+body[data-theme="dark"] .header-user-badge.badge-admin {
+  background: rgba(99, 102, 241, 0.16);
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.28);
+}
+
+body[data-theme="dark"] .header-user-badge.badge-member {
+  background: rgba(255, 255, 255, 0.06);
+  color: #aebcca;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Remote Completion Card Premium Styles */
+.remote-completion-card {
+  position: relative;
+  overflow: hidden;
+  border-left: 4px solid var(--success) !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.03) 0%, rgba(99, 102, 241, 0.01) 100%) !important;
+  border-color: rgba(16, 185, 129, 0.16) !important;
+  padding: 20px 24px !important;
+  gap: 16px !important;
+}
+
+body[data-theme="dark"] .remote-completion-card {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.05) 0%, rgba(129, 140, 248, 0.02) 100%) !important;
+  border-color: rgba(52, 211, 153, 0.22) !important;
+}
+
+.remote-completion-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.remote-completion-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--success);
+  margin-top: 2px;
+}
+
+.remote-completion-icon svg.success-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.remote-completion-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.remote-completion-copy strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.remote-completion-copy p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.remote-completion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.remote-completion-branch-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.04);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text);
+  width: fit-content;
+}
+
+body[data-theme="dark"] .remote-completion-branch-wrapper {
+  background: rgba(129, 140, 248, 0.08);
+  border-color: rgba(129, 140, 248, 0.18);
+}
+
+.remote-completion-branch-wrapper svg.branch-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+}
+
+.remote-completion-branch-wrapper .branch-label {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.remote-completion-branch-wrapper .branch-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+body[data-theme="dark"] .remote-completion-branch-wrapper .branch-name {
+  color: var(--accent);
+}
+
+.remote-completion-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none !important;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+  border: 1px solid rgba(99, 102, 241, 0.35) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2) !important;
+  width: fit-content;
+  margin-top: 4px;
+}
+
+.remote-completion-link span {
+  color: #ffffff !important;
+}
+
+.remote-completion-link:hover {
+  background: linear-gradient(135deg, #818cf8, #6366f1) !important;
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.remote-completion-link:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2) !important;
+}
+
+.remote-completion-link svg.external-link-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+}
+
+.remote-completion-link:hover svg.external-link-icon {
+  transform: translate(1px, -1px);
 }

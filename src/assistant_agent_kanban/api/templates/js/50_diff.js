@@ -280,7 +280,79 @@
 
     let qaChecklistPendingScrollState = null;
 
-    function setApprovalGateNotice({ title = '', body = '', actionLabel = '', action = '' } = {}) {
+    function copyTextFallback(value) {
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', 'readonly');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.pointerEvents = 'none';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      if (!copied) throw new Error('copy failed');
+    }
+
+    function copyIconMarkup(kind = 'copy') {
+      if (kind === 'check') {
+        return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.03 4.72a.75.75 0 0 1 0 1.06l-6 6a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06L6.5 10.19l5.47-5.47a.75.75 0 0 1 1.06 0Z" fill="currentColor"/></svg>';
+      }
+      if (kind === 'error') {
+        return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.47 4.47a.75.75 0 0 1 1.06 0L8 6.94l2.47-2.47a.75.75 0 1 1 1.06 1.06L9.06 8l2.47 2.47a.75.75 0 1 1-1.06 1.06L8 9.06l-2.47 2.47a.75.75 0 0 1-1.06-1.06L6.94 8 4.47 5.53a.75.75 0 0 1 0-1.06Z" fill="currentColor"/></svg>';
+      }
+      return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.75 2A1.75 1.75 0 0 0 4 3.75V4h-.25A1.75 1.75 0 0 0 2 5.75v6.5C2 13.216 2.784 14 3.75 14h6.5A1.75 1.75 0 0 0 12 12.25V12h.25A1.75 1.75 0 0 0 14 10.25v-6.5A1.75 1.75 0 0 0 12.25 2h-6.5ZM12 10.5V5.75A1.75 1.75 0 0 0 10.25 4H5.5v-.25a.25.25 0 0 1 .25-.25h6.5a.25.25 0 0 1 .25.25v6.5a.25.25 0 0 1-.25.25H12Zm-8.25-5h6.5a.25.25 0 0 1 .25.25v6.5a.25.25 0 0 1-.25.25h-6.5a.25.25 0 0 1-.25-.25v-6.5a.25.25 0 0 1 .25-.25Z" fill="currentColor"/></svg>';
+    }
+
+    function renderCopyIconButton(value) {
+      const label = translateHumanReview('copyValue');
+      return `<button type="button" class="ghost-button approval-copy-button" data-copy-value="${escapeHtml(value)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${copyIconMarkup('copy')}</button>`;
+    }
+
+    async function copyTextToClipboard(value, button) {
+      if (!value) return;
+      const originalMarkup = button?.innerHTML || copyIconMarkup('copy');
+      const originalLabel = button?.getAttribute('aria-label') || translateHumanReview('copyValue');
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          copyTextFallback(value);
+        }
+        if (button) {
+          button.innerHTML = copyIconMarkup('check');
+          button.setAttribute('aria-label', translateHumanReview('copiedValue'));
+          button.setAttribute('title', translateHumanReview('copiedValue'));
+        }
+      } catch (_error) {
+        if (button) {
+          button.innerHTML = copyIconMarkup('error');
+          button.setAttribute('aria-label', translateHumanReview('copyFailed'));
+          button.setAttribute('title', translateHumanReview('copyFailed'));
+        }
+      }
+      if (button) {
+        window.setTimeout(() => {
+          button.innerHTML = originalMarkup;
+          button.setAttribute('aria-label', originalLabel);
+          button.setAttribute('title', originalLabel);
+        }, 1400);
+      }
+    }
+
+    function renderLocalQaGitHint() {
+      const integration = activeTaskDetail?.metadata?.integration || {};
+      const branch = integration.remote_review_branch || integration.review_branch || '';
+      if (!branch) return '';
+      return `
+        <div class="approval-gate-title-branch" aria-label="${escapeHtml(translateHumanReview('approvalGateQaBranchLabel'))}">
+          <span>${escapeHtml(branch)}</span>
+          ${renderCopyIconButton(branch)}
+        </div>
+      `;
+    }
+
+    function setApprovalGateNotice({ title = '', body = '', actionLabel = '', action = '', detailsHtml = '' } = {}) {
       if (!taskApprovalGateNotice) return;
       if (!title && !body) {
         taskApprovalGateNotice.hidden = true;
@@ -290,10 +362,17 @@
       taskApprovalGateNotice.hidden = false;
       taskApprovalGateNotice.innerHTML = `
         <div class="approval-gate-copy">
-          <strong>${escapeHtml(title)}</strong>
+          <div class="approval-gate-title-row">
+            <strong>${escapeHtml(title)}</strong>
+            ${detailsHtml || ''}
+          </div>
           <span>${escapeHtml(body)}</span>
         </div>
-        ${actionLabel && action ? `<button type="button" class="accent-button" data-approval-gate-action="${escapeHtml(action)}">${escapeHtml(actionLabel)}</button>` : ''}
+        ${actionLabel && action ? `
+          <div class="approval-gate-actions">
+            <button type="button" class="accent-button" data-approval-gate-action="${escapeHtml(action)}">${escapeHtml(actionLabel)}</button>
+          </div>
+        ` : ''}
       `;
     }
 

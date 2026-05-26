@@ -191,6 +191,8 @@ class KanbanScanner:
             agent_status=derive_agent_status(item.metadata, state),
             agent_owner=item.metadata.lease.owner,
             agent_heartbeat_at=item.metadata.lease.heartbeat_at,
+            created_by_user_id=item.metadata.created_by_user_id,
+            created_by_username=item.metadata.created_by_username,
             target_repo_root=item.metadata.target.repo_root,
             target_repo_label=target_repo_label(item.metadata.target.repo_root),
             base_branch=base_branch,

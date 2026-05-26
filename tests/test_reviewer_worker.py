@@ -165,6 +165,66 @@ def test_parse_finalize_artifact_accepts_relaxed_json_with_qa_checklist(configur
     assert items[0].required is False
 
 
+def test_parse_finalize_artifact_accepts_markdown_verdict_when_json_is_missing(configured_paths):
+    config, _, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter([]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    artifact = worker._parse_finalize_artifact(
+        "Verification complete. Returning the review artifact.\n\n"
+        "Verdict: PASS\n\n"
+        "# 리뷰 결과\n\n"
+        "요청 사항을 충족합니다."
+    )
+
+    assert artifact is not None
+    assert artifact["artifact_type"] == "review"
+    assert artifact["verdict"] == "PASS"
+    assert artifact["primary_blocker"] is None
+    assert artifact["markdown"].startswith("Verdict: PASS")
+    assert "요청 사항을 충족합니다." in artifact["markdown"]
+
+
+def test_parse_finalize_artifact_accepts_markdown_needs_changes_blocker(configured_paths):
+    config, _, _ = configured_paths
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter([]),
+        integration_manager=IntegrationManager(config),
+    )
+
+    artifact = worker._parse_finalize_artifact(
+        "Verdict: NEEDS_CHANGES\n\n"
+        "Primary blocker: Duplicate item code\n\n"
+        "중복 코드가 남아 있습니다."
+    )
+
+    assert artifact is not None
+    assert artifact["verdict"] == "NEEDS_CHANGES"
+    assert artifact["primary_blocker"] == "duplicate-item-code"
+
+
 def _task_ready_for_review(config, *, worker_live_logs_enabled: bool = True):
     config.opencode.worker_live_logs_enabled = worker_live_logs_enabled
     metadata_store = MetadataStore()
