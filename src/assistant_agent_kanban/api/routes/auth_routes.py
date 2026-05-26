@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from ..auth import auth_is_required, current_user_or_none
+from ..auth import auth_is_required, current_user_or_none, local_admin_user
 
 
 ONBOARDING_VERSION = 1
@@ -187,15 +187,19 @@ def register(router: APIRouter) -> None:
         return {"users": [_user_payload(user) for user in users]}
 
     @router.post("/api/auth/users")
-    async def create_user(payload: CreateUserPayload, request: Request):
+    async def create_user(payload: CreateUserPayload, request: Request, response: Response):
+        was_local_admin_mode = not auth_is_required(request)
         _require_admin(request)
         store = request.app.state.user_settings_store
+        is_first_user = store.user_count() == 0
         try:
-            user = store.create_user(payload.username, payload.password, is_admin=payload.is_admin)
+            user = store.create_user(payload.username, payload.password, is_admin=payload.is_admin or is_first_user)
         except sqlite3.IntegrityError as exc:
             raise HTTPException(status_code=409, detail="username already exists") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if was_local_admin_mode and user.is_admin:
+            _set_session_cookie(response, request, user)
         return _user_payload(user)
 
     @router.delete("/api/auth/users")
@@ -238,7 +242,7 @@ def _set_session_cookie(response: Response, request: Request, user) -> None:
 
 def _require_admin(request: Request):
     if not auth_is_required(request):
-        raise HTTPException(status_code=401, detail="create the first admin account before managing users")
+        return local_admin_user()
     user = current_user_or_none(request)
     if user is None:
         raise HTTPException(status_code=401, detail="authentication required")

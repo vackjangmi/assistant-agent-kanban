@@ -25,9 +25,30 @@ class IntegrationManager:
         git_token: str | None = None,
         git_token_username: str | None = None,
     ) -> Path:
-        verification_repo_root, initialized_empty_verification_repo = self._prepare_verification_repo(metadata)
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
         patch_path = self._patch_path(metadata.task_id, metadata.cycle)
         patch_path.parent.mkdir(parents=True, exist_ok=True)
+        if self._is_git_repository(target_repo_root) and not self.config.review_branch_remote.enabled:
+            head = subprocess.run(
+                ["git", "-C", str(target_repo_root), "rev-parse", metadata.target.base_branch],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if head.returncode != 0:
+                raise IntegrationError(head.stderr.strip() or "failed to resolve target base branch")
+            metadata.integration.base_commit = head.stdout.strip() or None
+            return self._apply_workspace_patch_to_git_repo(
+                metadata,
+                workspace_repo,
+                target_repo_root,
+                patch_path,
+                cleanup_verification_workspace=False,
+            )
+        verification_repo_root, initialized_empty_verification_repo = self._prepare_verification_repo(metadata)
         head = subprocess.run(
             ["git", "-C", str(verification_repo_root), "rev-parse", metadata.target.base_branch],
             capture_output=True,
@@ -49,6 +70,23 @@ class IntegrationManager:
                 git_token=git_token,
                 git_token_username=git_token_username,
             )
+        return self._apply_workspace_patch_to_git_repo(
+            metadata,
+            workspace_repo,
+            verification_repo_root,
+            patch_path,
+            cleanup_verification_workspace=True,
+        )
+
+    def _apply_workspace_patch_to_git_repo(
+        self,
+        metadata: TaskMetadata,
+        workspace_repo: Path,
+        repo_root: Path,
+        patch_path: Path,
+        *,
+        cleanup_verification_workspace: bool,
+    ) -> Path:
         add_all = subprocess.run(
             ["git", "-C", str(workspace_repo), "add", "-A"],
             capture_output=True,
@@ -70,30 +108,33 @@ class IntegrationManager:
         if not diff.stdout.strip():
             metadata.integration.applied = False
             metadata.integration.applied_at = None
-            self._delete_verification_workspace(metadata)
+            if cleanup_verification_workspace:
+                self._delete_verification_workspace(metadata)
             raise IntegrationError("workspace has no changes to apply")
         status = subprocess.run(
-            ["git", "-C", str(verification_repo_root), "status", "--short"],
+            ["git", "-C", str(repo_root), "status", "--short"],
             capture_output=True,
             text=True,
             check=False,
         )
         if status.stdout.strip():
-            raise IntegrationError("verification repo must be clean before apply")
-        original_branch = self._current_branch(verification_repo_root) or metadata.target.base_branch
+            repo_label = "verification repo" if cleanup_verification_workspace else "target repo"
+            raise IntegrationError(f"{repo_label} must be clean before apply")
+        original_branch = self._current_branch(repo_root) or metadata.target.base_branch
         review_branch = metadata.integration.review_branch or self._review_branch_name(metadata)
-        self._switch_to_review_branch(verification_repo_root, metadata.target.base_branch, review_branch)
+        self._switch_to_review_branch(repo_root, metadata.target.base_branch, review_branch)
         metadata.integration.original_branch = original_branch
         metadata.integration.review_branch = review_branch
         apply_result = subprocess.run(
-            ["git", "-C", str(verification_repo_root), "apply", "--3way", "--index", str(patch_path)],
+            ["git", "-C", str(repo_root), "apply", "--3way", "--index", str(patch_path)],
             capture_output=True,
             text=True,
             check=False,
         )
         if apply_result.returncode != 0:
-            self._cleanup_review_branch(verification_repo_root, metadata)
-            self._delete_verification_workspace(metadata)
+            self._cleanup_review_branch(repo_root, metadata)
+            if cleanup_verification_workspace:
+                self._delete_verification_workspace(metadata)
             self._reset_transient_integration_state(metadata)
             raise IntegrationConflictError(apply_result.stderr.strip() or "failed to apply patch")
         metadata.integration.applied = True
@@ -111,6 +152,12 @@ class IntegrationManager:
     ) -> None:
         preserved_remote_name = metadata.integration.remote_name
         preserved_remote_review_branch = metadata.integration.remote_review_branch
+        if not self._has_active_integration(metadata):
+            self._reset_transient_integration_state(metadata)
+            if preserve_remote_review_branch:
+                metadata.integration.remote_name = preserved_remote_name
+                metadata.integration.remote_review_branch = preserved_remote_review_branch
+            return
         repo_root = self._active_integration_repo(metadata)
         if repo_root is None:
             self._reset_transient_integration_state(metadata)
@@ -395,6 +442,15 @@ class IntegrationManager:
         metadata.integration.remote_pushed_at = None
         metadata.integration.remote_push_error = None
         metadata.integration.initialized_target_repo = False
+
+    def _has_active_integration(self, metadata: TaskMetadata) -> bool:
+        return bool(
+            metadata.integration.verification_repo_root
+            or metadata.integration.original_branch
+            or metadata.integration.review_branch
+            or metadata.integration.final_branch
+            or metadata.integration.initialized_target_repo
+        )
 
     def _prepare_verification_repo(self, metadata: TaskMetadata) -> tuple[Path, bool]:
         try:
@@ -816,17 +872,35 @@ class IntegrationManager:
         if remote_url.returncode != 0:
             raise IntegrationError(remote_url.stderr.strip() or f"failed to resolve git remote '{remote_name}'")
         url = remote_url.stdout.strip()
+        url = self._https_push_url_for_token(url) or url
         split = urlsplit(url)
         if split.scheme not in {"http", "https"} or not split.netloc:
             if self._looks_like_remote_ssh_url(url):
                 raise IntegrationError(
-                    f"Git token can only be used with an HTTP(S) remote URL for '{remote_name}'"
+                    f"Git token can only be used with an HTTP(S) remote URL for '{remote_name}', and the SSH URL could not be converted"
                 )
             return remote_name
         username = quote((git_token_username or "x-access-token").strip() or "x-access-token", safe="")
         password = quote(git_token, safe="")
         netloc = split.netloc.split("@", 1)[-1]
         return urlunsplit((split.scheme, f"{username}:{password}@{netloc}", split.path, split.query, split.fragment))
+
+    def _https_push_url_for_token(self, url: str) -> str | None:
+        split = urlsplit(url)
+        if split.scheme in {"http", "https"} and split.netloc:
+            netloc = split.netloc.split("@", 1)[-1]
+            return urlunsplit((split.scheme, netloc, split.path, split.query, split.fragment))
+        if split.scheme in {"ssh", "git+ssh"} and split.hostname and split.path:
+            path = split.path.lstrip("/")
+            if path:
+                return f"https://{split.hostname}/{path}"
+        scp_match = re.match(r"^(?:[^@/\s]+@)?([^:/\s]+):(.+)$", url)
+        if scp_match:
+            host = scp_match.group(1)
+            path = scp_match.group(2).lstrip("/")
+            if host and path:
+                return f"https://{host}/{path}"
+        return None
 
     def _available_remote_branch(self, repo_root: Path, repository: str, preferred_branch: str, *, env: dict[str, str] | None) -> str:
         if not self._remote_branch_exists(repo_root, repository, preferred_branch, env=env):
@@ -934,14 +1008,50 @@ class IntegrationManager:
         if aborted.returncode != 0:
             raise IntegrationError(aborted.stderr.strip() or "failed to abort rebase")
 
+    def _abort_merge(self, repo_root: Path) -> None:
+        git_dir = repo_root / ".git"
+        if not (git_dir / "MERGE_HEAD").exists():
+            return
+        aborted = subprocess.run(
+            ["git", "-C", str(repo_root), "merge", "--abort"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if aborted.returncode != 0:
+            reset = subprocess.run(
+                ["git", "-C", str(repo_root), "reset", "--merge"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if reset.returncode != 0:
+                raise IntegrationError((aborted.stderr or reset.stderr).strip() or "failed to abort merge")
+
+    def _has_worktree_changes(self, repo_root: Path) -> bool:
+        status = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if status.returncode != 0:
+            raise IntegrationError(status.stderr.strip() or "failed to inspect repository status")
+        return bool(status.stdout.strip())
+
     def _cleanup_managed_branches(self, repo_root: Path, metadata: TaskMetadata) -> None:
         original_branch = metadata.integration.original_branch
         review_branch = metadata.integration.review_branch
         final_branch = metadata.integration.final_branch
         current_branch = self._current_branch(repo_root)
         self._abort_rebase(repo_root)
-        managed_branch = current_branch if current_branch in {review_branch, final_branch} else None
-        if managed_branch:
+        self._abort_merge(repo_root)
+        cleanup_branch = current_branch in {review_branch, final_branch} or (
+            bool(current_branch)
+            and current_branch in {original_branch, metadata.target.base_branch}
+            and self._has_worktree_changes(repo_root)
+        )
+        if cleanup_branch:
             reset = subprocess.run(
                 ["git", "-C", str(repo_root), "reset", "--hard", "HEAD"],
                 capture_output=True,

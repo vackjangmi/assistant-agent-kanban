@@ -241,11 +241,10 @@ def register(router: APIRouter) -> None:
             if forbidden_fields:
                 labels = ", ".join(sorted(forbidden_fields))
                 raise HTTPException(status_code=403, detail=f"{labels} can only be changed by an admin")
-        base_config = (
-            effective_config_for_user_and_project(runtime.config, store, user_id=user.user_id)
-            if user_scoped_settings
-            else runtime.config
-        )
+        base_config = runtime.config
+        if user_scoped_settings:
+            assert user is not None
+            base_config = effective_config_for_user_and_project(runtime.config, store, user_id=user.user_id)
         slack_config = base_config.slack.model_copy(deep=True)
         fields_set = payload.model_fields_set
         if "slack_enabled" in fields_set and payload.slack_enabled is not None:
@@ -322,7 +321,6 @@ def register(router: APIRouter) -> None:
     @router.get("/api/project-settings")
     async def get_project_settings(repo_root: str, request: Request) -> Mapping[str, object]:
         user = current_user_or_none(request)
-        runtime = request.app.state.runtime
         if auth_is_required(request) and user is None:
             raise HTTPException(status_code=401, detail="authentication required")
         settings = request.app.state.user_settings_store.get_project_settings(repo_root)
@@ -331,7 +329,6 @@ def register(router: APIRouter) -> None:
     @router.put("/api/project-settings")
     async def update_project_settings(payload: ProjectSettings, request: Request) -> Mapping[str, object]:
         user = current_user_or_none(request)
-        runtime = request.app.state.runtime
         if auth_is_required(request) and (user is None or not user.is_admin):
             raise HTTPException(status_code=403, detail="project settings can only be updated by an admin")
         settings = request.app.state.user_settings_store.update_project_settings(payload)

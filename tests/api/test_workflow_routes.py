@@ -13,7 +13,7 @@ from assistant_agent_kanban.exceptions import IntegrationError
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.models import utc_now
 from assistant_agent_kanban.split_proposals import sync_split_proposal_artifacts
-from assistant_agent_kanban.user_settings_store import RuntimePreferenceSettings, UserSecretUpdate
+from assistant_agent_kanban.user_settings_store import ProjectSettings, RuntimePreferenceSettings, UserSecretUpdate
 
 from ..conftest import FakeAdapter, create_request_task
 from ..test_plan_approval_worker import plan_with_split_proposal
@@ -25,8 +25,7 @@ from ._helpers import _task_ready_for_completed_reviews
 def _verification_repo_for(scanner: KanbanScanner, task_id: str) -> Path:
     refreshed = scanner.find_task(task_id)
     verification_repo_root = refreshed.metadata.integration.verification_repo_root
-    assert verification_repo_root
-    return Path(verification_repo_root)
+    return Path(verification_repo_root) if verification_repo_root else Path(refreshed.metadata.target.repo_root)
 
 
 def test_api_resumes_human_blocked_review_loop(configured_paths):
@@ -760,7 +759,7 @@ def test_api_supports_human_verification_start_and_reject(configured_paths):
         assert start.status_code == 200
         assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
         verification_repo = _verification_repo_for(scanner, completed.metadata.task_id)
-        assert (repo_root / "app.txt").read_text() == "hello\n"
+        assert (repo_root / "app.txt").read_text() == "review me\n"
         assert (verification_repo / "app.txt").read_text() == "review me\n"
 
         reject = client.post(
@@ -820,6 +819,38 @@ def test_api_authenticated_verification_pushes_remote_review_branch_even_when_gl
     assert refreshed.metadata.integration.remote_name == "origin"
 
 
+def test_api_local_verification_ignores_project_remote_push_override(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    config.auth.enabled = False
+    config.review_branch_remote.enabled = False
+    config.runtime.auto_dispatch = False
+    remote_repo = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    create_request_task(config, "local-human-verify-no-remote-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    app.state.user_settings_store.update_project_settings(
+        ProjectSettings(
+            repo_root=str(repo_root),
+            review_branch_push_enabled=True,
+            review_branch_require_push_success=True,
+        )
+    )
+    _, completed = _task_ready_for_completed_reviews(config, "local-human-verify-no-remote-task")
+
+    with TestClient(app) as client:
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+
+    assert start.status_code == 200
+    assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
+    remote_branch_ref = f"refs/heads/review/{completed.metadata.task_id.lower()}"
+    show_ref = subprocess.run(["git", "--git-dir", str(remote_repo), "show-ref", "--verify", remote_branch_ref], capture_output=True, text=True, check=False)
+    assert show_ref.returncode != 0
+    refreshed = app.state.runtime.scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.remote_review_branch is None
+    assert refreshed.metadata.integration.remote_name is None
+
+
 
 def test_api_returns_to_todos_on_verification_target_repo_drift(configured_paths):
     config, repo_root, _ = configured_paths
@@ -845,7 +876,7 @@ def test_api_returns_to_todos_on_verification_target_repo_drift(configured_paths
     assert refreshed.metadata.retry_gate.reason == "verification-target-repo-drift"
 
 
-def test_api_allows_human_verification_start_when_target_worktree_is_dirty(configured_paths):
+def test_api_blocks_human_verification_start_when_target_worktree_is_dirty(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
     docs_dir = repo_root / "docs"
@@ -863,11 +894,10 @@ def test_api_allows_human_verification_start_when_target_worktree_is_dirty(confi
     with TestClient(app) as client:
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
 
-    assert start.status_code == 200
-    assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
-    verification_repo = _verification_repo_for(scanner, completed.metadata.task_id)
+    assert start.status_code == 409
+    assert "target repo must be clean before apply" in start.json()["detail"]
+    assert scanner.find_task(completed.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
     assert (repo_root / "app.txt").read_text() == "hello\n"
-    assert (verification_repo / "app.txt").read_text() == "review me\n"
     assert not dirty_file.exists()
     status = subprocess.run(["git", "-C", str(repo_root), "status", "--short"], check=True, capture_output=True, text=True)
     assert "D docs/unrelated.md" in status.stdout

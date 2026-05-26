@@ -19,7 +19,7 @@ from assistant_agent_kanban.exceptions import IntegrationError, TransitionError
 from assistant_agent_kanban.integration_manager import IntegrationManager
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
-from assistant_agent_kanban.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, HumanQaChecklistItem
+from assistant_agent_kanban.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, HumanQaChecklistItem, TaskContext
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.services.human_verification_service import HumanVerificationService
@@ -70,8 +70,7 @@ def _task_ready_for_human_verification(config: AppConfig, *, workspace_side_effe
 
 def _verification_repo(context) -> Path:
     repo_root = context.metadata.integration.verification_repo_root
-    assert repo_root is not None
-    path = Path(repo_root)
+    path = Path(repo_root) if repo_root is not None else Path(context.metadata.target.repo_root)
     assert path.exists()
     return path
 
@@ -96,11 +95,11 @@ def test_human_verification_start_applies_patch_and_moves_state(configured_paths
     assert scanner.find_task(completed.metadata.task_id).state == TaskState.HUMAN_VERIFYING
     updated = scanner.find_task(completed.metadata.task_id)
     verification_repo = _verification_repo(updated)
-    assert (repo_root / "app.txt").read_text() == "hello\n"
+    assert (repo_root / "app.txt").read_text() == "review me\n"
     assert (verification_repo / "app.txt").read_text() == "review me\n"
     target_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     current_branch = subprocess.run(["git", "-C", str(verification_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
-    assert target_branch == "main"
+    assert target_branch == f"review/{updated.metadata.task_id.lower()}"
     assert current_branch == f"review/{updated.metadata.task_id.lower()}"
     assert updated.metadata.integration.original_branch == "main"
     assert updated.metadata.integration.review_branch == current_branch
@@ -329,20 +328,19 @@ def test_human_verification_start_returns_to_todos_when_target_repo_becomes_dirt
     assert any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
 
 
-def test_human_verification_start_does_not_auto_reject_other_review_branch_dirt(configured_paths):
+def test_human_verification_start_blocks_other_review_branch_dirt(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-other-review-branch-dirty-task")
     scanner, service, completed = _task_ready_for_human_verification(config)
     subprocess.run(["git", "-C", str(repo_root), "switch", "-c", "review/other-task"], check=True, capture_output=True, text=True)
     (repo_root / "app.txt").write_text("human review edits\n")
 
-    moved = service.start(completed.metadata.task_id, by="human")
+    with pytest.raises(IntegrationError, match="target repo must be clean before apply"):
+        service.start(completed.metadata.task_id, by="human")
 
     refreshed = scanner.find_task(completed.metadata.task_id)
-    assert moved.state == TaskState.HUMAN_VERIFYING
-    assert refreshed.state == TaskState.HUMAN_VERIFYING
+    assert refreshed.state == TaskState.COMPLETED_REVIEWS
     assert (repo_root / "app.txt").read_text() == "human review edits\n"
-    assert (_verification_repo(refreshed) / "app.txt").read_text() == "review me\n"
     assert not any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
 
 
@@ -363,7 +361,7 @@ def test_human_verification_start_uses_absolute_patch_path_from_relative_config(
     assert updated.metadata.integration.patch_path == str(
         (tmp_path / ".kanban-agent" / "_runtime" / "runs" / updated.metadata.task_id / "review-001.patch").resolve()
     )
-    assert (target_repo / "app.txt").read_text() == "hello\n"
+    assert (target_repo / "app.txt").read_text() == "review me\n"
     assert (_verification_repo(updated) / "app.txt").read_text() == "review me\n"
 
 
@@ -376,10 +374,21 @@ def test_human_verification_start_rechecks_state_after_lock_for_duplicate_reques
     allow_apply = Event()
     original_run_verification_apply = service._run_verification_apply
 
-    def slow_run_verification_apply(context):
+    def slow_run_verification_apply(
+        context: TaskContext,
+        *,
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> None:
         entered_apply.set()
         assert allow_apply.wait(timeout=5)
-        return original_run_verification_apply(context)
+        return original_run_verification_apply(
+            context,
+            git_token=git_token,
+            git_token_username=git_token_username,
+            operation_config=operation_config,
+        )
 
     service._run_verification_apply = slow_run_verification_apply
     try:
@@ -1257,7 +1266,7 @@ def test_human_verification_approve_commits_and_moves_done(tmp_path):
     git_message = subprocess.run(["git", "-C", str(target_repo), "log", "-1", "--pretty=%B", expected_final_branch], check=True, capture_output=True, text=True).stdout.strip()
     assert git_message == expected_message
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
-    assert current_branch == "main"
+    assert current_branch == expected_final_branch
     review_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--list", f"review/{done.metadata.task_id.lower()}"], check=True, capture_output=True, text=True).stdout.strip()
     assert review_branch == ""
     review_date = datetime.now(timezone.utc)
@@ -1328,7 +1337,7 @@ def test_human_verification_approve_switches_back_to_review_branch_before_commit
     assert moved.state == TaskState.DONE
     current_branch = subprocess.run(["git", "-C", str(target_repo), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     expected_final_branch = f"feature/{moved.metadata.task_id.lower()}-{moved.metadata.slug}"
-    assert current_branch == "main"
+    assert current_branch == expected_final_branch
     assert _git_ref_exists(target_repo, expected_final_branch)
 
 
@@ -1461,7 +1470,7 @@ def test_human_verification_approve_stages_manual_review_changes_before_commit(t
     show = subprocess.run(["git", "-C", str(target_repo), "show", "--stat", "--format=%B", final_branch], check=True, capture_output=True, text=True).stdout
     assert "manual tweak" in _git_text(target_repo, final_branch, "app.txt")
     assert "notes.txt" in show
-    assert (target_repo / "app.txt").read_text() == "hello\n"
+    assert (target_repo / "app.txt").read_text() == "review me\nmanual tweak\n"
     status = subprocess.run(["git", "-C", str(target_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
     assert status == ""
 

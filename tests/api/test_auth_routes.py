@@ -70,6 +70,36 @@ def test_bootstrapping_first_admin_turns_on_effective_login_requirement(configur
         assert blocked.status_code == 401
 
 
+def test_local_admin_can_create_first_user_from_user_settings(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        users = client.get("/api/auth/users")
+        assert users.status_code == 200
+        assert users.json() == {"users": []}
+
+        created = client.post("/api/auth/users", json={"username": "admin", "password": "secret-password", "is_admin": False})
+        assert created.status_code == 200
+        assert created.json()["username"] == "admin"
+        assert created.json()["is_admin"] is True
+
+        me = client.get("/api/auth/me")
+        assert me.status_code == 200
+        assert me.json()["enabled"] is True
+        assert me.json()["authenticated"] is True
+        assert me.json()["user"]["username"] == "admin"
+
+        listed = client.get("/api/auth/users")
+        assert listed.status_code == 200
+        assert [(item["username"], item["is_admin"]) for item in listed.json()["users"]] == [("admin", True)]
+
+    with TestClient(app) as anonymous_client:
+        blocked = anonymous_client.get("/api/auth/users")
+        assert blocked.status_code == 401
+
+
 def test_local_admin_mode_is_loopback_only(configured_paths):
     config, _, _ = configured_paths
     config.auth.enabled = False

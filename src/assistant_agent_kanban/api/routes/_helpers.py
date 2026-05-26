@@ -30,7 +30,7 @@ def _request_draft_store(request: Request) -> RequestDraftStore:
     return RequestDraftStore(request.app.state.runtime.config)
 
 
-def _request_draft_owner_fields(request: Request) -> dict[str, str]:
+def _request_draft_owner_fields(request: Request) -> dict[str, object]:
     if not auth_is_required(request):
         return {}
     user = current_user_or_none(request)

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal, cast
 
-from .config import AppConfig, ASSISTANT_ROLES, AssistantRole, normalize_runtime_assistant
+from .config import AppConfig, ASSISTANT_ROLES, AssistantBackend, AssistantRole, normalize_runtime_assistant
 from .language import normalize_runtime_language
 from .user_settings_store import ProjectSettings, RuntimePreferenceSettings, UserSettingsStore
 
@@ -67,13 +68,13 @@ def apply_runtime_preferences(config: AppConfig, settings: RuntimePreferenceSett
     if "language" in fields_set and settings.language is not None:
         language = normalize_runtime_language(settings.language)
         if language is not None:
-            config.runtime.language = language
+            config.runtime.language = cast(Literal["EN", "KO"], language)
     if "theme" in fields_set and settings.theme in {"light", "dark"}:
-        config.runtime.theme = settings.theme
+        config.runtime.theme = cast(Literal["light", "dark"], settings.theme)
     if "coding_assistant" in fields_set and settings.coding_assistant is not None:
         assistant = normalize_runtime_assistant(settings.coding_assistant)
         if assistant is not None:
-            config.runtime.coding_assistant = assistant
+            config.runtime.coding_assistant = cast(AssistantBackend, assistant)
     role_fields_set = settings.role_backends.model_fields_set
     for role in ASSISTANT_ROLES:
         if role not in role_fields_set:
@@ -81,7 +82,7 @@ def apply_runtime_preferences(config: AppConfig, settings: RuntimePreferenceSett
         value = getattr(settings.role_backends, role)
         normalized = normalize_runtime_assistant(value) if value else None
         if value is None or normalized is not None:
-            config.set_role_backend(role, normalized)
+            config.set_role_backend(role, cast(AssistantBackend | None, normalized))
     for role in ASSISTANT_ROLES:
         if f"{role}_model" not in fields_set:
             continue

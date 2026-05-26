@@ -361,6 +361,9 @@ def _git_credentials_for_request(request: Request, user, *, require_token: bool 
 
 def _operation_config_for_task(request: Request, task_id: str, user):
     runtime = request.app.state.runtime
+    effective_auth_enabled = auth_is_required(request)
+    if not effective_auth_enabled:
+        return runtime.config
     try:
         task = runtime.scanner.find_task(task_id)
     except FileNotFoundError:
@@ -369,7 +372,7 @@ def _operation_config_for_task(request: Request, task_id: str, user):
         runtime.config,
         request.app.state.user_settings_store,
         target_repo=task.metadata.target.repo_root,
-        user_id=user.user_id if user is not None and auth_is_required(request) else None,
+        user_id=user.user_id if user is not None else None,
     )
     if _remote_review_push_is_required(request, user):
         operation_config.review_branch_remote.enabled = True

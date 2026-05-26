@@ -263,6 +263,7 @@
       if (restartBtn) restartBtn.textContent = translateSettings('settingsHelpCardBtn');
       setSettingsText('settings-users-heading', 'usersHeading');
       setSettingsText('settings-users-description', 'usersDescription');
+      setSettingsText('settings-new-user-heading', 'newUserHeading');
       setSettingsText('settings-new-user-title', 'newUserTitle');
       setSettingsText('settings-new-user-description', 'newUserDescription');
       setSettingsText('settings-new-user-password-title', 'newUserPasswordTitle');
@@ -275,6 +276,7 @@
       setSettingsText('settings-delete-all-users-description', 'deleteAllUsersDescription');
       if (createUserButton) createUserButton.textContent = translateSettings('createUser');
       if (deleteAllUsersButton) deleteAllUsersButton.textContent = translateSettings('deleteAllUsers');
+      updateUserManagementModeControls();
       if (btnBrowseRepoRoot) btnBrowseRepoRoot.textContent = translateSettings('dirPickerOpen');
       setSettingsText('directory-picker-title', 'dirPickerTitle');
       setSettingsText('directory-picker-description', 'dirPickerDesc');
@@ -1031,7 +1033,37 @@
     }
 
     function currentAuthUser() {
-      return currentAuthPayload?.user || lastSettingsPayload?.user || null;
+      if (currentAuthPayload) return currentAuthPayload.user || null;
+      return lastSettingsPayload?.user || null;
+    }
+
+    function isUserManagementActivationMode() {
+      return Boolean(currentAuthPayload && !currentAuthPayload.enabled);
+    }
+
+    function canManageUsers() {
+      const user = currentAuthUser();
+      return isUserManagementActivationMode() || Boolean(user?.is_admin);
+    }
+
+    function updateUserManagementModeControls() {
+      const activationMode = isUserManagementActivationMode();
+      setSettingsText('settings-users-heading', activationMode ? 'userManagementActivationHeading' : 'usersHeading');
+      setSettingsText('settings-users-description', activationMode ? 'userManagementActivationDescription' : 'usersDescription');
+      setSettingsText('settings-new-user-heading', activationMode ? 'userManagementActivationCreateHeading' : 'newUserHeading');
+      setSettingsText('settings-new-user-title', activationMode ? 'userManagementActivationAdminTitle' : 'newUserTitle');
+      setSettingsText('settings-new-user-description', activationMode ? 'userManagementActivationAdminDescription' : 'newUserDescription');
+      setSettingsText('settings-user-list-title', activationMode ? 'userManagementActivationListTitle' : 'userListTitle');
+      setSettingsText('settings-user-list-description', activationMode ? 'userManagementActivationListDescription' : 'userListDescription');
+      if (createUserButton) createUserButton.textContent = translateSettings(activationMode ? 'activateUserManagement' : 'createUser');
+      if (newUserIsAdminInput) {
+        newUserIsAdminInput.checked = activationMode || newUserIsAdminInput.checked;
+        newUserIsAdminInput.disabled = activationMode;
+      }
+      const adminToggle = document.getElementById('settings-new-user-admin-toggle');
+      if (adminToggle) adminToggle.hidden = activationMode;
+      const dangerZone = document.getElementById('settings-user-danger-zone');
+      if (dangerZone) dangerZone.hidden = activationMode;
     }
 
     function updateAuthControls(data) {
@@ -1071,7 +1103,7 @@
       if (!authenticated && settingsGitPanel && !settingsGitPanel.hidden) {
         setSettingsTab('general');
       }
-      const canManageUsers = Boolean(authenticated && user.is_admin);
+      const canManageUserAccounts = canManageUsers();
       const canEditRepositories = !isRepoDiscoveryReadonly();
       const canEditRuntimeRoles = canEditCommonSettings();
       const settingsRolesTab = document.getElementById('settings-tab-roles');
@@ -1089,10 +1121,11 @@
         setSettingsTab('slack-channel');
       }
       if (settingsSlackChannelTab) settingsSlackChannelTab.hidden = false;
-      if (settingsUsersTab) settingsUsersTab.hidden = !canManageUsers;
-      if (!canManageUsers && settingsUsersPanel && !settingsUsersPanel.hidden) {
+      if (settingsUsersTab) settingsUsersTab.hidden = !canManageUserAccounts;
+      if (!canManageUserAccounts && settingsUsersPanel && !settingsUsersPanel.hidden) {
         setSettingsTab('general');
       }
+      updateUserManagementModeControls();
       updateSettingsPermissionControls();
       if (activeTaskDetail) {
         updatePlanActionState();
@@ -1128,6 +1161,7 @@
 
     function renderUsers(users) {
       if (!settingsUserList) return;
+      updateUserManagementModeControls();
       const rows = Array.isArray(users) ? users : [];
       if (!rows.length) {
         settingsUserList.innerHTML = `<div class="settings-user-card" style="grid-column: 1 / -1; justify-content: center; opacity: 0.7;"><span class="muted">${escapeHtml(translateSettings('userListEmpty'))}</span></div>`;
@@ -1173,7 +1207,7 @@
     }
 
     async function loadUsers() {
-      if (!currentAuthUser()?.is_admin || !settingsUserList) return;
+      if (!canManageUsers() || !settingsUserList) return;
       const response = await fetch('/api/auth/users');
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Failed to load users.');
@@ -1189,7 +1223,8 @@
         return;
       }
       createUserButton.disabled = true;
-      setCreateUserStatus(translateSettings('userCreateRunning'));
+      const activationMode = isUserManagementActivationMode();
+      setCreateUserStatus(translateSettings(activationMode ? 'userManagementActivationRunning' : 'userCreateRunning'));
       try {
         const response = await fetch('/api/auth/users', {
           method: 'POST',
@@ -1197,7 +1232,7 @@
           body: JSON.stringify({
             username,
             password,
-            is_admin: Boolean(newUserIsAdminInput.checked),
+            is_admin: activationMode || Boolean(newUserIsAdminInput.checked),
           }),
         });
         const data = await response.json();
@@ -1205,7 +1240,8 @@
         newUserUsernameInput.value = '';
         newUserPasswordInput.value = '';
         newUserIsAdminInput.checked = false;
-        setCreateUserStatus(translateSettings('userCreateSuccess'), 'success');
+        setCreateUserStatus(translateSettings(activationMode ? 'userManagementActivationSuccess' : 'userCreateSuccess'), 'success');
+        await loadAuthState();
         await loadUsers();
       } catch (error) {
         setCreateUserStatus(error.message || translateSettings('userCreateFailed'), 'error');
