@@ -199,6 +199,14 @@ Additional rules:
 - Convert exceptions into domain exceptions
 - Never log sensitive information
 
+Before committing or reporting a code change as done, reproduce the CI quality gates locally.
+
+- Prefer the project virtualenv when it exists: `.venv/bin/python -m ruff check .`, `.venv/bin/python -m pyright`, and relevant `pytest` commands.
+- If the virtualenv is unavailable, use the active Python only after installing the dev extras: `python -m pip install -e '.[dev]'`.
+- Run `python -m ruff check .` and `python -m pyright` after touching Python source, tests, route handlers, settings/config models, or type annotations.
+- Do not rely on targeted tests alone. A change can pass behavior tests while still failing lint or pyright in CI.
+- If a quality gate cannot be run locally, state that explicitly in the work summary and explain the blocker.
+
 Minimum test areas:
 
 - scanner
