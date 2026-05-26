@@ -212,6 +212,10 @@
       if (approveHumanReviewButton.disabled) return;
       taskModalError.hidden = true;
       taskModalError.textContent = '';
+      if (activeTaskDetail?.metadata?.integration?.remote_review_branch) {
+        approveVerification('new-branch');
+        return;
+      }
       setApprovalChoiceModalOpen(true);
     }
 
@@ -239,6 +243,13 @@
         if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
         approvalSubmissionInFlight = false;
         await loadBoard();
+        const remoteUrl = payload?.integration?.remote_merge_request_url || '';
+        if (remoteUrl) {
+          setApprovalChoiceModalOpen(false, { force: true });
+          await loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false });
+          setTaskTab('overview');
+          return;
+        }
         setApprovalChoiceModalOpen(false, { force: true });
         setTaskModalOpen(false);
       } catch (error) {

@@ -16,6 +16,17 @@
       if (deleteButton) void deleteRequestDraftFromList(deleteButton.dataset.requestDraftDelete || '');
     });
     openSettingsButton.addEventListener('click', openSettingsModal);
+    if (logoutButton) logoutButton.addEventListener('click', () => logout().catch(() => { window.location.href = '/login'; }));
+    if (createUserButton) createUserButton.addEventListener('click', () => createUser());
+    if (deleteAllUsersButton) deleteAllUsersButton.addEventListener('click', () => deleteAllUsers());
+    [newUserUsernameInput, newUserPasswordInput].forEach((input) => {
+      if (!input) return;
+      input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        createUser();
+      });
+    });
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });
     cancelComposerButton.addEventListener('click', () => { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); });
     cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
@@ -191,6 +202,11 @@
     taskTabReviewerQa.addEventListener('click', () => setTaskTab('reviewer-qa'));
     taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
     taskApprovalGateNotice.addEventListener('click', (event) => {
+      const copyButton = event.target.closest('[data-copy-value]');
+      if (copyButton) {
+        copyTextToClipboard(copyButton.dataset.copyValue || '', copyButton);
+        return;
+      }
       const actionButton = event.target.closest('[data-approval-gate-action]');
       if (!actionButton) return;
       const action = actionButton.dataset.approvalGateAction;
@@ -421,7 +437,10 @@
     scopeField.addEventListener('input', () => { scopeField.dataset.autofilled = 'false'; });
     outOfScopeField.addEventListener('input', () => { outOfScopeField.dataset.autofilled = 'false'; });
     if (btnBrowseRepoRoot) {
-      btnBrowseRepoRoot.addEventListener('click', () => openDirectoryPicker('repo_discovery_root'));
+      btnBrowseRepoRoot.addEventListener('click', () => {
+        if (isRepoDiscoveryReadonly()) return;
+        openDirectoryPicker('repo_discovery_root');
+      });
     }
     if (btnBrowseTargetRepo) {
       btnBrowseTargetRepo.addEventListener('click', () => openDirectoryPicker('target_repo'));
@@ -444,5 +463,6 @@
     }
     resetFormState();
     applyRuntimeTheme(initialRuntimeTheme);
+    void loadAuthState().catch(() => {});
     void loadModelSettings(false, { allowHidden: true }).catch(() => {});
     loadTargetRepoOptions();

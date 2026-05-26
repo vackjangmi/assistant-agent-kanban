@@ -148,6 +148,7 @@
         element.disabled = isHydrating;
       });
       saveSettingsButton.disabled = isHydrating;
+      if (!isHydrating) updateSettingsPermissionControls();
     }
 
     function syncNumericSettingInput(input, value, fallback) {
@@ -240,6 +241,7 @@
       applyRuntimeTheme(runtimeThemeInput.value);
       cachedAssistantOptions = resolveAssistantOptions(data);
       lastSettingsPayload = data;
+      updateAuthControls();
       renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
       applySlackSettingsData(data);
       plannerBackendInput.value = data.role_backends?.planner || 'default';
@@ -252,6 +254,9 @@
       workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
       applyRuntimeSettingsTranslations();
       repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
+      if (gitTokenUsernameInput) gitTokenUsernameInput.value = data.git_token_username || '';
+      if (gitTokenInput) gitTokenInput.value = '';
+      updateGitTokenStatus(data);
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
       setRoleModelValue('planner', data.planner_model || '');
       setRoleModelValue('request_draft', data.request_draft_model || '');
@@ -374,12 +379,15 @@
       try {
         const slackPayload = buildSlackSettingsPayload();
         const pendingSlackChannel = slackPayload.slack_default_channel || '';
-        const response = await fetch('/api/settings/models', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            language: runtimeLanguageInput.value || 'EN',
-            theme: runtimeThemeInput.value || 'light',
+        const payload = {
+          language: runtimeLanguageInput.value || 'EN',
+          theme: runtimeThemeInput.value || 'light',
+          git_token_username: gitTokenUsernameInput?.value || '',
+          ...(gitTokenInput?.value ? { git_token: gitTokenInput.value } : {}),
+          ...slackPayload,
+        };
+        if (canEditCommonSettings()) {
+          Object.assign(payload, {
             coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
             role_backends: {
               planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
@@ -390,8 +398,6 @@
               commit: commitBackendInput.value === 'default' ? null : commitBackendInput.value,
             },
             worker_live_logs_enabled: workerLiveLogsModeInput.value === 'true',
-            repo_discovery_root: repoDiscoveryRootInput.value,
-            repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
             planner_model: currentRoleModelValue(roleSettingConfig('planner')),
             request_draft_model: currentRoleModelValue(roleSettingConfig('request_draft')),
             planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
@@ -406,8 +412,16 @@
             reviewer_agent_count: readNumericSettingInput(reviewerAgentCountInput, 1),
             commit_model: currentRoleModelValue(roleSettingConfig('commit')),
             commit_session_token_budget: readNumericSettingInput(commitSessionTokenBudgetInput, 250),
-            ...slackPayload,
-          }),
+          });
+        }
+        if (!isRepoDiscoveryReadonly()) {
+          payload.repo_discovery_root = repoDiscoveryRootInput.value;
+          payload.repo_discovery_max_depth = readNumericSettingInput(repoDiscoveryMaxDepthInput, 1);
+        }
+        const response = await fetch('/api/settings/models', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(formatSettingsApiError(data.detail));
@@ -417,6 +431,7 @@
         applyRuntimeTheme(runtimeThemeInput.value);
         cachedAssistantOptions = resolveAssistantOptions(data);
         lastSettingsPayload = data;
+        updateAuthControls();
         renderAssistantOptions(cachedAssistantOptions, data.coding_assistant || 'opencode');
         const preservePendingChannel = Boolean(normalizeSlackChannelValue(pendingSlackChannel))
           && normalizeSlackChannelValue(pendingSlackChannel) !== normalizeSlackChannelValue(data.slack_default_channel_display || data.slack_default_channel || '');
@@ -431,6 +446,9 @@
         workerLiveLogsModeInput.value = data.worker_live_logs_enabled ? 'true' : 'false';
         applyRuntimeSettingsTranslations();
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
+        if (gitTokenUsernameInput) gitTokenUsernameInput.value = data.git_token_username || '';
+        if (gitTokenInput) gitTokenInput.value = '';
+        updateGitTokenStatus(data);
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         setRoleModelValue('planner', data.planner_model || '');
         setRoleModelValue('request_draft', data.request_draft_model || '');
@@ -933,6 +951,7 @@
         && snapshot.metadata.retry_gate.reason.startsWith('review-')
         && Boolean(snapshot?.metadata?.retry_gate?.not_before);
       const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;
+      const canActOnTask = canCurrentUserActOnTask(snapshot);
       const chrome = taskChromeState(state);
       const nextTab = preserveTab ? activeTaskTab : chrome.defaultTab;
       document.getElementById('task-modal-title').textContent = snapshot?.title || translateTask('modalTitle');
@@ -942,37 +961,37 @@
       taskTabReviewerQa.hidden = !chrome.reviewerQaVisible;
       taskTabReviewNote.hidden = !chrome.reviewNoteVisible;
       taskTabEditor.hidden = !chrome.viewerVisible;
-      togglePlanEditButton.hidden = state !== 'waiting-check-plans';
-      togglePlanEditButton.disabled = state !== 'waiting-check-plans';
-      savePlanButton.hidden = state !== 'waiting-check-plans';
+      togglePlanEditButton.hidden = state !== 'waiting-check-plans' || !canActOnTask;
+      togglePlanEditButton.disabled = state !== 'waiting-check-plans' || !canActOnTask;
+      savePlanButton.hidden = state !== 'waiting-check-plans' || !canActOnTask;
       savePlanButton.disabled = true;
-      approvePlanButton.hidden = state !== 'waiting-check-plans';
-      approvePlanButton.disabled = state !== 'waiting-check-plans';
-      splitPlanButton.hidden = !(state === 'waiting-check-plans' && taskHasSplitProposal(snapshot?.metadata));
+      approvePlanButton.hidden = state !== 'waiting-check-plans' || !canActOnTask;
+      approvePlanButton.disabled = state !== 'waiting-check-plans' || !canActOnTask;
+      splitPlanButton.hidden = !(state === 'waiting-check-plans' && taskHasSplitProposal(snapshot?.metadata) && canActOnTask);
       splitPlanButton.disabled = splitPlanButton.hidden;
-      startVerificationButton.hidden = state !== 'completed-reviews';
-      startVerificationButton.disabled = state !== 'completed-reviews';
-      retryVerificationApplyButton.hidden = state !== 'human-verifying';
-      retryVerificationApplyButton.disabled = state !== 'human-verifying';
-      resumePlannerButton.hidden = !canResumePlannerFromSnapshot;
-      resumePlannerButton.disabled = !canResumePlannerFromSnapshot;
-      resumeImplementerButton.hidden = !canResumeImplementerFromSnapshot;
-      resumeImplementerButton.disabled = !canResumeImplementerFromSnapshot;
-      resumeReviewerButton.hidden = !canResumeReviewerFromSnapshot;
-      resumeReviewerButton.disabled = !canResumeReviewerFromSnapshot;
-      resumeReviewLoopButton.hidden = !canResumeReviewLoopFromSnapshot;
-      resumeReviewLoopButton.disabled = !canResumeReviewLoopFromSnapshot;
-      if (!canResumePlannerFromSnapshot) setResumePlannerChoiceModalOpen(false, { force: true });
-      if (!canResumeImplementerFromSnapshot) setResumeImplementerChoiceModalOpen(false, { force: true });
-      if (!canResumeReviewerFromSnapshot) setResumeReviewerChoiceModalOpen(false, { force: true });
-      requestChangesButton.hidden = state !== 'human-verifying';
-      requestChangesShell.hidden = state !== 'human-verifying';
-      approveHumanReviewButton.hidden = state !== 'human-verifying';
-      approveHumanReviewShell.hidden = state !== 'human-verifying';
-      cancelTaskButton.hidden = !snapshot || state === 'done' || state === 'closed';
+      startVerificationButton.hidden = state !== 'completed-reviews' || !canActOnTask;
+      startVerificationButton.disabled = state !== 'completed-reviews' || !canActOnTask;
+      retryVerificationApplyButton.hidden = state !== 'human-verifying' || !canActOnTask;
+      retryVerificationApplyButton.disabled = state !== 'human-verifying' || !canActOnTask;
+      resumePlannerButton.hidden = !canResumePlannerFromSnapshot || !canActOnTask;
+      resumePlannerButton.disabled = !canResumePlannerFromSnapshot || !canActOnTask;
+      resumeImplementerButton.hidden = !canResumeImplementerFromSnapshot || !canActOnTask;
+      resumeImplementerButton.disabled = !canResumeImplementerFromSnapshot || !canActOnTask;
+      resumeReviewerButton.hidden = !canResumeReviewerFromSnapshot || !canActOnTask;
+      resumeReviewerButton.disabled = !canResumeReviewerFromSnapshot || !canActOnTask;
+      resumeReviewLoopButton.hidden = !canResumeReviewLoopFromSnapshot || !canActOnTask;
+      resumeReviewLoopButton.disabled = !canResumeReviewLoopFromSnapshot || !canActOnTask;
+      if (!canResumePlannerFromSnapshot || !canActOnTask) setResumePlannerChoiceModalOpen(false, { force: true });
+      if (!canResumeImplementerFromSnapshot || !canActOnTask) setResumeImplementerChoiceModalOpen(false, { force: true });
+      if (!canResumeReviewerFromSnapshot || !canActOnTask) setResumeReviewerChoiceModalOpen(false, { force: true });
+      requestChangesButton.hidden = state !== 'human-verifying' || !canActOnTask;
+      requestChangesShell.hidden = state !== 'human-verifying' || !canActOnTask;
+      approveHumanReviewButton.hidden = state !== 'human-verifying' || !canActOnTask;
+      approveHumanReviewShell.hidden = state !== 'human-verifying' || !canActOnTask;
+      cancelTaskButton.hidden = !snapshot || state === 'done' || state === 'closed' || !canActOnTask;
       cancelTaskButton.disabled = cancelTaskButton.hidden;
-      deleteTaskButton.hidden = !snapshot;
-      deleteTaskButton.disabled = !snapshot;
+      deleteTaskButton.hidden = !snapshot || !canActOnTask;
+      deleteTaskButton.disabled = deleteTaskButton.hidden;
       if (state === 'waiting-check-plans' || state === 'plan-approving') activeArtifactName = 'PLAN.md';
       setTaskTab(nextTab, { load: false });
       return nextTab;

@@ -82,6 +82,8 @@
         },
         state: stateChanged ? snapshot.state : activeMetadata.state,
         updated_at: updatedAtChanged ? snapshot.updated_at : activeMetadata.updated_at,
+        created_by_user_id: snapshot.created_by_user_id || activeMetadata.created_by_user_id,
+        created_by_username: snapshot.created_by_username || activeMetadata.created_by_username,
       };
       const nextMarkdownFiles = ['plan-approving', 'waiting-check-plans'].includes(snapshot.state) && !activeTaskDetail.markdown_files.includes('PLAN.md')
         ? ['PLAN.md', ...activeTaskDetail.markdown_files]
@@ -255,6 +257,29 @@
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.9 2.75 4.45v7.1L8 14.1l5.25-2.55v-7.1L8 1.9Zm0 1.665 3.553 1.726L8 7.016 4.447 5.291 8 3.565Zm-3.75 2.93L7.25 7.95v4.11l-3-1.457v-4.11Zm4.5 5.565v-4.11l3-1.456v4.109l-3 1.457Z" fill="currentColor"/></svg>`;
     }
 
+    function userIconSvg(className = 'card-user-icon') {
+      return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 8.25a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 1.25c-2.82 0-5.25 1.64-5.25 3.66 0 .49.4.89.89.89h8.72c.49 0 .89-.4.89-.89C13.25 11.14 10.82 9.5 8 9.5Z" fill="currentColor"/></svg>`;
+    }
+
+    function taskOwnerName(task) {
+      return task?.created_by_username || task?.metadata?.created_by_username || '';
+    }
+
+    function taskOwnerTitle(task) {
+      const owner = taskOwnerName(task);
+      if (!owner) return '';
+      return currentUiLanguage() === 'KO' ? `요청자: ${owner}` : `Creator: ${owner}`;
+    }
+
+    function canCurrentUserActOnTask(task) {
+      if (!currentAuthPayload?.enabled) return true;
+      const user = currentAuthUser();
+      if (!user) return false;
+      if (user.is_admin) return true;
+      const ownerId = task?.created_by_user_id || task?.metadata?.created_by_user_id || '';
+      return Boolean(ownerId && ownerId === user.user_id);
+    }
+
     function renderTag(label, value, className = '', style = '', title = '', prefixHtml = '') {
       if (!value) return '';
       const classes = ['card-tag'];
@@ -271,10 +296,12 @@
       const repoLabel = item.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
       const branchLabel = item.base_branch || '';
       const finalBranchLabel = item.final_branch || '';
+      const ownerLabel = taskOwnerName(item);
       const repoTone = repoTagTone(repoPath);
       const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};--tag-bg-dark:${repoTone.darkBackground};--tag-border-dark:${repoTone.darkBorder};--tag-text-dark:${repoTone.darkText};`;
       const tags = [
         renderTag('', item.task_id || '', 'card-tag-id', '', item.task_id || '', taskIdIconSvg()),
+        renderTag('', ownerLabel, 'card-tag-owner', '', taskOwnerTitle(item), userIconSvg()),
         compactFinal ? '' : renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
         compactFinal ? '' : renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon')),
         compactFinal ? renderTag('', finalBranchLabel, 'card-tag-branch card-tag-final-branch', '', finalBranchLabel, branchIconSvg('card-branch-icon')) : '',
@@ -313,6 +340,7 @@
       const repoLabel = task.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
       const baseBranch = task.base_branch || '';
       const finalBranch = task.final_branch || '';
+      const ownerLabel = taskOwnerName(task);
       const state = task.state || '';
       const completedAt = task.completed_at || resolveTaskCompletedAt(task);
       const repoTone = repoTagTone(repoPath);
@@ -320,6 +348,7 @@
       const statusStyle = state ? stateTagStyle(state) : '';
       const leftTags = [
         renderTag('', task.task_id || '', 'card-tag-id', '', task.task_id || '', taskIdIconSvg()),
+        renderTag('', ownerLabel, 'card-tag-owner', '', taskOwnerTitle(task), userIconSvg()),
         renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
         renderTag('', baseBranch, 'card-tag-branch', '', baseBranch, branchIconSvg('card-branch-icon')),
         renderTag('', finalBranch, 'card-tag-branch card-tag-final-branch', '', finalBranch, branchIconSvg('card-branch-icon')),
@@ -455,6 +484,12 @@
       return orderedGroups.map(([projectPath, items]) => renderFinalProjectColumn(projectPath, items)).join('');
     }
 
+    function draftOwnerLabel(draft) {
+      const owner = draft?.created_by_username || '';
+      if (!owner) return '';
+      return currentUiLanguage() === 'KO' ? `생성자: ${owner}` : `Creator: ${owner}`;
+    }
+
     function renderBoardColumn(column) {
       const items = column.items || [];
       return `
@@ -476,11 +511,13 @@
         const repoPath = normalizeRepoPath(draft.target_repo || '');
         const repoLabel = deriveRepoContext(repoPath).repoName || repoPath || 'draft';
         const updatedLabel = translateRequest('draftsUpdated', { time: formatDateTime(draft.updated_at) });
+        const ownerLabel = draftOwnerLabel(draft);
         return `
           <article class="draft-card">
             <strong>${escapeHtml(draft.title || translateRequest('draftsTitle'))}</strong>
             <p>${escapeHtml(repoLabel)}${draft.base_branch ? ` · ${escapeHtml(draft.base_branch)}` : ''}</p>
             <div class="draft-card-meta">
+              ${ownerLabel ? `<span class="diff-badge draft-owner-badge">${escapeHtml(ownerLabel)}</span>` : ''}
               ${draft.has_transcript ? `<span class="diff-badge">${escapeHtml(translateRequest('draftTitle'))}</span>` : ''}
               ${draft.has_unsent_input ? `<span class="diff-badge">${escapeHtml(translateRequest('draftLiveSuffix').trim())}</span>` : ''}
               <span class="diff-badge">${escapeHtml(updatedLabel)}</span>

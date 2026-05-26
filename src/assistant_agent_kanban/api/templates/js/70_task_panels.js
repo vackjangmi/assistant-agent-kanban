@@ -286,11 +286,13 @@
         setApprovalGateNotice({
           title: translateHumanReview('approvalGateRetryTitle'),
           body: translateHumanReview('approvalGateRetryBody'),
+          detailsHtml: renderLocalQaGitHint(),
         });
       } else if (noteExists || currentCommentCount > 0) {
         setApprovalGateNotice({
           title: translateHumanReview('approvalGateReviewTitle'),
           body: translateHumanReview('approvalGateReviewBody'),
+          detailsHtml: renderLocalQaGitHint(),
         });
       } else if (incompleteQaCount > 0) {
         setApprovalGateNotice({
@@ -298,6 +300,7 @@
           body: translateHumanReview(incompleteQaCount === 1 ? 'approvalGateQaBodyOne' : 'approvalGateQaBodyMany', { count: incompleteQaCount }),
           actionLabel: translateHumanReview('approvalGateQaAction'),
           action: 'qa-checklist',
+          detailsHtml: renderLocalQaGitHint(),
         });
       } else {
         setApprovalGateNotice();
@@ -455,8 +458,9 @@
     }
 
     function updatePlanActionState() {
-      const editableArtifact = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md');
-      const canSplitPlan = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans' && taskHasSplitProposal(activeTaskDetail.metadata));
+      const canActOnTask = canCurrentUserActOnTask(activeTaskDetail?.metadata);
+      const editableArtifact = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md' && canActOnTask);
+      const canSplitPlan = Boolean(activeTaskDetail && activeTaskDetail.metadata.state === 'waiting-check-plans' && taskHasSplitProposal(activeTaskDetail.metadata) && canActOnTask);
       togglePlanEditButton.hidden = !editableArtifact;
       savePlanButton.hidden = !editableArtifact || !planEditMode;
       approvePlanButton.hidden = !editableArtifact;
@@ -469,21 +473,22 @@
 
     function updateHumanVerificationState() {
       const state = activeTaskDetail?.metadata?.state;
+      const canActOnTask = canCurrentUserActOnTask(activeTaskDetail?.metadata);
       const verificationLeaseRunId = activeTaskDetail?.metadata?.lease?.run_id;
       const review = activeTaskDetail?.metadata?.review || {};
       const integrationApplied = Boolean(activeTaskDetail?.metadata?.integration?.applied);
-      const canResumePlanner = state === 'requests'
+      const canResumePlanner = canActOnTask && state === 'requests'
         && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
         && activeTaskDetail.metadata.retry_gate.reason.startsWith('planner-');
-      const canResumeImplementer = canResumeImplementerForMetadata(activeTaskDetail?.metadata, state);
-      const canResumeReviewer = state === 'waiting-reviews'
+      const canResumeImplementer = canActOnTask && canResumeImplementerForMetadata(activeTaskDetail?.metadata, state);
+      const canResumeReviewer = canActOnTask && state === 'waiting-reviews'
         && typeof activeTaskDetail?.metadata?.retry_gate?.reason === 'string'
         && activeTaskDetail.metadata.retry_gate.reason.startsWith('review-')
         && Boolean(activeTaskDetail?.metadata?.retry_gate?.not_before);
-      const canResumeReviewLoop = state === 'todos' && review.human_rework_required === true;
+      const canResumeReviewLoop = canActOnTask && state === 'todos' && review.human_rework_required === true;
       const verificationStartInFlight = state === 'completed-reviews' && verificationLeaseRunId === 'manual-human-verifying';
-      const canStart = state === 'completed-reviews' && !verificationStartInFlight;
-      const canApproveOrReject = state === 'human-verifying';
+      const canStart = canActOnTask && state === 'completed-reviews' && !verificationStartInFlight;
+      const canApproveOrReject = canActOnTask && state === 'human-verifying';
       const canRetryApply = canApproveOrReject && !integrationApplied;
       resumePlannerButton.hidden = !canResumePlanner;
       resumePlannerButton.disabled = !canResumePlanner || taskDetailStale;
@@ -510,14 +515,15 @@
     function updateTaskDeleteState() {
       const state = activeTaskDetail?.metadata?.state;
       const available = Boolean(state);
-      const canCancel = available && state !== 'done' && state !== 'closed';
-      const canRerequest = available && state === 'closed' && activeTaskDetail?.metadata?.closure?.reason === 'cancelled_by_human';
+      const canActOnTask = canCurrentUserActOnTask(activeTaskDetail?.metadata);
+      const canCancel = canActOnTask && available && state !== 'done' && state !== 'closed';
+      const canRerequest = canActOnTask && available && state === 'closed' && activeTaskDetail?.metadata?.closure?.reason === 'cancelled_by_human';
       rerequestTaskButton.hidden = !canRerequest;
       rerequestTaskButton.disabled = !canRerequest || taskDetailStale;
       cancelTaskButton.hidden = !canCancel;
       cancelTaskButton.disabled = !canCancel || taskDetailStale;
-      deleteTaskButton.hidden = !available;
-      deleteTaskButton.disabled = !available || taskDetailStale;
+      deleteTaskButton.hidden = !available || !canActOnTask;
+      deleteTaskButton.disabled = !available || !canActOnTask || taskDetailStale;
     }
 
     function taskVisitText(summary) {
@@ -704,6 +710,53 @@
       `;
     }
 
+    function renderRemoteCompletionSection(detail) {
+      const metadata = detail?.metadata;
+      if (metadata?.state !== 'done') return '';
+      const integration = metadata.integration || {};
+      const branch = integration.final_remote_branch || '';
+      const url = integration.remote_merge_request_url || '';
+      if (!branch && !url) return '';
+      return `
+        <div class="task-section">
+          <h3>${escapeHtml(translateTask('remoteCompletionTitle'))}</h3>
+          <div class="settings-card remote-completion-card">
+            <div class="remote-completion-header">
+              <div class="remote-completion-icon">
+                <svg class="success-icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <div class="remote-completion-copy">
+                <strong>${escapeHtml(translateTask('remoteCompletionTitle'))}</strong>
+                <p>${escapeHtml(translateTask('remoteCompletionDescription'))}</p>
+              </div>
+            </div>
+            <div class="remote-completion-body">
+              ${branch ? `
+                <div class="remote-completion-branch-wrapper">
+                  <svg class="branch-icon" viewBox="0 0 16 16" fill="currentColor">
+                    <path fill-rule="evenodd" d="M11.5 7.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM9 13a1 1 0 011-1h1.5a2.5 2.5 0 002.5-2.5V5.707a1 1 0 00-.293-.707l-2-2A1 1 0 0011.293 3H9.5a1.5 1.5 0 00-3 0H4.5A2.5 2.5 0 002 5.5v3.293a1 1 0 00.293.707l2 2A1 1 0 005.293 12H7a1 1 0 011 1zm-3-8.5a.5.5 0 11-1 0 .5.5 0 011 0z" />
+                  </svg>
+                  <span class="branch-label">${escapeHtml(translateTask('remoteCompletionBranch'))}:</span>
+                  <span class="branch-name">${escapeHtml(branch)}</span>
+                </div>
+              ` : ''}
+              ${url ? `
+                <a class="accent-button remote-completion-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color: #ffffff !important; text-decoration: none !important; display: inline-flex !important; align-items: center; justify-content: center; gap: 8px;">
+                  <span style="color: #ffffff !important; font-weight: 600;">${escapeHtml(translateTask('remoteCompletionAction'))}</span>
+                  <svg class="external-link-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                  </svg>
+                </a>
+              ` : `<div class="muted">${escapeHtml(translateTask('remoteCompletionNoUrl'))}</div>`}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function completedGroupInput() {
       return document.getElementById('completed-group-input');
     }
@@ -795,12 +848,15 @@
           <h3>${escapeHtml(translateTask('latestError'))}</h3>
           <div class="muted">${latestError ? escapeHtml(latestError.message) : escapeHtml(translateTask('noRecordedErrors'))}</div>
         </div>
+        ${renderRemoteCompletionSection(detail)}
         ${renderCompletedGroupSection(detail)}
       `;
       document.getElementById('task-modal-title').textContent = metadata.title;
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags({
         task_id: metadata.task_id,
         state: metadata.state,
+        created_by_user_id: metadata.created_by_user_id,
+        created_by_username: metadata.created_by_username,
         target_repo_root: metadata.target.repo_root,
         target_repo_label: metadata.target.repo_label,
         base_branch: metadata.target.base_branch,
