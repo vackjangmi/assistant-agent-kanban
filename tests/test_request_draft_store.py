@@ -43,3 +43,32 @@ def test_request_draft_store_separates_different_slack_threads(configured_paths)
     )
 
     assert second.draft_id != first.draft_id
+
+
+def test_request_draft_store_backfills_missing_fields_from_saved_assistant_updates(configured_paths):
+    config, _, _ = configured_paths
+    store = RequestDraftStore(config)
+
+    draft = store.create(
+        {
+            "title": "Manual title",
+            "transcript": [
+                {"role": "user", "content": "draft this"},
+                {
+                    "role": "assistant",
+                    "content": "updated fields",
+                    "field_updates": {
+                        "title": "Suggested title",
+                        "goal": "Suggested goal",
+                        "background": "Suggested background",
+                    },
+                },
+            ],
+        }
+    )
+
+    loaded = store.load(draft.draft_id)
+
+    assert loaded.title == "Manual title"
+    assert loaded.goal == "Suggested goal"
+    assert loaded.background == "Suggested background"

@@ -14,8 +14,16 @@ from ...request_creator import (
     get_request_upload,
     save_request_upload,
 )
-from ...request_drafting import RequestDraftPayload as RequestDraftRoutePayload, draft_request
-from ._helpers import _request_draft_state_from_payload, _request_draft_store
+from ...request_drafting import ALLOWED_DRAFT_UPDATE_FIELDS, RequestDraftPayload as RequestDraftRoutePayload, draft_request
+from ...settings_resolver import effective_config_for_user_and_project
+from ..auth import auth_is_required, current_user_or_none
+from ._helpers import (
+    _filter_request_drafts_for_current_user,
+    _request_draft_owner_fields,
+    _request_draft_state_from_payload,
+    _request_draft_store,
+    _require_request_draft_access,
+)
 from ._payloads import (
     CreateRequestDraftPayload,
     CreateRequestPayload,
@@ -55,7 +63,11 @@ def register(router: APIRouter) -> None:
         store = _request_draft_store(request)
         try:
             draft_id = (payload.request_draft_id or "").strip() if hasattr(payload, "request_draft_id") else ""
-            draft = store.load(draft_id) if draft_id else store.create()
+            if draft_id:
+                draft = store.load(draft_id)
+                _require_request_draft_access(request, draft)
+            else:
+                draft = store.create(_request_draft_owner_fields(request))
             draft = store.update(draft.draft_id, _request_draft_state_from_payload(payload))
             user_message = payload.message.strip()
             draft_for_run = draft.model_copy(update={
@@ -68,6 +80,7 @@ def register(router: APIRouter) -> None:
                 payload=draft_for_run.to_drafting_payload(message=user_message),
             )
             draft = store.update(draft.draft_id, {
+                **_request_draft_field_updates_state(result.field_updates),
                 "request_draft_input": "",
                 "transcript": [
                     *draft.transcript,
@@ -75,6 +88,8 @@ def register(router: APIRouter) -> None:
                     {"role": "assistant", "content": result.reply, "field_updates": result.field_updates},
                 ],
             })
+        except HTTPException:
+            raise
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
         except (ValueError, AdapterRunError) as exc:
@@ -96,18 +111,23 @@ def register(router: APIRouter) -> None:
     async def create_request_draft_state(payload: CreateRequestDraftPayload, request: Request):
         store = _request_draft_store(request)
         try:
-            draft = store.create(_request_draft_state_from_payload(payload))
+            draft = store.create({
+                **_request_draft_owner_fields(request),
+                **_request_draft_state_from_payload(payload),
+            })
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return draft.model_dump(mode="json")
 
     @router.get("/api/request-drafts")
     async def list_request_drafts(request: Request):
-        drafts = _request_draft_store(request).list()
+        drafts = _filter_request_drafts_for_current_user(request, _request_draft_store(request).list())
         return {
             "items": [
                 {
                     "draft_id": draft.draft_id,
+                    "created_by_user_id": draft.created_by_user_id,
+                    "created_by_username": draft.created_by_username,
                     "title": draft.title,
                     "target_repo": draft.target_repo,
                     "base_branch": draft.base_branch,
@@ -125,6 +145,7 @@ def register(router: APIRouter) -> None:
     async def get_request_draft(draft_id: str, request: Request):
         try:
             draft = _request_draft_store(request).load(draft_id)
+            _require_request_draft_access(request, draft)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
         except ValueError as exc:
@@ -135,6 +156,8 @@ def register(router: APIRouter) -> None:
     async def update_request_draft(draft_id: str, payload: UpdateRequestDraftPayload, request: Request):
         store = _request_draft_store(request)
         try:
+            draft = store.load(draft_id)
+            _require_request_draft_access(request, draft)
             draft = store.update(draft_id, _request_draft_state_from_payload(payload))
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
@@ -147,6 +170,7 @@ def register(router: APIRouter) -> None:
         store = _request_draft_store(request)
         try:
             draft = store.load(draft_id)
+            _require_request_draft_access(request, draft)
             store.delete(draft_id)
         except FileNotFoundError:
             return {"deleted": True}
@@ -182,7 +206,24 @@ def register(router: APIRouter) -> None:
     @router.post("/api/requests")
     async def create_request_task(payload: CreateRequestPayload, request: Request):
         runtime = request.app.state.runtime
+        user = current_user_or_none(request)
+        effective_auth_enabled = auth_is_required(request)
+        effective_config = effective_config_for_user_and_project(
+            runtime.config,
+            request.app.state.user_settings_store,
+            target_repo=payload.target_repo,
+            user_id=user.user_id if user and effective_auth_enabled else None,
+        )
+        slack_channel_id = _initial_slack_channel(
+            runtime.config,
+            request.app.state.user_settings_store,
+            target_repo=payload.target_repo,
+            user_id=user.user_id if user and effective_auth_enabled else None,
+        )
         try:
+            request_draft_id = (payload.request_draft_id or "").strip()
+            if request_draft_id:
+                _require_request_draft_access(request, _request_draft_store(request).load(request_draft_id))
             task_dir = await asyncio.to_thread(
                 runtime.create_request_from_submission,
                 title=payload.title,
@@ -199,6 +240,10 @@ def register(router: APIRouter) -> None:
                 request_upload_token=payload.request_upload_token,
                 request_draft_id=payload.request_draft_id,
                 request_draft_markdown=payload.request_draft_markdown,
+                slack_channel_id=slack_channel_id,
+                request_config=effective_config,
+                created_by_user_id=user.user_id if user and effective_auth_enabled else None,
+                created_by_username=user.username if user and effective_auth_enabled else None,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
@@ -206,3 +251,22 @@ def register(router: APIRouter) -> None:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
         return {"task_path": str(task_dir), "created": True}
+
+
+def _initial_slack_channel(config, store, *, target_repo: str, user_id: str | None) -> str | None:
+    channel = config.slack.default_channel
+    if user_id:
+        user_settings = store.get_user_settings(user_id)
+        channel = user_settings.runtime.slack_default_channel or channel
+    if target_repo:
+        project_settings = store.get_project_settings(target_repo)
+        channel = project_settings.runtime.slack_default_channel or channel
+    return channel
+
+
+def _request_draft_field_updates_state(field_updates: dict[str, str]) -> dict[str, object]:
+    return {
+        field_name: value
+        for field_name, value in field_updates.items()
+        if field_name in ALLOWED_DRAFT_UPDATE_FIELDS and value is not None
+    }

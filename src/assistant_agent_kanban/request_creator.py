@@ -15,6 +15,8 @@ import yaml
 from .config import AppConfig
 from .enums import TaskState
 from .language import runtime_language_code_to_request_language
+from .metadata_store import MetadataStore, slugify
+from .models import TaskRuntimePin
 from .target_repo_guard import resolve_safe_target_repo_root
 
 
@@ -95,6 +97,11 @@ def create_request(
     request_language: str | None = None,
     request_upload_token: str | None = None,
     request_draft_markdown: str | None = None,
+    slack_channel_id: str | None = None,
+    slack_thread_ts: str | None = None,
+    created_by_user_id: str | None = None,
+    created_by_username: str | None = None,
+    runtime_pin: TaskRuntimePin | None = None,
 ) -> Path:
     title = template.title.strip()
     goal = (template.goal or "").strip()
@@ -118,6 +125,24 @@ def create_request(
                 "acceptance_criteria": _normalize_request_markdown_field(task_dir, _finalize_request_uploads(config, task_dir, template.acceptance_criteria, request_upload_token, finalized_uploads)),
             }
         )
+        metadata_store = MetadataStore()
+        metadata = metadata_store.bootstrap(
+            task_dir,
+            TaskState.REQUESTS,
+            task_dir.name,
+            title,
+            slugify(title),
+            target_repo_root=str(resolved_repo),
+            base_branch=base_branch or config.base_branch,
+            request_language=request_language,
+            request_plan_auto_approve=normalized_template.plan_auto_approve,
+        )
+        metadata.slack.channel = slack_channel_id
+        metadata.slack.thread_ts = slack_thread_ts
+        metadata.created_by_user_id = created_by_user_id
+        metadata.created_by_username = created_by_username
+        metadata.runtime_pin = runtime_pin
+        metadata_store.save(task_dir, metadata)
         request_path = task_dir / "REQUEST.md"
         front_matter = yaml.safe_dump(
             {
