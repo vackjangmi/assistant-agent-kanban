@@ -19,7 +19,7 @@ from assistant_agent_kanban.exceptions import IntegrationError, TransitionError
 from assistant_agent_kanban.integration_manager import IntegrationManager
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
-from assistant_agent_kanban.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, HumanQaChecklistItem
+from assistant_agent_kanban.models import HumanLineComment, HumanLineCommentAnchor, HumanLineCommentsArtifact, HumanQaChecklistItem, TaskContext
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.services.task_service import TaskService
 from assistant_agent_kanban.services.human_verification_service import HumanVerificationService
@@ -374,10 +374,21 @@ def test_human_verification_start_rechecks_state_after_lock_for_duplicate_reques
     allow_apply = Event()
     original_run_verification_apply = service._run_verification_apply
 
-    def slow_run_verification_apply(context):
+    def slow_run_verification_apply(
+        context: TaskContext,
+        *,
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> None:
         entered_apply.set()
         assert allow_apply.wait(timeout=5)
-        return original_run_verification_apply(context)
+        return original_run_verification_apply(
+            context,
+            git_token=git_token,
+            git_token_username=git_token_username,
+            operation_config=operation_config,
+        )
 
     service._run_verification_apply = slow_run_verification_apply
     try:

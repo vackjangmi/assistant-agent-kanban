@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pydantic import SecretStr
+
 from assistant_agent_kanban.settings_resolver import effective_config_for_user_and_project
 from assistant_agent_kanban.user_settings_store import ProjectSettings, RuntimePreferenceSettings, UserSecretUpdate, UserSettingsStore
 
@@ -21,7 +23,7 @@ def test_user_settings_store_hashes_password_and_encrypts_tokens(configured_path
         ProjectSettings(
             repo_root=str(repo_root),
             runtime=RuntimePreferenceSettings(slack_enabled=True, slack_default_channel="C123"),
-            slack_bot_token="xoxb-project-secret",
+            slack_bot_token=SecretStr("xoxb-project-secret"),
         )
     )
 

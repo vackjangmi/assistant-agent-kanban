@@ -31,12 +31,12 @@ def test_push_review_branch_uses_token_without_git_credential_fallback(monkeypat
     config.review_branch_remote.enabled = True
     config.review_branch_remote.require_push_success = True
     metadata = _metadata_with_review_branch(config.repo_root)
-    calls: list[dict[str, object]] = []
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
 
     monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
 
-    def fake_run(command, *, capture_output, text, check, env=None):
-        calls.append({"command": command, "env": env})
+    def fake_run(command: list[str], *, capture_output: bool, text: bool, check: bool, env: dict[str, str] | None = None):
+        calls.append((command, env))
         if command[3:] == ["remote", "get-url", "origin"]:
             return subprocess.CompletedProcess(command, 0, stdout="https://git.example.com/group/repo.git\n", stderr="")
         if command[3] == "push":
@@ -52,10 +52,8 @@ def test_push_review_branch_uses_token_without_git_credential_fallback(monkeypat
             git_token_username="git-user",
         )
 
-    push_call = next(call for call in calls if call["command"][3] == "push")
-    push_command = push_call["command"]
+    push_command, env = next((command, env) for command, env in calls if command[3] == "push")
     assert push_command[5] == "https://git-user:bad-token@git.example.com/group/repo.git"
-    env = push_call["env"]
     assert isinstance(env, dict)
     assert env["GIT_TERMINAL_PROMPT"] == "0"
     config_index = int(env["GIT_CONFIG_COUNT"]) - 1
@@ -70,10 +68,10 @@ def test_push_review_branch_converts_ssh_remote_when_token_is_provided(monkeypat
     config.review_branch_remote.enabled = True
     config.review_branch_remote.require_push_success = True
     metadata = _metadata_with_review_branch(config.repo_root)
-    calls: list[dict[str, object]] = []
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
 
-    def fake_run(command, *, capture_output, text, check, env=None):
-        calls.append({"command": command, "env": env})
+    def fake_run(command: list[str], *, capture_output: bool, text: bool, check: bool, env: dict[str, str] | None = None):
+        calls.append((command, env))
         if command[3:] == ["remote", "get-url", "origin"]:
             return subprocess.CompletedProcess(command, 0, stdout="git@git.example.com:group/repo.git\n", stderr="")
         if command[3] == "push":
@@ -88,8 +86,7 @@ def test_push_review_branch_converts_ssh_remote_when_token_is_provided(monkeypat
         git_token_username="git-user",
     )
 
-    push_call = next(call for call in calls if call["command"][3] == "push")
-    push_command = push_call["command"]
+    push_command, _ = next((command, env) for command, env in calls if command[3] == "push")
     assert push_command[5] == "https://git-user:token@git.example.com/group/repo.git"
     assert metadata.integration.remote_name == "origin"
     assert metadata.integration.remote_review_branch == "review/abc123"

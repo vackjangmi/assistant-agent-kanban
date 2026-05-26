@@ -241,11 +241,10 @@ def register(router: APIRouter) -> None:
             if forbidden_fields:
                 labels = ", ".join(sorted(forbidden_fields))
                 raise HTTPException(status_code=403, detail=f"{labels} can only be changed by an admin")
-        base_config = (
-            effective_config_for_user_and_project(runtime.config, store, user_id=user.user_id)
-            if user_scoped_settings
-            else runtime.config
-        )
+        base_config = runtime.config
+        if user_scoped_settings:
+            assert user is not None
+            base_config = effective_config_for_user_and_project(runtime.config, store, user_id=user.user_id)
         slack_config = base_config.slack.model_copy(deep=True)
         fields_set = payload.model_fields_set
         if "slack_enabled" in fields_set and payload.slack_enabled is not None:
