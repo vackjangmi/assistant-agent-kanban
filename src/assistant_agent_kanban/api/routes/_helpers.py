@@ -20,13 +20,69 @@ from ...config import (
 )
 from ...language import normalize_runtime_language
 from ...omo_config import read_omo_delegation_snapshot
-from ...request_draft_store import RequestDraftStore
+from ...request_draft_store import RequestDraftStore, StoredRequestDraft
 from ...request_drafting import RequestDraftPayload as RequestDraftRoutePayload
+from ..auth import auth_is_required, current_user_or_none
 from ._payloads import UpdateRequestDraftPayload
 
 
 def _request_draft_store(request: Request) -> RequestDraftStore:
     return RequestDraftStore(request.app.state.runtime.config)
+
+
+def _request_draft_owner_fields(request: Request) -> dict[str, str]:
+    if not auth_is_required(request):
+        return {}
+    user = current_user_or_none(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="authentication required")
+    return {
+        "created_by_user_id": user.user_id,
+        "created_by_username": user.username,
+    }
+
+
+def _filter_request_drafts_for_current_user(request: Request, drafts: list[StoredRequestDraft]) -> list[StoredRequestDraft]:
+    if not auth_is_required(request):
+        return drafts
+    user = current_user_or_none(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="authentication required")
+    if user.is_admin:
+        return drafts
+    return [draft for draft in drafts if draft.created_by_user_id == user.user_id]
+
+
+def _require_request_draft_access(request: Request, draft: StoredRequestDraft) -> None:
+    if not auth_is_required(request):
+        return
+    user = current_user_or_none(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="authentication required")
+    if user.is_admin:
+        return
+    if draft.created_by_user_id == user.user_id:
+        return
+    raise HTTPException(status_code=403, detail="request draft is only available to its creator or an admin")
+
+
+def _require_task_actor(request: Request, task_id: str):
+    if not auth_is_required(request):
+        return current_user_or_none(request)
+    user = current_user_or_none(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="authentication required")
+    if user.is_admin:
+        return user
+    runtime = request.app.state.runtime
+    scanner = getattr(runtime, "scanner", None) or runtime.task_service.scanner
+    try:
+        task = scanner.find_task(task_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"task not found: {task_id}") from exc
+    if task.metadata.created_by_user_id == user.user_id:
+        return user
+    raise HTTPException(status_code=403, detail="task action is only available to the task creator or an admin")
 
 
 def _request_draft_state_from_payload(payload: UpdateRequestDraftPayload | RequestDraftRoutePayload) -> dict[str, object]:
@@ -117,6 +173,8 @@ def _apply_config_update(target, updated) -> None:
     target.runtime = updated.runtime
     target.repo_discovery = updated.repo_discovery
     target.slack = updated.slack
+    target.auth = updated.auth
+    target.review_branch_remote = updated.review_branch_remote
     target.loaded_from = updated.loaded_from
     target.loaded_local_from = updated.loaded_local_from
 
@@ -149,30 +207,31 @@ def _settings_response(runtime, snapshots_by_backend, *, view_config=None, confi
     omo_snapshot = read_omo_delegation_snapshot() if active_backend == "opencode" else None
     availability_map = _resolve_availability_map(runtime, snapshots_by_backend)
     response = {
-        "language": runtime.config.runtime.language,
-        "theme": runtime.config.runtime.theme,
+        "language": active_config.runtime.language,
+        "theme": active_config.runtime.theme,
         "coding_assistant": active_backend,
-        "role_backends": {role: getattr(runtime.config.runtime.role_backends, role) for role in ASSISTANT_ROLES},
+        "role_backends": {role: getattr(active_config.runtime.role_backends, role) for role in ASSISTANT_ROLES},
         "effective_role_backends": {role: active_config.backend_for_role(role) for role in ASSISTANT_ROLES},
-        "worker_live_logs_enabled": runtime.config.opencode.worker_live_logs_enabled,
+        "worker_live_logs_enabled": active_config.opencode.worker_live_logs_enabled,
         "planner_model": active_config.role_model("planner"),
         "planner_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("planner")),
-        "planner_agent_count": runtime.config.runtime.planner_agent_count,
+        "planner_agent_count": active_config.runtime.planner_agent_count,
         "request_draft_model": active_config.role_model("request_draft"),
         "plan_approval_model": active_config.role_model("plan_approval"),
         "plan_approval_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("plan_approval")),
         "implementer_model": active_config.role_model("implementer"),
         "implementer_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("implementer")),
-        "implementer_agent_count": runtime.config.runtime.implementer_agent_count,
+        "implementer_agent_count": active_config.runtime.implementer_agent_count,
         "reviewer_model": active_config.role_model("reviewer"),
         "reviewer_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("reviewer")),
-        "reviewer_agent_count": runtime.config.runtime.reviewer_agent_count,
+        "reviewer_agent_count": active_config.runtime.reviewer_agent_count,
         "commit_model": active_config.role_model("commit"),
         "commit_session_token_budget": _display_session_token_budget(active_config.role_session_token_budget("commit")),
         "repo_discovery_root": runtime.config.repo_discovery_root_value(),
         "repo_discovery_max_depth": runtime.config.repo_discovery.max_depth,
         "slack_enabled": active_config.slack.enabled,
         "slack_socket_mode_enabled": active_config.slack.socket_mode_enabled,
+        "slack_bot_name": active_config.slack.bot_name,
         "slack_default_channel": active_config.slack.default_channel,
         "slack_default_channel_display": active_config.slack.default_channel_display or active_config.slack.default_channel,
         "slack_app_mention_enabled": active_config.slack.app_mention_enabled,
