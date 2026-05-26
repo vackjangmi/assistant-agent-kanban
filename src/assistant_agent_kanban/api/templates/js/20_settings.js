@@ -212,8 +212,13 @@
       setSettingsText('settings-modal-title', 'settingsTitle');
       setSettingsText('settings-modal-description', 'settingsDescription');
       setSettingsText('settings-tab-general', 'settingsTabGeneral');
+      setSettingsText('settings-tab-git', 'settingsTabGit');
       setSettingsText('settings-tab-slack', 'settingsTabSlack');
+      setSettingsText('settings-tab-slack-channel', 'settingsTabSlackChannel');
       setSettingsText('settings-tab-roles', 'settingsTabRoles');
+      setSettingsText('settings-tab-repositories', 'settingsTabRepositories');
+      setSettingsText('settings-tab-users', 'settingsTabUsers');
+      if (logoutButton) logoutButton.textContent = translateSettings('logout');
       cancelSettingsButton.textContent = translateSettings('closeSettings');
       setSettingsText('settings-copy-title', 'settingsCopyTitle');
       setSettingsHtml('settings-copy-body', 'settingsCopyBody');
@@ -235,6 +240,15 @@
       setSettingsHtml('settings-theme-note', 'themeNote');
       runtimeThemeInput.querySelector('option[value="light"]').textContent = translateSettings('themeLight');
       runtimeThemeInput.querySelector('option[value="dark"]').textContent = translateSettings('themeDark');
+      setSettingsText('settings-git-heading', 'gitHeading');
+      setSettingsText('settings-git-description', 'gitDescription');
+      setSettingsText('settings-git-token-username-title', 'gitTokenUsernameTitle');
+      setSettingsText('settings-git-token-username-description', 'gitTokenUsernameDescription');
+      setSettingsHtml('settings-git-token-username-note', 'gitTokenUsernameNote');
+      setSettingsText('settings-git-token-title', 'gitTokenTitle');
+      setSettingsText('settings-git-token-description', 'gitTokenDescription');
+      setSettingsText('settings-repositories-heading', 'repositoriesHeading');
+      setSettingsText('settings-repositories-description', 'repositoriesDescription');
       setSettingsText('settings-repo-root-title', 'repoRootTitle');
       setSettingsText('settings-repo-root-description', 'repoRootDescription');
       setSettingsHtml('settings-repo-root-note', 'repoRootNote');
@@ -247,15 +261,30 @@
       setSettingsText('settings-help-card-desc', 'settingsHelpCardDesc');
       const restartBtn = document.getElementById('restart-onboarding-btn');
       if (restartBtn) restartBtn.textContent = translateSettings('settingsHelpCardBtn');
+      setSettingsText('settings-users-heading', 'usersHeading');
+      setSettingsText('settings-users-description', 'usersDescription');
+      setSettingsText('settings-new-user-title', 'newUserTitle');
+      setSettingsText('settings-new-user-description', 'newUserDescription');
+      setSettingsText('settings-new-user-password-title', 'newUserPasswordTitle');
+      setSettingsText('settings-new-user-password-description', 'newUserPasswordDescription');
+      setSettingsText('settings-new-user-admin-label', 'newUserAdminLabel');
+      setSettingsText('settings-new-user-admin-description', 'newUserAdminDescription');
+      setSettingsText('settings-user-list-title', 'userListTitle');
+      setSettingsText('settings-user-list-description', 'userListDescription');
+      setSettingsText('settings-delete-all-users-title', 'deleteAllUsersTitle');
+      setSettingsText('settings-delete-all-users-description', 'deleteAllUsersDescription');
+      if (createUserButton) createUserButton.textContent = translateSettings('createUser');
+      if (deleteAllUsersButton) deleteAllUsersButton.textContent = translateSettings('deleteAllUsers');
       if (btnBrowseRepoRoot) btnBrowseRepoRoot.textContent = translateSettings('dirPickerOpen');
       setSettingsText('directory-picker-title', 'dirPickerTitle');
       setSettingsText('directory-picker-description', 'dirPickerDesc');
       if (btnDirectoryPickerSelect) btnDirectoryPickerSelect.textContent = translateSettings('dirPickerSelect');
       if (btnDirectoryPickerClose) btnDirectoryPickerClose.textContent = translateSettings('dirPickerClose');
       setSettingsText('settings-slack-title', 'slackTitle');
-      setSettingsText('settings-slack-description', 'slackDescription');
+      setSettingsText('settings-slack-description', canEditCommonSettings() ? 'slackChannelAdminDescription' : 'slackUserDescription');
       setSettingsText('settings-slack-basics-title', 'slackBasicsTitle');
-      setSettingsText('settings-slack-basics-description', 'slackBasicsDescription');
+      setSettingsText('settings-slack-auth-title', 'slackConnectionTitle');
+      setSettingsText('settings-slack-auth-description', 'slackConnectionDescription');
       setSettingsText('settings-slack-enabled-label', 'slackEnabledLabel');
       setSettingsText('settings-slack-socket-mode-label', 'slackSocketModeLabel');
       setSettingsText('settings-slack-mention-label', 'slackMentionLabel');
@@ -265,14 +294,36 @@
       setSettingsText('settings-slack-bot-token-label', 'slackBotTokenLabel');
       setSettingsText('settings-slack-app-token-label', 'slackAppTokenLabel');
       setSettingsText('settings-slack-channel-label', 'slackChannelLabel');
-      setSettingsHtml('settings-slack-channel-description', 'slackChannelDescription');
+      const slackBotDisplayName = lastSettingsPayload?.slack_bot_name || translateSettings('slackBotFallbackName');
+      const highlightedBot = `<strong class="slack-bot-highlight">${escapeHtml(slackBotDisplayName)}</strong>`;
+      setSettingsHtml(
+        'settings-slack-notice-banner',
+        'slackChannelNoticeBanner',
+        { bot: highlightedBot }
+      );
+      setSettingsHtml(
+        'settings-slack-basics-description',
+        canEditCommonSettings() ? 'slackChannelAdminBasicsDescription' : 'slackBasicsDescription',
+        { bot: highlightedBot }
+      );
+      setSettingsHtml(
+        'settings-slack-channel-description',
+        canEditCommonSettings() ? 'slackChannelDescription' : 'slackUserChannelDescription',
+        { bot: highlightedBot },
+      );
       setSettingsText('settings-slack-effective-channel-label', 'slackEffectiveChannelLabel');
       setSettingsHtml('settings-slack-effective-channel-help', 'slackEffectiveChannelHelp');
-      setSettingsHtml('settings-slack-channel-note', 'slackChannelNote');
+      setSettingsHtml(
+        'settings-slack-channel-note',
+        canEditCommonSettings() ? 'slackChannelNote' : 'slackUserChannelNote',
+        { bot: highlightedBot },
+      );
       setSettingsText('settings-slack-advanced-title', 'slackAdvancedTitle');
       setSettingsText('settings-slack-advanced-description', 'slackAdvancedDescription');
       setSettingsText('settings-slack-advanced-note', 'slackAdvancedNote');
       setSettingsText('settings-slack-test-description', 'slackTestDescription');
+      setSettingsText('settings-slack-bot-name-label', 'slackBotNameLabel');
+      setSettingsHtml('settings-slack-bot-name-note', 'slackBotNameNote');
       if (slackListenerStatus) slackListenerStatus.textContent = translateSettings('slackListenerIdle');
       clearSlackBotTokenButton.textContent = translateSettings('slackClearToken');
       clearSlackAppTokenButton.textContent = translateSettings('slackClearToken');
@@ -326,6 +377,7 @@
         setSettingsStatus(translateSettings('statusIdle'));
       }
       renderAllRoleModelOptions();
+      updateSlackPermissionControls();
       renderBoardPhaseTabs();
     }
 
@@ -519,6 +571,57 @@
       field.style.display = isOpenCode ? '' : 'none';
     }
 
+    function isRepoDiscoveryReadonly() {
+      if (lastSettingsPayload && Object.prototype.hasOwnProperty.call(lastSettingsPayload, 'repo_discovery_readonly')) {
+        return Boolean(lastSettingsPayload.repo_discovery_readonly);
+      }
+      const user = currentAuthUser();
+      return Boolean(currentAuthPayload?.enabled && user && !user.is_admin);
+    }
+
+    function canEditCommonSettings() {
+      if (lastSettingsPayload && Object.prototype.hasOwnProperty.call(lastSettingsPayload, 'can_edit_common_settings')) {
+        return Boolean(lastSettingsPayload.can_edit_common_settings);
+      }
+      const user = currentAuthUser();
+      return !currentAuthPayload?.enabled || !user || Boolean(user.is_admin);
+    }
+
+    function updateSettingsPermissionControls() {
+      const repoDiscoveryReadonly = isRepoDiscoveryReadonly();
+      if (repoDiscoveryRootInput) {
+        repoDiscoveryRootInput.disabled = repoDiscoveryReadonly;
+        repoDiscoveryRootInput.setAttribute('aria-readonly', String(repoDiscoveryReadonly));
+      }
+      if (repoDiscoveryMaxDepthInput) {
+        repoDiscoveryMaxDepthInput.disabled = repoDiscoveryReadonly;
+        repoDiscoveryMaxDepthInput.setAttribute('aria-readonly', String(repoDiscoveryReadonly));
+      }
+      if (btnBrowseRepoRoot) btnBrowseRepoRoot.disabled = repoDiscoveryReadonly;
+      [repoDiscoveryRootInput, repoDiscoveryMaxDepthInput].forEach((input) => {
+        const card = input?.closest?.('.settings-card');
+        if (card) card.classList.toggle('settings-card-readonly', repoDiscoveryReadonly);
+      });
+      updateSlackPermissionControls();
+    }
+
+    function updateSlackPermissionControls() {
+      const canEditSlackConnection = canEditCommonSettings();
+      const adminSection = document.getElementById('settings-slack-admin-section');
+      if (adminSection) {
+        adminSection.hidden = !canEditSlackConnection;
+      }
+      if (settingsSlackTab) settingsSlackTab.hidden = !canEditSlackConnection;
+      if (!canEditSlackConnection && settingsSlackPanel && !settingsSlackPanel.hidden) {
+        setSettingsTab('slack-channel');
+      }
+      [slackEnabledInput, slackSocketModeEnabledInput, slackAppMentionEnabledInput, slackBotNameInput, slackBotTokenInput, slackAppTokenInput].forEach((input) => {
+        if (input) input.disabled = !canEditSlackConnection;
+      });
+      if (clearSlackBotTokenButton) clearSlackBotTokenButton.hidden = !canEditSlackConnection;
+      if (clearSlackAppTokenButton) clearSlackAppTokenButton.hidden = !canEditSlackConnection;
+    }
+
     function captureSettingsState() {
       return {
         language: runtimeLanguageInput.value || 'EN',
@@ -527,9 +630,12 @@
         slack_enabled: slackEnabledInput.checked,
         slack_socket_mode_enabled: slackSocketModeEnabledInput.checked,
         slack_app_mention_enabled: slackAppMentionEnabledInput.checked,
+        slack_bot_name: slackBotNameInput?.value || '',
         slack_bot_token: slackBotTokenInput.value || '',
         slack_app_token: slackAppTokenInput.value || '',
         slack_default_channel: slackDefaultChannelInput.value || '',
+        git_token_username: gitTokenUsernameInput?.value || '',
+        git_token: gitTokenInput?.value || '',
         role_backends: {
           planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
           request_draft: requestDraftBackendInput.value === 'default' ? null : requestDraftBackendInput.value,
@@ -556,6 +662,19 @@
         commit_model: currentRoleModelValue(roleSettingConfig('commit')),
         commit_session_token_budget: readNumericSettingInput(commitSessionTokenBudgetInput, 250),
       };
+    }
+
+    function updateGitTokenStatus(data) {
+      if (!gitTokenStatus) return;
+      if (gitTokenInput?.value) {
+        gitTokenStatus.textContent = translateSettings('gitTokenStatusWillReplace');
+        return;
+      }
+      if (data?.git_token_configured && data?.git_token_masked) {
+        gitTokenStatus.textContent = translateSettings('gitTokenStatusConfigured', { masked: data.git_token_masked });
+        return;
+      }
+      gitTokenStatus.textContent = translateSettings('gitTokenStatusNotConfigured');
     }
 
     function updateSlackTokenStatus(element, maskedValue, configured) {
@@ -719,16 +838,21 @@
 
     function buildSlackSettingsPayload() {
       const payload = {
-        slack_enabled: slackEnabledInput.checked,
-        slack_socket_mode_enabled: slackSocketModeEnabledInput.checked,
         slack_default_channel: slackDefaultChannelInput.value,
-        slack_app_mention_enabled: slackAppMentionEnabledInput.checked,
       };
-      if (slackBotTokenClearRequested || slackBotTokenInput.value) {
-        payload.slack_bot_token = slackBotTokenClearRequested ? '' : slackBotTokenInput.value;
+      if (canEditCommonSettings()) {
+        payload.slack_enabled = slackEnabledInput.checked;
+        payload.slack_socket_mode_enabled = slackSocketModeEnabledInput.checked;
+        payload.slack_app_mention_enabled = slackAppMentionEnabledInput.checked;
+        payload.slack_bot_name = slackBotNameInput?.value || '';
       }
-      if (slackAppTokenClearRequested || slackAppTokenInput.value) {
-        payload.slack_app_token = slackAppTokenClearRequested ? '' : slackAppTokenInput.value;
+      if (canEditCommonSettings()) {
+        if (slackBotTokenClearRequested || slackBotTokenInput.value) {
+          payload.slack_bot_token = slackBotTokenClearRequested ? '' : slackBotTokenInput.value;
+        }
+        if (slackAppTokenClearRequested || slackAppTokenInput.value) {
+          payload.slack_app_token = slackAppTokenClearRequested ? '' : slackAppTokenInput.value;
+        }
       }
       return payload;
     }
@@ -797,6 +921,7 @@
       slackEnabledInput.checked = Boolean(data.slack_enabled);
       slackSocketModeEnabledInput.checked = data.slack_socket_mode_enabled !== false;
       slackAppMentionEnabledInput.checked = Boolean(data.slack_app_mention_enabled);
+      if (slackBotNameInput) slackBotNameInput.value = data.slack_bot_name || '';
       if (!preserveChannelInput) {
         slackDefaultChannelInput.value = data.slack_default_channel_display || data.slack_default_channel || '';
       }
@@ -822,11 +947,15 @@
       slackEnabledInput.checked = Boolean(state.slack_enabled);
       slackSocketModeEnabledInput.checked = state.slack_socket_mode_enabled !== false;
       slackAppMentionEnabledInput.checked = Boolean(state.slack_app_mention_enabled);
+      if (slackBotNameInput) slackBotNameInput.value = state.slack_bot_name || '';
       slackBotTokenInput.value = state.slack_bot_token || '';
       slackAppTokenInput.value = state.slack_app_token || '';
       slackBotTokenClearRequested = false;
       slackAppTokenClearRequested = false;
       slackDefaultChannelInput.value = state.slack_default_channel || '';
+      if (gitTokenUsernameInput) gitTokenUsernameInput.value = state.git_token_username || '';
+      if (gitTokenInput) gitTokenInput.value = state.git_token || '';
+      updateGitTokenStatus(lastSettingsPayload);
       updateSlackChannelState();
       plannerBackendInput.value = state.role_backends?.planner || 'default';
       requestDraftBackendInput.value = state.role_backends?.request_draft || 'default';
@@ -901,6 +1030,224 @@
       return `${count} ${count === 1 ? 'task' : 'tasks'} in ${phaseLabel(phase)}`;
     }
 
+    function currentAuthUser() {
+      return currentAuthPayload?.user || lastSettingsPayload?.user || null;
+    }
+
+    function updateAuthControls(data) {
+      if (data) currentAuthPayload = data;
+      const user = currentAuthUser();
+      const enabled = Boolean(currentAuthPayload?.enabled || user);
+      const authenticated = Boolean(user && enabled);
+      if (authUserLabel) {
+        authUserLabel.hidden = !authenticated;
+        if (authenticated) {
+          const avatarGradients = [
+            'linear-gradient(135deg, #6366f1, #4f46e5)', // Indigo
+            'linear-gradient(135deg, #ec4899, #be185d)', // Pink
+            'linear-gradient(135deg, #10b981, #047857)', // Emerald
+            'linear-gradient(135deg, #f59e0b, #d97706)', // Amber
+            'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
+            'linear-gradient(135deg, #8b5cf6, #6d28d9)'  // Violet
+          ];
+          const username = user.username || '';
+          const initial = username.charAt(0).toUpperCase();
+          const charCodeSum = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          const bgGradient = avatarGradients[charCodeSum % avatarGradients.length];
+          const roleClass = user.is_admin ? 'badge-admin' : 'badge-member';
+          const roleLabel = user.is_admin ? translateSettings('userRoleAdmin') : translateSettings('userRoleMember');
+
+          authUserLabel.innerHTML = `
+            <div class="header-user-avatar" style="background: ${bgGradient};" title="${escapeHtml(roleLabel)}">${escapeHtml(initial)}</div>
+            <span class="header-username">${escapeHtml(username)}</span>
+            <span class="header-user-badge ${roleClass}">${escapeHtml(roleLabel)}</span>
+          `;
+        } else {
+          authUserLabel.innerHTML = '';
+        }
+      }
+      if (logoutButton) logoutButton.hidden = !authenticated;
+      if (settingsGitTab) settingsGitTab.hidden = !authenticated;
+      if (!authenticated && settingsGitPanel && !settingsGitPanel.hidden) {
+        setSettingsTab('general');
+      }
+      const canManageUsers = Boolean(authenticated && user.is_admin);
+      const canEditRepositories = !isRepoDiscoveryReadonly();
+      const canEditRuntimeRoles = canEditCommonSettings();
+      const settingsRolesTab = document.getElementById('settings-tab-roles');
+      const settingsRolesPanel = document.getElementById('settings-panel-roles');
+      if (settingsRolesTab) settingsRolesTab.hidden = !canEditRuntimeRoles;
+      if (!canEditRuntimeRoles && settingsRolesPanel && !settingsRolesPanel.hidden) {
+        setSettingsTab('general');
+      }
+      if (settingsRepositoriesTab) settingsRepositoriesTab.hidden = !canEditRepositories;
+      if (!canEditRepositories && settingsRepositoriesPanel && !settingsRepositoriesPanel.hidden) {
+        setSettingsTab('general');
+      }
+      if (settingsSlackTab) settingsSlackTab.hidden = !canEditRuntimeRoles;
+      if (!canEditRuntimeRoles && settingsSlackPanel && !settingsSlackPanel.hidden) {
+        setSettingsTab('slack-channel');
+      }
+      if (settingsSlackChannelTab) settingsSlackChannelTab.hidden = false;
+      if (settingsUsersTab) settingsUsersTab.hidden = !canManageUsers;
+      if (!canManageUsers && settingsUsersPanel && !settingsUsersPanel.hidden) {
+        setSettingsTab('general');
+      }
+      updateSettingsPermissionControls();
+      if (activeTaskDetail) {
+        updatePlanActionState();
+        updateHumanVerificationState();
+        updateTaskDeleteState();
+      }
+    }
+
+    async function loadAuthState() {
+      const response = await fetch('/api/auth/me');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to load auth state.');
+      updateAuthControls(data);
+      return data;
+    }
+
+    async function logout() {
+      if (!logoutButton) return;
+      logoutButton.disabled = true;
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+      } finally {
+        window.location.href = '/login';
+      }
+    }
+
+    function setCreateUserStatus(message, tone = 'neutral') {
+      if (!createUserStatus) return;
+      createUserStatus.hidden = !message;
+      createUserStatus.textContent = message || '';
+      createUserStatus.dataset.tone = tone;
+    }
+
+    function renderUsers(users) {
+      if (!settingsUserList) return;
+      const rows = Array.isArray(users) ? users : [];
+      if (!rows.length) {
+        settingsUserList.innerHTML = `<div class="settings-user-card" style="grid-column: 1 / -1; justify-content: center; opacity: 0.7;"><span class="muted">${escapeHtml(translateSettings('userListEmpty'))}</span></div>`;
+        return;
+      }
+
+      const avatarGradients = [
+        'linear-gradient(135deg, #6366f1, #4f46e5)', // Indigo
+        'linear-gradient(135deg, #ec4899, #be185d)', // Pink
+        'linear-gradient(135deg, #10b981, #047857)', // Emerald
+        'linear-gradient(135deg, #f59e0b, #d97706)', // Amber
+        'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
+        'linear-gradient(135deg, #8b5cf6, #6d28d9)'  // Violet
+      ];
+      const currentUserId = currentAuthUser()?.user_id || '';
+
+      settingsUserList.innerHTML = rows.map((user) => {
+        const username = user.username || '';
+        const initial = username.charAt(0).toUpperCase();
+
+        // Sum character codes to get a deterministic color index
+        const charCodeSum = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const bgGradient = avatarGradients[charCodeSum % avatarGradients.length];
+
+        const roleClass = user.is_admin ? 'user-badge-admin' : 'user-badge-member';
+        const roleLabel = user.is_admin ? translateSettings('userRoleAdmin') : translateSettings('userRoleMember');
+        const isCurrentUser = user.user_id === currentUserId;
+        const action = isCurrentUser
+          ? `<button type="button" class="settings-user-delete" disabled>${escapeHtml(translateSettings('currentUserLabel'))}</button>`
+          : `<button type="button" class="settings-user-delete" data-delete-user-id="${escapeHtml(user.user_id || '')}" data-delete-username="${escapeHtml(username)}">${escapeHtml(translateSettings('deleteUser'))}</button>`;
+
+        return `
+          <div class="settings-user-card">
+            <div class="user-avatar" style="background: ${bgGradient};">${escapeHtml(initial)}</div>
+            <div class="user-info">
+              <strong class="user-username">${escapeHtml(username)}</strong>
+              <span class="user-badge ${roleClass}">${escapeHtml(roleLabel)}</span>
+            </div>
+            ${action}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function loadUsers() {
+      if (!currentAuthUser()?.is_admin || !settingsUserList) return;
+      const response = await fetch('/api/auth/users');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to load users.');
+      renderUsers(data.users || []);
+    }
+
+    async function createUser() {
+      if (!newUserUsernameInput || !newUserPasswordInput || !newUserIsAdminInput || !createUserButton) return;
+      const username = (newUserUsernameInput.value || '').trim();
+      const password = newUserPasswordInput.value || '';
+      if (!username || !password) {
+        setCreateUserStatus(currentUiLanguage() === 'KO' ? '사용자명과 비밀번호를 입력하세요.' : 'Enter a username and password.', 'error');
+        return;
+      }
+      createUserButton.disabled = true;
+      setCreateUserStatus(translateSettings('userCreateRunning'));
+      try {
+        const response = await fetch('/api/auth/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            password,
+            is_admin: Boolean(newUserIsAdminInput.checked),
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || translateSettings('userCreateFailed'));
+        newUserUsernameInput.value = '';
+        newUserPasswordInput.value = '';
+        newUserIsAdminInput.checked = false;
+        setCreateUserStatus(translateSettings('userCreateSuccess'), 'success');
+        await loadUsers();
+      } catch (error) {
+        setCreateUserStatus(error.message || translateSettings('userCreateFailed'), 'error');
+      } finally {
+        createUserButton.disabled = false;
+      }
+    }
+
+    async function deleteUser(userId, username) {
+      if (!userId) return;
+      const confirmed = window.confirm(translateSettings('userDeleteConfirm', { username: username || userId }));
+      if (!confirmed) return;
+      setCreateUserStatus(translateSettings('userDeleteRunning'));
+      try {
+        const response = await fetch(`/api/auth/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || translateSettings('userDeleteFailed'));
+        setCreateUserStatus(translateSettings('userDeleteSuccess'), 'success');
+        await loadUsers();
+      } catch (error) {
+        setCreateUserStatus(error.message || translateSettings('userDeleteFailed'), 'error');
+      }
+    }
+
+    async function deleteAllUsers() {
+      if (!deleteAllUsersButton) return;
+      const confirmed = window.confirm(translateSettings('userDeleteAllConfirm'));
+      if (!confirmed) return;
+      deleteAllUsersButton.disabled = true;
+      setCreateUserStatus(translateSettings('userDeleteAllRunning'));
+      try {
+        const response = await fetch('/api/auth/users', { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || translateSettings('userDeleteAllFailed'));
+        setCreateUserStatus(translateSettings('userDeleteAllSuccess'), 'success');
+        window.location.href = '/';
+      } catch (error) {
+        setCreateUserStatus(error.message || translateSettings('userDeleteAllFailed'), 'error');
+        deleteAllUsersButton.disabled = false;
+      }
+    }
+
     function renderBoardPhaseTabs() {
       boardPhaseTabs.querySelectorAll('[data-board-phase]').forEach((button) => {
         const phase = button.dataset.boardPhase;
@@ -925,7 +1272,7 @@
     }
 
     function setSettingsTab(tab) {
-      const panels = ['general', 'slack', 'roles'];
+      const panels = ['general', 'git', 'repositories', 'roles', 'slack', 'slack-channel', 'users'];
       panels.forEach(p => {
         const active = p === tab;
         const tabEl = document.getElementById(`settings-tab-${p}`);
@@ -948,5 +1295,19 @@
 
 
     document.getElementById('settings-tab-general').addEventListener('click', () => setSettingsTab('general'));
+    if (settingsGitTab) settingsGitTab.addEventListener('click', () => setSettingsTab('git'));
     document.getElementById('settings-tab-slack').addEventListener('click', () => setSettingsTab('slack'));
+    if (settingsSlackChannelTab) settingsSlackChannelTab.addEventListener('click', () => setSettingsTab('slack-channel'));
     document.getElementById('settings-tab-roles').addEventListener('click', () => setSettingsTab('roles'));
+    if (settingsRepositoriesTab) settingsRepositoriesTab.addEventListener('click', () => setSettingsTab('repositories'));
+    if (settingsUsersTab) settingsUsersTab.addEventListener('click', () => {
+      setSettingsTab('users');
+      loadUsers().catch((error) => setCreateUserStatus(error.message, 'error'));
+    });
+    if (settingsUserList) settingsUserList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-delete-user-id]');
+      if (!button || button.disabled) return;
+      deleteUser(button.dataset.deleteUserId || '', button.dataset.deleteUsername || '').catch((error) => {
+        setCreateUserStatus(error.message || translateSettings('userDeleteFailed'), 'error');
+      });
+    });

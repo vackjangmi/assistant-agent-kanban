@@ -192,17 +192,40 @@ class SlackConfig(BaseModel):
     socket_mode_enabled: bool = True
     bot_token: str | None = None
     app_token: str | None = None
+    bot_name: str | None = None
     default_channel: str | None = None
     default_channel_display: str | None = None
     app_mention_enabled: bool = False
 
-    @field_validator("bot_token", "app_token", "default_channel", "default_channel_display", mode="before")
+    @field_validator("bot_token", "app_token", "bot_name", "default_channel", "default_channel_display", mode="before")
     @classmethod
     def normalize_optional_secret(cls, value: str | None) -> str | None:
         if value is None:
             return None
         normalized = value.strip()
         return normalized or None
+
+
+class AuthConfig(BaseModel):
+    enabled: bool = False
+    database_path: Path | None = None
+    encryption_key_path: Path | None = None
+    session_cookie_name: str = "assistant_agent_kanban_session"
+    session_ttl_seconds: int = Field(default=60 * 60 * 24 * 14, ge=60)
+    require_admin_for_common_settings: bool = True
+
+
+class ReviewBranchRemoteConfig(BaseModel):
+    enabled: bool = False
+    remote_name: str = "origin"
+    require_push_success: bool = True
+    delete_on_cleanup: bool = True
+
+    @field_validator("remote_name", mode="before")
+    @classmethod
+    def normalize_remote_name(cls, value: str | None) -> str:
+        normalized = (value or "origin").strip()
+        return normalized or "origin"
 
 
 class AppConfig(BaseModel):
@@ -220,6 +243,8 @@ class AppConfig(BaseModel):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     repo_discovery: RepoDiscoveryConfig = Field(default_factory=RepoDiscoveryConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    review_branch_remote: ReviewBranchRemoteConfig = Field(default_factory=ReviewBranchRemoteConfig)
     loaded_from: Path | None = Field(default=None, exclude=True)
     loaded_local_from: Path | None = Field(default=None, exclude=True)
 
@@ -230,12 +255,14 @@ class AppConfig(BaseModel):
         for relative in [
             "_runtime/locks",
             "_runtime/workspaces",
+            "_runtime/human-verifications",
             "_runtime/runs",
             "_runtime/archive-runs",
             "_runtime/request-drafts",
             "_runtime/request-uploads",
             "_runtime/events",
             "_runtime/board-cache",
+            "_runtime/secrets",
             "retrospectives",
         ]:
             (self.kanban_root / relative).mkdir(parents=True, exist_ok=True)
@@ -243,6 +270,10 @@ class AppConfig(BaseModel):
             self.workspace.root = self.kanban_root / "_runtime/workspaces"
         if self.repo_discovery.root is None:
             self.repo_discovery.root = DEFAULT_REPO_DISCOVERY_ROOT
+        if self.auth.database_path is None:
+            self.auth.database_path = self.kanban_root / "_runtime/app.db"
+        if self.auth.encryption_key_path is None:
+            self.auth.encryption_key_path = self.kanban_root / "_runtime/secrets/settings.key"
 
     def repo_discovery_root_value(self) -> str:
         return str(self.repo_discovery.root or DEFAULT_REPO_DISCOVERY_ROOT)
@@ -383,12 +414,24 @@ class AppConfig(BaseModel):
         return self.kanban_root / "_runtime/archive-runs"
 
     @property
+    def human_verifications_dir(self) -> Path:
+        return self.kanban_root / "_runtime/human-verifications"
+
+    @property
     def request_uploads_dir(self) -> Path:
         return self.kanban_root / "_runtime/request-uploads"
 
     @property
     def request_drafts_dir(self) -> Path:
         return self.kanban_root / "_runtime/request-drafts"
+
+    @property
+    def app_database_path(self) -> Path:
+        return self.auth.database_path or (self.kanban_root / "_runtime/app.db")
+
+    @property
+    def encryption_key_path(self) -> Path:
+        return self.auth.encryption_key_path or (self.kanban_root / "_runtime/secrets/settings.key")
 
     @property
     def events_dir(self) -> Path:
