@@ -1031,7 +1031,8 @@
     }
 
     function currentAuthUser() {
-      return currentAuthPayload?.user || lastSettingsPayload?.user || null;
+      if (currentAuthPayload) return currentAuthPayload.user || null;
+      return lastSettingsPayload?.user || null;
     }
 
     function updateAuthControls(data) {
