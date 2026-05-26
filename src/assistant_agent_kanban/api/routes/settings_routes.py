@@ -322,7 +322,6 @@ def register(router: APIRouter) -> None:
     @router.get("/api/project-settings")
     async def get_project_settings(repo_root: str, request: Request) -> Mapping[str, object]:
         user = current_user_or_none(request)
-        runtime = request.app.state.runtime
         if auth_is_required(request) and user is None:
             raise HTTPException(status_code=401, detail="authentication required")
         settings = request.app.state.user_settings_store.get_project_settings(repo_root)
@@ -331,7 +330,6 @@ def register(router: APIRouter) -> None:
     @router.put("/api/project-settings")
     async def update_project_settings(payload: ProjectSettings, request: Request) -> Mapping[str, object]:
         user = current_user_or_none(request)
-        runtime = request.app.state.runtime
         if auth_is_required(request) and (user is None or not user.is_admin):
             raise HTTPException(status_code=403, detail="project settings can only be updated by an admin")
         settings = request.app.state.user_settings_store.update_project_settings(payload)
