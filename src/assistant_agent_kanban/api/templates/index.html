@@ -308,7 +308,7 @@
                 <span id="settings-users-description">Create local login accounts for this kanban server.</span>
               </div>
               <div class="settings-user-container">
-                <div class="settings-card settings-user-create-card">
+                <div id="settings-user-create-card" class="settings-card settings-user-create-card">
                   <strong id="settings-new-user-heading" class="settings-card-title-main">Add New User</strong>
                   <div class="settings-user-fields-grid">
                     <div class="settings-user-field">
@@ -323,7 +323,7 @@
                     </div>
                   </div>
                   <div class="settings-user-actions-row">
-                    <div class="settings-toggle compact-toggle">
+                    <div id="settings-new-user-admin-toggle" class="settings-toggle compact-toggle">
                       <div class="settings-toggle-copy">
                         <label id="settings-new-user-admin-label" for="new-user-is-admin">Admin</label>
                         <span id="settings-new-user-admin-description">Admins can edit common settings and create users.</span>
@@ -343,7 +343,7 @@
                   <strong id="settings-user-list-title">Existing users</strong>
                   <span id="settings-user-list-description" class="settings-card-subtitle">Accounts that can sign in to this local kanban database.</span>
                   <div id="settings-user-list" class="settings-user-grid"></div>
-                  <div class="settings-user-danger-zone">
+                  <div id="settings-user-danger-zone" class="settings-user-danger-zone">
                     <div>
                       <strong id="settings-delete-all-users-title">Disable login mode</strong>
                       <span id="settings-delete-all-users-description">Delete every user account and return this server to localhost-only admin mode.</span>
