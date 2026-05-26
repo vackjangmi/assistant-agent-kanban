@@ -103,6 +103,11 @@ class _ResumeMixin(_TaskServiceLike):
                         target_repo_root=Path(task.metadata.target.repo_root),
                         base_branch=task.metadata.target.base_branch,
                         request_language=task.metadata.request.language,
+                        slack_channel_id=task.metadata.slack.channel,
+                        slack_thread_ts=task.metadata.slack.thread_ts,
+                        created_by_user_id=task.metadata.created_by_user_id,
+                        created_by_username=task.metadata.created_by_username,
+                        runtime_pin=task.metadata.runtime_pin,
                     )
                     created_child_dirs.append(child_dir)
                     self._copy_parent_request_attachments(task.task_dir, child_dir)

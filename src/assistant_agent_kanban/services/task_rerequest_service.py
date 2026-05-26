@@ -61,6 +61,12 @@ class TaskRerequestService:
                 request_language=parsed.language or source.metadata.request.language,
                 request_plan_auto_approve=parsed.plan_auto_approve,
             )
+            metadata.created_by_user_id = source.metadata.created_by_user_id
+            metadata.created_by_username = source.metadata.created_by_username
+            metadata.slack.channel = source.metadata.slack.channel
+            metadata.slack.thread_ts = source.metadata.slack.thread_ts
+            metadata.runtime_pin = source.metadata.runtime_pin
+            self.metadata_store.save(new_task_dir, metadata)
             with self.locks.acquire(new_task_dir, metadata, owner=by, run_id="manual-rerequest"):
                 return self.transitions.move(
                     TaskContext(metadata=metadata, task_dir=new_task_dir, state=TaskState.REQUESTS),

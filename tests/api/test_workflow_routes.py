@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import subprocess
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -12,12 +13,21 @@ from assistant_agent_kanban.exceptions import IntegrationError
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.models import utc_now
 from assistant_agent_kanban.split_proposals import sync_split_proposal_artifacts
+from assistant_agent_kanban.user_settings_store import RuntimePreferenceSettings, UserSecretUpdate
 
 from ..conftest import FakeAdapter, create_request_task
 from ..test_plan_approval_worker import plan_with_split_proposal
 
 
 from ._helpers import _task_ready_for_completed_reviews
+
+
+def _verification_repo_for(scanner: KanbanScanner, task_id: str) -> Path:
+    refreshed = scanner.find_task(task_id)
+    verification_repo_root = refreshed.metadata.integration.verification_repo_root
+    assert verification_repo_root
+    return Path(verification_repo_root)
+
 
 def test_api_resumes_human_blocked_review_loop(configured_paths):
     config, _, _ = configured_paths
@@ -67,6 +77,67 @@ def test_api_resumes_human_blocked_review_loop(configured_paths):
     assert "Please keep the existing review direction, but incorporate the human note." in qa_markdown
 
 
+def test_api_task_actions_require_creator_or_admin(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    config.runtime.auto_dispatch = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    app.state.user_settings_store.create_user("admin", "admin-password", is_admin=True)
+    owner = app.state.user_settings_store.create_user("owner", "owner-password", is_admin=False)
+    app.state.user_settings_store.create_user("other", "other-password", is_admin=False)
+
+    with TestClient(app) as owner_client:
+        assert owner_client.post("/api/auth/login", json={"username": "owner", "password": "owner-password"}).status_code == 200
+        created = owner_client.post(
+            "/api/requests",
+            json={
+                "title": "creator gated task",
+                "goal": "Only the creator or admin can approve the plan.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+            },
+        )
+        assert created.status_code == 200
+
+    runtime = app.state.runtime
+    metadata_store = runtime.task_service.metadata_store
+    scanner = runtime.task_service.scanner
+    transitions = runtime.task_service.transitions
+    task = scanner.scan()[0]
+    assert task.metadata.created_by_user_id == owner.user_id
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text(
+        "\n\n".join(
+            [
+                "## Summary\nPlan summary.",
+                "## Scope\nPlan scope.",
+                "## Out of Scope\nNone.",
+                "## File Map\n- file",
+                "## Step-by-step Plan\n1. Change it.",
+                "## Validation Plan\n- Run tests.",
+                "## Acceptance Criteria\n- Done.",
+                "## Risks\nNone.",
+                "## Open Questions\nNone.",
+            ]
+        )
+        + "\n"
+    )
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+
+    with TestClient(app) as other_client:
+        assert other_client.post("/api/auth/login", json={"username": "other", "password": "other-password"}).status_code == 200
+        blocked = other_client.post(f"/api/tasks/{waiting.metadata.task_id}/approve-plan")
+        assert blocked.status_code == 403
+        assert "creator" in blocked.json()["detail"]
+
+    with TestClient(app) as admin_client:
+        assert admin_client.post("/api/auth/login", json={"username": "admin", "password": "admin-password"}).status_code == 200
+        approved = admin_client.post(f"/api/tasks/{waiting.metadata.task_id}/approve-plan")
+        assert approved.status_code == 200
+        assert approved.json()["state"] == "todos"
+
+
 def test_api_split_plan_creates_children_and_closes_parent(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
@@ -77,6 +148,9 @@ def test_api_split_plan_creates_children_and_closes_parent(configured_paths):
     scanner = runtime.task_service.scanner
     transitions = runtime.task_service.transitions
     task = next(task for task in scanner.scan() if task.metadata.title == "api-split-parent")
+    task.metadata.created_by_user_id = "owner-id"
+    task.metadata.created_by_username = "owner"
+    metadata_store.save(task.task_dir, task.metadata)
     planning = transitions.move(task, TaskState.PLANNING, by="planner")
     plan_text = plan_with_split_proposal()
     (planning.task_dir / "PLAN.md").write_text(plan_text)
@@ -95,6 +169,8 @@ def test_api_split_plan_creates_children_and_closes_parent(configured_paths):
     assert len(payload["closure"]["child_task_ids"]) == 2
     children = [scanner.find_task(task_id) for task_id in payload["closure"]["child_task_ids"]]
     assert all(child.state == TaskState.REQUESTS for child in children)
+    assert all(child.metadata.created_by_user_id == "owner-id" for child in children)
+    assert all(child.metadata.created_by_username == "owner" for child in children)
 
 
 def test_api_cancel_task_moves_to_closed_and_removes_workspace(configured_paths):
@@ -683,7 +759,9 @@ def test_api_supports_human_verification_start_and_reject(configured_paths):
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
         assert start.status_code == 200
         assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
-        assert (repo_root / "app.txt").read_text() == "review me\n"
+        verification_repo = _verification_repo_for(scanner, completed.metadata.task_id)
+        assert (repo_root / "app.txt").read_text() == "hello\n"
+        assert (verification_repo / "app.txt").read_text() == "review me\n"
 
         reject = client.post(
             f"/api/tasks/{completed.metadata.task_id}/reject-verification",
@@ -692,6 +770,54 @@ def test_api_supports_human_verification_start_and_reject(configured_paths):
         assert reject.status_code == 200
         assert reject.json()["state"] == TaskState.TODOS.value
         assert (repo_root / "app.txt").read_text() == "hello\n"
+
+
+def test_api_authenticated_verification_requires_git_token(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "auth-human-verify-token-required-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    admin = app.state.user_settings_store.create_user("admin", "secret-password", is_admin=True)
+    _, completed = _task_ready_for_completed_reviews(config, "auth-human-verify-token-required-task")
+
+    with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"username": admin.username, "password": "secret-password"}).status_code == 200
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+
+    assert start.status_code == 409
+    assert start.json()["detail"] == "Git token is required to push review branches in multi-user mode"
+
+
+def test_api_authenticated_verification_pushes_remote_review_branch_even_when_global_setting_is_disabled(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    config.auth.enabled = False
+    config.review_branch_remote.enabled = False
+    config.runtime.auto_dispatch = False
+    remote_repo = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    create_request_task(config, "auth-human-verify-force-remote-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    admin = app.state.user_settings_store.create_user("admin", "secret-password", is_admin=True)
+    app.state.user_settings_store.update_user_settings(
+        admin.user_id,
+        RuntimePreferenceSettings(),
+        secrets_update=UserSecretUpdate(git_token="test-token"),
+    )
+    _, completed = _task_ready_for_completed_reviews(config, "auth-human-verify-force-remote-task")
+
+    with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"username": admin.username, "password": "secret-password"}).status_code == 200
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+
+    assert start.status_code == 200
+    remote_branch_ref = f"refs/heads/review/{completed.metadata.task_id.lower()}"
+    show_ref = subprocess.run(["git", "--git-dir", str(remote_repo), "show-ref", "--verify", remote_branch_ref], capture_output=True, text=True, check=False)
+    assert show_ref.returncode == 0
+    refreshed = app.state.runtime.scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.remote_review_branch == f"review/{completed.metadata.task_id.lower()}"
+    assert refreshed.metadata.integration.remote_name == "origin"
 
 
 
@@ -719,7 +845,7 @@ def test_api_returns_to_todos_on_verification_target_repo_drift(configured_paths
     assert refreshed.metadata.retry_gate.reason == "verification-target-repo-drift"
 
 
-def test_api_blocks_human_verification_start_when_target_baseline_is_dirty(configured_paths):
+def test_api_allows_human_verification_start_when_target_worktree_is_dirty(configured_paths):
     config, repo_root, _ = configured_paths
     config.runtime.auto_dispatch = False
     docs_dir = repo_root / "docs"
@@ -737,9 +863,14 @@ def test_api_blocks_human_verification_start_when_target_baseline_is_dirty(confi
     with TestClient(app) as client:
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
 
-    assert start.status_code == 409
-    assert start.json()["detail"] == "target repo must be clean before apply"
-    assert scanner.find_task(completed.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
+    assert start.status_code == 200
+    assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
+    verification_repo = _verification_repo_for(scanner, completed.metadata.task_id)
+    assert (repo_root / "app.txt").read_text() == "hello\n"
+    assert (verification_repo / "app.txt").read_text() == "review me\n"
+    assert not dirty_file.exists()
+    status = subprocess.run(["git", "-C", str(repo_root), "status", "--short"], check=True, capture_output=True, text=True)
+    assert "D docs/unrelated.md" in status.stdout
 
 
 def test_api_rejects_retry_when_verification_apply_is_already_active(configured_paths):
@@ -778,10 +909,12 @@ def test_api_supports_human_verification_start_into_empty_non_git_target(configu
     assert start.status_code == 200
     payload = start.json()
     assert payload["state"] == TaskState.HUMAN_VERIFYING.value
-    assert payload["integration"]["initialized_target_repo"] is True
-    assert (empty_target / ".git").exists()
-    assert (empty_target / "app.txt").read_text() == "review me\n"
-    branch = subprocess.run(["git", "-C", str(empty_target), "branch", "--show-current"], check=True, capture_output=True, text=True)
+    assert payload["integration"]["initialized_target_repo"] is False
+    assert not (empty_target / ".git").exists()
+    assert not (empty_target / "app.txt").exists()
+    verification_repo = _verification_repo_for(scanner, completed.metadata.task_id)
+    assert (verification_repo / "app.txt").read_text() == "review me\n"
+    branch = subprocess.run(["git", "-C", str(verification_repo), "branch", "--show-current"], check=True, capture_output=True, text=True)
     assert branch.stdout.strip() == f"review/{completed.metadata.task_id.lower()}"
     refreshed = scanner.find_task(completed.metadata.task_id)
     assert refreshed.metadata.integration.patch_path
@@ -1049,7 +1182,10 @@ def test_api_returns_todos_when_human_verification_rebase_fails(configured_paths
     subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "upstream change"], check=True, capture_output=True, text=True)
 
     with TestClient(app) as client:
-        approve = client.post(f"/api/tasks/{completed.metadata.task_id}/approve-verification")
+        approve = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/approve-verification",
+            json={"completion_mode": "target-branch"},
+        )
 
     assert approve.status_code == 200
     assert approve.json()["state"] == TaskState.TODOS.value

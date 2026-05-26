@@ -891,7 +891,27 @@ class ReviewerWorker(WorkerBase):
             artifact = self._parse_finalize_payload(payload)
             if artifact is not None:
                 return artifact
-        return None
+        return self._parse_markdown_finalize_artifact(assistant_text)
+
+    def _parse_markdown_finalize_artifact(self, assistant_text: str) -> ReviewFinalizeArtifact | None:
+        match = re.search(r"(?im)^\s*Verdict:\s*(PASS|NEEDS_CHANGES)\s*$", assistant_text)
+        if match is None:
+            return None
+        verdict = cast(Literal["PASS", "NEEDS_CHANGES"], match.group(1))
+        markdown = assistant_text[match.start() :].strip()
+        if not markdown:
+            return None
+        blocker_match = re.search(r"(?im)^\s*(?:Primary blocker|Blocker):\s*([^\n]+)\s*$", markdown)
+        primary_blocker = self._normalize_primary_blocker(blocker_match.group(1) if blocker_match else None, verdict=verdict)
+        return {
+            "schema_version": 1,
+            "artifact_type": "review",
+            "task_id": "",
+            "cycle": 0,
+            "verdict": verdict,
+            "primary_blocker": primary_blocker,
+            "markdown": markdown,
+        }
 
     def _parse_finalize_payload(self, payload: object) -> ReviewFinalizeArtifact | None:
         if not isinstance(payload, dict):

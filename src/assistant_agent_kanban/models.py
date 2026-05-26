@@ -200,11 +200,20 @@ class IntegrationInfo(BaseModel):
     base_branch: str = "main"
     base_commit: str | None = None
     patch_path: str | None = None
+    verification_repo_root: str | None = None
     applied_at: datetime | None = None
     original_branch: str | None = None
     review_branch: str | None = None
+    remote_name: str | None = None
+    remote_review_branch: str | None = None
+    remote_pushed_at: datetime | None = None
+    remote_push_error: str | None = None
     final_branch_summary: str | None = None
     final_branch: str | None = None
+    final_remote_name: str | None = None
+    final_remote_branch: str | None = None
+    final_remote_pushed_at: datetime | None = None
+    remote_merge_request_url: str | None = None
     initialized_target_repo: bool = False
 
 
@@ -309,6 +318,8 @@ class TaskMetadata(BaseModel):
     parent_task_id: str | None = None
     split_index: int | None = None
     split_count: int | None = None
+    created_by_user_id: str | None = None
+    created_by_username: str | None = None
     cycle: int = 0
     implementation: ImplementationInfo = Field(default_factory=ImplementationInfo)
     review: ReviewInfo = Field(default_factory=ReviewInfo)
@@ -334,6 +345,8 @@ class TaskSnapshot(BaseModel):
     agent_status: Literal["active", "waiting", "idle"] = "idle"
     agent_owner: str | None = None
     agent_heartbeat_at: datetime | None = None
+    created_by_user_id: str | None = None
+    created_by_username: str | None = None
     target_repo_root: str = "."
     target_repo_label: str = "."
     base_branch: str = "main"

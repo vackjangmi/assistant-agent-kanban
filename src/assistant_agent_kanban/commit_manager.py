@@ -35,26 +35,35 @@ class CommitManager:
             raise CommitError(f"unsupported completion mode: {completion_mode}")
         review_sha = self._ensure_review_branch_tip(task_dir, metadata)
         metadata.commit.review_sha = review_sha
-        try:
-            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
-        except ValueError as exc:
-            raise CommitError(str(exc)) from exc
+        repo_root = self._commit_repo_root(metadata)
+        target_repo_root = self._target_repo_root(metadata)
         if completion_mode == "target-branch":
-            final_sha = self._squash_review_branch_onto(target_repo_root, task_dir, metadata, metadata.target.base_branch)
+            final_sha = self._squash_review_branch_onto(repo_root, task_dir, metadata, metadata.target.base_branch)
             metadata.integration.final_branch = metadata.target.base_branch
+            if repo_root != target_repo_root:
+                self._publish_target_branch(
+                    repo_root,
+                    target_repo_root,
+                    metadata.target.base_branch,
+                    final_sha,
+                    expected_base_sha=metadata.integration.base_commit,
+                )
             return final_sha
-        base_head = self._branch_head(target_repo_root, metadata.target.base_branch)
+        base_head = self._branch_head(repo_root, metadata.target.base_branch)
         if base_head is None:
             raise CommitError(f"failed to resolve base branch '{metadata.target.base_branch}'")
-        final_branch = self._ensure_final_branch(target_repo_root, metadata, base_head)
+        final_branch = self._ensure_final_branch(repo_root, metadata, base_head, collision_repo_root=target_repo_root if repo_root != target_repo_root else None)
         metadata.integration.final_branch = final_branch
-        return self._squash_review_branch_onto(target_repo_root, task_dir, metadata, final_branch)
+        final_sha = self._squash_review_branch_onto(repo_root, task_dir, metadata, final_branch)
+        if repo_root != target_repo_root:
+            self._publish_final_branch(repo_root, target_repo_root, final_branch)
+        return final_sha
+
+    def preferred_final_branch(self, metadata: TaskMetadata) -> str:
+        return self._preferred_final_branch(metadata)
 
     def _commit_review_branch(self, task_dir: Path, metadata: TaskMetadata, *, allow_existing_commit: bool) -> str:
-        try:
-            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
-        except ValueError as exc:
-            raise CommitError(str(exc)) from exc
+        target_repo_root = self._commit_repo_root(metadata)
         if not metadata.commit.prepared_message:
             self.prepare_commit_message(task_dir, metadata)
         review_branch = metadata.integration.review_branch
@@ -99,10 +108,7 @@ class CommitManager:
         review_branch = metadata.integration.review_branch
         if not review_branch:
             raise CommitError("review branch is missing")
-        try:
-            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
-        except ValueError as exc:
-            raise CommitError(str(exc)) from exc
+        target_repo_root = self._commit_repo_root(metadata)
         current_branch = self._current_branch(target_repo_root)
         if current_branch != review_branch:
             switch = subprocess.run(
@@ -355,14 +361,28 @@ class CommitManager:
                 return
         raise CommitError(f"failed to switch to target branch '{branch}'")
 
-    def _ensure_final_branch(self, repo_root: Path, metadata: TaskMetadata, start_point: str) -> str:
+    def _commit_repo_root(self, metadata: TaskMetadata) -> Path:
+        if metadata.integration.verification_repo_root:
+            repo_root = Path(metadata.integration.verification_repo_root).expanduser().resolve()
+            if not repo_root.exists():
+                raise CommitError("verification repository is missing")
+            return repo_root
+        return self._target_repo_root(metadata)
+
+    def _target_repo_root(self, metadata: TaskMetadata) -> Path:
+        try:
+            return resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise CommitError(str(exc)) from exc
+
+    def _ensure_final_branch(self, repo_root: Path, metadata: TaskMetadata, start_point: str, *, collision_repo_root: Path | None = None) -> str:
         branch = self._preferred_final_branch(metadata)
-        if self._branch_exists(repo_root, branch):
-            existing_sha = self._branch_head(repo_root, branch)
+        existing_sha = self._branch_head_for_collision(repo_root, collision_repo_root, branch)
+        if existing_sha is not None:
             if existing_sha != start_point:
                 branch = f"{branch}-{metadata.task_id.lower()}"
-                if self._branch_exists(repo_root, branch):
-                    fallback_sha = self._branch_head(repo_root, branch)
+                fallback_sha = self._branch_head_for_collision(repo_root, collision_repo_root, branch)
+                if fallback_sha is not None:
                     if fallback_sha != start_point:
                         raise CommitError("failed to create final branch: fallback branch already exists")
         switch = subprocess.run(
@@ -374,6 +394,67 @@ class CommitManager:
         if switch.returncode != 0:
             raise CommitError(switch.stderr.strip() or "failed to create final branch")
         return branch
+
+    def _branch_head_for_collision(self, repo_root: Path, collision_repo_root: Path | None, branch: str) -> str | None:
+        existing_sha = self._branch_head(repo_root, branch)
+        if existing_sha is not None:
+            return existing_sha
+        if collision_repo_root is None:
+            return None
+        return self._branch_head(collision_repo_root, branch)
+
+    def _publish_final_branch(self, source_repo_root: Path, target_repo_root: Path, branch: str) -> None:
+        if self._current_branch(target_repo_root) == branch:
+            raise CommitError(f"cannot publish final branch '{branch}' while it is checked out in the target repository")
+        fetched = subprocess.run(
+            ["git", "-C", str(target_repo_root), "fetch", str(source_repo_root), f"refs/heads/{branch}:refs/heads/{branch}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if fetched.returncode != 0:
+            raise CommitError(fetched.stderr.strip() or "failed to publish final branch to target repository")
+
+    def _publish_target_branch(
+        self,
+        source_repo_root: Path,
+        target_repo_root: Path,
+        branch: str,
+        final_sha: str,
+        *,
+        expected_base_sha: str | None,
+    ) -> None:
+        target_head = self._branch_head(target_repo_root, branch)
+        if expected_base_sha and target_head and target_head != expected_base_sha:
+            raise CommitError(f"target branch '{branch}' changed during human verification")
+        current_branch = self._current_branch(target_repo_root)
+        if current_branch == branch:
+            status = subprocess.run(["git", "-C", str(target_repo_root), "status", "--short"], capture_output=True, text=True, check=False)
+            if status.returncode != 0:
+                raise CommitError(status.stderr.strip() or "failed to inspect target repository status")
+            if status.stdout.strip():
+                raise CommitError("target repo must be clean before updating target branch")
+            fetched = subprocess.run(
+                ["git", "-C", str(target_repo_root), "fetch", str(source_repo_root), f"refs/heads/{branch}:refs/aak/verification/{branch}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if fetched.returncode != 0:
+                raise CommitError(fetched.stderr.strip() or "failed to publish target branch to target repository")
+            reset = subprocess.run(["git", "-C", str(target_repo_root), "reset", "--hard", final_sha], capture_output=True, text=True, check=False)
+            subprocess.run(["git", "-C", str(target_repo_root), "update-ref", "-d", f"refs/aak/verification/{branch}"], capture_output=True, text=True, check=False)
+            if reset.returncode != 0:
+                raise CommitError(reset.stderr.strip() or "failed to update target branch worktree")
+            return
+        fetched = subprocess.run(
+            ["git", "-C", str(target_repo_root), "fetch", str(source_repo_root), f"refs/heads/{branch}:refs/heads/{branch}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if fetched.returncode != 0:
+            raise CommitError(fetched.stderr.strip() or "failed to publish target branch to target repository")
 
     def _preferred_final_branch(self, metadata: TaskMetadata) -> str:
         summary = self.sanitize_branch_summary(metadata.integration.final_branch_summary, fallback_title=metadata.title)

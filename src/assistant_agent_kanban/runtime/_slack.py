@@ -1153,9 +1153,13 @@ class _SlackHandlersMixin(_RuntimeSupervisorLike):
         request_draft_markdown: str | None,
         slack_channel_id: str | None = None,
         slack_thread_ts: str | None = None,
+        request_config=None,
+        created_by_user_id: str | None = None,
+        created_by_username: str | None = None,
     ) -> Path:
-        normalized_base_branch = base_branch.strip() if base_branch else self.config.base_branch
-        request_language = runtime_language_code_to_request_language(self.config.runtime.language)
+        active_config = request_config or self.config
+        normalized_base_branch = base_branch.strip() if base_branch else active_config.base_branch
+        request_language = runtime_language_code_to_request_language(active_config.runtime.language)
         request_draft_store = RequestDraftStore(self.config)
         stored_draft = None
         if request_draft_id:
@@ -1166,10 +1170,10 @@ class _SlackHandlersMixin(_RuntimeSupervisorLike):
         default_scope, default_out_of_scope = build_default_scope_sections_for_language(
             target_repo,
             language_code=request_language,
-            managed_docs_root=self.config.target_repo_docs_root_value(),
+            managed_docs_root=active_config.target_repo_docs_root_value(),
         )
         task_dir = create_request(
-            self.config,
+            active_config,
             template=RequestTemplateData(
                 title=title.strip(),
                 goal=goal.strip(),
@@ -1183,15 +1187,16 @@ class _SlackHandlersMixin(_RuntimeSupervisorLike):
             ),
             target_repo_root=Path(target_repo),
             base_branch=normalized_base_branch,
+            request_language=request_language,
             request_upload_token=request_upload_token,
             request_draft_markdown=draft_markdown,
+            slack_channel_id=slack_channel_id,
+            slack_thread_ts=slack_thread_ts,
+            created_by_user_id=created_by_user_id,
+            created_by_username=created_by_username,
+            runtime_pin=active_config.capture_runtime_pin(captured_by=created_by_username or "human"),
         )
         self.scanner.scan()
-        if slack_channel_id or slack_thread_ts:
-            task = self.scanner.find_task(task_dir.name)
-            task.metadata.slack.channel = slack_channel_id
-            task.metadata.slack.thread_ts = slack_thread_ts
-            self.scanner.metadata_store.save(task.task_dir, task.metadata)
         if stored_draft is not None:
             request_draft_store.delete(stored_draft.draft_id)
         return task_dir

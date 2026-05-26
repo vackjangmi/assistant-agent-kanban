@@ -11,7 +11,9 @@ from .enums import TaskState
 from .metadata_store import MetadataStore
 from .models import TaskContext
 from .scanner import KanbanScanner
+from .settings_resolver import effective_config_for_user_and_project
 from .slack_api import slack_api_call, slack_error_message, slack_upload_file_to_thread
+from .user_settings_store import UserSettingsStore
 
 
 logger = logging.getLogger(__name__)
@@ -43,20 +45,22 @@ MILESTONE_EMOJIS: dict[str, str] = {
 
 
 class SlackMilestoneNotifier:
-    def __init__(self, config: AppConfig, metadata_store: MetadataStore | None = None) -> None:
+    def __init__(self, config: AppConfig, metadata_store: MetadataStore | None = None, settings_store: UserSettingsStore | None = None) -> None:
         self.config = config
         self.metadata_store = metadata_store or MetadataStore()
+        self.settings_store = settings_store
 
     def notify_transition(self, context: TaskContext, *, previous_state: TaskState, by: str, note: str | None = None) -> None:
         milestone = MILESTONE_TRANSITIONS.get((previous_state, context.state))
-        token = self.config.slack.bot_token
-        if not self.config.slack.enabled or not token:
+        notification_config = self._notification_config(context)
+        token = notification_config.slack.bot_token
+        if not notification_config.slack.enabled or not token:
             return
         if context.state == TaskState.IMPLEMENTING:
             self._clear_action_message(context, action_key="resume_review_loop", token=token)
         if milestone is None:
             return
-        channel = context.metadata.slack.channel or self.config.slack.default_channel
+        channel = context.metadata.slack.channel or notification_config.slack.default_channel
         if not channel:
             return
         payload: dict[str, object] = {
@@ -95,6 +99,20 @@ class SlackMilestoneNotifier:
                 "from_state": self._state_value(previous_state),
                 "to_state": self._state_value(context.state),
             },
+        )
+
+    def _notification_config(self, context: TaskContext) -> AppConfig:
+        if self.settings_store is None:
+            return self.config
+        target_repo = context.metadata.target.repo_root
+        user_id = context.metadata.created_by_user_id
+        if not target_repo and not user_id:
+            return self.config
+        return effective_config_for_user_and_project(
+            self.config,
+            self.settings_store,
+            target_repo=target_repo or None,
+            user_id=user_id or None,
         )
 
     def _build_message(
