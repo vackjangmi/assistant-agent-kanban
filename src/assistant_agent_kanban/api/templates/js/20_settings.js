@@ -247,6 +247,9 @@
       setSettingsHtml('settings-git-token-username-note', 'gitTokenUsernameNote');
       setSettingsText('settings-git-token-title', 'gitTokenTitle');
       setSettingsText('settings-git-token-description', 'gitTokenDescription');
+      setSettingsText('settings-git-unlock-key-title', 'gitUnlockKeyTitle');
+      setSettingsText('settings-git-unlock-key-description', 'gitUnlockKeyDescription');
+      updateGitUnlockKeyStatus();
       setSettingsText('settings-repositories-heading', 'repositoriesHeading');
       setSettingsText('settings-repositories-description', 'repositoriesDescription');
       setSettingsText('settings-repo-root-title', 'repoRootTitle');
@@ -261,21 +264,26 @@
       setSettingsText('settings-help-card-desc', 'settingsHelpCardDesc');
       const restartBtn = document.getElementById('restart-onboarding-btn');
       if (restartBtn) restartBtn.textContent = translateSettings('settingsHelpCardBtn');
+      setSettingsText('account-modal-title', 'accountTitle');
+      setSettingsText('account-modal-description', 'accountDescription');
+      setSettingsText('account-password-heading', 'passwordHeading');
+      setSettingsText('account-password-description', 'passwordDescription');
+      setSettingsText('settings-current-password-title', 'currentPasswordTitle');
+      setSettingsText('settings-change-password-title', 'changePasswordTitle');
+      setSettingsText('settings-confirm-password-title', 'confirmPasswordTitle');
+      if (changePasswordButton) changePasswordButton.textContent = translateSettings('updatePassword');
       setSettingsText('settings-users-heading', 'usersHeading');
       setSettingsText('settings-users-description', 'usersDescription');
+      setSettingsText('settings-remote-usage-title', 'remoteUsageTitle');
+      setSettingsText('settings-remote-usage-description', 'remoteUsageDescription');
       setSettingsText('settings-new-user-heading', 'newUserHeading');
       setSettingsText('settings-new-user-title', 'newUserTitle');
       setSettingsText('settings-new-user-description', 'newUserDescription');
       setSettingsText('settings-new-user-password-title', 'newUserPasswordTitle');
-      setSettingsText('settings-new-user-password-description', 'newUserPasswordDescription');
       setSettingsText('settings-new-user-admin-label', 'newUserAdminLabel');
       setSettingsText('settings-new-user-admin-description', 'newUserAdminDescription');
       setSettingsText('settings-user-list-title', 'userListTitle');
-      setSettingsText('settings-user-list-description', 'userListDescription');
-      setSettingsText('settings-delete-all-users-title', 'deleteAllUsersTitle');
-      setSettingsText('settings-delete-all-users-description', 'deleteAllUsersDescription');
       if (createUserButton) createUserButton.textContent = translateSettings('createUser');
-      if (deleteAllUsersButton) deleteAllUsersButton.textContent = translateSettings('deleteAllUsers');
       updateUserManagementModeControls();
       if (btnBrowseRepoRoot) btnBrowseRepoRoot.textContent = translateSettings('dirPickerOpen');
       setSettingsText('directory-picker-title', 'dirPickerTitle');
@@ -363,7 +371,9 @@
       setSettingsHtml('settings-commit-note', 'commitNote');
       renderAssistantOptions(cachedAssistantOptions, runtimeCodingAssistantInput.value || 'opencode');
       cancelSettingsButton.textContent = translateSettings('cancel');
-      saveSettingsButton.textContent = translateSettings('saveSettings');
+      saveSettingsButtons.forEach((button) => {
+        button.textContent = translateSettings('saveSettings');
+      });
       if (lastSettingsPayload) {
         applySlackSettingsData(lastSettingsPayload, { preserveInputs: true });
       } else {
@@ -615,7 +625,7 @@
       }
       if (settingsSlackTab) settingsSlackTab.hidden = !canEditSlackConnection;
       if (!canEditSlackConnection && settingsSlackPanel && !settingsSlackPanel.hidden) {
-        setSettingsTab('slack-channel');
+        setSettingsTab('slack-channel', { guardUnsaved: false });
       }
       [slackEnabledInput, slackSocketModeEnabledInput, slackAppMentionEnabledInput, slackBotNameInput, slackBotTokenInput, slackAppTokenInput].forEach((input) => {
         if (input) input.disabled = !canEditSlackConnection;
@@ -635,6 +645,8 @@
         slack_bot_name: slackBotNameInput?.value || '',
         slack_bot_token: slackBotTokenInput.value || '',
         slack_app_token: slackAppTokenInput.value || '',
+        slack_bot_token_clear_requested: slackBotTokenClearRequested,
+        slack_app_token_clear_requested: slackAppTokenClearRequested,
         slack_default_channel: slackDefaultChannelInput.value || '',
         git_token_username: gitTokenUsernameInput?.value || '',
         git_token: gitTokenInput?.value || '',
@@ -677,6 +689,164 @@
         return;
       }
       gitTokenStatus.textContent = translateSettings('gitTokenStatusNotConfigured');
+    }
+
+    function updateGitUnlockKeyStatus() {
+      if (!gitTokenUnlockKeyNote) return;
+      const inlineValue = (gitTokenUnlockKeyInput?.value || '').trim();
+      if (inlineValue) {
+        gitTokenUnlockKeyNote.textContent = translateSettings('gitUnlockKeyWillSaveLocal', { fingerprint: '...' });
+        updateGitUnlockKeyFingerprint(inlineValue, 'gitUnlockKeyWillSaveLocal', () => (gitTokenUnlockKeyInput?.value || '').trim() === inlineValue);
+        return;
+      }
+      const localValue = readGitTokenUnlockLocal();
+      if (localValue) {
+        gitTokenUnlockKeyNote.textContent = translateSettings('gitUnlockKeySavedLocal', { fingerprint: '...' });
+        updateGitUnlockKeyFingerprint(localValue, 'gitUnlockKeySavedLocal', () => !(gitTokenUnlockKeyInput?.value || '').trim() && readGitTokenUnlockLocal() === localValue);
+        return;
+      }
+      gitTokenUnlockKeyNote.textContent = translateSettings('gitUnlockKeyNote');
+    }
+
+    function updateGitUnlockKeyFingerprint(value, translationKey, stillCurrent) {
+      gitUnlockKeyFingerprint(value).then((fingerprint) => {
+        if (!gitTokenUnlockKeyNote || !stillCurrent()) return;
+        gitTokenUnlockKeyNote.textContent = translateSettings(translationKey, { fingerprint });
+      }).catch(() => {});
+    }
+
+    async function gitUnlockKeyFingerprint(value) {
+      if (!crypto?.subtle) return 'unavailable';
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+      return Array.from(new Uint8Array(digest).slice(0, 6))
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    function gitTokenAad() {
+      const user = currentAuthUser();
+      return JSON.stringify({
+        purpose: 'assistant-agent-kanban.git-token',
+        version: 1,
+        user_id: user?.user_id || '',
+      });
+    }
+
+    function gitTokenUnlockLocalStorageKey() {
+      const userId = currentAuthUser()?.user_id || 'local';
+      return `assistant-agent-kanban.git-token-unlock.${userId}`;
+    }
+
+    function readGitTokenUnlockLocal() {
+      try {
+        return localStorage.getItem(gitTokenUnlockLocalStorageKey()) || '';
+      } catch {
+        return '';
+      }
+    }
+
+    function writeGitTokenUnlockLocal(value) {
+      const text = (value || '').trim();
+      if (!text) return;
+      try {
+        localStorage.setItem(gitTokenUnlockLocalStorageKey(), text);
+      } catch {
+        // Local storage can be unavailable in restricted browser contexts.
+      }
+      updateGitUnlockKeyStatus();
+    }
+
+    function clearGitTokenUnlockLocal() {
+      try {
+        localStorage.removeItem(gitTokenUnlockLocalStorageKey());
+      } catch {
+        // Local storage can be unavailable in restricted browser contexts.
+      }
+      updateGitUnlockKeyStatus();
+    }
+
+    function maskGitTokenForDisplay(value) {
+      const text = value || '';
+      if (!text) return '';
+      if (text.length <= 4) return '•'.repeat(text.length);
+      return `${'•'.repeat(text.length - 4)}${text.slice(-4)}`;
+    }
+
+    function base64FromBytes(bytes) {
+      let binary = '';
+      bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+      return btoa(binary);
+    }
+
+    function cryptoBytes(length) {
+      const bytes = new Uint8Array(length);
+      crypto.getRandomValues(bytes);
+      return bytes;
+    }
+
+    async function encryptGitTokenForStorage(token, unlockKey) {
+      if (!crypto?.subtle || !crypto?.getRandomValues) {
+        throw new Error(translateSettings('gitCryptoUnavailable'));
+      }
+      const trimmedToken = (token || '').trim();
+      const trimmedUnlockKey = (unlockKey || '').trim();
+      if (!trimmedToken) throw new Error(translateSettings('gitTokenRequiredForEncryption'));
+      if (!trimmedUnlockKey) throw new Error(translateSettings('gitUnlockKeyRequired'));
+      const encoder = new TextEncoder();
+      const salt = cryptoBytes(16);
+      const nonce = cryptoBytes(12);
+      const aad = gitTokenAad();
+      const baseKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(trimmedUnlockKey),
+        'PBKDF2',
+        false,
+        ['deriveKey'],
+      );
+      const key = await crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          hash: 'SHA-256',
+          salt,
+          iterations: 600000,
+        },
+        baseKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt'],
+      );
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: nonce, additionalData: encoder.encode(aad) },
+        key,
+        encoder.encode(trimmedToken),
+      );
+      return {
+        version: 1,
+        algorithm: 'AES-256-GCM',
+        kdf: 'PBKDF2-SHA256',
+        kdf_iterations: 600000,
+        salt: base64FromBytes(salt),
+        nonce: base64FromBytes(nonce),
+        ciphertext: base64FromBytes(new Uint8Array(ciphertext)),
+        aad,
+      };
+    }
+
+    function resolveGitUnlockKeyForOperation() {
+      const inlineValue = (gitTokenUnlockKeyInput?.value || '').trim();
+      if (inlineValue) return inlineValue;
+      const localValue = readGitTokenUnlockLocal();
+      if (localValue) return localValue;
+      const promptedValue = (window.prompt(translateSettings('gitUnlockPrompt')) || '').trim();
+      if (promptedValue) writeGitTokenUnlockLocal(promptedValue);
+      return promptedValue;
+    }
+
+    function gitUnlockBodyForOperation(extra = {}) {
+      if (!currentAuthPayload?.enabled || !currentAuthPayload?.authenticated) return { ...extra };
+      const unlockKey = resolveGitUnlockKeyForOperation();
+      if (!unlockKey) return null;
+      return { ...extra, git_token_unlock_key: unlockKey };
     }
 
     function updateSlackTokenStatus(element, maskedValue, configured) {
@@ -838,17 +1008,18 @@
       }
     }
 
-    function buildSlackSettingsPayload() {
-      const payload = {
-        slack_default_channel: slackDefaultChannelInput.value,
-      };
-      if (canEditCommonSettings()) {
+    function buildSlackSettingsPayload({ includeConnection = canEditCommonSettings(), includeChannel = true } = {}) {
+      const payload = {};
+      if (includeChannel) {
+        payload.slack_default_channel = slackDefaultChannelInput.value;
+      }
+      if (includeConnection && canEditCommonSettings()) {
         payload.slack_enabled = slackEnabledInput.checked;
         payload.slack_socket_mode_enabled = slackSocketModeEnabledInput.checked;
         payload.slack_app_mention_enabled = slackAppMentionEnabledInput.checked;
         payload.slack_bot_name = slackBotNameInput?.value || '';
       }
-      if (canEditCommonSettings()) {
+      if (includeConnection && canEditCommonSettings()) {
         if (slackBotTokenClearRequested || slackBotTokenInput.value) {
           payload.slack_bot_token = slackBotTokenClearRequested ? '' : slackBotTokenInput.value;
         }
@@ -952,12 +1123,14 @@
       if (slackBotNameInput) slackBotNameInput.value = state.slack_bot_name || '';
       slackBotTokenInput.value = state.slack_bot_token || '';
       slackAppTokenInput.value = state.slack_app_token || '';
-      slackBotTokenClearRequested = false;
-      slackAppTokenClearRequested = false;
+      slackBotTokenClearRequested = Boolean(state.slack_bot_token_clear_requested);
+      slackAppTokenClearRequested = Boolean(state.slack_app_token_clear_requested);
       slackDefaultChannelInput.value = state.slack_default_channel || '';
       if (gitTokenUsernameInput) gitTokenUsernameInput.value = state.git_token_username || '';
       if (gitTokenInput) gitTokenInput.value = state.git_token || '';
+      if (gitTokenUnlockKeyInput) gitTokenUnlockKeyInput.value = '';
       updateGitTokenStatus(lastSettingsPayload);
+      updateGitUnlockKeyStatus();
       updateSlackChannelState();
       plannerBackendInput.value = state.role_backends?.planner || 'default';
       requestDraftBackendInput.value = state.role_backends?.request_draft || 'default';
@@ -988,13 +1161,15 @@
       applyRequestTranslations();
       applyHumanReviewTranslations();
       refreshRequestDerivedText();
+      discardUserManagementDraft();
     }
 
     function applyRuntimeTheme(theme) {
       body.dataset.theme = theme === 'dark' ? 'dark' : 'light';
     }
 
-    function closeSettingsModal({ restore = false } = {}) {
+    function closeSettingsModal({ restore = false, force = false } = {}) {
+      if (!force && !confirmUnsavedSettingsBeforeClose()) return;
       if (restore) restoreSettingsState(lastLoadedSettingsState);
       setSettingsModalOpen(false);
     }
@@ -1037,24 +1212,111 @@
       return lastSettingsPayload?.user || null;
     }
 
+    function isRemoteUsageActive() {
+      return Boolean(currentAuthPayload?.enabled || currentAuthUser());
+    }
+
     function isUserManagementActivationMode() {
-      return Boolean(currentAuthPayload && !currentAuthPayload.enabled);
+      return Boolean(currentAuthPayload && !isRemoteUsageActive() && remoteUsageSetupRequested);
+    }
+
+    function canChangeOwnPassword() {
+      return Boolean(currentAuthPayload?.enabled && currentAuthUser());
+    }
+
+    function authAvatarGradient(username) {
+      const avatarGradients = [
+        'linear-gradient(135deg, #6366f1, #4f46e5)',
+        'linear-gradient(135deg, #ec4899, #be185d)',
+        'linear-gradient(135deg, #10b981, #047857)',
+        'linear-gradient(135deg, #f59e0b, #d97706)',
+        'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+        'linear-gradient(135deg, #8b5cf6, #6d28d9)'
+      ];
+      const charCodeSum = (username || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      return avatarGradients[charCodeSum % avatarGradients.length];
+    }
+
+    function hasUnsavedUserManagementChanges() {
+      return Boolean(
+        (!isRemoteUsageActive() && remoteUsageSetupRequested)
+        || (newUserUsernameInput?.value || '').trim()
+        || newUserPasswordInput?.value
+      );
+    }
+
+    function isOnboardingActive() {
+      const onboardingOverlay = document.getElementById('onboarding-overlay');
+      return Boolean(onboardingOverlay && !onboardingOverlay.hidden);
+    }
+
+    function discardUserManagementDraft() {
+      if (!isRemoteUsageActive()) {
+        remoteUsageSetupRequested = false;
+      }
+      if (newUserUsernameInput) newUserUsernameInput.value = '';
+      if (newUserPasswordInput) newUserPasswordInput.value = '';
+      if (newUserIsAdminInput) newUserIsAdminInput.checked = false;
+      setCreateUserStatus('');
+      updateUserManagementModeControls();
+      if (!isRemoteUsageActive()) renderUsers([]);
+    }
+
+    function resetAccountPasswordForm() {
+      if (currentUserPasswordInput) {
+        currentUserPasswordInput.value = '';
+        currentUserPasswordInput.type = 'password';
+      }
+      if (newUserPasswordChangeInput) {
+        newUserPasswordChangeInput.value = '';
+        newUserPasswordChangeInput.type = 'password';
+      }
+      if (confirmUserPasswordChangeInput) {
+        confirmUserPasswordChangeInput.value = '';
+        confirmUserPasswordChangeInput.type = 'password';
+      }
+      document.querySelectorAll('.password-visibility-toggle').forEach((button) => {
+        const eyeOpen = button.querySelector('.eye-open-icon');
+        const eyeClosed = button.querySelector('.eye-closed-icon');
+        if (eyeOpen && eyeClosed) {
+          eyeOpen.hidden = false;
+          eyeClosed.hidden = true;
+        }
+      });
+      setPasswordChangeStatus('');
     }
 
     function canManageUsers() {
       const user = currentAuthUser();
-      return isUserManagementActivationMode() || Boolean(user?.is_admin);
+      return Boolean(currentAuthPayload && !isRemoteUsageActive()) || Boolean(user?.is_admin);
     }
 
     function updateUserManagementModeControls() {
       const activationMode = isUserManagementActivationMode();
+      const remoteUsageActive = isRemoteUsageActive();
+      const setupRequested = !remoteUsageActive && remoteUsageSetupRequested;
+      const canManageUserAccounts = canManageUsers();
       setSettingsText('settings-users-heading', activationMode ? 'userManagementActivationHeading' : 'usersHeading');
       setSettingsText('settings-users-description', activationMode ? 'userManagementActivationDescription' : 'usersDescription');
+      setSettingsText('settings-remote-usage-title', 'remoteUsageTitle');
+      setSettingsText('settings-remote-usage-description', 'remoteUsageDescription');
       setSettingsText('settings-new-user-heading', activationMode ? 'userManagementActivationCreateHeading' : 'newUserHeading');
       setSettingsText('settings-new-user-title', activationMode ? 'userManagementActivationAdminTitle' : 'newUserTitle');
       setSettingsText('settings-new-user-description', activationMode ? 'userManagementActivationAdminDescription' : 'newUserDescription');
-      setSettingsText('settings-user-list-title', activationMode ? 'userManagementActivationListTitle' : 'userListTitle');
-      setSettingsText('settings-user-list-description', activationMode ? 'userManagementActivationListDescription' : 'userListDescription');
+      setSettingsText('settings-user-list-title', 'userListTitle');
+      if (remoteUsageStatus) {
+        const statusKey = remoteUsageActive ? 'remoteUsageEnabledStatus' : (setupRequested ? 'remoteUsageSetupStatus' : 'remoteUsageDisabledStatus');
+        remoteUsageStatus.textContent = setupRequested && !remoteUsageActive
+          ? `${translateSettings(statusKey)} · ${translateSettings('remoteUsageDisabledHint')}`
+          : translateSettings(statusKey);
+        remoteUsageStatus.dataset.tone = remoteUsageActive ? 'success' : (setupRequested ? 'warning' : 'neutral');
+      }
+      if (remoteUsageEnabledInput) {
+        remoteUsageEnabledInput.checked = remoteUsageActive || setupRequested;
+      }
+      if (remoteUsageCard) remoteUsageCard.hidden = !canManageUserAccounts && remoteUsageActive;
+      if (userCreateCard) userCreateCard.hidden = (!remoteUsageActive && !setupRequested) || (remoteUsageActive && !canManageUserAccounts);
+      if (userListCard) userListCard.hidden = !remoteUsageActive || !canManageUserAccounts;
       if (createUserButton) createUserButton.textContent = translateSettings(activationMode ? 'activateUserManagement' : 'createUser');
       if (newUserIsAdminInput) {
         newUserIsAdminInput.checked = activationMode || newUserIsAdminInput.checked;
@@ -1062,33 +1324,27 @@
       }
       const adminToggle = document.getElementById('settings-new-user-admin-toggle');
       if (adminToggle) adminToggle.hidden = activationMode;
-      const dangerZone = document.getElementById('settings-user-danger-zone');
-      if (dangerZone) dangerZone.hidden = activationMode;
     }
 
     function updateAuthControls(data) {
       if (data) currentAuthPayload = data;
+      if (isRemoteUsageActive()) {
+        remoteUsageSetupRequested = false;
+      }
       const user = currentAuthUser();
       const enabled = Boolean(currentAuthPayload?.enabled || user);
       const authenticated = Boolean(user && enabled);
       if (authUserLabel) {
         authUserLabel.hidden = !authenticated;
         if (authenticated) {
-          const avatarGradients = [
-            'linear-gradient(135deg, #6366f1, #4f46e5)', // Indigo
-            'linear-gradient(135deg, #ec4899, #be185d)', // Pink
-            'linear-gradient(135deg, #10b981, #047857)', // Emerald
-            'linear-gradient(135deg, #f59e0b, #d97706)', // Amber
-            'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
-            'linear-gradient(135deg, #8b5cf6, #6d28d9)'  // Violet
-          ];
           const username = user.username || '';
           const initial = username.charAt(0).toUpperCase();
-          const charCodeSum = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-          const bgGradient = avatarGradients[charCodeSum % avatarGradients.length];
+          const bgGradient = authAvatarGradient(username);
           const roleClass = user.is_admin ? 'badge-admin' : 'badge-member';
           const roleLabel = user.is_admin ? translateSettings('userRoleAdmin') : translateSettings('userRoleMember');
 
+          authUserLabel.setAttribute('aria-label', translateSettings('accountOpenLabel'));
+          authUserLabel.title = translateSettings('accountOpenLabel');
           authUserLabel.innerHTML = `
             <div class="header-user-avatar" style="background: ${bgGradient};" title="${escapeHtml(roleLabel)}">${escapeHtml(initial)}</div>
             <span class="header-username">${escapeHtml(username)}</span>
@@ -1096,37 +1352,38 @@
           `;
         } else {
           authUserLabel.innerHTML = '';
+          authUserLabel.removeAttribute('aria-label');
+          authUserLabel.removeAttribute('title');
         }
       }
       if (logoutButton) logoutButton.hidden = !authenticated;
       if (settingsGitTab) settingsGitTab.hidden = !authenticated;
       if (!authenticated && settingsGitPanel && !settingsGitPanel.hidden) {
-        setSettingsTab('general');
+        setSettingsTab('general', { guardUnsaved: false });
       }
       const canManageUserAccounts = canManageUsers();
       const canEditRepositories = !isRepoDiscoveryReadonly();
       const canEditRuntimeRoles = canEditCommonSettings();
-      const settingsRolesTab = document.getElementById('settings-tab-roles');
-      const settingsRolesPanel = document.getElementById('settings-panel-roles');
       if (settingsRolesTab) settingsRolesTab.hidden = !canEditRuntimeRoles;
       if (!canEditRuntimeRoles && settingsRolesPanel && !settingsRolesPanel.hidden) {
-        setSettingsTab('general');
+        setSettingsTab('general', { guardUnsaved: false });
       }
       if (settingsRepositoriesTab) settingsRepositoriesTab.hidden = !canEditRepositories;
       if (!canEditRepositories && settingsRepositoriesPanel && !settingsRepositoriesPanel.hidden) {
-        setSettingsTab('general');
+        setSettingsTab('general', { guardUnsaved: false });
       }
       if (settingsSlackTab) settingsSlackTab.hidden = !canEditRuntimeRoles;
       if (!canEditRuntimeRoles && settingsSlackPanel && !settingsSlackPanel.hidden) {
-        setSettingsTab('slack-channel');
+        setSettingsTab('slack-channel', { guardUnsaved: false });
       }
       if (settingsSlackChannelTab) settingsSlackChannelTab.hidden = false;
       if (settingsUsersTab) settingsUsersTab.hidden = !canManageUserAccounts;
       if (!canManageUserAccounts && settingsUsersPanel && !settingsUsersPanel.hidden) {
-        setSettingsTab('general');
+        setSettingsTab('general', { guardUnsaved: false });
       }
       updateUserManagementModeControls();
       updateSettingsPermissionControls();
+      updateGitUnlockKeyStatus();
       if (activeTaskDetail) {
         updatePlanActionState();
         updateHumanVerificationState();
@@ -1159,9 +1416,20 @@
       createUserStatus.dataset.tone = tone;
     }
 
+    function setPasswordChangeStatus(message, tone = 'neutral') {
+      if (!changePasswordStatus) return;
+      changePasswordStatus.hidden = !message;
+      changePasswordStatus.textContent = message || '';
+      changePasswordStatus.dataset.tone = tone;
+    }
+
     function renderUsers(users) {
       if (!settingsUserList) return;
       updateUserManagementModeControls();
+      if (!isRemoteUsageActive()) {
+        settingsUserList.innerHTML = '';
+        return;
+      }
       const rows = Array.isArray(users) ? users : [];
       if (!rows.length) {
         settingsUserList.innerHTML = `<div class="settings-user-card" style="grid-column: 1 / -1; justify-content: center; opacity: 0.7;"><span class="muted">${escapeHtml(translateSettings('userListEmpty'))}</span></div>`;
@@ -1208,14 +1476,110 @@
 
     async function loadUsers() {
       if (!canManageUsers() || !settingsUserList) return;
+      if (!isRemoteUsageActive()) {
+        renderUsers([]);
+        return;
+      }
       const response = await fetch('/api/auth/users');
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Failed to load users.');
       renderUsers(data.users || []);
     }
 
+    function renderAccountSummary() {
+      if (!accountSummary) return;
+      const user = currentAuthUser();
+      if (!user) {
+        accountSummary.innerHTML = '';
+        return;
+      }
+      const username = user.username || '';
+      const initial = username.charAt(0).toUpperCase();
+      const roleClass = user.is_admin ? 'user-badge-admin' : 'user-badge-member';
+      const roleLabel = user.is_admin ? translateSettings('userRoleAdmin') : translateSettings('userRoleMember');
+      accountSummary.innerHTML = `
+        <div class="account-profile-hero">
+          <div class="account-avatar-wrapper">
+            <div class="user-avatar account-avatar" style="background: ${authAvatarGradient(username)};">${escapeHtml(initial)}</div>
+            <span class="account-avatar-ring"></span>
+          </div>
+          <div class="account-summary-copy">
+            <span class="account-signed-in-label">
+              <svg class="secure-lock-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+              </svg>
+              ${escapeHtml(translateSettings('accountSignedInAs'))}
+            </span>
+            <strong class="account-username">${escapeHtml(username)}</strong>
+            <div class="account-badges-row">
+              <span class="user-badge ${roleClass}">${escapeHtml(roleLabel)}</span>
+              <span class="account-status-badge">
+                <span class="status-pulse-dot"></span>
+                Active Session
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openAccountModal() {
+      if (!canChangeOwnPassword()) return;
+      renderAccountSummary();
+      resetAccountPasswordForm();
+      setAccountModalOpen(true);
+      currentUserPasswordInput?.focus();
+    }
+
+    async function changeOwnPassword() {
+      if (!currentUserPasswordInput || !newUserPasswordChangeInput || !confirmUserPasswordChangeInput || !changePasswordButton) return;
+      if (!canChangeOwnPassword()) {
+        setPasswordChangeStatus(translateSettings('passwordChangeFailed'), 'error');
+        return;
+      }
+      const currentPassword = currentUserPasswordInput.value || '';
+      const newPassword = newUserPasswordChangeInput.value || '';
+      const confirmPassword = confirmUserPasswordChangeInput.value || '';
+      if (!currentPassword || !newPassword) {
+        setPasswordChangeStatus(translateSettings('passwordChangeRequired'), 'error');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setPasswordChangeStatus(translateSettings('passwordChangeMismatch'), 'error');
+        return;
+      }
+      changePasswordButton.disabled = true;
+      setPasswordChangeStatus(translateSettings('passwordChangeRunning'));
+      try {
+        const response = await fetch('/api/auth/password', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || translateSettings('passwordChangeFailed'));
+        currentUserPasswordInput.value = '';
+        newUserPasswordChangeInput.value = '';
+        confirmUserPasswordChangeInput.value = '';
+        setPasswordChangeStatus(translateSettings('passwordChangeSuccess'), 'success');
+      } catch (error) {
+        setPasswordChangeStatus(error.message || translateSettings('passwordChangeFailed'), 'error');
+      } finally {
+        changePasswordButton.disabled = false;
+      }
+    }
+
     async function createUser() {
       if (!newUserUsernameInput || !newUserPasswordInput || !newUserIsAdminInput || !createUserButton) return;
+      const activationMode = isUserManagementActivationMode();
+      if (!isRemoteUsageActive() && !activationMode) {
+        setCreateUserStatus(translateSettings('remoteUsageDisabledHint'), 'error');
+        updateUserManagementModeControls();
+        return;
+      }
       const username = (newUserUsernameInput.value || '').trim();
       const password = newUserPasswordInput.value || '';
       if (!username || !password) {
@@ -1223,7 +1587,6 @@
         return;
       }
       createUserButton.disabled = true;
-      const activationMode = isUserManagementActivationMode();
       setCreateUserStatus(translateSettings(activationMode ? 'userManagementActivationRunning' : 'userCreateRunning'));
       try {
         const response = await fetch('/api/auth/users', {
@@ -1241,6 +1604,7 @@
         newUserPasswordInput.value = '';
         newUserIsAdminInput.checked = false;
         setCreateUserStatus(translateSettings(activationMode ? 'userManagementActivationSuccess' : 'userCreateSuccess'), 'success');
+        remoteUsageSetupRequested = false;
         await loadAuthState();
         await loadUsers();
       } catch (error) {
@@ -1266,22 +1630,45 @@
       }
     }
 
-    async function deleteAllUsers() {
-      if (!deleteAllUsersButton) return;
-      const confirmed = window.confirm(translateSettings('userDeleteAllConfirm'));
-      if (!confirmed) return;
-      deleteAllUsersButton.disabled = true;
+    async function deleteAllUsers({ confirm = true } = {}) {
+      const confirmed = !confirm || window.confirm(translateSettings('userDeleteAllConfirm'));
+      if (!confirmed) return false;
       setCreateUserStatus(translateSettings('userDeleteAllRunning'));
       try {
         const response = await fetch('/api/auth/users', { method: 'DELETE' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || translateSettings('userDeleteAllFailed'));
         setCreateUserStatus(translateSettings('userDeleteAllSuccess'), 'success');
+        remoteUsageSetupRequested = false;
         window.location.href = '/';
+        return true;
       } catch (error) {
         setCreateUserStatus(error.message || translateSettings('userDeleteAllFailed'), 'error');
-        deleteAllUsersButton.disabled = false;
+        return false;
       }
+    }
+
+    async function handleRemoteUsageToggleChange() {
+      if (!remoteUsageEnabledInput) return;
+      if (remoteUsageEnabledInput.checked) {
+        if (!isRemoteUsageActive()) {
+          remoteUsageSetupRequested = true;
+          updateUserManagementModeControls();
+          newUserUsernameInput?.focus();
+        }
+        return;
+      }
+      if (isRemoteUsageActive()) {
+        const disabled = await deleteAllUsers();
+        if (!disabled) {
+          remoteUsageEnabledInput.checked = true;
+          updateUserManagementModeControls();
+        }
+        return;
+      }
+      remoteUsageSetupRequested = false;
+      setCreateUserStatus('');
+      updateUserManagementModeControls();
     }
 
     function renderBoardPhaseTabs() {
@@ -1307,10 +1694,143 @@
       return 'plan';
     }
 
-    function setSettingsTab(tab) {
+    function normalizeSettingsTab(tab) {
+      const panels = ['general', 'git', 'repositories', 'roles', 'slack', 'slack-channel', 'users'];
+      return panels.includes(tab) ? tab : 'general';
+    }
+
+    function settingsTabLabel(tab) {
+      const keys = {
+        general: 'settingsTabGeneral',
+        git: 'settingsTabGit',
+        repositories: 'settingsTabRepositories',
+        roles: 'settingsTabRoles',
+        slack: 'settingsTabSlack',
+        'slack-channel': 'settingsTabSlackChannel',
+        users: 'settingsTabUsers',
+      };
+      return translateSettings(keys[normalizeSettingsTab(tab)] || 'settingsTabGeneral');
+    }
+
+    function settingsStateFragmentForTab(tab, state) {
+      const source = state || {};
+      switch (normalizeSettingsTab(tab)) {
+        case 'general':
+          return {
+            language: source.language || 'EN',
+            theme: source.theme || 'light',
+          };
+        case 'git':
+          return {
+            git_token_username: source.git_token_username || '',
+            git_token: source.git_token || '',
+          };
+        case 'repositories':
+          return {
+            repo_discovery_root: source.repo_discovery_root || '../',
+            repo_discovery_max_depth: source.repo_discovery_max_depth || 1,
+          };
+        case 'roles':
+          return {
+            coding_assistant: source.coding_assistant || 'opencode',
+            worker_live_logs_enabled: Boolean(source.worker_live_logs_enabled),
+            role_backends: source.role_backends || {},
+            planner_model: source.planner_model || '',
+            request_draft_model: source.request_draft_model || '',
+            planner_session_token_budget: source.planner_session_token_budget || 250,
+            planner_agent_count: source.planner_agent_count || 1,
+            plan_approval_model: source.plan_approval_model || '',
+            plan_approval_session_token_budget: source.plan_approval_session_token_budget || 250,
+            implementer_model: source.implementer_model || '',
+            implementer_session_token_budget: source.implementer_session_token_budget || 250,
+            implementer_agent_count: source.implementer_agent_count || 1,
+            reviewer_model: source.reviewer_model || '',
+            reviewer_session_token_budget: source.reviewer_session_token_budget || 250,
+            reviewer_agent_count: source.reviewer_agent_count || 1,
+            commit_model: source.commit_model || '',
+            commit_session_token_budget: source.commit_session_token_budget || 250,
+          };
+        case 'slack':
+          return {
+            slack_enabled: Boolean(source.slack_enabled),
+            slack_socket_mode_enabled: source.slack_socket_mode_enabled !== false,
+            slack_app_mention_enabled: Boolean(source.slack_app_mention_enabled),
+            slack_bot_name: source.slack_bot_name || '',
+            slack_bot_token: source.slack_bot_token || '',
+            slack_app_token: source.slack_app_token || '',
+            slack_bot_token_clear_requested: Boolean(source.slack_bot_token_clear_requested),
+            slack_app_token_clear_requested: Boolean(source.slack_app_token_clear_requested),
+          };
+        case 'slack-channel':
+          return {
+            slack_default_channel: source.slack_default_channel || '',
+          };
+        default:
+          return {};
+      }
+    }
+
+    function hasUnsavedSettingsTabChanges(tab = activeSettingsTab) {
+      if (!lastLoadedSettingsState) return false;
+      const normalizedTab = normalizeSettingsTab(tab);
+      if (normalizedTab === 'users') return hasUnsavedUserManagementChanges();
+      const currentFragment = settingsStateFragmentForTab(normalizedTab, captureSettingsState());
+      const loadedFragment = settingsStateFragmentForTab(normalizedTab, lastLoadedSettingsState);
+      return JSON.stringify(currentFragment) !== JSON.stringify(loadedFragment);
+    }
+
+    function firstUnsavedSettingsTab() {
+      const tabs = ['general', 'git', 'repositories', 'roles', 'slack', 'slack-channel', 'users'];
+      return tabs.find((tab) => {
+        const tabEl = document.getElementById(`settings-tab-${tab}`);
+        const panelEl = document.getElementById(`settings-panel-${tab}`);
+        if (tab !== activeSettingsTab && tabEl?.hidden && panelEl?.hidden) return false;
+        return hasUnsavedSettingsTabChanges(tab);
+      }) || null;
+    }
+
+    function notifyUnsavedSettingsTab(tab = activeSettingsTab) {
+      if (isOnboardingActive()) return;
+      setSettingsStatus(translateSettings('statusUnsavedTab', { tab: settingsTabLabel(tab) }), 'error');
+      const saveButton = saveSettingsButtons.find((button) => button.dataset.settingsSaveScope === normalizeSettingsTab(tab));
+      if (saveButton && !saveButton.disabled) saveButton.focus({ preventScroll: true });
+      if (!saveButton && normalizeSettingsTab(tab) === 'users') {
+        const target = canChangeOwnPassword() ? currentUserPasswordInput : remoteUsageEnabledInput;
+        target?.focus({ preventScroll: true });
+      }
+    }
+
+    function confirmUnsavedSettingsBeforeClose() {
+      const unsavedTab = firstUnsavedSettingsTab();
+      if (!unsavedTab) return true;
+      if (isOnboardingActive()) {
+        restoreSettingsState(lastLoadedSettingsState);
+        return true;
+      }
+      const confirmed = window.confirm(translateSettings('confirmUnsavedSettingsClose', { tab: settingsTabLabel(unsavedTab) }));
+      if (!confirmed) notifyUnsavedSettingsTab(unsavedTab);
+      return confirmed;
+    }
+
+    function setSettingsTab(tab, { guardUnsaved = true } = {}) {
+      const targetTab = normalizeSettingsTab(tab);
+      if (guardUnsaved && targetTab !== activeSettingsTab && hasUnsavedSettingsTabChanges(activeSettingsTab)) {
+        const currentTab = activeSettingsTab;
+        if (isOnboardingActive()) {
+          restoreSettingsState(lastLoadedSettingsState);
+        } else {
+          const confirmed = window.confirm(translateSettings('confirmUnsavedSettingsTabLeave', { tab: settingsTabLabel(currentTab) }));
+          if (!confirmed) {
+            notifyUnsavedSettingsTab(currentTab);
+            return false;
+          }
+          restoreSettingsState(lastLoadedSettingsState);
+        }
+      }
+      activeSettingsTab = targetTab;
       const panels = ['general', 'git', 'repositories', 'roles', 'slack', 'slack-channel', 'users'];
       panels.forEach(p => {
-        const active = p === tab;
+        const active = p === targetTab;
         const tabEl = document.getElementById(`settings-tab-${p}`);
         const panelEl = document.getElementById(`settings-panel-${p}`);
         if (tabEl) {
@@ -1326,6 +1846,8 @@
       if (settingsScrollBody) {
         settingsScrollBody.scrollTop = 0;
       }
+      updateSettingsStatusVisibility(targetTab);
+      return true;
     }
     window.setSettingsTab = setSettingsTab;
 
@@ -1334,11 +1856,17 @@
     if (settingsGitTab) settingsGitTab.addEventListener('click', () => setSettingsTab('git'));
     document.getElementById('settings-tab-slack').addEventListener('click', () => setSettingsTab('slack'));
     if (settingsSlackChannelTab) settingsSlackChannelTab.addEventListener('click', () => setSettingsTab('slack-channel'));
-    document.getElementById('settings-tab-roles').addEventListener('click', () => setSettingsTab('roles'));
+    if (settingsRolesTab) settingsRolesTab.addEventListener('click', () => setSettingsTab('roles'));
     if (settingsRepositoriesTab) settingsRepositoriesTab.addEventListener('click', () => setSettingsTab('repositories'));
     if (settingsUsersTab) settingsUsersTab.addEventListener('click', () => {
-      setSettingsTab('users');
+      if (!setSettingsTab('users')) return;
       loadUsers().catch((error) => setCreateUserStatus(error.message, 'error'));
+    });
+    if (remoteUsageEnabledInput) remoteUsageEnabledInput.addEventListener('change', () => {
+      handleRemoteUsageToggleChange().catch((error) => {
+        setCreateUserStatus(error.message || translateSettings('userDeleteAllFailed'), 'error');
+        updateUserManagementModeControls();
+      });
     });
     if (settingsUserList) settingsUserList.addEventListener('click', (event) => {
       const button = event.target.closest('[data-delete-user-id]');

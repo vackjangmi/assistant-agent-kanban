@@ -130,16 +130,46 @@
         slackReceiveTestPollTimer = null;
       }
       if (isOpen) {
-        setSettingsTab('general');
+        setSettingsTab('general', { guardUnsaved: false });
         if (runtimeLanguageInput) {
           runtimeLanguageInput.focus();
         }
       }
     }
 
-    function setSettingsStatus(message, tone = 'neutral') {
+    function setAccountModalOpen(isOpen) {
+      if (!accountModal) return;
+      accountModal.hidden = !isOpen;
+      accountModal.setAttribute('aria-hidden', String(!isOpen));
+      if (!isOpen) resetAccountPasswordForm();
+      
+      if (isOpen && authUserLabel) {
+        const panel = accountModal.querySelector('.account-modal-panel');
+        if (panel) {
+          const rect = authUserLabel.getBoundingClientRect();
+          const rightOffset = window.innerWidth - rect.right;
+          panel.style.position = 'absolute';
+          panel.style.top = `${rect.bottom + 8}px`;
+          panel.style.right = `${rightOffset}px`;
+          panel.style.margin = '0';
+          panel.style.left = 'auto';
+        }
+      }
+      
+      syncBodyModalState();
+    }
+
+    function updateSettingsStatusVisibility(activeTab = null) {
+      if (!settingsStatus) return;
+      const rolesActive = activeTab ? activeTab === 'roles' : Boolean(settingsRolesPanel && !settingsRolesPanel.hidden);
+      settingsStatus.hidden = settingsStatus.dataset.statusScope === 'roles' && !rolesActive;
+    }
+
+    function setSettingsStatus(message, tone = 'neutral', { scope = 'global' } = {}) {
       settingsStatus.textContent = message;
       settingsStatus.dataset.tone = tone;
+      settingsStatus.dataset.statusScope = scope;
+      updateSettingsStatusVisibility();
     }
 
     function setSettingsFormHydrating(isHydrating) {
@@ -147,7 +177,9 @@
         if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement || element instanceof HTMLButtonElement)) return;
         element.disabled = isHydrating;
       });
-      saveSettingsButton.disabled = isHydrating;
+      saveSettingsButtons.forEach((button) => {
+        button.disabled = isHydrating;
+      });
       if (!isHydrating) updateSettingsPermissionControls();
     }
 
@@ -171,7 +203,7 @@
       const availability = data.backend_availability_by_backend?.[activeBackend];
       if (availability && availability.available === false) {
         settingsDiscoverySummary.textContent = translateSettings('summaryEmpty');
-        setSettingsStatus(translateSettings('errorBackendUnavailable', { field: activeBackend, message: availability.error || 'not installed' }), 'error');
+        setSettingsStatus(translateSettings('errorBackendUnavailable', { field: activeBackend, message: availability.error || 'not installed' }), 'error', { scope: 'roles' });
         return;
       }
       const count = data.available_models.length;
@@ -179,22 +211,22 @@
         const refreshedAt = data.discovered_at ? new Date(data.discovered_at).toLocaleString() : translateSettings('justNow');
         settingsDiscoverySummary.textContent = translateSettings(count === 1 ? 'summaryAvailableOne' : 'summaryAvailableMany', { count, refreshedAt });
         if (data.discovery_status === 'fallback' && data.discovery_error) {
-          setSettingsStatus(translateSettings('statusFallback', { error: data.discovery_error }), 'error');
+          setSettingsStatus(translateSettings('statusFallback', { error: data.discovery_error }), 'error', { scope: 'roles' });
         } else {
-          setSettingsStatus(translateSettings('statusLoaded'), 'success');
+          setSettingsStatus(translateSettings('statusLoaded'), 'success', { scope: 'roles' });
         }
         return;
       }
       settingsDiscoverySummary.textContent = translateSettings('summaryEmpty');
       if (data.discovery_status === 'error' && data.discovery_error) {
-        setSettingsStatus(translateSettings('statusDiscoveryFailed', { error: data.discovery_error }), 'error');
+        setSettingsStatus(translateSettings('statusDiscoveryFailed', { error: data.discovery_error }), 'error', { scope: 'roles' });
         return;
       }
       if (data.discovery_status === 'empty') {
-        setSettingsStatus(translateSettings('statusDiscoveryEmpty'));
+        setSettingsStatus(translateSettings('statusDiscoveryEmpty'), 'neutral', { scope: 'roles' });
         return;
       }
-      setSettingsStatus(translateSettings('statusLoadedHint'));
+      setSettingsStatus(translateSettings('statusLoadedHint'), 'neutral', { scope: 'roles' });
     }
 
     function mergeSettingsPayload(data) {
@@ -223,7 +255,7 @@
           cachedAssistantOptions = resolveAssistantOptions(mergedData);
         }
         restoreSettingsState(preservedState);
-        if (!updateSummary) setSettingsStatus(translateSettings('statusLoaded'), 'success');
+        if (!updateSummary) setSettingsStatus(translateSettings('statusLoaded'), 'success', { scope: 'roles' });
         return;
       }
       if (!updateSummary) {
@@ -231,7 +263,7 @@
         cachedAssistantOptions = resolveAssistantOptions(mergedData);
       }
       applyLoadedModelSettings(mergedData);
-      if (!updateSummary) setSettingsStatus(translateSettings('statusLoaded'), 'success');
+      if (!updateSummary) setSettingsStatus(translateSettings('statusLoaded'), 'success', { scope: 'roles' });
     }
 
     function applyLoadedModelSettings(data) {
@@ -256,7 +288,9 @@
       repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
       if (gitTokenUsernameInput) gitTokenUsernameInput.value = data.git_token_username || '';
       if (gitTokenInput) gitTokenInput.value = '';
+      if (gitTokenUnlockKeyInput) gitTokenUnlockKeyInput.value = '';
       updateGitTokenStatus(data);
+      updateGitUnlockKeyStatus();
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
       setRoleModelValue('planner', data.planner_model || '');
       setRoleModelValue('request_draft', data.request_draft_model || '');
@@ -287,7 +321,7 @@
       const assistantOverride = typeof options.assistantOverride === 'string' ? options.assistantOverride : '';
       const updateSummary = options.updateSummary !== false;
       if (!refresh && !allowHidden) setSettingsFormHydrating(true);
-      setSettingsStatus(refresh ? translateSettings('statusRefreshing') : translateSettings('statusLoading'));
+      setSettingsStatus(refresh ? translateSettings('statusRefreshing') : translateSettings('statusLoading'), 'neutral', { scope: refresh ? 'roles' : 'global' });
       refreshModelOptionsButton.disabled = true;
       try {
         const params = new URLSearchParams();
@@ -371,53 +405,114 @@
       }
     }
 
+    function setSettingsSaveButtonsDisabled(isDisabled) {
+      saveSettingsButtons.forEach((button) => {
+        button.disabled = isDisabled;
+      });
+    }
+
+    function resolveSettingsSaveScope(event) {
+      const submitter = event?.submitter;
+      const submitterScope = submitter instanceof HTMLElement ? submitter.dataset.settingsSaveScope : '';
+      if (submitterScope) {
+        const panel = document.getElementById(`settings-panel-${submitterScope}`);
+        if (panel && !panel.hidden) return submitterScope;
+      }
+      return activeSettingsTab || 'general';
+    }
+
+    function buildRoleSettingsPayload() {
+      if (!canEditCommonSettings()) return {};
+      return {
+        coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
+        role_backends: {
+          planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
+          request_draft: requestDraftBackendInput.value === 'default' ? null : requestDraftBackendInput.value,
+          plan_approval: planApprovalBackendInput.value === 'default' ? null : planApprovalBackendInput.value,
+          implementer: implementerBackendInput.value === 'default' ? null : implementerBackendInput.value,
+          reviewer: reviewerBackendInput.value === 'default' ? null : reviewerBackendInput.value,
+          commit: commitBackendInput.value === 'default' ? null : commitBackendInput.value,
+        },
+        worker_live_logs_enabled: workerLiveLogsModeInput.value === 'true',
+        planner_model: currentRoleModelValue(roleSettingConfig('planner')),
+        request_draft_model: currentRoleModelValue(roleSettingConfig('request_draft')),
+        planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
+        planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
+        plan_approval_model: currentRoleModelValue(roleSettingConfig('plan_approval')),
+        plan_approval_session_token_budget: readNumericSettingInput(planApprovalSessionTokenBudgetInput, 250),
+        implementer_model: currentRoleModelValue(roleSettingConfig('implementer')),
+        implementer_session_token_budget: readNumericSettingInput(implementerSessionTokenBudgetInput, 250),
+        implementer_agent_count: readNumericSettingInput(implementerAgentCountInput, 1),
+        reviewer_model: currentRoleModelValue(roleSettingConfig('reviewer')),
+        reviewer_session_token_budget: readNumericSettingInput(reviewerSessionTokenBudgetInput, 250),
+        reviewer_agent_count: readNumericSettingInput(reviewerAgentCountInput, 1),
+        commit_model: currentRoleModelValue(roleSettingConfig('commit')),
+        commit_session_token_budget: readNumericSettingInput(commitSessionTokenBudgetInput, 250),
+      };
+    }
+
+    function buildRepositorySettingsPayload() {
+      if (isRepoDiscoveryReadonly()) return {};
+      return {
+        repo_discovery_root: repoDiscoveryRootInput.value,
+        repo_discovery_max_depth: readNumericSettingInput(repoDiscoveryMaxDepthInput, 1),
+      };
+    }
+
+    async function buildGitSettingsPayload() {
+      const payload = {
+        git_token_username: gitTokenUsernameInput?.value || '',
+      };
+      const token = gitTokenInput?.value || '';
+      if (token) {
+        const unlockKey = gitTokenUnlockKeyInput?.value || '';
+        payload.git_token_encrypted = await encryptGitTokenForStorage(token, unlockKey);
+        payload.git_token_masked = maskGitTokenForDisplay(token);
+        writeGitTokenUnlockLocal(unlockKey);
+      }
+      return payload;
+    }
+
+    async function buildSettingsPayloadForScope(scope) {
+      switch (scope) {
+        case 'general':
+          return {
+            language: runtimeLanguageInput.value || 'EN',
+            theme: runtimeThemeInput.value || 'light',
+          };
+        case 'git':
+          return buildGitSettingsPayload();
+        case 'repositories':
+          return buildRepositorySettingsPayload();
+        case 'roles':
+          return buildRoleSettingsPayload();
+        case 'slack':
+          return buildSlackSettingsPayload({ includeConnection: true, includeChannel: false });
+        case 'slack-channel':
+          return {
+            slack_default_channel: slackDefaultChannelInput.value,
+          };
+        default:
+          return {
+            language: runtimeLanguageInput.value || 'EN',
+            theme: runtimeThemeInput.value || 'light',
+          };
+      }
+    }
+
     async function saveModelSettings(event) {
       event.preventDefault();
       settingsRequestToken += 1;
-      saveSettingsButton.disabled = true;
-      setSettingsStatus(translateSettings('statusSaving'));
+      const saveScope = resolveSettingsSaveScope(event);
+      setSettingsSaveButtonsDisabled(true);
       try {
-        const slackPayload = buildSlackSettingsPayload();
-        const pendingSlackChannel = slackPayload.slack_default_channel || '';
-        const payload = {
-          language: runtimeLanguageInput.value || 'EN',
-          theme: runtimeThemeInput.value || 'light',
-          git_token_username: gitTokenUsernameInput?.value || '',
-          ...(gitTokenInput?.value ? { git_token: gitTokenInput.value } : {}),
-          ...slackPayload,
-        };
-        if (canEditCommonSettings()) {
-          Object.assign(payload, {
-            coding_assistant: runtimeCodingAssistantInput.value || 'opencode',
-            role_backends: {
-              planner: plannerBackendInput.value === 'default' ? null : plannerBackendInput.value,
-              request_draft: requestDraftBackendInput.value === 'default' ? null : requestDraftBackendInput.value,
-              plan_approval: planApprovalBackendInput.value === 'default' ? null : planApprovalBackendInput.value,
-              implementer: implementerBackendInput.value === 'default' ? null : implementerBackendInput.value,
-              reviewer: reviewerBackendInput.value === 'default' ? null : reviewerBackendInput.value,
-              commit: commitBackendInput.value === 'default' ? null : commitBackendInput.value,
-            },
-            worker_live_logs_enabled: workerLiveLogsModeInput.value === 'true',
-            planner_model: currentRoleModelValue(roleSettingConfig('planner')),
-            request_draft_model: currentRoleModelValue(roleSettingConfig('request_draft')),
-            planner_session_token_budget: readNumericSettingInput(plannerSessionTokenBudgetInput, 250),
-            planner_agent_count: readNumericSettingInput(plannerAgentCountInput, 1),
-            plan_approval_model: currentRoleModelValue(roleSettingConfig('plan_approval')),
-            plan_approval_session_token_budget: readNumericSettingInput(planApprovalSessionTokenBudgetInput, 250),
-            implementer_model: currentRoleModelValue(roleSettingConfig('implementer')),
-            implementer_session_token_budget: readNumericSettingInput(implementerSessionTokenBudgetInput, 250),
-            implementer_agent_count: readNumericSettingInput(implementerAgentCountInput, 1),
-            reviewer_model: currentRoleModelValue(roleSettingConfig('reviewer')),
-            reviewer_session_token_budget: readNumericSettingInput(reviewerSessionTokenBudgetInput, 250),
-            reviewer_agent_count: readNumericSettingInput(reviewerAgentCountInput, 1),
-            commit_model: currentRoleModelValue(roleSettingConfig('commit')),
-            commit_session_token_budget: readNumericSettingInput(commitSessionTokenBudgetInput, 250),
-          });
+        if (saveScope === 'slack-channel') {
+          await runSlackSettingsTest();
+          return;
         }
-        if (!isRepoDiscoveryReadonly()) {
-          payload.repo_discovery_root = repoDiscoveryRootInput.value;
-          payload.repo_discovery_max_depth = readNumericSettingInput(repoDiscoveryMaxDepthInput, 1);
-        }
+        setSettingsStatus(translateSettings('statusSaving'));
+        const payload = await buildSettingsPayloadForScope(saveScope);
+        const pendingSlackChannel = Object.prototype.hasOwnProperty.call(payload, 'slack_default_channel') ? payload.slack_default_channel || '' : '';
         const response = await fetch('/api/settings/models', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -448,7 +543,9 @@
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         if (gitTokenUsernameInput) gitTokenUsernameInput.value = data.git_token_username || '';
         if (gitTokenInput) gitTokenInput.value = '';
+        if (gitTokenUnlockKeyInput) gitTokenUnlockKeyInput.value = '';
         updateGitTokenStatus(data);
+        updateGitUnlockKeyStatus();
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         setRoleModelValue('planner', data.planner_model || '');
         setRoleModelValue('request_draft', data.request_draft_model || '');
@@ -478,7 +575,7 @@
       } catch (error) {
         setSettingsStatus(error.message, 'error');
       } finally {
-        saveSettingsButton.disabled = false;
+        setSettingsSaveButtonsDisabled(false);
       }
     }
 
@@ -639,7 +736,7 @@
     }
 
     function syncBodyModalState() {
-      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden || !directoryPickerModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || (accountModal && !accountModal.hidden) || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden || !directoryPickerModal.hidden);
     }
 
     function renderRetrospectiveMeta(record) {

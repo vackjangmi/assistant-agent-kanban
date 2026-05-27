@@ -11,6 +11,7 @@ from ..auth import auth_is_required
 from ._helpers import _require_task_actor
 from ._payloads import (
     CompletedGroupOverridePayload,
+    GitUnlockPayload,
     HumanReviewNotePayload,
     HumanVerificationApprovePayload,
     HumanVerificationPayload,
@@ -134,10 +135,15 @@ def register(router: APIRouter) -> None:
         return moved.metadata
 
     @router.post("/api/tasks/{task_id}/start-verification")
-    async def start_verification(task_id: str, request: Request):
+    async def start_verification(task_id: str, request: Request, payload: GitUnlockPayload | None = None):
         runtime = request.app.state.runtime
         user = _require_task_actor(request, task_id)
-        git_token, git_token_username = _git_credentials_for_request(request, user, require_token=_remote_review_push_is_required(request, user))
+        git_token, git_token_username = _git_credentials_for_request(
+            request,
+            user,
+            require_token=_remote_review_push_is_required(request, user),
+            unlock_key=payload.git_token_unlock_key if payload else None,
+        )
         operation_config = _operation_config_for_task(request, task_id, user)
         try:
             moved = await _to_thread_compatible(
@@ -154,10 +160,15 @@ def register(router: APIRouter) -> None:
         return moved.metadata
 
     @router.post("/api/tasks/{task_id}/retry-verification-apply")
-    async def retry_verification_apply(task_id: str, request: Request):
+    async def retry_verification_apply(task_id: str, request: Request, payload: GitUnlockPayload | None = None):
         runtime = request.app.state.runtime
         user = _require_task_actor(request, task_id)
-        git_token, git_token_username = _git_credentials_for_request(request, user, require_token=_remote_review_push_is_required(request, user))
+        git_token, git_token_username = _git_credentials_for_request(
+            request,
+            user,
+            require_token=_remote_review_push_is_required(request, user),
+            unlock_key=payload.git_token_unlock_key if payload else None,
+        )
         operation_config = _operation_config_for_task(request, task_id, user)
         try:
             context = await _to_thread_compatible(
@@ -201,10 +212,15 @@ def register(router: APIRouter) -> None:
         return result
 
     @router.post("/api/tasks/{task_id}/reviewer-qa-rerequest")
-    async def rerequest_from_reviewer_qa(task_id: str, request: Request):
+    async def rerequest_from_reviewer_qa(task_id: str, request: Request, payload: GitUnlockPayload | None = None):
         runtime = request.app.state.runtime
         user = _require_task_actor(request, task_id)
-        git_token, git_token_username = _git_credentials_for_request(request, user, require_token=_remote_review_push_is_required(request, user))
+        git_token, git_token_username = _git_credentials_for_request(
+            request,
+            user,
+            require_token=_remote_review_push_is_required(request, user),
+            unlock_key=payload.git_token_unlock_key if payload else None,
+        )
         operation_config = _operation_config_for_task(request, task_id, user)
         try:
             moved = await _to_thread_compatible(
@@ -225,7 +241,12 @@ def register(router: APIRouter) -> None:
     async def reject_verification(task_id: str, payload: HumanVerificationPayload, request: Request):
         runtime = request.app.state.runtime
         user = _require_task_actor(request, task_id)
-        git_token, git_token_username = _git_credentials_for_request(request, user, require_token=_remote_review_push_is_required(request, user))
+        git_token, git_token_username = _git_credentials_for_request(
+            request,
+            user,
+            require_token=_remote_review_push_is_required(request, user),
+            unlock_key=payload.git_token_unlock_key,
+        )
         operation_config = _operation_config_for_task(request, task_id, user)
         try:
             moved = await _to_thread_compatible(
@@ -251,7 +272,12 @@ def register(router: APIRouter) -> None:
         runtime = request.app.state.runtime
         approval_payload = payload or HumanVerificationApprovePayload()
         user = _require_task_actor(request, task_id)
-        git_token, git_token_username = _git_credentials_for_request(request, user, require_token=_remote_review_push_is_required(request, user))
+        git_token, git_token_username = _git_credentials_for_request(
+            request,
+            user,
+            require_token=_remote_review_push_is_required(request, user),
+            unlock_key=approval_payload.git_token_unlock_key,
+        )
         operation_config = _operation_config_for_task(request, task_id, user)
         try:
             moved = await _to_thread_compatible(
@@ -348,13 +374,20 @@ async def _to_thread_compatible(func, *args, **kwargs):
     return await asyncio.to_thread(func, *args, **filtered_kwargs)
 
 
-def _git_credentials_for_request(request: Request, user, *, require_token: bool = False) -> tuple[str | None, str | None]:
+def _git_credentials_for_request(request: Request, user, *, require_token: bool = False, unlock_key: str | None = None) -> tuple[str | None, str | None]:
     if user is None or not auth_is_required(request):
         if require_token:
             raise HTTPException(status_code=409, detail="Git token is required to push review branches in multi-user mode")
         return None, None
-    token, username = request.app.state.user_settings_store.git_credentials_for_user(user.user_id)
+    store = request.app.state.user_settings_store
+    try:
+        token, username = store.git_credentials_for_user(user.user_id, unlock_key=unlock_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if require_token and not token:
+        settings = store.get_user_settings(user.user_id)
+        if settings.git_token_configured:
+            raise HTTPException(status_code=409, detail="Git token unlock key is required to push review branches in multi-user mode")
         raise HTTPException(status_code=409, detail="Git token is required to push review branches in multi-user mode")
     return token, username
 

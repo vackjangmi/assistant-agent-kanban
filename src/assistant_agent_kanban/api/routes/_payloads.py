@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from ...client_encrypted_credentials import ClientEncryptedGitToken
 from ...config import normalize_runtime_assistant
 from ...language import normalize_runtime_language
 
@@ -54,11 +55,15 @@ class CreateRequestDraftPayload(UpdateRequestDraftPayload):
     pass
 
 
-class HumanVerificationPayload(BaseModel):
+class GitUnlockPayload(BaseModel):
+    git_token_unlock_key: str | None = None
+
+
+class HumanVerificationPayload(GitUnlockPayload):
     note: str = ""
 
 
-class HumanVerificationApprovePayload(BaseModel):
+class HumanVerificationApprovePayload(GitUnlockPayload):
     completion_mode: Literal["new-branch", "target-branch"] = "new-branch"
 
 
@@ -147,6 +152,8 @@ class ModelSettingsPayload(BaseModel):
     slack_default_channel: str | None = None
     slack_app_mention_enabled: bool | None = None
     git_token: str | None = None
+    git_token_encrypted: ClientEncryptedGitToken | None = None
+    git_token_masked: str | None = None
     git_token_username: str | None = None
 
     @field_validator("language", mode="before")

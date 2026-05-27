@@ -783,7 +783,13 @@
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'completed-reviews' || activeTaskDetail?.metadata?.lease?.run_id === 'manual-human-verifying') return;
       startVerificationButton.disabled = true;
       try {
-        const response = await fetch(`/api/tasks/${activeTaskId}/start-verification`, { method: 'POST' });
+        const requestBody = gitUnlockBodyForOperation();
+        if (requestBody === null) return;
+        const response = await fetch(`/api/tasks/${activeTaskId}/start-verification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedStartVerification'));
         await loadBoard();
@@ -802,7 +808,13 @@
       retryVerificationApplyButton.disabled = true;
       taskHumanReviewNoteStatus.textContent = translateTask('retryVerificationApply');
       try {
-        const response = await fetch(`/api/tasks/${activeTaskId}/retry-verification-apply`, { method: 'POST' });
+        const requestBody = gitUnlockBodyForOperation();
+        if (requestBody === null) return;
+        const response = await fetch(`/api/tasks/${activeTaskId}/retry-verification-apply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedRetryVerificationApply'));
         await loadBoard();

@@ -16,15 +16,48 @@
       if (deleteButton) void deleteRequestDraftFromList(deleteButton.dataset.requestDraftDelete || '');
     });
     openSettingsButton.addEventListener('click', openSettingsModal);
+    if (authUserLabel) authUserLabel.addEventListener('click', () => openAccountModal());
+    if (closeAccountModalButton) closeAccountModalButton.addEventListener('click', () => setAccountModalOpen(false));
+    if (accountModal) {
+      accountModal.addEventListener('click', (event) => {
+        if (event.target === accountModal) {
+          setAccountModalOpen(false);
+        }
+      });
+    }
     if (logoutButton) logoutButton.addEventListener('click', () => logout().catch(() => { window.location.href = '/login'; }));
     if (createUserButton) createUserButton.addEventListener('click', () => createUser());
-    if (deleteAllUsersButton) deleteAllUsersButton.addEventListener('click', () => deleteAllUsers());
+    if (changePasswordButton) changePasswordButton.addEventListener('click', () => changeOwnPassword());
     [newUserUsernameInput, newUserPasswordInput].forEach((input) => {
       if (!input) return;
       input.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
         createUser();
+      });
+    });
+    [currentUserPasswordInput, newUserPasswordChangeInput, confirmUserPasswordChangeInput].forEach((input) => {
+      if (!input) return;
+      input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        changeOwnPassword();
+      });
+    });
+    document.querySelectorAll('.password-visibility-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.target;
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        
+        const eyeOpen = button.querySelector('.eye-open-icon');
+        const eyeClosed = button.querySelector('.eye-closed-icon');
+        if (eyeOpen && eyeClosed) {
+          eyeOpen.hidden = !isPassword;
+          eyeClosed.hidden = isPassword;
+        }
       });
     });
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });
@@ -42,7 +75,7 @@
     });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } if (event.key === 'Escape' && directoryPickerModal && !directoryPickerModal.hidden) { setDirectoryPickerModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && accountModal && !accountModal.hidden) setAccountModalOpen(false); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } if (event.key === 'Escape' && directoryPickerModal && !directoryPickerModal.hidden) { setDirectoryPickerModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     requestForm.addEventListener('input', () => void syncRequestComposerDraftState({ silent: true }));
     requestForm.addEventListener('change', () => void syncRequestComposerDraftState({ silent: true }));
@@ -94,7 +127,7 @@
       });
     });
     settingsForm.addEventListener('submit', saveModelSettings);
-    refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error')));
+    refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error', { scope: 'roles' })));
     testSlackSettingsButton.addEventListener('click', () => runSlackSettingsTest());
     startSlackReceiveTestButton.addEventListener('click', () => startSlackReceiveTest());
     copySlackReceiveTestButton.addEventListener('click', () => copySlackReceiveTestInstruction());
@@ -116,6 +149,12 @@
       slackAppTokenClearRequested = false;
       updateSlackTokenStatus(slackAppTokenStatus, lastSettingsPayload?.slack_app_token_masked, lastSettingsPayload?.slack_app_token_configured);
     });
+    gitTokenInput?.addEventListener('input', () => {
+      updateGitTokenStatus(lastSettingsPayload);
+    });
+    gitTokenUnlockKeyInput?.addEventListener('input', () => {
+      updateGitUnlockKeyStatus();
+    });
     slackDefaultChannelInput.addEventListener('input', () => {
       updateSlackChannelState();
     });
@@ -136,7 +175,7 @@
         resetRoleModelSelection(config);
       });
       renderAllRoleModelOptions();
-      loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error'));
+      loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error', { scope: 'roles' }));
     });
     roleSettingConfigs.forEach((config) => {
       const { backendInput, modelInput, modelSelectInput, role } = config;
@@ -145,7 +184,7 @@
         renderRoleModelOptions(role);
         const selectedBackend = effectiveRoleBackend(role);
         if (selectedBackend) {
-          loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false }).catch((error) => setSettingsStatus(error.message, 'error'));
+          loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false }).catch((error) => setSettingsStatus(error.message, 'error', { scope: 'roles' }));
         }
       });
       modelSelectInput.addEventListener('change', () => {

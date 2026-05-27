@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from assistant_agent_kanban.api.app import create_app
 
 from ..conftest import FakeAdapter
+from ..test_user_settings_store import _client_encrypted_git_token
 
 
 def test_existing_admin_account_requires_login_even_when_auth_config_is_disabled(configured_paths):
@@ -115,6 +116,19 @@ def test_local_admin_mode_is_loopback_only(configured_paths):
         assert blocked.json()["detail"] == "local admin mode is only available from localhost"
 
 
+def test_local_admin_mode_remote_browser_gets_help_page(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app, base_url="http://192.168.1.50:8765") as remote_client:
+        blocked = remote_client.get("/", headers={"accept": "text/html"})
+        assert blocked.status_code == 403
+        assert blocked.headers["content-type"].startswith("text/html")
+        assert "Assistant Agent Kanban is running in local admin mode." in blocked.text
+        assert "http://localhost:8765/" in blocked.text
+
+
 def test_login_mode_allows_ip_host_after_user_exists(configured_paths):
     config, _, _ = configured_paths
     config.auth.enabled = False
@@ -167,6 +181,121 @@ def test_onboarding_state_is_stored_per_authenticated_user(configured_paths):
     with TestClient(app) as anonymous_client:
         blocked = anonymous_client.patch("/api/auth/onboarding", json={"completed": True, "version": 1})
         assert blocked.status_code == 401
+
+
+def test_authenticated_user_can_change_own_password(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    member = app.state.user_settings_store.create_user("member", "member-password", is_admin=False)
+    other_token, _ = app.state.user_settings_store.create_session(member)
+
+    with TestClient(app) as client:
+        login = client.post("/api/auth/login", json={"username": "member", "password": "member-password"})
+        assert login.status_code == 200
+
+        rejected = client.patch(
+            "/api/auth/password",
+            json={"current_password": "wrong-password", "new_password": "new-password"},
+        )
+        assert rejected.status_code == 401
+        assert app.state.user_settings_store.authenticate("member", "member-password") == member
+
+        empty_password = client.patch(
+            "/api/auth/password",
+            json={"current_password": "member-password", "new_password": ""},
+        )
+        assert empty_password.status_code == 400
+
+        changed = client.patch(
+            "/api/auth/password",
+            json={"current_password": "member-password", "new_password": "new-password"},
+        )
+        assert changed.status_code == 200
+        assert changed.json() == {"changed": True}
+        assert app.state.user_settings_store.authenticate("member", "member-password") is None
+        assert app.state.user_settings_store.authenticate("member", "new-password") == member
+        assert app.state.user_settings_store.user_for_session(other_token) is None
+
+        me = client.get("/api/auth/me")
+        assert me.status_code == 200
+        assert me.json()["authenticated"] is True
+        assert me.json()["user"]["username"] == "member"
+
+    with TestClient(app) as old_password_client:
+        old_login = old_password_client.post("/api/auth/login", json={"username": "member", "password": "member-password"})
+        assert old_login.status_code == 401
+
+        new_login = old_password_client.post("/api/auth/login", json={"username": "member", "password": "new-password"})
+        assert new_login.status_code == 200
+
+
+def test_settings_api_stores_client_encrypted_git_token_without_returning_ciphertext(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    admin = app.state.user_settings_store.create_user("admin", "secret-password", is_admin=True)
+    encrypted = _client_encrypted_git_token(admin.user_id, "ghp_secret_token", "user-unlock-key")
+
+    with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"username": admin.username, "password": "secret-password"}).status_code == 200
+        updated = client.put(
+            "/api/settings/models",
+            json={
+                "git_token_username": "git-user",
+                "git_token_encrypted": encrypted.model_dump(mode="json"),
+                "git_token_masked": "***********oken",
+            },
+        )
+        assert updated.status_code == 200
+        updated_text = updated.text
+        assert encrypted.ciphertext not in updated_text
+        assert encrypted.salt not in updated_text
+        assert encrypted.nonce not in updated_text
+        assert "ghp_secret_token" not in updated_text
+        assert "user-unlock-key" not in updated_text
+        assert updated.json()["git_token_configured"] is True
+        assert updated.json()["git_token_masked"] == "***********oken"
+
+        loaded = client.get("/api/settings/models")
+        assert loaded.status_code == 200
+        loaded_text = loaded.text
+        assert encrypted.ciphertext not in loaded_text
+        assert encrypted.salt not in loaded_text
+        assert encrypted.nonce not in loaded_text
+
+
+def test_settings_api_rejects_plaintext_git_token(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    admin = app.state.user_settings_store.create_user("admin", "secret-password", is_admin=True)
+
+    with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"username": admin.username, "password": "secret-password"}).status_code == 200
+        rejected = client.put(
+            "/api/settings/models",
+            json={
+                "git_token_username": "git-user",
+                "git_token": "ghp_secret_token",
+            },
+        )
+
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"] == "Git token must be encrypted in the browser before saving"
+
+
+def test_password_change_requires_login_mode(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        changed = client.patch(
+            "/api/auth/password",
+            json={"current_password": "local", "new_password": "new-password"},
+        )
+        assert changed.status_code == 409
 
 
 def test_admin_can_create_users_and_logout(configured_paths):

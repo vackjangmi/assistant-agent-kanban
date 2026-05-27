@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+from types import SimpleNamespace
 
-from assistant_agent_kanban.main import main
+from assistant_agent_kanban.main import _print_online_message, _print_shutdown_message, main
 
 
 def test_main_serve_forwards_reload_flag(monkeypatch):
     recorded = {}
 
-    def fake_uvicorn_run(app, *, host, port, reload, factory=False):
+    def fake_uvicorn_run(app, *, host, port, reload, factory=False, access_log=True, log_level="info"):
         recorded["app"] = app
         recorded["host"] = host
         recorded["port"] = port
         recorded["reload"] = reload
         recorded["factory"] = factory
+        recorded["access_log"] = access_log
+        recorded["log_level"] = log_level
         recorded["config_env"] = os.environ.get("ASSISTANT_AGENT_KANBAN_CONFIG")
 
     monkeypatch.setattr("assistant_agent_kanban.main.uvicorn.run", fake_uvicorn_run)
@@ -27,23 +31,39 @@ def test_main_serve_forwards_reload_flag(monkeypatch):
         "port": 9000,
         "reload": True,
         "factory": True,
+        "access_log": False,
+        "log_level": "warning",
         "config_env": "config.yaml",
     }
 
 
-def test_main_serve_uses_app_object_without_reload(monkeypatch):
+def test_main_serve_uses_app_object_without_reload(monkeypatch, capsys):
     recorded = {}
 
     def fake_create_default_app(config_path):
         recorded["config"] = config_path
-        return "app"
+        return SimpleNamespace(
+            state=SimpleNamespace(
+                runtime=SimpleNamespace(
+                    config=SimpleNamespace(
+                        auth=SimpleNamespace(enabled=False),
+                        app_database_path=Path("/tmp/missing.db"),
+                        kanban_root="/tmp/kanban",
+                        loaded_local_from=None,
+                        loaded_from=None,
+                    )
+                )
+            )
+        )
 
-    def fake_uvicorn_run(app, *, host, port, reload, factory=False):
+    def fake_uvicorn_run(app, *, host, port, reload, factory=False, access_log=True, log_level="info"):
         recorded["app"] = app
         recorded["host"] = host
         recorded["port"] = port
         recorded["reload"] = reload
         recorded["factory"] = factory
+        recorded["access_log"] = access_log
+        recorded["log_level"] = log_level
 
     monkeypatch.setattr("assistant_agent_kanban.main.create_default_app", fake_create_default_app)
     monkeypatch.setattr("assistant_agent_kanban.main.uvicorn.run", fake_uvicorn_run)
@@ -52,9 +72,40 @@ def test_main_serve_uses_app_object_without_reload(monkeypatch):
 
     assert recorded == {
         "config": "config.yaml",
-        "app": "app",
+        "app": recorded["app"],
         "host": "127.0.0.1",
         "port": 8001,
         "reload": False,
         "factory": False,
+        "access_log": False,
+        "log_level": "warning",
     }
+    output = capsys.readouterr().out
+    assert "Assistant Agent Kanban v" in output
+    assert "STARTING  Assistant Agent Kanban is booting..." in output
+    assert "Dashboard   http://127.0.0.1:8001/" in output
+    assert "Logs        quiet mode; warnings and errors will still appear" in output
+
+
+def test_online_message_is_printed_for_tty(monkeypatch, capsys):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr("assistant_agent_kanban.main.sys.stdout.isatty", lambda: True)
+
+    _print_online_message("0.0.0.0", 8000)
+
+    output = capsys.readouterr().out
+    assert output.startswith("\n\x1b[")
+    assert "ONLINE    Serving requests at http://127.0.0.1:8000/" in output
+    assert output.endswith("\x1b[0m\n\n")
+
+
+def test_shutdown_message_is_printed_for_tty(monkeypatch, capsys):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr("assistant_agent_kanban.main.sys.stdout.isatty", lambda: True)
+
+    _print_shutdown_message()
+
+    output = capsys.readouterr().out
+    assert output.startswith("\n\x1b[")
+    assert "STOPPING  Shutting down Assistant Agent Kanban..." in output
+    assert output.endswith("\x1b[0m\n\n")

@@ -17,6 +17,7 @@ from assistant_agent_kanban.user_settings_store import ProjectSettings, RuntimeP
 
 from ..conftest import FakeAdapter, create_request_task
 from ..test_plan_approval_worker import plan_with_split_proposal
+from ..test_user_settings_store import _client_encrypted_git_token
 
 
 from ._helpers import _task_ready_for_completed_reviews
@@ -802,13 +803,16 @@ def test_api_authenticated_verification_pushes_remote_review_branch_even_when_gl
     app.state.user_settings_store.update_user_settings(
         admin.user_id,
         RuntimePreferenceSettings(),
-        secrets_update=UserSecretUpdate(git_token="test-token"),
+        secrets_update=UserSecretUpdate(
+            git_token_client_encrypted=_client_encrypted_git_token(admin.user_id, "test-token", "unlock-key"),
+            git_token_masked="******oken",
+        ),
     )
     _, completed = _task_ready_for_completed_reviews(config, "auth-human-verify-force-remote-task")
 
     with TestClient(app) as client:
         assert client.post("/api/auth/login", json={"username": admin.username, "password": "secret-password"}).status_code == 200
-        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification", json={"git_token_unlock_key": "unlock-key"})
 
     assert start.status_code == 200
     remote_branch_ref = f"refs/heads/review/{completed.metadata.task_id.lower()}"
