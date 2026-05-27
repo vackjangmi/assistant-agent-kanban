@@ -3074,6 +3074,7 @@ body[data-theme="dark"] .onboarding-nav-btn.next-btn {
 
 .settings-user-create-card[hidden],
 .settings-user-list-card[hidden],
+.settings-remote-usage-card[hidden],
 .compact-toggle[hidden] {
   display: none;
 }
@@ -3162,6 +3163,65 @@ body[data-theme="dark"] .onboarding-nav-btn.next-btn {
 
 .settings-user-submit-area button {
   min-width: 140px;
+}
+
+.settings-password-fields-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.settings-password-status {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.account-modal-panel {
+  width: min(720px, calc(100vw - 48px));
+  display: grid;
+  gap: 18px;
+  overflow: visible;
+}
+
+.account-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.04);
+}
+
+body[data-theme="dark"] .account-summary {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.account-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 1rem;
+}
+
+.account-summary-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.account-summary-copy > span:first-child {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.account-summary-copy strong {
+  color: var(--text);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.account-password-section {
+  margin-top: 0;
 }
 
 .settings-user-grid {
@@ -3324,6 +3384,9 @@ body[data-theme="dark"] .user-badge-member {
   background: rgba(99, 102, 241, 0.04);
   border: 1px solid rgba(99, 102, 241, 0.08);
   border-radius: 20px;
+  box-shadow: none;
+  color: var(--text);
+  min-height: 32px;
   transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
@@ -3331,10 +3394,12 @@ body[data-theme="dark"] .user-badge-member {
   display: none;
 }
 
-#auth-user-label:hover {
+#auth-user-label:not(:disabled):hover,
+#auth-user-label:not(:disabled):focus-visible {
   background: rgba(99, 102, 241, 0.07);
   border-color: rgba(99, 102, 241, 0.18);
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.04);
+  color: var(--text);
 }
 
 body[data-theme="dark"] #auth-user-label {
@@ -3342,7 +3407,8 @@ body[data-theme="dark"] #auth-user-label {
   border-color: rgba(255, 255, 255, 0.06);
 }
 
-body[data-theme="dark"] #auth-user-label:hover {
+body[data-theme="dark"] #auth-user-label:not(:disabled):hover,
+body[data-theme="dark"] #auth-user-label:not(:disabled):focus-visible {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);

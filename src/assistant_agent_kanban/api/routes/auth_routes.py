@@ -25,6 +25,11 @@ class CreateUserPayload(LoginPayload):
     is_admin: bool = False
 
 
+class ChangePasswordPayload(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class OnboardingPayload(BaseModel):
     completed: bool = True
     version: int = ONBOARDING_VERSION
@@ -165,6 +170,28 @@ def register(router: APIRouter) -> None:
         store.delete_session(request.cookies.get(cookie_name))
         response.delete_cookie(cookie_name)
         return {"logged_out": True}
+
+    @router.patch("/api/auth/password")
+    async def change_password(payload: ChangePasswordPayload, request: Request):
+        if not auth_is_required(request):
+            raise HTTPException(status_code=409, detail="password changes require login mode")
+        user = current_user_or_none(request)
+        if user is None:
+            raise HTTPException(status_code=401, detail="authentication required")
+        runtime = request.app.state.runtime
+        store = request.app.state.user_settings_store
+        try:
+            changed = store.change_user_password(
+                user.user_id,
+                payload.current_password,
+                payload.new_password,
+                keep_session_token=request.cookies.get(runtime.config.auth.session_cookie_name),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not changed:
+            raise HTTPException(status_code=401, detail="current password is incorrect")
+        return {"changed": True}
 
     @router.patch("/api/auth/onboarding")
     async def update_onboarding(payload: OnboardingPayload, request: Request):

@@ -188,6 +188,32 @@ class UserSettingsStore:
             return None
         return AuthUser(user_id=str(row["user_id"]), username=str(row["username"]), is_admin=bool(row["is_admin"]))
 
+    def change_user_password(
+        self,
+        user_id: str,
+        current_password: str,
+        new_password: str,
+        *,
+        keep_session_token: str | None = None,
+    ) -> bool:
+        with self._connect() as conn:
+            row = conn.execute("select password_hash from users where user_id = ?", (user_id,)).fetchone()
+            if row is None or not verify_password(current_password, str(row["password_hash"])):
+                return False
+            conn.execute(
+                "update users set password_hash = ?, updated_at = ? where user_id = ?",
+                (hash_password(new_password), _iso(_utc_now()), user_id),
+            )
+            if keep_session_token:
+                conn.execute(
+                    "delete from sessions where user_id = ? and token_hash <> ?",
+                    (user_id, hash_session_token(keep_session_token)),
+                )
+            else:
+                conn.execute("delete from sessions where user_id = ?", (user_id,))
+            conn.commit()
+        return True
+
     def create_session(self, user: AuthUser) -> tuple[str, datetime]:
         token = generate_session_token()
         expires_at = _utc_now() + timedelta(seconds=self.config.auth.session_ttl_seconds)

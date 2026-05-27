@@ -17,7 +17,7 @@
   <header>
     <h1>Assistant Agent Kanban</h1>
     <div class="header-actions">
-      <span id="auth-user-label" class="muted" hidden></span>
+      <button type="button" id="auth-user-label" class="muted" hidden></button>
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Settings</button>
       <button id="open-onboarding" class="ghost-button">Guide</button>
@@ -25,6 +25,46 @@
       <button id="logout-button" class="ghost-button" hidden>Logout</button>
     </div>
   </header>
+  <section id="account-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel account-modal-panel" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="account-modal-title">My account</h2>
+          <p id="account-modal-description">Manage your signed-in account.</p>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="close-account-modal">Close</button>
+        </div>
+      </div>
+      <div id="account-summary" class="account-summary"></div>
+      <section class="settings-section account-password-section">
+        <div class="settings-section-head">
+          <strong id="account-password-heading">Change password</strong>
+          <span id="account-password-description">Update the password for your signed-in account.</span>
+        </div>
+        <div class="settings-user-fields-grid settings-password-fields-grid">
+          <div class="settings-user-field">
+            <label id="settings-current-password-title" for="current-user-password">Current password</label>
+            <input id="current-user-password" type="password" autocomplete="current-password" placeholder="••••••••">
+          </div>
+          <div class="settings-user-field">
+            <label id="settings-change-password-title" for="change-user-password">New password</label>
+            <input id="change-user-password" type="password" autocomplete="new-password" placeholder="••••••••">
+          </div>
+          <div class="settings-user-field">
+            <label id="settings-confirm-password-title" for="confirm-user-password">Confirm new password</label>
+            <input id="confirm-user-password" type="password" autocomplete="new-password" placeholder="••••••••">
+          </div>
+        </div>
+        <div class="settings-user-actions-row">
+          <div id="change-password-status" class="settings-status settings-password-status" hidden></div>
+          <div class="settings-user-submit-area">
+            <button type="button" id="change-password-button" class="primary">Update password</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
   <section id="request-modal" class="modal" hidden aria-hidden="true">
     <div class="modal-panel stacked-modal-panel" role="dialog" aria-modal="true" aria-labelledby="request-modal-title">
       <div class="modal-head">
@@ -316,7 +356,7 @@
                 <span id="settings-users-description">Control remote access and login-based user management.</span>
               </div>
               <div class="settings-user-container">
-                <div class="settings-card settings-remote-usage-card">
+                <div id="settings-remote-usage-card" class="settings-card settings-remote-usage-card">
                   <div class="settings-remote-usage-copy">
                     <strong id="settings-remote-usage-title" class="settings-card-title-main">Remote use</strong>
                     <span id="settings-remote-usage-description" class="settings-card-subtitle">Require login and allow access from non-localhost clients.</span>

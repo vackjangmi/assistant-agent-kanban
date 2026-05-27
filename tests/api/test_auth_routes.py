@@ -182,6 +182,66 @@ def test_onboarding_state_is_stored_per_authenticated_user(configured_paths):
         assert blocked.status_code == 401
 
 
+def test_authenticated_user_can_change_own_password(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    member = app.state.user_settings_store.create_user("member", "member-password", is_admin=False)
+    other_token, _ = app.state.user_settings_store.create_session(member)
+
+    with TestClient(app) as client:
+        login = client.post("/api/auth/login", json={"username": "member", "password": "member-password"})
+        assert login.status_code == 200
+
+        rejected = client.patch(
+            "/api/auth/password",
+            json={"current_password": "wrong-password", "new_password": "new-password"},
+        )
+        assert rejected.status_code == 401
+        assert app.state.user_settings_store.authenticate("member", "member-password") == member
+
+        empty_password = client.patch(
+            "/api/auth/password",
+            json={"current_password": "member-password", "new_password": ""},
+        )
+        assert empty_password.status_code == 400
+
+        changed = client.patch(
+            "/api/auth/password",
+            json={"current_password": "member-password", "new_password": "new-password"},
+        )
+        assert changed.status_code == 200
+        assert changed.json() == {"changed": True}
+        assert app.state.user_settings_store.authenticate("member", "member-password") is None
+        assert app.state.user_settings_store.authenticate("member", "new-password") == member
+        assert app.state.user_settings_store.user_for_session(other_token) is None
+
+        me = client.get("/api/auth/me")
+        assert me.status_code == 200
+        assert me.json()["authenticated"] is True
+        assert me.json()["user"]["username"] == "member"
+
+    with TestClient(app) as old_password_client:
+        old_login = old_password_client.post("/api/auth/login", json={"username": "member", "password": "member-password"})
+        assert old_login.status_code == 401
+
+        new_login = old_password_client.post("/api/auth/login", json={"username": "member", "password": "new-password"})
+        assert new_login.status_code == 200
+
+
+def test_password_change_requires_login_mode(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        changed = client.patch(
+            "/api/auth/password",
+            json={"current_password": "local", "new_password": "new-password"},
+        )
+        assert changed.status_code == 409
+
+
 def test_admin_can_create_users_and_logout(configured_paths):
     config, _, _ = configured_paths
     config.auth.enabled = False

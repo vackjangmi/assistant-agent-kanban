@@ -105,6 +105,28 @@ def test_user_settings_store_deletes_user_sessions_and_settings(configured_paths
     assert store.authenticate("admin", "admin-password") == admin
 
 
+def test_user_settings_store_changes_password_and_revokes_other_sessions(configured_paths):
+    config, _, _ = configured_paths
+    store = UserSettingsStore(config)
+    user = store.create_user("member", "member-password", is_admin=False)
+    current_token, _ = store.create_session(user)
+    other_token, _ = store.create_session(user)
+
+    rejected = store.change_user_password(user.user_id, "wrong-password", "new-password", keep_session_token=current_token)
+
+    assert rejected is False
+    assert store.authenticate("member", "member-password") == user
+    assert store.user_for_session(other_token) == user
+
+    changed = store.change_user_password(user.user_id, "member-password", "new-password", keep_session_token=current_token)
+
+    assert changed is True
+    assert store.authenticate("member", "member-password") is None
+    assert store.authenticate("member", "new-password") == user
+    assert store.user_for_session(current_token) == user
+    assert store.user_for_session(other_token) is None
+
+
 def test_user_settings_store_can_delete_all_users(configured_paths):
     config, _, _ = configured_paths
     store = UserSettingsStore(config)

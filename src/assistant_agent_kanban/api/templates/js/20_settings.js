@@ -261,6 +261,14 @@
       setSettingsText('settings-help-card-desc', 'settingsHelpCardDesc');
       const restartBtn = document.getElementById('restart-onboarding-btn');
       if (restartBtn) restartBtn.textContent = translateSettings('settingsHelpCardBtn');
+      setSettingsText('account-modal-title', 'accountTitle');
+      setSettingsText('account-modal-description', 'accountDescription');
+      setSettingsText('account-password-heading', 'passwordHeading');
+      setSettingsText('account-password-description', 'passwordDescription');
+      setSettingsText('settings-current-password-title', 'currentPasswordTitle');
+      setSettingsText('settings-change-password-title', 'changePasswordTitle');
+      setSettingsText('settings-confirm-password-title', 'confirmPasswordTitle');
+      if (changePasswordButton) changePasswordButton.textContent = translateSettings('updatePassword');
       setSettingsText('settings-users-heading', 'usersHeading');
       setSettingsText('settings-users-description', 'usersDescription');
       setSettingsText('settings-remote-usage-title', 'remoteUsageTitle');
@@ -1049,6 +1057,23 @@
       return Boolean(currentAuthPayload && !isRemoteUsageActive() && remoteUsageSetupRequested);
     }
 
+    function canChangeOwnPassword() {
+      return Boolean(currentAuthPayload?.enabled && currentAuthUser());
+    }
+
+    function authAvatarGradient(username) {
+      const avatarGradients = [
+        'linear-gradient(135deg, #6366f1, #4f46e5)',
+        'linear-gradient(135deg, #ec4899, #be185d)',
+        'linear-gradient(135deg, #10b981, #047857)',
+        'linear-gradient(135deg, #f59e0b, #d97706)',
+        'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+        'linear-gradient(135deg, #8b5cf6, #6d28d9)'
+      ];
+      const charCodeSum = (username || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      return avatarGradients[charCodeSum % avatarGradients.length];
+    }
+
     function hasUnsavedUserManagementChanges() {
       return Boolean(
         (!isRemoteUsageActive() && remoteUsageSetupRequested)
@@ -1074,6 +1099,13 @@
       if (!isRemoteUsageActive()) renderUsers([]);
     }
 
+    function resetAccountPasswordForm() {
+      if (currentUserPasswordInput) currentUserPasswordInput.value = '';
+      if (newUserPasswordChangeInput) newUserPasswordChangeInput.value = '';
+      if (confirmUserPasswordChangeInput) confirmUserPasswordChangeInput.value = '';
+      setPasswordChangeStatus('');
+    }
+
     function canManageUsers() {
       const user = currentAuthUser();
       return Boolean(currentAuthPayload && !isRemoteUsageActive()) || Boolean(user?.is_admin);
@@ -1083,6 +1115,7 @@
       const activationMode = isUserManagementActivationMode();
       const remoteUsageActive = isRemoteUsageActive();
       const setupRequested = !remoteUsageActive && remoteUsageSetupRequested;
+      const canManageUserAccounts = canManageUsers();
       setSettingsText('settings-users-heading', activationMode ? 'userManagementActivationHeading' : 'usersHeading');
       setSettingsText('settings-users-description', activationMode ? 'userManagementActivationDescription' : 'usersDescription');
       setSettingsText('settings-remote-usage-title', 'remoteUsageTitle');
@@ -1101,8 +1134,9 @@
       if (remoteUsageEnabledInput) {
         remoteUsageEnabledInput.checked = remoteUsageActive || setupRequested;
       }
-      if (userCreateCard) userCreateCard.hidden = !remoteUsageActive && !setupRequested;
-      if (userListCard) userListCard.hidden = !remoteUsageActive;
+      if (remoteUsageCard) remoteUsageCard.hidden = !canManageUserAccounts && remoteUsageActive;
+      if (userCreateCard) userCreateCard.hidden = (!remoteUsageActive && !setupRequested) || (remoteUsageActive && !canManageUserAccounts);
+      if (userListCard) userListCard.hidden = !remoteUsageActive || !canManageUserAccounts;
       if (createUserButton) createUserButton.textContent = translateSettings(activationMode ? 'activateUserManagement' : 'createUser');
       if (newUserIsAdminInput) {
         newUserIsAdminInput.checked = activationMode || newUserIsAdminInput.checked;
@@ -1123,21 +1157,14 @@
       if (authUserLabel) {
         authUserLabel.hidden = !authenticated;
         if (authenticated) {
-          const avatarGradients = [
-            'linear-gradient(135deg, #6366f1, #4f46e5)', // Indigo
-            'linear-gradient(135deg, #ec4899, #be185d)', // Pink
-            'linear-gradient(135deg, #10b981, #047857)', // Emerald
-            'linear-gradient(135deg, #f59e0b, #d97706)', // Amber
-            'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
-            'linear-gradient(135deg, #8b5cf6, #6d28d9)'  // Violet
-          ];
           const username = user.username || '';
           const initial = username.charAt(0).toUpperCase();
-          const charCodeSum = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-          const bgGradient = avatarGradients[charCodeSum % avatarGradients.length];
+          const bgGradient = authAvatarGradient(username);
           const roleClass = user.is_admin ? 'badge-admin' : 'badge-member';
           const roleLabel = user.is_admin ? translateSettings('userRoleAdmin') : translateSettings('userRoleMember');
 
+          authUserLabel.setAttribute('aria-label', translateSettings('accountOpenLabel'));
+          authUserLabel.title = translateSettings('accountOpenLabel');
           authUserLabel.innerHTML = `
             <div class="header-user-avatar" style="background: ${bgGradient};" title="${escapeHtml(roleLabel)}">${escapeHtml(initial)}</div>
             <span class="header-username">${escapeHtml(username)}</span>
@@ -1145,6 +1172,8 @@
           `;
         } else {
           authUserLabel.innerHTML = '';
+          authUserLabel.removeAttribute('aria-label');
+          authUserLabel.removeAttribute('title');
         }
       }
       if (logoutButton) logoutButton.hidden = !authenticated;
@@ -1204,6 +1233,13 @@
       createUserStatus.hidden = !message;
       createUserStatus.textContent = message || '';
       createUserStatus.dataset.tone = tone;
+    }
+
+    function setPasswordChangeStatus(message, tone = 'neutral') {
+      if (!changePasswordStatus) return;
+      changePasswordStatus.hidden = !message;
+      changePasswordStatus.textContent = message || '';
+      changePasswordStatus.dataset.tone = tone;
     }
 
     function renderUsers(users) {
@@ -1267,6 +1303,76 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Failed to load users.');
       renderUsers(data.users || []);
+    }
+
+    function renderAccountSummary() {
+      if (!accountSummary) return;
+      const user = currentAuthUser();
+      if (!user) {
+        accountSummary.innerHTML = '';
+        return;
+      }
+      const username = user.username || '';
+      const initial = username.charAt(0).toUpperCase();
+      const roleClass = user.is_admin ? 'user-badge-admin' : 'user-badge-member';
+      const roleLabel = user.is_admin ? translateSettings('userRoleAdmin') : translateSettings('userRoleMember');
+      accountSummary.innerHTML = `
+        <div class="user-avatar account-avatar" style="background: ${authAvatarGradient(username)};">${escapeHtml(initial)}</div>
+        <div class="account-summary-copy">
+          <span>${escapeHtml(translateSettings('accountSignedInAs'))}</span>
+          <strong>${escapeHtml(username)}</strong>
+          <span class="user-badge ${roleClass}">${escapeHtml(roleLabel)}</span>
+        </div>
+      `;
+    }
+
+    function openAccountModal() {
+      if (!canChangeOwnPassword()) return;
+      renderAccountSummary();
+      resetAccountPasswordForm();
+      setAccountModalOpen(true);
+      currentUserPasswordInput?.focus();
+    }
+
+    async function changeOwnPassword() {
+      if (!currentUserPasswordInput || !newUserPasswordChangeInput || !confirmUserPasswordChangeInput || !changePasswordButton) return;
+      if (!canChangeOwnPassword()) {
+        setPasswordChangeStatus(translateSettings('passwordChangeFailed'), 'error');
+        return;
+      }
+      const currentPassword = currentUserPasswordInput.value || '';
+      const newPassword = newUserPasswordChangeInput.value || '';
+      const confirmPassword = confirmUserPasswordChangeInput.value || '';
+      if (!currentPassword || !newPassword) {
+        setPasswordChangeStatus(translateSettings('passwordChangeRequired'), 'error');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setPasswordChangeStatus(translateSettings('passwordChangeMismatch'), 'error');
+        return;
+      }
+      changePasswordButton.disabled = true;
+      setPasswordChangeStatus(translateSettings('passwordChangeRunning'));
+      try {
+        const response = await fetch('/api/auth/password', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || translateSettings('passwordChangeFailed'));
+        currentUserPasswordInput.value = '';
+        newUserPasswordChangeInput.value = '';
+        confirmUserPasswordChangeInput.value = '';
+        setPasswordChangeStatus(translateSettings('passwordChangeSuccess'), 'success');
+      } catch (error) {
+        setPasswordChangeStatus(error.message || translateSettings('passwordChangeFailed'), 'error');
+      } finally {
+        changePasswordButton.disabled = false;
+      }
     }
 
     async function createUser() {
@@ -1491,7 +1597,10 @@
       setSettingsStatus(translateSettings('statusUnsavedTab', { tab: settingsTabLabel(tab) }), 'error');
       const saveButton = saveSettingsButtons.find((button) => button.dataset.settingsSaveScope === normalizeSettingsTab(tab));
       if (saveButton && !saveButton.disabled) saveButton.focus({ preventScroll: true });
-      if (!saveButton && normalizeSettingsTab(tab) === 'users') remoteUsageEnabledInput?.focus({ preventScroll: true });
+      if (!saveButton && normalizeSettingsTab(tab) === 'users') {
+        const target = canChangeOwnPassword() ? currentUserPasswordInput : remoteUsageEnabledInput;
+        target?.focus({ preventScroll: true });
+      }
     }
 
     function confirmUnsavedSettingsBeforeClose() {

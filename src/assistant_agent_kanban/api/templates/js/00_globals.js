@@ -6,6 +6,7 @@
     const body = document.body;
     const modal = document.getElementById('request-modal');
     const settingsModal = document.getElementById('settings-modal');
+    const accountModal = document.getElementById('account-modal');
     const taskModal = document.getElementById('task-modal');
     const retrospectiveModal = document.getElementById('retrospective-modal');
     const approvalChoiceModal = document.getElementById('approval-choice-modal');
@@ -18,6 +19,7 @@
     const logoutButton = document.getElementById('logout-button');
     const refreshButton = document.getElementById('refresh');
     const closeTaskModalButton = document.getElementById('close-task-modal');
+    const closeAccountModalButton = document.getElementById('close-account-modal');
     const closeRetrospectiveModalButton = document.getElementById('close-retrospective-modal');
     const closeApprovalChoiceButton = document.getElementById('close-approval-choice');
     const closeResumePlannerChoiceButton = document.getElementById('close-resume-planner-choice');
@@ -77,7 +79,14 @@
     const createUserButton = document.getElementById('create-user-button');
     const createUserStatus = document.getElementById('create-user-status');
     const settingsUserList = document.getElementById('settings-user-list');
+    const accountSummary = document.getElementById('account-summary');
+    const currentUserPasswordInput = document.getElementById('current-user-password');
+    const newUserPasswordChangeInput = document.getElementById('change-user-password');
+    const confirmUserPasswordChangeInput = document.getElementById('confirm-user-password');
+    const changePasswordButton = document.getElementById('change-password-button');
+    const changePasswordStatus = document.getElementById('change-password-status');
     const remoteUsageEnabledInput = document.getElementById('remote-usage-enabled');
+    const remoteUsageCard = document.getElementById('settings-remote-usage-card');
     const remoteUsageStatus = document.getElementById('settings-remote-usage-status');
     const userCreateCard = document.getElementById('settings-user-create-card');
     const userListCard = document.getElementById('settings-user-list-card');

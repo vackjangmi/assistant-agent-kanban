@@ -137,6 +137,14 @@
       }
     }
 
+    function setAccountModalOpen(isOpen) {
+      if (!accountModal) return;
+      accountModal.hidden = !isOpen;
+      accountModal.setAttribute('aria-hidden', String(!isOpen));
+      if (!isOpen) resetAccountPasswordForm();
+      syncBodyModalState();
+    }
+
     function updateSettingsStatusVisibility(activeTab = null) {
       if (!settingsStatus) return;
       const rolesActive = activeTab ? activeTab === 'roles' : Boolean(settingsRolesPanel && !settingsRolesPanel.hidden);
@@ -701,7 +709,7 @@
     }
 
     function syncBodyModalState() {
-      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden || !directoryPickerModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || (accountModal && !accountModal.hidden) || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden || !directoryPickerModal.hidden);
     }
 
     function renderRetrospectiveMeta(record) {
