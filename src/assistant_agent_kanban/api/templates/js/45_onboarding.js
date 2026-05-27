@@ -14,8 +14,10 @@
     }
 
     let currentStep = 1;
-    let totalSteps = 7;
+    let totalSteps = 6;
     let isUserAdmin = true;
+    let showPersonalGitStep = false;
+    let showRemoteUseStep = false;
     const onboardingVersion = 1;
     let onboardingStateSource = 'browser';
     let activePointerBadges = [];
@@ -23,7 +25,12 @@
     // Helper to get onboarding icons dynamically based on user role
     function getOnboardingIcon(step) {
       if (isUserAdmin) {
-        const adminIcons = { 1: '👋', 2: '🤖', 3: '💬', 4: '🔑', 5: '🚀', 6: '📂', 7: '✍️' };
+        let adminIcons = { 1: '👋', 2: '🤖', 3: '💬', 4: '🚀', 5: '📂', 6: '✍️' };
+        if (showPersonalGitStep) {
+          adminIcons = { 1: '👋', 2: '🤖', 3: '💬', 4: '🔑', 5: '🚀', 6: '📂', 7: '✍️' };
+        } else if (showRemoteUseStep) {
+          adminIcons = { 1: '👋', 2: '🤖', 3: '💬', 4: '🌐', 5: '🚀', 6: '📂', 7: '✍️' };
+        }
         return adminIcons[step] || '';
       } else {
         const nonAdminIcons = { 1: '👋', 2: '🔑', 3: '🚀', 4: '📂', 5: '✍️' };
@@ -38,14 +45,25 @@
       
       let actualKey = key;
       if (isUserAdmin) {
-        if (key === 'onboardingStep4Title') actualKey = 'onboardingStep2TitleNonAdmin';
-        if (key === 'onboardingStep4Desc') actualKey = 'onboardingStep2DescNonAdmin';
-        if (key === 'onboardingStep5Title') actualKey = 'onboardingStep4Title';
-        if (key === 'onboardingStep5Desc') actualKey = 'onboardingStep4Desc';
-        if (key === 'onboardingStep6Title') actualKey = 'onboardingStep5Title';
-        if (key === 'onboardingStep6Desc') actualKey = 'onboardingStep5Desc';
-        if (key === 'onboardingStep7Title') actualKey = 'onboardingStep6Title';
-        if (key === 'onboardingStep7Desc') actualKey = 'onboardingStep6Desc';
+        if (showPersonalGitStep) {
+          if (key === 'onboardingStep4Title') actualKey = 'onboardingStep2TitleNonAdmin';
+          if (key === 'onboardingStep4Desc') actualKey = 'onboardingStep2DescNonAdmin';
+          if (key === 'onboardingStep5Title') actualKey = 'onboardingStep4Title';
+          if (key === 'onboardingStep5Desc') actualKey = 'onboardingStep4Desc';
+          if (key === 'onboardingStep6Title') actualKey = 'onboardingStep5Title';
+          if (key === 'onboardingStep6Desc') actualKey = 'onboardingStep5Desc';
+          if (key === 'onboardingStep7Title') actualKey = 'onboardingStep6Title';
+          if (key === 'onboardingStep7Desc') actualKey = 'onboardingStep6Desc';
+        } else if (showRemoteUseStep) {
+          if (key === 'onboardingStep4Title') actualKey = 'onboardingStepRemoteUseTitle';
+          if (key === 'onboardingStep4Desc') actualKey = 'onboardingStepRemoteUseDesc';
+          if (key === 'onboardingStep5Title') actualKey = 'onboardingStep4Title';
+          if (key === 'onboardingStep5Desc') actualKey = 'onboardingStep4Desc';
+          if (key === 'onboardingStep6Title') actualKey = 'onboardingStep5Title';
+          if (key === 'onboardingStep6Desc') actualKey = 'onboardingStep5Desc';
+          if (key === 'onboardingStep7Title') actualKey = 'onboardingStep6Title';
+          if (key === 'onboardingStep7Desc') actualKey = 'onboardingStep6Desc';
+        }
       } else {
         if (key === 'onboardingStep2Title') actualKey = 'onboardingStep2TitleNonAdmin';
         if (key === 'onboardingStep2Desc') actualKey = 'onboardingStep2DescNonAdmin';
@@ -71,11 +89,13 @@
           onboardingStep2TitleNonAdmin: 'Git 자격 증명 및 환경설정 🔑',
           onboardingStep2DescNonAdmin: '저장소 작업에 필요한 본인의 Git 자격 증명을 설정하고 개인 환경설정을 구성합니다.<br><br>💡 <strong>설정 안내</strong>:<br><ul class="onboarding-guide-list"><li><strong>Git 사용자명 및 토큰</strong>: AI 에이전트가 본인의 깃허브 계정 권한으로 커밋을 작성하고 저장소에 푸시할 수 있도록 Git Token(개인 액세스 토큰)을 입력합니다.</li><li><strong>개인 설정</strong>: UI 언어(한국어/영어) 및 테마(다크 모드/라이트 모드)를 본인의 취향에 맞게 지정할 수 있습니다.</li></ul>',
           onboardingStep3Title: '슬랙 연동 💬',
-          onboardingStep3Desc: '실시간 진행 상황 알림 및 인간 개입형 승인(Human-in-the-loop) 알림을 수신할 슬랙 연동을 설정합니다.<br><br>💡 <strong>쉽고 빠른 연동 단계</strong>:<br><ul class="onboarding-guide-list"><li class="custom-bullet">1️⃣ <strong>연동 활성화</strong>: "슬랙 연동 활성화" 스위치를 활성화합니다.</li><li class="custom-bullet">2️⃣ <strong>토큰 입력</strong>: Slack App 설정에서 발급받은 Bot OAuth Token (<code>xoxb-...</code>)을 입력합니다.</li><li class="custom-bullet">3️⃣ <strong>채널 설정</strong>: 알림을 수신할 슬랙 채널명(예: <code>#agent-alerts</code>)을 지정합니다.</li><li class="custom-bullet">4️⃣ <strong>연동 검증</strong>: "Slack 테스트 및 채널 생성" 버튼을 클릭해 연동 상태를 확인하고 저장합니다.</li></ul>',
+          onboardingStep3Desc: '실시간 진행 상황 알림 및 인간 개입형 승인(Human-in-the-loop) 알림을 수신할 슬랙 연동을 설정합니다.<br><br>💡 <strong>쉽고 빠른 연동 단계</strong>:<br><ul class="onboarding-guide-list"><li class="custom-bullet">1️⃣ <strong>연동 활성화</strong>: "슬랙 연동 활성화" 스위치를 활성화합니다.</li><li class="custom-bullet">2️⃣ <strong>Bot 표시 이름</strong>: 사용자가 채널에 초대해야 할 bot 이름을 입력합니다.</li><li class="custom-bullet">3️⃣ <strong>토큰 입력</strong>: Slack App 설정에서 발급받은 Bot OAuth Token (<code>xoxb-...</code>)을 입력합니다.</li><li class="custom-bullet">4️⃣ <strong>채널 설정</strong>: 알림을 수신할 슬랙 채널명(예: <code>#agent-alerts</code>)을 지정합니다.</li><li class="custom-bullet">5️⃣ <strong>연동 검증</strong>: "Slack 테스트 및 채널 생성" 버튼을 클릭해 연동 상태를 확인하고 저장합니다.</li></ul>',
           onboardingStep3TitleNonAdmin: '새 요청 등록 🚀',
           onboardingStep3DescNonAdmin: '대시보드 상단의 "새 요청" 버튼을 클릭하여 작업 생성 대화창을 엽니다.',
           onboardingStep4Title: '새 요청 등록 🚀',
           onboardingStep4Desc: '대시보드 상단의 "새 요청" 버튼을 클릭하여 작업 생성 대화창을 엽니다.',
+          onboardingStepRemoteUseTitle: '원격 사용 설정 🌐',
+          onboardingStepRemoteUseDesc: '다른 기기에서 접속하거나 사용자 로그인이 필요하다면 원격 사용을 켤 수 있습니다.<br><br>💡 <strong>설정 위치</strong>:<br><ul class="onboarding-guide-list"><li><strong>원격 사용 설정 탭</strong>: 설정 창의 "원격 사용 설정" 탭을 엽니다.</li><li><strong>원격 사용 스위치</strong>: "원격 사용"을 켜면 첫 관리자 계정 설정 화면이 열립니다.</li><li><strong>로컬 전용 유지</strong>: 혼자 localhost에서만 쓴다면 꺼둔 상태로 계속 사용할 수 있습니다.</li></ul>',
           onboardingStep4TitleNonAdmin: '대상 프로젝트 지정 📂',
           onboardingStep4DescNonAdmin: '어시스턴트와 초안을 다듬기 전에, 먼저 이 요청의 대상 프로젝트를 지정합니다.<br><br>💡 <strong>대상 프로젝트가 중요한 이유</strong>:<br><ul class="onboarding-guide-list"><li><strong>범위 자동 채움</strong>: 선택한 프로젝트 경로를 기반으로 범위(Scope)와 범위 외(Out of Scope) 필드가 자동으로 채워집니다.</li><li><strong>브랜치 제안</strong>: 선택한 저장소에서 브랜치 자동 완성이 로드되어 올바른 기준 브랜치를 쉽게 선택할 수 있습니다.</li><li><strong>AI 컨텍스트</strong>: 어시스턴트가 대상 저장소의 프로젝트별 파일(<code>AGENTS.md</code>, <code>CLAUDE.md</code>)을 읽어 더 정확한 초안을 생성합니다.</li></ul>',
           onboardingStep5Title: '대상 프로젝트 지정 📂',
@@ -88,9 +108,15 @@
           badgeAssistantModel: '어시스턴트 툴 및 모델 선택',
           badgeRuntimeTitle: '각 런타임별 개별 모델 구성',
           badgeSlackEnable: '1. 슬랙 연동 활성화 스위치 ON',
-          badgeSlackToken: '2. Bot OAuth 토큰(xoxb-...) 입력',
-          badgeSlackChannel: '3. 알림 수신할 슬랙 채널 지정',
-          badgeSlackTest: '4. 연동 상태 테스트 및 설정 저장',
+          badgeSlackBotName: '2. 사용자가 초대할 Bot 표시 이름 입력',
+          badgeSlackToken: '3. Bot OAuth 토큰(xoxb-...) 입력',
+          badgeSlackChannel: '4. 알림 수신할 슬랙 채널 지정',
+          badgeSlackTest: '5. 연동 상태 테스트 및 설정 저장',
+          badgeRemoteUseTab: '원격 접속이 필요하면 이 탭을 엽니다',
+          badgeRemoteUseToggle: '원격 사용을 켜고 첫 관리자 계정을 설정합니다',
+          badgeRemoteUseAdminUsername: '첫 관리자 계정 이름 입력',
+          badgeRemoteUseAdminPassword: '관리자 비밀번호 입력',
+          badgeRemoteUseAdminSubmit: '관리자 설정을 완료해 원격 사용 활성화',
           badgeNewRequest: '여기에서 첫 워크플로우를 시작해 보세요!',
           badgeTargetRepo: '대상 프로젝트 저장소를 찾아 선택하세요',
           badgeBaseBranch: '선택한 저장소에서 브랜치가 자동 제안됩니다',
@@ -113,11 +139,13 @@
           onboardingStep2TitleNonAdmin: 'Git Credentials & Preferences 🔑',
           onboardingStep2DescNonAdmin: 'Configure your personal Git credentials and customize your display preferences.<br><br>💡 <strong>Configuration Guide</strong>:<br><ul class="onboarding-guide-list"><li><strong>Git Username & Token</strong>: Enter your Git personal access token to allow AI agents to write commits and push to the repository securely under your identity.</li><li><strong>Preferences</strong>: Choose your preferred UI language (Korean/English) and application theme (Dark/Light mode).</li></ul>',
           onboardingStep3Title: 'Slack Integration 💬',
-          onboardingStep3Desc: 'Configure Slack integration to receive real-time execution progress updates and handle Human-in-the-loop approval workflows.<br><br>💡 <strong>Easy Integration Steps</strong>:<br><ul class="onboarding-guide-list"><li class="custom-bullet">1️⃣ <strong>Enable Integration</strong>: Toggle the "Enable Slack Integration" switch to ON.</li><li class="custom-bullet">2️⃣ <strong>Enter Token</strong>: Paste your Bot OAuth Token (<code>xoxb-...</code>) obtained from your Slack App configuration.</li><li class="custom-bullet">3️⃣ <strong>Set Channel</strong>: Specify the Slack channel name (e.g., <code>#agent-alerts</code>) to receive agent notifications.</li><li class="custom-bullet">4️⃣ <strong>Verify Connection</strong>: Click the "Test Slack & Create Channel" button to verify the integration and save.</li></ul>',
+          onboardingStep3Desc: 'Configure Slack integration to receive real-time execution progress updates and handle Human-in-the-loop approval workflows.<br><br>💡 <strong>Easy Integration Steps</strong>:<br><ul class="onboarding-guide-list"><li class="custom-bullet">1️⃣ <strong>Enable Integration</strong>: Toggle the "Enable Slack Integration" switch to ON.</li><li class="custom-bullet">2️⃣ <strong>Bot display name</strong>: Enter the bot name users should invite to Slack channels.</li><li class="custom-bullet">3️⃣ <strong>Enter Token</strong>: Paste your Bot OAuth Token (<code>xoxb-...</code>) obtained from your Slack App configuration.</li><li class="custom-bullet">4️⃣ <strong>Set Channel</strong>: Specify the Slack channel name (e.g., <code>#agent-alerts</code>) to receive agent notifications.</li><li class="custom-bullet">5️⃣ <strong>Verify Connection</strong>: Click the "Test Slack & Create Channel" button to verify the integration and save.</li></ul>',
           onboardingStep3TitleNonAdmin: 'Create a New Request 🚀',
           onboardingStep3DescNonAdmin: 'Click the "New request" button in the dashboard header to open the request composer modal.',
           onboardingStep4Title: 'Create a New Request 🚀',
           onboardingStep4Desc: 'Click the "New request" button in the dashboard header to open the request composer modal.',
+          onboardingStepRemoteUseTitle: 'Remote Use Settings 🌐',
+          onboardingStepRemoteUseDesc: 'Turn on remote use when you need access from another device or login-based user management.<br><br>💡 <strong>Where to configure it</strong>:<br><ul class="onboarding-guide-list"><li><strong>Remote use settings tab</strong>: Open the "Remote use" tab in Settings.</li><li><strong>Remote use switch</strong>: Turn on "Remote use" to open first-admin setup.</li><li><strong>Local-only mode</strong>: Leave it off if you only use this server from localhost.</li></ul>',
           onboardingStep4TitleNonAdmin: 'Select Target Project 📂',
           onboardingStep4DescNonAdmin: 'Before drafting with the assistant, first specify the target project for this request.<br><br>💡 <strong>Why this matters</strong>:<br><ul class="onboarding-guide-list"><li><strong>Scope auto-fill</strong>: The Scope and Out of Scope fields are automatically populated based on the selected project path.</li><li><strong>Branch suggestions</strong>: Branch autocomplete loads from the selected repository so you can pick the right base branch.</li><li><strong>AI context</strong>: The assistant reads project-specific files (<code>AGENTS.md</code>, <code>CLAUDE.md</code>) from the target repo to generate more accurate drafts.</li></ul>',
           onboardingStep5Title: 'Select Target Project 📂',
@@ -130,9 +158,15 @@
           badgeAssistantModel: 'Select assistant tool & model',
           badgeRuntimeTitle: 'Configure individual models for each runtime',
           badgeSlackEnable: '1. Toggle Slack Integration ON',
-          badgeSlackToken: '2. Enter Bot OAuth Token (xoxb-...)',
-          badgeSlackChannel: '3. Enter destination channel name',
-          badgeSlackTest: '4. Test connection and save settings',
+          badgeSlackBotName: '2. Enter the bot display name users will invite',
+          badgeSlackToken: '3. Enter Bot OAuth Token (xoxb-...)',
+          badgeSlackChannel: '4. Enter destination channel name',
+          badgeSlackTest: '5. Test connection and save settings',
+          badgeRemoteUseTab: 'Open this tab when remote access is needed',
+          badgeRemoteUseToggle: 'Turn on remote use and set the first administrator',
+          badgeRemoteUseAdminUsername: 'Enter the first administrator username',
+          badgeRemoteUseAdminPassword: 'Enter the administrator password',
+          badgeRemoteUseAdminSubmit: 'Finish administrator setup to enable remote use',
           badgeNewRequest: 'Start your first workflow here!',
           badgeTargetRepo: 'Browse and select the target project repository',
           badgeBaseBranch: 'Branch is auto-suggested from the selected repo',
@@ -285,6 +319,47 @@
       activePointerBadges = [];
     }
 
+    function renderRemoteUseStepBadges() {
+      if (currentStep !== 4 || !showRemoteUseStep) return;
+
+      clearHighlights();
+      clearPointerBadges();
+
+      const tabUsers = document.getElementById('settings-tab-users');
+      const remoteUsageCard = document.querySelector('.settings-remote-usage-card');
+      const remoteUsageSwitch = document.querySelector('label.settings-switch[for="remote-usage-enabled"]');
+      const userCreateCard = document.getElementById('settings-user-create-card');
+      const adminUsername = document.getElementById('new-user-username');
+      const adminPassword = document.getElementById('new-user-password');
+      const createAdminButton = document.getElementById('create-user-button');
+      const setupVisible = Boolean(userCreateCard && !userCreateCard.hidden);
+
+      if (tabUsers) tabUsers.classList.add('onboarding-target-highlight');
+      if (remoteUsageCard) remoteUsageCard.classList.add('onboarding-target-highlight');
+
+      if (tabUsers) {
+        createPointerBadge(tabUsers, getOnboardingText('badgeRemoteUseTab'), 'bottom', true);
+      }
+      if (remoteUsageSwitch) {
+        createPointerBadge(remoteUsageSwitch, getOnboardingText('badgeRemoteUseToggle'), 'right', true);
+      }
+
+      if (!setupVisible) {
+        return;
+      }
+
+      if (userCreateCard) userCreateCard.classList.add('onboarding-target-highlight');
+      if (adminUsername) {
+        createPointerBadge(adminUsername, getOnboardingText('badgeRemoteUseAdminUsername'), 'bottom', true);
+      }
+      if (adminPassword) {
+        createPointerBadge(adminPassword, getOnboardingText('badgeRemoteUseAdminPassword'), 'bottom', true);
+      }
+      if (createAdminButton) {
+        createPointerBadge(createAdminButton, getOnboardingText('badgeRemoteUseAdminSubmit'), 'bottom', true);
+      }
+    }
+
     function positionAllBadges() {
       activePointerBadges.forEach(item => {
         if (!item.targetEl || !item.element) return;
@@ -396,13 +471,25 @@
       // Apply card placement classes for premium UX positioning mapping to admin equivalent visual slots
       let positionStep = step;
       if (isUserAdmin) {
-        if (step === 1) positionStep = 1;
-        else if (step === 2) positionStep = 2; // Runtime Roles
-        else if (step === 3) positionStep = 3; // Slack Integration
-        else if (step === 4) positionStep = 2; // Git Credentials & Preferences (use step-2 position: bottom-left)
-        else if (step === 5) positionStep = 4; // New Request
-        else if (step === 6) positionStep = 5; // Target Project
-        else if (step === 7) positionStep = 6; // Draft Refinement
+        if (showPersonalGitStep) {
+          if (step === 1) positionStep = 1;
+          else if (step === 2) positionStep = 2; // Runtime Roles
+          else if (step === 3) positionStep = 3; // Slack Integration
+          else if (step === 4) positionStep = 2; // Git Credentials & Preferences (use step-2 position: bottom-left)
+          else if (step === 5) positionStep = 4; // New Request
+          else if (step === 6) positionStep = 5; // Target Project
+          else if (step === 7) positionStep = 6; // Draft Refinement
+        } else if (showRemoteUseStep) {
+          if (step === 1) positionStep = 1;
+          else if (step === 2) positionStep = 2; // Runtime Roles
+          else if (step === 3) positionStep = 3; // Slack Integration
+          else if (step === 4) positionStep = 2; // Remote Use Settings
+          else if (step === 5) positionStep = 4; // New Request
+          else if (step === 6) positionStep = 5; // Target Project
+          else if (step === 7) positionStep = 6; // Draft Refinement
+        } else {
+          positionStep = step;
+        }
       } else {
         if (step === 1) positionStep = 1;
         else if (step === 2) positionStep = 2; // Git Credentials & Preferences
@@ -555,12 +642,16 @@
             // 5. Create pointer badges with preventScroll = true to keep scroll at top
             setTimeout(() => {
               const slackEnabled = document.querySelector('label.settings-switch[for="slack_enabled"]');
+              const slackBotName = document.getElementById('slack_bot_name');
               const slackBotToken = document.getElementById('slack_bot_token');
               const slackChannel = document.getElementById('slack_default_channel');
               const testSlackSettings = document.getElementById('test-slack-settings');
 
               if (slackEnabled) {
                 createPointerBadge(slackEnabled, getOnboardingText('badgeSlackEnable'), 'right', true);
+              }
+              if (slackBotName) {
+                createPointerBadge(slackBotName, getOnboardingText('badgeSlackBotName'), 'bottom', true);
               }
               if (slackBotToken) {
                 createPointerBadge(slackBotToken, getOnboardingText('badgeSlackToken'), 'bottom', true);
@@ -634,7 +725,7 @@
             }, 100);
           }).catch(e => console.error('Failed to open settings modal in step 3:', e));
         }
-        else if (step === 4) {
+        else if (showPersonalGitStep && step === 4) {
           // Step 4: Git Credentials & Preferences for Admin
           // 1. Open settings
           if (window.openSettingsModal) {
@@ -677,7 +768,31 @@
             }).catch(e => console.error('Failed to open settings modal in step 4:', e));
           }
         }
-        else if (step === 5) {
+        else if (showRemoteUseStep && step === 4) {
+          // Step 4: Remote Use Settings
+          if (window.openSettingsModal) {
+            window.openSettingsModal().then(() => {
+              if (window.setSettingsTab) {
+                window.setSettingsTab('users');
+              }
+              const tabUsers = document.getElementById('settings-tab-users');
+              if (tabUsers) tabUsers.classList.add('onboarding-target-highlight');
+
+              const enforceScrollTop = () => {
+                const settingsScrollBody = document.querySelector('#settings-modal .modal-scroll-body');
+                if (settingsScrollBody) {
+                  settingsScrollBody.scrollTop = 0;
+                }
+              };
+              enforceScrollTop();
+              const scrollInterval = setInterval(enforceScrollTop, 50);
+              setTimeout(() => clearInterval(scrollInterval), 1500);
+
+              setTimeout(renderRemoteUseStepBadges, 100);
+            }).catch(e => console.error('Failed to open settings modal in remote use step:', e));
+          }
+        }
+        else if (step === (showPersonalGitStep || showRemoteUseStep ? 5 : 4)) {
           // Step 5: New Request Button
           // 1. Close settings modal
           if (window.closeSettingsModal) {
@@ -710,7 +825,7 @@
             }, 100);
           }
         }
-        else if (step === 6) {
+        else if (step === (showPersonalGitStep || showRemoteUseStep ? 6 : 5)) {
           // Step 6: Target Project Selection
           // 1. Open request composer modal if not open
           const reqModal = document.getElementById('request-modal');
@@ -766,7 +881,7 @@
             }, 100);
           }).catch(e => console.error('Failed to open request composer in step 6:', e));
         }
-        else if (step === 7) {
+        else if (step === (showPersonalGitStep || showRemoteUseStep ? 7 : 6)) {
           // Step 7: Draft with Assistant
           // 1. Open request composer modal if not open
           const reqModal = document.getElementById('request-modal');
@@ -1046,21 +1161,29 @@
           if (data.enabled && data.authenticated && data.user) {
             onboardingStateSource = 'user';
             isUserAdmin = Boolean(data.user.is_admin);
+            showPersonalGitStep = true;
+            showRemoteUseStep = false;
             totalSteps = isUserAdmin ? 7 : 5;
             updateOnboardingStepsUI();
             const state = data.onboarding || {};
             return Boolean(state.completed && Number(state.version || 0) >= onboardingVersion);
           } else {
+            onboardingStateSource = 'browser';
             isUserAdmin = true;
-            totalSteps = 7;
+            showPersonalGitStep = false;
+            showRemoteUseStep = !data.enabled;
+            totalSteps = showRemoteUseStep ? 7 : 6;
             updateOnboardingStepsUI();
+            return browserOnboardingCompleted();
           }
         }
       } catch (_error) {
       }
       onboardingStateSource = 'browser';
       isUserAdmin = true;
-      totalSteps = 7;
+      showPersonalGitStep = false;
+      showRemoteUseStep = false;
+      totalSteps = 6;
       updateOnboardingStepsUI();
       return browserOnboardingCompleted();
     }
@@ -1144,6 +1267,15 @@
       languageEl.addEventListener('change', applyTranslations);
     }
 
+    const remoteUsageOnboardingToggle = document.getElementById('remote-usage-enabled');
+    if (remoteUsageOnboardingToggle) {
+      remoteUsageOnboardingToggle.addEventListener('change', () => {
+        if (currentStep === 4 && showRemoteUseStep) {
+          setTimeout(renderRemoteUseStepBadges, 120);
+        }
+      });
+    }
+
     // Observe modal and tab panel visibility changes to update pointer badges dynamically
     const settingsModal = document.getElementById('settings-modal');
     const requestModal = document.getElementById('request-modal');
@@ -1213,7 +1345,9 @@
       }
     }).catch(() => {
       isUserAdmin = true;
-      totalSteps = 7;
+      showPersonalGitStep = false;
+      showRemoteUseStep = false;
+      totalSteps = 6;
       updateOnboardingStepsUI();
       if (!browserOnboardingCompleted()) {
         setTimeout(() => {
