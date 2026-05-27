@@ -1953,6 +1953,21 @@ body[data-theme="dark"] .qa-checklist-note {
   border-color: rgba(186, 200, 214, 0.16);
   color: var(--text);
 }
+body[data-theme="dark"] .qa-checklist-toggle {
+  background: rgba(30, 41, 52, 0.98);
+  border-color: rgba(186, 200, 214, 0.16);
+  color: var(--muted);
+}
+body[data-theme="dark"] .qa-checklist-toggle.is-active {
+  border-color: rgba(33, 115, 73, 0.4);
+  background: rgba(33, 115, 73, 0.15);
+  color: var(--success);
+}
+body[data-theme="dark"] .qa-checklist-toggle.is-skipped {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+}
 .diff-file-heading { display: grid; gap: 3px; min-width: 0; }
 .diff-file-title { display: block; font-weight: 700; font-size: 0.96rem; line-height: 1.35; overflow-wrap: anywhere; }
 .diff-file-path { display: block; font-size: 0.78rem; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
