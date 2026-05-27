@@ -28,7 +28,7 @@
     const requestForm = document.getElementById('request-form');
     const settingsForm = document.getElementById('settings-form');
     const submitButton = document.getElementById('submit-request');
-    const saveSettingsButton = document.getElementById('save-settings');
+    const saveSettingsButtons = Array.from(document.querySelectorAll('[data-settings-save-scope]'));
     const formError = document.getElementById('form-error');
     const requestTitleInput = document.getElementById('title');
     const goalInput = document.getElementById('goal');
@@ -63,6 +63,8 @@
     const settingsGitPanel = document.getElementById('settings-panel-git');
     const settingsRepositoriesTab = document.getElementById('settings-tab-repositories');
     const settingsRepositoriesPanel = document.getElementById('settings-panel-repositories');
+    const settingsRolesTab = document.getElementById('settings-tab-roles');
+    const settingsRolesPanel = document.getElementById('settings-panel-roles');
     const settingsSlackTab = document.getElementById('settings-tab-slack');
     const settingsSlackPanel = document.getElementById('settings-panel-slack');
     const settingsSlackChannelTab = document.getElementById('settings-tab-slack-channel');
@@ -75,7 +77,10 @@
     const createUserButton = document.getElementById('create-user-button');
     const createUserStatus = document.getElementById('create-user-status');
     const settingsUserList = document.getElementById('settings-user-list');
-    const deleteAllUsersButton = document.getElementById('delete-all-users-button');
+    const remoteUsageEnabledInput = document.getElementById('remote-usage-enabled');
+    const remoteUsageStatus = document.getElementById('settings-remote-usage-status');
+    const userCreateCard = document.getElementById('settings-user-create-card');
+    const userListCard = document.getElementById('settings-user-list-card');
     const btnBrowseRepoRoot = document.getElementById('btn-browse-repo-root');
     const btnBrowseTargetRepo = document.getElementById('btn-browse-target-repo');
     const directoryPickerModal = document.getElementById('directory-picker-modal');
@@ -352,6 +357,8 @@
     let latestBranchLookupToken = 0;
     let lastSettingsPayload = null;
     let currentAuthPayload = null;
+    let remoteUsageSetupRequested = false;
+    let activeSettingsTab = 'general';
     let cachedAssistantOptions = null;
     let boardTaskSnapshots = new Map();
     let lastLoadedSettingsState = null;

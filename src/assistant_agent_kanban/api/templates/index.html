@@ -188,7 +188,6 @@
           <p id="settings-modal-description">Update runtime defaults and model choices.</p>
         </div>
         <div class="modal-head-actions">
-    <button type="submit" id="save-settings" class="primary" form="settings-form">Save settings</button>
           <button type="button" id="cancel-settings">Close</button>
         </div>
       </div>
@@ -199,7 +198,7 @@
         <button type="button" id="settings-tab-roles" role="tab" aria-selected="false">Runtime Roles</button>
         <button type="button" id="settings-tab-slack" role="tab" aria-selected="false">Slack connection settings</button>
         <button type="button" id="settings-tab-slack-channel" role="tab" aria-selected="false">Slack channel settings</button>
-        <button type="button" id="settings-tab-users" role="tab" aria-selected="false" hidden>Users</button>
+        <button type="button" id="settings-tab-users" role="tab" aria-selected="false" hidden>Remote use</button>
       </div>
       <form id="settings-form" class="modal-scroll-form">
         <div class="modal-scroll-body">
@@ -246,6 +245,9 @@
                 </div>
               </div>
             </section>
+            <div class="settings-tab-actions">
+              <button type="submit" class="primary settings-tab-save" data-settings-save-scope="general">Save</button>
+            </div>
           </div>
 
           <div id="settings-panel-git" class="settings-panel" hidden>
@@ -271,6 +273,9 @@
                 </div>
               </div>
             </section>
+            <div class="settings-tab-actions">
+              <button type="submit" class="primary settings-tab-save" data-settings-save-scope="git">Save</button>
+            </div>
           </div>
 
           <div id="settings-panel-repositories" class="settings-panel" hidden>
@@ -299,16 +304,30 @@
                 </div>
               </div>
             </section>
+            <div class="settings-tab-actions">
+              <button type="submit" class="primary settings-tab-save" data-settings-save-scope="repositories">Save</button>
+            </div>
           </div>
 
           <div id="settings-panel-users" class="settings-panel" hidden>
             <section class="settings-section">
               <div class="settings-section-head">
-                <strong id="settings-users-heading">Users</strong>
-                <span id="settings-users-description">Create local login accounts for this kanban server.</span>
+                <strong id="settings-users-heading">Remote use settings</strong>
+                <span id="settings-users-description">Control remote access and login-based user management.</span>
               </div>
               <div class="settings-user-container">
-                <div id="settings-user-create-card" class="settings-card settings-user-create-card">
+                <div class="settings-card settings-remote-usage-card">
+                  <div class="settings-remote-usage-copy">
+                    <strong id="settings-remote-usage-title" class="settings-card-title-main">Remote use</strong>
+                    <span id="settings-remote-usage-description" class="settings-card-subtitle">Require login and allow access from non-localhost clients.</span>
+                    <span id="settings-remote-usage-status" class="settings-remote-usage-status">Disabled</span>
+                  </div>
+                  <label class="settings-switch" for="remote-usage-enabled">
+                    <input id="remote-usage-enabled" type="checkbox" role="switch">
+                    <span class="settings-switch-ui" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <div id="settings-user-create-card" class="settings-card settings-user-create-card" hidden>
                   <strong id="settings-new-user-heading" class="settings-card-title-main">Add New User</strong>
                   <div class="settings-user-fields-grid">
                     <div class="settings-user-field">
@@ -319,7 +338,6 @@
                     <div class="settings-user-field">
                       <label id="settings-new-user-password-title" for="new-user-password">Password</label>
                       <input id="new-user-password" type="password" autocomplete="new-password" placeholder="••••••••">
-                      <span id="settings-new-user-password-description" class="field-help-text">Stored as a salted hash.</span>
                     </div>
                   </div>
                   <div class="settings-user-actions-row">
@@ -339,17 +357,9 @@
                   </div>
                   <div id="create-user-status" class="settings-status" hidden></div>
                 </div>
-                <div class="settings-card settings-user-list-card">
+                <div id="settings-user-list-card" class="settings-card settings-user-list-card" hidden>
                   <strong id="settings-user-list-title">Existing users</strong>
-                  <span id="settings-user-list-description" class="settings-card-subtitle">Accounts that can sign in to this local kanban database.</span>
                   <div id="settings-user-list" class="settings-user-grid"></div>
-                  <div id="settings-user-danger-zone" class="settings-user-danger-zone">
-                    <div>
-                      <strong id="settings-delete-all-users-title">Disable login mode</strong>
-                      <span id="settings-delete-all-users-description">Delete every user account and return this server to localhost-only admin mode.</span>
-                    </div>
-                    <button type="button" id="delete-all-users-button" class="settings-user-delete-all">Delete all users</button>
-                  </div>
                 </div>
               </div>
             </section>
@@ -452,6 +462,9 @@
                   </div>
                 </div>
               </section>
+              <div class="settings-tab-actions">
+                <button type="submit" class="primary settings-tab-save" data-settings-save-scope="slack">Save</button>
+              </div>
             </div>
           </div>
 
@@ -676,6 +689,9 @@
                 </div>
               </div>
             </section>
+            <div class="settings-tab-actions">
+              <button type="submit" class="primary settings-tab-save" data-settings-save-scope="roles">Save</button>
+            </div>
           </div>
         </div>
         <div id="settings-status" class="settings-status">Current values load when you open this panel.</div>

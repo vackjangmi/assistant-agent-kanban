@@ -18,7 +18,6 @@
     openSettingsButton.addEventListener('click', openSettingsModal);
     if (logoutButton) logoutButton.addEventListener('click', () => logout().catch(() => { window.location.href = '/login'; }));
     if (createUserButton) createUserButton.addEventListener('click', () => createUser());
-    if (deleteAllUsersButton) deleteAllUsersButton.addEventListener('click', () => deleteAllUsers());
     [newUserUsernameInput, newUserPasswordInput].forEach((input) => {
       if (!input) return;
       input.addEventListener('keydown', (event) => {
@@ -94,7 +93,7 @@
       });
     });
     settingsForm.addEventListener('submit', saveModelSettings);
-    refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error')));
+    refreshModelOptionsButton.addEventListener('click', () => loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error', { scope: 'roles' })));
     testSlackSettingsButton.addEventListener('click', () => runSlackSettingsTest());
     startSlackReceiveTestButton.addEventListener('click', () => startSlackReceiveTest());
     copySlackReceiveTestButton.addEventListener('click', () => copySlackReceiveTestInstruction());
@@ -136,7 +135,7 @@
         resetRoleModelSelection(config);
       });
       renderAllRoleModelOptions();
-      loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error'));
+      loadModelSettings(true, { preserveState: true }).catch((error) => setSettingsStatus(error.message, 'error', { scope: 'roles' }));
     });
     roleSettingConfigs.forEach((config) => {
       const { backendInput, modelInput, modelSelectInput, role } = config;
@@ -145,7 +144,7 @@
         renderRoleModelOptions(role);
         const selectedBackend = effectiveRoleBackend(role);
         if (selectedBackend) {
-          loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false }).catch((error) => setSettingsStatus(error.message, 'error'));
+          loadModelSettings(true, { preserveState: true, assistantOverride: selectedBackend, updateSummary: false }).catch((error) => setSettingsStatus(error.message, 'error', { scope: 'roles' }));
         }
       });
       modelSelectInput.addEventListener('change', () => {
