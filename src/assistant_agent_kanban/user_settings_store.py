@@ -10,6 +10,7 @@ import uuid
 
 from pydantic import BaseModel, Field, SecretStr
 
+from .client_encrypted_credentials import ClientEncryptedGitToken, decrypt_client_encrypted_git_token, validate_git_token_aad
 from .config import AppConfig
 from .security import SecretBox, generate_session_token, hash_password, hash_session_token, mask_secret, verify_password
 
@@ -33,6 +34,15 @@ def _secret_value(value: SecretStr | str | None) -> str | None:
         return None
     text = value.get_secret_value() if isinstance(value, SecretStr) else value
     return text.strip() or None
+
+
+def _normalize_masked_secret(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text or len(text) > 256:
+        return None
+    return text
 
 
 @dataclass(frozen=True)
@@ -97,6 +107,8 @@ class UserOnboardingState(BaseModel):
 
 class UserSecretUpdate(BaseModel):
     git_token: str | None = None
+    git_token_client_encrypted: ClientEncryptedGitToken | None = None
+    git_token_masked: str | None = None
     git_token_username: str | None = None
     slack_bot_token: str | None = None
     slack_app_token: str | None = None
@@ -288,14 +300,16 @@ class UserSettingsStore:
         if row is None:
             return UserSettings()
         runtime = RuntimePreferenceSettings.model_validate_json(str(row["settings_json"] or "{}"))
-        git_token = self.secret_box.decrypt_optional(row["git_token_encrypted"])
+        client_encrypted_git_token = row["git_token_client_encrypted"] if "git_token_client_encrypted" in row.keys() else None
+        legacy_git_token = None if client_encrypted_git_token else self.secret_box.decrypt_optional(row["git_token_encrypted"])
+        git_token_masked = row["git_token_masked"] if "git_token_masked" in row.keys() else None
         slack_bot_token = self.secret_box.decrypt_optional(row["slack_bot_token_encrypted"])
         slack_app_token = self.secret_box.decrypt_optional(row["slack_app_token_encrypted"])
         return UserSettings(
             runtime=runtime,
             git_token_username=row["git_token_username"],
-            git_token_configured=git_token is not None,
-            git_token_masked=mask_secret(git_token),
+            git_token_configured=bool(client_encrypted_git_token or legacy_git_token),
+            git_token_masked=git_token_masked or mask_secret(legacy_git_token),
             slack_bot_token_configured=slack_bot_token is not None,
             slack_bot_token_masked=mask_secret(slack_bot_token),
             slack_app_token_configured=slack_app_token is not None,
@@ -312,11 +326,20 @@ class UserSettingsStore:
         existing = self._raw_user_settings(user_id)
         secrets_update = secrets_update or UserSecretUpdate()
         git_token_encrypted = existing.get("git_token_encrypted")
+        git_token_client_encrypted = existing.get("git_token_client_encrypted")
+        git_token_masked = existing.get("git_token_masked")
         slack_bot_token_encrypted = existing.get("slack_bot_token_encrypted")
         slack_app_token_encrypted = existing.get("slack_app_token_encrypted")
         git_token_username = secrets_update.git_token_username if secrets_update.git_token_username is not None else existing.get("git_token_username")
+        if secrets_update.git_token_client_encrypted is not None:
+            validate_git_token_aad(secrets_update.git_token_client_encrypted.aad, user_id=user_id)
+            git_token_client_encrypted = secrets_update.git_token_client_encrypted.model_dump_json()
+            git_token_masked = _normalize_masked_secret(secrets_update.git_token_masked)
+            git_token_encrypted = None
         if secrets_update.git_token is not None:
             git_token_encrypted = self.secret_box.encrypt_optional(secrets_update.git_token.strip() or None)
+            git_token_client_encrypted = None
+            git_token_masked = mask_secret(secrets_update.git_token.strip() or None)
         if secrets_update.slack_bot_token is not None:
             slack_bot_token_encrypted = self.secret_box.encrypt_optional(secrets_update.slack_bot_token.strip() or None)
         if secrets_update.slack_app_token is not None:
@@ -327,27 +350,45 @@ class UserSettingsStore:
             conn.execute(
                 """
                 insert into user_settings
-                  (user_id, settings_json, git_token_encrypted, git_token_username, slack_bot_token_encrypted, slack_app_token_encrypted, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?)
+                  (user_id, settings_json, git_token_encrypted, git_token_client_encrypted, git_token_masked, git_token_username, slack_bot_token_encrypted, slack_app_token_encrypted, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(user_id) do update set
                   settings_json = excluded.settings_json,
                   git_token_encrypted = excluded.git_token_encrypted,
+                  git_token_client_encrypted = excluded.git_token_client_encrypted,
+                  git_token_masked = excluded.git_token_masked,
                   git_token_username = excluded.git_token_username,
                   slack_bot_token_encrypted = excluded.slack_bot_token_encrypted,
                   slack_app_token_encrypted = excluded.slack_app_token_encrypted,
                   updated_at = excluded.updated_at
                 """,
-                (user_id, payload, git_token_encrypted, git_token_username, slack_bot_token_encrypted, slack_app_token_encrypted, now),
+                (
+                    user_id,
+                    payload,
+                    git_token_encrypted,
+                    git_token_client_encrypted,
+                    git_token_masked,
+                    git_token_username,
+                    slack_bot_token_encrypted,
+                    slack_app_token_encrypted,
+                    now,
+                ),
             )
             conn.commit()
         return self.get_user_settings(user_id)
 
-    def git_credentials_for_user(self, user_id: str | None) -> tuple[str | None, str | None]:
+    def git_credentials_for_user(self, user_id: str | None, *, unlock_key: str | None = None) -> tuple[str | None, str | None]:
         if not user_id:
             return None, None
         raw = self._raw_user_settings(user_id)
-        token = self.secret_box.decrypt_optional(raw.get("git_token_encrypted"))
         username = (raw.get("git_token_username") or "x-access-token").strip() or "x-access-token"
+        if raw.get("git_token_client_encrypted"):
+            if not unlock_key:
+                return None, username
+            payload = ClientEncryptedGitToken.model_validate_json(str(raw["git_token_client_encrypted"]))
+            token = decrypt_client_encrypted_git_token(payload, unlock_key).strip() or None
+            return token, username
+        token = self.secret_box.decrypt_optional(raw.get("git_token_encrypted"))
         return token, username
 
     def slack_credentials_for_user(self, user_id: str | None) -> tuple[str | None, str | None]:
@@ -464,6 +505,8 @@ class UserSettingsStore:
                   user_id text primary key references users(user_id) on delete cascade,
                   settings_json text not null default '{}',
                   git_token_encrypted text,
+                  git_token_client_encrypted text,
+                  git_token_masked text,
                   git_token_username text,
                   slack_bot_token_encrypted text,
                   slack_app_token_encrypted text,
@@ -486,6 +529,10 @@ class UserSettingsStore:
             if "slack_app_token_encrypted" not in existing_columns:
                 conn.execute("alter table project_settings add column slack_app_token_encrypted text")
             existing_user_settings_columns = {row["name"] for row in conn.execute("pragma table_info(user_settings)").fetchall()}
+            if "git_token_client_encrypted" not in existing_user_settings_columns:
+                conn.execute("alter table user_settings add column git_token_client_encrypted text")
+            if "git_token_masked" not in existing_user_settings_columns:
+                conn.execute("alter table user_settings add column git_token_masked text")
             if "onboarding_completed_at" not in existing_user_settings_columns:
                 conn.execute("alter table user_settings add column onboarding_completed_at text")
             if "onboarding_version" not in existing_user_settings_columns:

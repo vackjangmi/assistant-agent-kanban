@@ -247,6 +247,9 @@
       setSettingsHtml('settings-git-token-username-note', 'gitTokenUsernameNote');
       setSettingsText('settings-git-token-title', 'gitTokenTitle');
       setSettingsText('settings-git-token-description', 'gitTokenDescription');
+      setSettingsText('settings-git-unlock-key-title', 'gitUnlockKeyTitle');
+      setSettingsText('settings-git-unlock-key-description', 'gitUnlockKeyDescription');
+      updateGitUnlockKeyStatus();
       setSettingsText('settings-repositories-heading', 'repositoriesHeading');
       setSettingsText('settings-repositories-description', 'repositoriesDescription');
       setSettingsText('settings-repo-root-title', 'repoRootTitle');
@@ -688,6 +691,164 @@
       gitTokenStatus.textContent = translateSettings('gitTokenStatusNotConfigured');
     }
 
+    function updateGitUnlockKeyStatus() {
+      if (!gitTokenUnlockKeyNote) return;
+      const inlineValue = (gitTokenUnlockKeyInput?.value || '').trim();
+      if (inlineValue) {
+        gitTokenUnlockKeyNote.textContent = translateSettings('gitUnlockKeyWillSaveLocal', { fingerprint: '...' });
+        updateGitUnlockKeyFingerprint(inlineValue, 'gitUnlockKeyWillSaveLocal', () => (gitTokenUnlockKeyInput?.value || '').trim() === inlineValue);
+        return;
+      }
+      const localValue = readGitTokenUnlockLocal();
+      if (localValue) {
+        gitTokenUnlockKeyNote.textContent = translateSettings('gitUnlockKeySavedLocal', { fingerprint: '...' });
+        updateGitUnlockKeyFingerprint(localValue, 'gitUnlockKeySavedLocal', () => !(gitTokenUnlockKeyInput?.value || '').trim() && readGitTokenUnlockLocal() === localValue);
+        return;
+      }
+      gitTokenUnlockKeyNote.textContent = translateSettings('gitUnlockKeyNote');
+    }
+
+    function updateGitUnlockKeyFingerprint(value, translationKey, stillCurrent) {
+      gitUnlockKeyFingerprint(value).then((fingerprint) => {
+        if (!gitTokenUnlockKeyNote || !stillCurrent()) return;
+        gitTokenUnlockKeyNote.textContent = translateSettings(translationKey, { fingerprint });
+      }).catch(() => {});
+    }
+
+    async function gitUnlockKeyFingerprint(value) {
+      if (!crypto?.subtle) return 'unavailable';
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+      return Array.from(new Uint8Array(digest).slice(0, 6))
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    function gitTokenAad() {
+      const user = currentAuthUser();
+      return JSON.stringify({
+        purpose: 'assistant-agent-kanban.git-token',
+        version: 1,
+        user_id: user?.user_id || '',
+      });
+    }
+
+    function gitTokenUnlockLocalStorageKey() {
+      const userId = currentAuthUser()?.user_id || 'local';
+      return `assistant-agent-kanban.git-token-unlock.${userId}`;
+    }
+
+    function readGitTokenUnlockLocal() {
+      try {
+        return localStorage.getItem(gitTokenUnlockLocalStorageKey()) || '';
+      } catch {
+        return '';
+      }
+    }
+
+    function writeGitTokenUnlockLocal(value) {
+      const text = (value || '').trim();
+      if (!text) return;
+      try {
+        localStorage.setItem(gitTokenUnlockLocalStorageKey(), text);
+      } catch {
+        // Local storage can be unavailable in restricted browser contexts.
+      }
+      updateGitUnlockKeyStatus();
+    }
+
+    function clearGitTokenUnlockLocal() {
+      try {
+        localStorage.removeItem(gitTokenUnlockLocalStorageKey());
+      } catch {
+        // Local storage can be unavailable in restricted browser contexts.
+      }
+      updateGitUnlockKeyStatus();
+    }
+
+    function maskGitTokenForDisplay(value) {
+      const text = value || '';
+      if (!text) return '';
+      if (text.length <= 4) return '•'.repeat(text.length);
+      return `${'•'.repeat(text.length - 4)}${text.slice(-4)}`;
+    }
+
+    function base64FromBytes(bytes) {
+      let binary = '';
+      bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+      return btoa(binary);
+    }
+
+    function cryptoBytes(length) {
+      const bytes = new Uint8Array(length);
+      crypto.getRandomValues(bytes);
+      return bytes;
+    }
+
+    async function encryptGitTokenForStorage(token, unlockKey) {
+      if (!crypto?.subtle || !crypto?.getRandomValues) {
+        throw new Error(translateSettings('gitCryptoUnavailable'));
+      }
+      const trimmedToken = (token || '').trim();
+      const trimmedUnlockKey = (unlockKey || '').trim();
+      if (!trimmedToken) throw new Error(translateSettings('gitTokenRequiredForEncryption'));
+      if (!trimmedUnlockKey) throw new Error(translateSettings('gitUnlockKeyRequired'));
+      const encoder = new TextEncoder();
+      const salt = cryptoBytes(16);
+      const nonce = cryptoBytes(12);
+      const aad = gitTokenAad();
+      const baseKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(trimmedUnlockKey),
+        'PBKDF2',
+        false,
+        ['deriveKey'],
+      );
+      const key = await crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          hash: 'SHA-256',
+          salt,
+          iterations: 600000,
+        },
+        baseKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt'],
+      );
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: nonce, additionalData: encoder.encode(aad) },
+        key,
+        encoder.encode(trimmedToken),
+      );
+      return {
+        version: 1,
+        algorithm: 'AES-256-GCM',
+        kdf: 'PBKDF2-SHA256',
+        kdf_iterations: 600000,
+        salt: base64FromBytes(salt),
+        nonce: base64FromBytes(nonce),
+        ciphertext: base64FromBytes(new Uint8Array(ciphertext)),
+        aad,
+      };
+    }
+
+    function resolveGitUnlockKeyForOperation() {
+      const inlineValue = (gitTokenUnlockKeyInput?.value || '').trim();
+      if (inlineValue) return inlineValue;
+      const localValue = readGitTokenUnlockLocal();
+      if (localValue) return localValue;
+      const promptedValue = (window.prompt(translateSettings('gitUnlockPrompt')) || '').trim();
+      if (promptedValue) writeGitTokenUnlockLocal(promptedValue);
+      return promptedValue;
+    }
+
+    function gitUnlockBodyForOperation(extra = {}) {
+      if (!currentAuthPayload?.enabled || !currentAuthPayload?.authenticated) return { ...extra };
+      const unlockKey = resolveGitUnlockKeyForOperation();
+      if (!unlockKey) return null;
+      return { ...extra, git_token_unlock_key: unlockKey };
+    }
+
     function updateSlackTokenStatus(element, maskedValue, configured) {
       if (!element) return;
       const input = element === slackBotTokenStatus ? slackBotTokenInput : slackAppTokenInput;
@@ -967,7 +1128,9 @@
       slackDefaultChannelInput.value = state.slack_default_channel || '';
       if (gitTokenUsernameInput) gitTokenUsernameInput.value = state.git_token_username || '';
       if (gitTokenInput) gitTokenInput.value = state.git_token || '';
+      if (gitTokenUnlockKeyInput) gitTokenUnlockKeyInput.value = '';
       updateGitTokenStatus(lastSettingsPayload);
+      updateGitUnlockKeyStatus();
       updateSlackChannelState();
       plannerBackendInput.value = state.role_backends?.planner || 'default';
       requestDraftBackendInput.value = state.role_backends?.request_draft || 'default';
@@ -1220,6 +1383,7 @@
       }
       updateUserManagementModeControls();
       updateSettingsPermissionControls();
+      updateGitUnlockKeyStatus();
       if (activeTaskDetail) {
         updatePlanActionState();
         updateHumanVerificationState();

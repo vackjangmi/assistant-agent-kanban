@@ -148,6 +148,7 @@ def register(router: APIRouter) -> None:
                 next_config.set_role_backend(role, getattr(payload.role_backends, role))
         if "worker_live_logs_enabled" in fields_set and payload.worker_live_logs_enabled is not None:
             next_config.opencode.worker_live_logs_enabled = payload.worker_live_logs_enabled
+        _reject_plaintext_git_token(payload)
         if "planner_model" in fields_set:
             next_config.set_role_model("planner", _normalize_model_override(payload.planner_model))
         if "request_draft_model" in fields_set:
@@ -212,7 +213,7 @@ def register(router: APIRouter) -> None:
             _reconfigure_runtime_adapters(runtime)
         ensure_runtime_agents(runtime.config)
         refreshed_config, snapshots_by_backend = await _resolve_settings_snapshots(runtime, refresh=False, assistant=None)
-        if effective_auth_enabled and user is not None and ("git_token" in fields_set or "git_token_username" in fields_set):
+        if effective_auth_enabled and user is not None and ({"git_token", "git_token_encrypted", "git_token_username"} & fields_set):
             _persist_user_secret_settings(payload, request, user)
         response = dict(_settings_response(runtime, snapshots_by_backend, view_config=refreshed_config, config_path=str(config_path), saved=True))
         if effective_auth_enabled and user is not None:
@@ -338,6 +339,7 @@ def register(router: APIRouter) -> None:
 async def _update_user_model_settings(payload: ModelSettingsPayload, request: Request, user) -> Mapping[str, object]:
     runtime = request.app.state.runtime
     store = request.app.state.user_settings_store
+    _reject_plaintext_git_token(payload)
     forbidden_fields = _user_forbidden_settings_fields(payload)
     if forbidden_fields:
         labels = ", ".join(sorted(forbidden_fields))
@@ -419,9 +421,16 @@ def _persist_user_secret_settings(
         runtime_preferences,
         secrets_update=UserSecretUpdate(
             git_token=payload.git_token if "git_token" in payload.model_fields_set else None,
+            git_token_client_encrypted=payload.git_token_encrypted if "git_token_encrypted" in payload.model_fields_set else None,
+            git_token_masked=payload.git_token_masked if "git_token_masked" in payload.model_fields_set else None,
             git_token_username=payload.git_token_username if "git_token_username" in payload.model_fields_set else None,
         ),
     )
+
+
+def _reject_plaintext_git_token(payload: ModelSettingsPayload) -> None:
+    if "git_token" in payload.model_fields_set and payload.git_token:
+        raise HTTPException(status_code=400, detail="Git token must be encrypted in the browser before saving")
 
 
 def _runtime_preferences_from_payload(payload: ModelSettingsPayload) -> RuntimePreferenceSettings:

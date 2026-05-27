@@ -60,6 +60,8 @@
     const repoDiscoveryMaxDepthInput = document.getElementById('repo_discovery_max_depth');
     const gitTokenUsernameInput = document.getElementById('git_token_username');
     const gitTokenInput = document.getElementById('git_token');
+    const gitTokenUnlockKeyInput = document.getElementById('git_token_unlock_key');
+    const gitTokenUnlockKeyNote = document.getElementById('settings-git-unlock-key-note');
     const gitTokenStatus = document.getElementById('git-token-status');
     const settingsGitTab = document.getElementById('settings-tab-git');
     const settingsGitPanel = document.getElementById('settings-panel-git');

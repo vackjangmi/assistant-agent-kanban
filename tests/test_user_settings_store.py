@@ -1,9 +1,42 @@
 from __future__ import annotations
 
+import base64
+import json
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from pydantic import SecretStr
 
+from assistant_agent_kanban.client_encrypted_credentials import ClientEncryptedGitToken
 from assistant_agent_kanban.settings_resolver import effective_config_for_user_and_project
 from assistant_agent_kanban.user_settings_store import ProjectSettings, RuntimePreferenceSettings, UserSecretUpdate, UserSettingsStore
+
+
+def _client_encrypted_git_token(user_id: str, token: str, unlock_key: str) -> ClientEncryptedGitToken:
+    salt = b"1" * 16
+    nonce = b"2" * 12
+    aad = json.dumps(
+        {
+            "purpose": "assistant-agent-kanban.git-token",
+            "version": 1,
+            "user_id": user_id,
+        },
+        separators=(",", ":"),
+    )
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=600000)
+    key = kdf.derive(unlock_key.encode("utf-8"))
+    ciphertext = AESGCM(key).encrypt(nonce, token.encode("utf-8"), aad.encode("utf-8"))
+    return ClientEncryptedGitToken(
+        version=1,
+        algorithm="AES-256-GCM",
+        kdf="PBKDF2-SHA256",
+        kdf_iterations=600000,
+        salt=base64.b64encode(salt).decode("ascii"),
+        nonce=base64.b64encode(nonce).decode("ascii"),
+        ciphertext=base64.b64encode(ciphertext).decode("ascii"),
+        aad=aad,
+    )
 
 
 def test_user_settings_store_hashes_password_and_encrypts_tokens(configured_paths):
@@ -11,11 +44,13 @@ def test_user_settings_store_hashes_password_and_encrypts_tokens(configured_path
     store = UserSettingsStore(config)
 
     user = store.create_user("Alice", "correct horse battery staple", is_admin=True)
+    encrypted_git_token = _client_encrypted_git_token(user.user_id, "ghp_secret_token", "user-unlock-key")
     updated = store.update_user_settings(
         user.user_id,
         RuntimePreferenceSettings(language="KO", theme="dark"),
         secrets_update=UserSecretUpdate(
-            git_token="ghp_secret_token",
+            git_token_client_encrypted=encrypted_git_token,
+            git_token_masked="***********oken",
             git_token_username="x-access-token",
         ),
     )
@@ -31,7 +66,8 @@ def test_user_settings_store_hashes_password_and_encrypts_tokens(configured_path
     assert updated.git_token_configured is True
     assert updated.git_token_masked is not None
     assert updated.git_token_masked.endswith("oken")
-    assert store.git_credentials_for_user(user.user_id) == ("ghp_secret_token", "x-access-token")
+    assert store.git_credentials_for_user(user.user_id) == (None, "x-access-token")
+    assert store.git_credentials_for_user(user.user_id, unlock_key="user-unlock-key") == ("ghp_secret_token", "x-access-token")
     assert project.slack_bot_token_configured is True
     assert project.slack_bot_token_masked is not None
     assert "xoxb-project-secret" not in str(project.model_dump(mode="json"))
@@ -45,7 +81,29 @@ def test_user_settings_store_hashes_password_and_encrypts_tokens(configured_path
     raw_database = config.app_database_path.read_bytes()
     assert b"correct horse battery staple" not in raw_database
     assert b"ghp_secret_token" not in raw_database
+    assert b"user-unlock-key" not in raw_database
     assert b"xoxb-project-secret" not in raw_database
+
+
+def test_user_settings_store_rejects_wrong_git_unlock_key(configured_paths):
+    config, _, _ = configured_paths
+    store = UserSettingsStore(config)
+    user = store.create_user("member", "member-password", is_admin=False)
+    store.update_user_settings(
+        user.user_id,
+        RuntimePreferenceSettings(),
+        secrets_update=UserSecretUpdate(
+            git_token_client_encrypted=_client_encrypted_git_token(user.user_id, "ghp_secret_token", "right-key"),
+            git_token_masked="****oken",
+        ),
+    )
+
+    try:
+        store.git_credentials_for_user(user.user_id, unlock_key="wrong-key")
+    except ValueError as exc:
+        assert str(exc) == "Git token cannot be decrypted with the provided unlock key"
+    else:
+        raise AssertionError("expected wrong unlock key to fail")
 
 
 def test_user_slack_channel_override_does_not_reuse_common_display_label(configured_paths):

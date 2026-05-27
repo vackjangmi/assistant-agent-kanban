@@ -149,6 +149,12 @@
       slackAppTokenClearRequested = false;
       updateSlackTokenStatus(slackAppTokenStatus, lastSettingsPayload?.slack_app_token_masked, lastSettingsPayload?.slack_app_token_configured);
     });
+    gitTokenInput?.addEventListener('input', () => {
+      updateGitTokenStatus(lastSettingsPayload);
+    });
+    gitTokenUnlockKeyInput?.addEventListener('input', () => {
+      updateGitUnlockKeyStatus();
+    });
     slackDefaultChannelInput.addEventListener('input', () => {
       updateSlackChannelState();
     });

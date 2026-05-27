@@ -288,7 +288,9 @@
       repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
       if (gitTokenUsernameInput) gitTokenUsernameInput.value = data.git_token_username || '';
       if (gitTokenInput) gitTokenInput.value = '';
+      if (gitTokenUnlockKeyInput) gitTokenUnlockKeyInput.value = '';
       updateGitTokenStatus(data);
+      updateGitUnlockKeyStatus();
       syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
       setRoleModelValue('planner', data.planner_model || '');
       setRoleModelValue('request_draft', data.request_draft_model || '');
@@ -457,20 +459,29 @@
       };
     }
 
-    function buildSettingsPayloadForScope(scope) {
+    async function buildGitSettingsPayload() {
+      const payload = {
+        git_token_username: gitTokenUsernameInput?.value || '',
+      };
+      const token = gitTokenInput?.value || '';
+      if (token) {
+        const unlockKey = gitTokenUnlockKeyInput?.value || '';
+        payload.git_token_encrypted = await encryptGitTokenForStorage(token, unlockKey);
+        payload.git_token_masked = maskGitTokenForDisplay(token);
+        writeGitTokenUnlockLocal(unlockKey);
+      }
+      return payload;
+    }
+
+    async function buildSettingsPayloadForScope(scope) {
       switch (scope) {
         case 'general':
           return {
             language: runtimeLanguageInput.value || 'EN',
             theme: runtimeThemeInput.value || 'light',
           };
-        case 'git': {
-          const payload = {
-            git_token_username: gitTokenUsernameInput?.value || '',
-          };
-          if (gitTokenInput?.value) payload.git_token = gitTokenInput.value;
-          return payload;
-        }
+        case 'git':
+          return buildGitSettingsPayload();
         case 'repositories':
           return buildRepositorySettingsPayload();
         case 'roles':
@@ -500,7 +511,7 @@
           return;
         }
         setSettingsStatus(translateSettings('statusSaving'));
-        const payload = buildSettingsPayloadForScope(saveScope);
+        const payload = await buildSettingsPayloadForScope(saveScope);
         const pendingSlackChannel = Object.prototype.hasOwnProperty.call(payload, 'slack_default_channel') ? payload.slack_default_channel || '' : '';
         const response = await fetch('/api/settings/models', {
           method: 'PUT',
@@ -532,7 +543,9 @@
         repoDiscoveryRootInput.value = data.repo_discovery_root || '../';
         if (gitTokenUsernameInput) gitTokenUsernameInput.value = data.git_token_username || '';
         if (gitTokenInput) gitTokenInput.value = '';
+        if (gitTokenUnlockKeyInput) gitTokenUnlockKeyInput.value = '';
         updateGitTokenStatus(data);
+        updateGitUnlockKeyStatus();
         syncNumericSettingInput(repoDiscoveryMaxDepthInput, data.repo_discovery_max_depth, 2);
         setRoleModelValue('planner', data.planner_model || '');
         setRoleModelValue('request_draft', data.request_draft_model || '');

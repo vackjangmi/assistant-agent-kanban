@@ -189,10 +189,12 @@
       taskHumanReviewNoteStatus.textContent = translateHumanReview('requestingChanges');
       try {
         await saveHumanReviewNoteIfNeeded();
+        const requestBody = gitUnlockBodyForOperation({ note: getHumanReviewEditorContent() });
+        if (requestBody === null) return;
         const response = await fetch(`/api/tasks/${activeTaskId}/reject-verification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note: getHumanReviewEditorContent() }),
+          body: JSON.stringify(requestBody),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedRejectVerification'));
@@ -234,10 +236,12 @@
       taskHumanReviewNoteStatus.textContent = approvalMessage;
       try {
         await saveHumanReviewNoteIfNeeded();
+        const requestBody = gitUnlockBodyForOperation({ completion_mode: completionMode || 'new-branch' });
+        if (requestBody === null) return;
         const response = await fetch(`/api/tasks/${activeTaskId}/approve-verification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ completion_mode: completionMode || 'new-branch' }),
+          body: JSON.stringify(requestBody),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedApproveVerification'));
