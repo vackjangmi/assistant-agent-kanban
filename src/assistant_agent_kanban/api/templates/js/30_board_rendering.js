@@ -97,7 +97,7 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
-      scheduleActiveTaskRefresh({ reloadArtifact: stateChanged || updatedAtChanged });
+      scheduleActiveTaskRefresh({ reloadArtifact: stateChanged });
     }
 
     async function loadBoard() {

@@ -22,7 +22,9 @@
         return;
       }
       if (reviewerQaUpdated) return;
-      scheduleActiveTaskRefresh({ reloadArtifact: false });
+      if (activeTaskTab === 'overview') {
+        scheduleActiveTaskRefresh({ reloadArtifact: false });
+      }
     });
     source.addEventListener('worker_log_file', (event) => {
       if (taskModal.hidden) return;
