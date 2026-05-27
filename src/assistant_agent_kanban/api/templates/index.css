@@ -2451,7 +2451,7 @@ body[data-theme="dark"] .onboarding-overlay {
   background: transparent !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  pointer-events: none !important;
+  pointer-events: auto !important;
 }
 
 /* Onboarding Wizard Card Container */
@@ -2956,7 +2956,7 @@ body[data-theme="dark"] .onboarding-nav-btn.next-btn {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.35) !important;
   animation: onboarding-pulse 1.8s infinite !important;
-  pointer-events: auto !important; /* Make sure the target remains interactive! */
+  pointer-events: none !important; /* Prevent interactions with the target during onboarding */
   transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
