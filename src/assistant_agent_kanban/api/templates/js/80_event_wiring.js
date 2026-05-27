@@ -18,6 +18,13 @@
     openSettingsButton.addEventListener('click', openSettingsModal);
     if (authUserLabel) authUserLabel.addEventListener('click', () => openAccountModal());
     if (closeAccountModalButton) closeAccountModalButton.addEventListener('click', () => setAccountModalOpen(false));
+    if (accountModal) {
+      accountModal.addEventListener('click', (event) => {
+        if (event.target === accountModal) {
+          setAccountModalOpen(false);
+        }
+      });
+    }
     if (logoutButton) logoutButton.addEventListener('click', () => logout().catch(() => { window.location.href = '/login'; }));
     if (createUserButton) createUserButton.addEventListener('click', () => createUser());
     if (changePasswordButton) changePasswordButton.addEventListener('click', () => changeOwnPassword());
@@ -35,6 +42,22 @@
         if (event.key !== 'Enter') return;
         event.preventDefault();
         changeOwnPassword();
+      });
+    });
+    document.querySelectorAll('.password-visibility-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.target;
+        const input = document.getElementById(targetId);
+        if (!input) return;
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        
+        const eyeOpen = button.querySelector('.eye-open-icon');
+        const eyeClosed = button.querySelector('.eye-closed-icon');
+        if (eyeOpen && eyeClosed) {
+          eyeOpen.hidden = !isPassword;
+          eyeClosed.hidden = isPassword;
+        }
       });
     });
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });

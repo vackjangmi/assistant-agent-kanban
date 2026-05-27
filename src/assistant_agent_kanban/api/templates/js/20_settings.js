@@ -1100,9 +1100,26 @@
     }
 
     function resetAccountPasswordForm() {
-      if (currentUserPasswordInput) currentUserPasswordInput.value = '';
-      if (newUserPasswordChangeInput) newUserPasswordChangeInput.value = '';
-      if (confirmUserPasswordChangeInput) confirmUserPasswordChangeInput.value = '';
+      if (currentUserPasswordInput) {
+        currentUserPasswordInput.value = '';
+        currentUserPasswordInput.type = 'password';
+      }
+      if (newUserPasswordChangeInput) {
+        newUserPasswordChangeInput.value = '';
+        newUserPasswordChangeInput.type = 'password';
+      }
+      if (confirmUserPasswordChangeInput) {
+        confirmUserPasswordChangeInput.value = '';
+        confirmUserPasswordChangeInput.type = 'password';
+      }
+      document.querySelectorAll('.password-visibility-toggle').forEach((button) => {
+        const eyeOpen = button.querySelector('.eye-open-icon');
+        const eyeClosed = button.querySelector('.eye-closed-icon');
+        if (eyeOpen && eyeClosed) {
+          eyeOpen.hidden = false;
+          eyeClosed.hidden = true;
+        }
+      });
       setPasswordChangeStatus('');
     }
 
@@ -1317,11 +1334,27 @@
       const roleClass = user.is_admin ? 'user-badge-admin' : 'user-badge-member';
       const roleLabel = user.is_admin ? translateSettings('userRoleAdmin') : translateSettings('userRoleMember');
       accountSummary.innerHTML = `
-        <div class="user-avatar account-avatar" style="background: ${authAvatarGradient(username)};">${escapeHtml(initial)}</div>
-        <div class="account-summary-copy">
-          <span>${escapeHtml(translateSettings('accountSignedInAs'))}</span>
-          <strong>${escapeHtml(username)}</strong>
-          <span class="user-badge ${roleClass}">${escapeHtml(roleLabel)}</span>
+        <div class="account-profile-hero">
+          <div class="account-avatar-wrapper">
+            <div class="user-avatar account-avatar" style="background: ${authAvatarGradient(username)};">${escapeHtml(initial)}</div>
+            <span class="account-avatar-ring"></span>
+          </div>
+          <div class="account-summary-copy">
+            <span class="account-signed-in-label">
+              <svg class="secure-lock-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+              </svg>
+              ${escapeHtml(translateSettings('accountSignedInAs'))}
+            </span>
+            <strong class="account-username">${escapeHtml(username)}</strong>
+            <div class="account-badges-row">
+              <span class="user-badge ${roleClass}">${escapeHtml(roleLabel)}</span>
+              <span class="account-status-badge">
+                <span class="status-pulse-dot"></span>
+                Active Session
+              </span>
+            </div>
+          </div>
         </div>
       `;
     }

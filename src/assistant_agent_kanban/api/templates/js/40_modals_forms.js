@@ -142,6 +142,20 @@
       accountModal.hidden = !isOpen;
       accountModal.setAttribute('aria-hidden', String(!isOpen));
       if (!isOpen) resetAccountPasswordForm();
+      
+      if (isOpen && authUserLabel) {
+        const panel = accountModal.querySelector('.account-modal-panel');
+        if (panel) {
+          const rect = authUserLabel.getBoundingClientRect();
+          const rightOffset = window.innerWidth - rect.right;
+          panel.style.position = 'absolute';
+          panel.style.top = `${rect.bottom + 8}px`;
+          panel.style.right = `${rightOffset}px`;
+          panel.style.margin = '0';
+          panel.style.left = 'auto';
+        }
+      }
+      
       syncBodyModalState();
     }
 
