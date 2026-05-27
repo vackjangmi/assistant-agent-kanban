@@ -7,6 +7,7 @@
           el: taskViewerHost,
           viewer: true,
           initialValue: renderedValue,
+          theme: document.body.dataset.theme === 'dark' ? 'dark' : 'default',
         });
         return markdownViewer;
       }
@@ -132,6 +133,7 @@
         initialEditType: 'markdown',
         previewStyle: 'tab',
         hideModeSwitch: true,
+        theme: document.body.dataset.theme === 'dark' ? 'dark' : 'default',
         toolbarItems: [
           ['heading', 'bold', 'italic'],
           ['ul', 'ol', 'task'],

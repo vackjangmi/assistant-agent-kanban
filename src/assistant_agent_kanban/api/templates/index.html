@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
+  <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/theme/toastui-editor-dark.min.css">
   <style>
     /* {{ INJECT_CSS }} */
   </style>
@@ -122,12 +123,6 @@
               <span id="request-basics-description">What you want built and why it matters.</span>
             </div>
             <div class="composer-grid">
-              <div class="field span-full">
-                <label id="request-title-label" for="title">Title</label>
-                <span id="request-title-description">Short task name used for the request heading and internal metadata slug.</span>
-                <input id="title" name="title" maxlength="80" required>
-                <div class="error-text" data-error-for="title"></div>
-              </div>
               <div class="field compact">
                 <label id="request-target-repo-label" for="target_repo">Target repo</label>
                 <span id="request-target-repo-description">Browse to choose the repository used for this request.</span>
@@ -144,15 +139,6 @@
                 <datalist id="base-branch-options"></datalist>
                 <div class="error-text" data-error-for="base_branch"></div>
               </div>
-              <div class="field compact span-full field-checkbox">
-                <div class="field-checkbox-row">
-                  <input id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true" checked>
-                  <div class="field-checkbox-copy">
-                    <label id="request-plan-auto-approve-label" for="plan_auto_approve">Plan auto approval</label>
-                    <span id="request-plan-auto-approve-description">Skip manual plan approval and automatically move to TODO after plan generation.</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </section>
           <section class="settings-section">
@@ -168,6 +154,21 @@
                     <span id="request-repo-description">Target repo, branch, and delivery guardrails.</span>
                   </div>
                   <div class="composer-grid">
+                    <div class="field span-full">
+                      <label id="request-title-label" for="title">Title</label>
+                      <span id="request-title-description">Short task name used for the request heading and internal metadata slug.</span>
+                      <input id="title" name="title" maxlength="80" required>
+                      <div class="error-text" data-error-for="title"></div>
+                    </div>
+                    <div class="field compact span-full field-checkbox">
+                      <div class="field-checkbox-row">
+                        <input id="plan_auto_approve" name="plan_auto_approve" type="checkbox" value="true" checked>
+                        <div class="field-checkbox-copy">
+                          <label id="request-plan-auto-approve-label" for="plan_auto_approve">Plan auto approval</label>
+                          <span id="request-plan-auto-approve-description">Skip manual plan approval and automatically move to TODO after plan generation.</span>
+                        </div>
+                      </div>
+                    </div>
                     <div class="field span-full">
                       <label id="request-background-label" for="background">Background / Why</label>
                       <span id="request-background-description">Context that helps the planner understand motivation and history.</span>

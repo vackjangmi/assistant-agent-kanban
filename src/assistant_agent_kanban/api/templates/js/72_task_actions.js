@@ -297,11 +297,23 @@
       clearMessages();
       applyRepoDefaults();
       syncRequestGoalField();
+      
       const validation = validateForm();
+      
+      if (activeRequestComposerTab === 'assistant') {
+        if (validation.errors.target_repo || validation.errors.base_branch) {
+          const firstInvalidTopField = validation.errors.target_repo ? 'target_repo' : 'base_branch';
+          requestAnimationFrame(() => focusRequestFieldForValidation(firstInvalidTopField));
+          return;
+        }
+        setRequestComposerTab('fields');
+        return;
+      }
+
       if (!validation.valid) {
-        const firstInvalidField = ['title', 'target_repo', 'base_branch', 'background', 'goal', 'constraints', 'acceptance_criteria', 'scope', 'out_of_scope', 'references'].find((fieldName) => validation.errors[fieldName]);
+        const firstInvalidField = ['target_repo', 'base_branch', 'title', 'background', 'goal', 'constraints', 'acceptance_criteria', 'scope', 'out_of_scope', 'references'].find((fieldName) => validation.errors[fieldName]);
         if (firstInvalidField) {
-          const lowerComposerFields = new Set(['background', 'goal', 'constraints', 'acceptance_criteria', 'scope', 'out_of_scope', 'references']);
+          const lowerComposerFields = new Set(['title', 'background', 'goal', 'constraints', 'acceptance_criteria', 'scope', 'out_of_scope', 'references']);
           if (lowerComposerFields.has(firstInvalidField)) setRequestComposerTab('fields');
           requestAnimationFrame(() => focusRequestFieldForValidation(firstInvalidField));
         }

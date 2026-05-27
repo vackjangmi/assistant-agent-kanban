@@ -37,6 +37,7 @@
         initialValue: goalInput.value || requestGoalEditorFallback.value || '',
         previewStyle: 'tab',
         hideModeSwitch: true,
+        theme: document.body.dataset.theme === 'dark' ? 'dark' : 'default',
         hooks: {
           addImageBlobHook: async (blob, callback) => {
             try {
@@ -150,6 +151,7 @@
         initialEditType: 'markdown',
         previewStyle: 'tab',
         hideModeSwitch: true,
+        theme: document.body.dataset.theme === 'dark' ? 'dark' : 'default',
         hooks: {
           addImageBlobHook: async (blob, callback) => {
             try {

@@ -548,6 +548,22 @@ body[data-theme="dark"] .diff-unified-line.context { color: var(--text); }
 body[data-theme="dark"] .diff-unified-line.header { color: #f1c997; }
 body[data-theme="dark"] .diff-unified-line.add { background: var(--review-add-line-bg); color: var(--review-add-text); }
 body[data-theme="dark"] .diff-unified-line.remove { background: var(--review-remove-line-bg); color: var(--review-remove-text); }
+/* Ensure the icons sprite is fully visible and inverts in dark mode */
+body[data-theme="dark"] .toastui-editor-toolbar-icons {
+  filter: brightness(0) invert(1) !important;
+}
+/* Tab buttons styling in dark mode */
+body[data-theme="dark"] .toastui-editor-mode-switch .tab-item {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+body[data-theme="dark"] .toastui-editor-mode-switch .tab-item.active {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffe2bd !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
 body[data-theme="dark"] .toastui-editor-defaultUI,
 body[data-theme="dark"] .toastui-editor-main,
 body[data-theme="dark"] .toastui-editor-md-container,
@@ -791,15 +807,31 @@ body[data-theme="dark"] #task-human-review-editor-fallback {
   border-radius: 0;
 }
  body[data-theme="dark"] .toastui-editor-contents,
+ body[data-theme="dark"] .toastui-editor-contents *,
  body[data-theme="dark"] .toastui-editor-contents p,
  body[data-theme="dark"] .toastui-editor-contents li,
  body[data-theme="dark"] .toastui-editor-contents pre,
+ body[data-theme="dark"] .toastui-editor-contents table,
+ body[data-theme="dark"] .toastui-editor-contents th,
+ body[data-theme="dark"] .toastui-editor-contents td,
  body[data-theme="dark"] .toastui-editor-md-preview,
+ body[data-theme="dark"] .toastui-editor-md-preview *,
  body[data-theme="dark"] .toastui-editor-md-preview p,
  body[data-theme="dark"] .toastui-editor-md-preview li,
- body[data-theme="dark"] .toastui-editor-md-preview pre {
+ body[data-theme="dark"] .toastui-editor-md-preview pre,
+ body[data-theme="dark"] .toastui-editor-md-preview table,
+ body[data-theme="dark"] .toastui-editor-md-preview th,
+ body[data-theme="dark"] .toastui-editor-md-preview td {
    background: transparent !important;
    color: var(--text) !important;
+ }
+ body[data-theme="dark"] .modal {
+   background: rgba(4, 7, 13, 0.75);
+ }
+ body[data-theme="dark"] .modal-panel {
+   background: #1e293b;
+   border-color: rgba(129, 140, 248, 0.5) !important;
+   box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(99, 102, 241, 0.12);
  }
  body[data-theme="dark"] .toastui-editor-contents code,
  body[data-theme="dark"] .toastui-editor-md-preview code {
@@ -915,12 +947,12 @@ header { padding: 12px 20px 10px; display: flex; justify-content: space-between;
 .draft-card-meta { display: flex; flex-wrap: wrap; gap: 8px; }
 .draft-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .draft-card-actions button { flex: 1 1 0; min-width: 108px; padding: 7px 10px; }
-button { padding: 9px 14px; border: 1px solid rgba(99, 102, 241, 0.22); background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); cursor: pointer; font: inherit; color: var(--text); border-radius: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-button:not(:disabled):hover, button:not(:disabled):focus-visible { background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); border-color: rgba(99, 102, 241, 0.4); color: var(--accent-strong); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
-button:active { background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%); border-color: rgba(99, 102, 241, 0.5); }
-body[data-theme="dark"] button { background: linear-gradient(180deg, rgba(30, 41, 59, 0.94) 0%, rgba(15, 23, 42, 0.94) 100%); border-color: rgba(99, 102, 241, 0.24); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
-body[data-theme="dark"] button:not(:disabled):hover, body[data-theme="dark"] button:not(:disabled):focus-visible { background: linear-gradient(180deg, rgba(37, 50, 70, 0.96) 0%, rgba(22, 32, 47, 0.96) 100%); border-color: rgba(99, 102, 241, 0.45); color: var(--text); }
-body[data-theme="dark"] button:active { background: linear-gradient(180deg, rgba(22, 32, 47, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%); border-color: rgba(99, 102, 241, 0.55); }
+button:not(.toastui-editor-defaultUI button) { padding: 9px 14px; border: 1px solid rgba(99, 102, 241, 0.22); background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); cursor: pointer; font: inherit; color: var(--text); border-radius: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+button:not(.toastui-editor-defaultUI button):not(:disabled):hover, button:not(.toastui-editor-defaultUI button):not(:disabled):focus-visible { background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); border-color: rgba(99, 102, 241, 0.4); color: var(--accent-strong); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+button:not(.toastui-editor-defaultUI button):active { background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%); border-color: rgba(99, 102, 241, 0.5); }
+body[data-theme="dark"] button:not(.toastui-editor-defaultUI button) { background: linear-gradient(180deg, rgba(30, 41, 59, 0.94) 0%, rgba(15, 23, 42, 0.94) 100%); border-color: rgba(99, 102, 241, 0.24); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
+body[data-theme="dark"] button:not(.toastui-editor-defaultUI button):not(:disabled):hover, body[data-theme="dark"] button:not(.toastui-editor-defaultUI button):not(:disabled):focus-visible { background: linear-gradient(180deg, rgba(37, 50, 70, 0.96) 0%, rgba(22, 32, 47, 0.96) 100%); border-color: rgba(99, 102, 241, 0.45); color: var(--text); }
+body[data-theme="dark"] button:not(.toastui-editor-defaultUI button):active { background: linear-gradient(180deg, rgba(22, 32, 47, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%); border-color: rgba(99, 102, 241, 0.55); }
 button.primary { background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: rgba(99, 102, 241, 0.35); color: #fff; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.15); }
 button.primary:not(:disabled):hover, button.primary:not(:disabled):focus-visible { background: linear-gradient(135deg, #818cf8, #6366f1); border-color: rgba(99, 102, 241, 0.45); }
 .accent-button { background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: rgba(99, 102, 241, 0.35); color: #fff; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.15); border-radius: 6px; transition: all 0.2s ease; }
@@ -1921,6 +1953,21 @@ body[data-theme="dark"] .qa-checklist-note {
   border-color: rgba(186, 200, 214, 0.16);
   color: var(--text);
 }
+body[data-theme="dark"] .qa-checklist-toggle {
+  background: rgba(30, 41, 52, 0.98);
+  border-color: rgba(186, 200, 214, 0.16);
+  color: var(--muted);
+}
+body[data-theme="dark"] .qa-checklist-toggle.is-active {
+  border-color: rgba(33, 115, 73, 0.4);
+  background: rgba(33, 115, 73, 0.15);
+  color: var(--success);
+}
+body[data-theme="dark"] .qa-checklist-toggle.is-skipped {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+}
 .diff-file-heading { display: grid; gap: 3px; min-width: 0; }
 .diff-file-title { display: block; font-weight: 700; font-size: 0.96rem; line-height: 1.35; overflow-wrap: anywhere; }
 .diff-file-path { display: block; font-size: 0.78rem; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
@@ -2404,7 +2451,7 @@ body[data-theme="dark"] .onboarding-overlay {
   background: transparent !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  pointer-events: none !important;
+  pointer-events: auto !important;
 }
 
 /* Onboarding Wizard Card Container */
@@ -2909,7 +2956,7 @@ body[data-theme="dark"] .onboarding-nav-btn.next-btn {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.35) !important;
   animation: onboarding-pulse 1.8s infinite !important;
-  pointer-events: auto !important; /* Make sure the target remains interactive! */
+  pointer-events: none !important; /* Prevent interactions with the target during onboarding */
   transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
