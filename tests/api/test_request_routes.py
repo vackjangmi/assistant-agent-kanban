@@ -993,7 +993,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function applyRuntimeTheme(theme)" in response.text
     assert "applyRuntimeTheme(initialRuntimeTheme);" in response.text
     assert "let requestModalFocusToken = 0;" in response.text
-    assert "function focusRequestTitleWhenReady(token)" in response.text
+    assert "function focusRequestModalWhenReady(token)" in response.text
     assert "if (token !== requestModalFocusToken || modal.hidden) return;" in response.text
     assert "requestTitleInput.focus();" in response.text
     assert "setRequestGoalEditorContent('', { initialize: false });" in response.text
@@ -1204,7 +1204,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "fetch(`/api/request-uploads?upload_token=${encodeURIComponent(uploadToken)}`" in response.text
     assert "boardPhaseManuallySelected = true;" in response.text
     assert "activeBoardPhase = 'plan';" in response.text
-    assert response.text.index('id="title"') < response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="background"') < response.text.index('id="goal"')
+    assert response.text.index('id="target_repo"') < response.text.index('id="base_branch"') < response.text.index('id="title"') < response.text.index('id="background"') < response.text.index('id="goal"')
     assert response.text.index('id="constraints"') < response.text.index('id="acceptance_criteria"') < response.text.index('id="scope"') < response.text.index('id="out_of_scope"') < response.text.index('id="references"')
     assert "function buildAcceptanceCriteriaDefaults()" in response.text
     assert "이 요청으로 추가하거나 변경한 코드의 모든 케이스를 테스트해야 하며, 그 변경 범위의 테스트 커버리지는 100%여야 한다." in response.text
