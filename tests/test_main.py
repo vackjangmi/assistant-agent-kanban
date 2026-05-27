@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-from assistant_agent_kanban.main import _print_shutdown_message, main
+from assistant_agent_kanban.main import _print_online_message, _print_shutdown_message, main
 
 
 def test_main_serve_forwards_reload_flag(monkeypatch):
@@ -82,13 +82,30 @@ def test_main_serve_uses_app_object_without_reload(monkeypatch, capsys):
     }
     output = capsys.readouterr().out
     assert "Assistant Agent Kanban v" in output
+    assert "STARTING  Assistant Agent Kanban is booting..." in output
     assert "Dashboard   http://127.0.0.1:8001/" in output
     assert "Logs        quiet mode; warnings and errors will still appear" in output
 
 
+def test_online_message_is_printed_for_tty(monkeypatch, capsys):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr("assistant_agent_kanban.main.sys.stdout.isatty", lambda: True)
+
+    _print_online_message("0.0.0.0", 8000)
+
+    output = capsys.readouterr().out
+    assert output.startswith("\n\x1b[")
+    assert "ONLINE    Serving requests at http://127.0.0.1:8000/" in output
+    assert output.endswith("\x1b[0m\n\n")
+
+
 def test_shutdown_message_is_printed_for_tty(monkeypatch, capsys):
+    monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setattr("assistant_agent_kanban.main.sys.stdout.isatty", lambda: True)
 
     _print_shutdown_message()
 
-    assert "Shutting down Assistant Agent Kanban..." in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert output.startswith("\n\x1b[")
+    assert "STOPPING  Shutting down Assistant Agent Kanban..." in output
+    assert output.endswith("\x1b[0m\n\n")

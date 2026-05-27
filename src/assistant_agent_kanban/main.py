@@ -36,6 +36,9 @@ BANNER_ART_COLORS = (
 )
 BANNER_PRIMARY = BANNER_ART_COLORS[0]
 BANNER_MUTED = "38;2;71;85;105"
+BANNER_STARTING = "1;38;2;167;139;250"
+BANNER_ONLINE = "1;38;2;52;211;153"
+BANNER_SHUTDOWN = "1;38;2;251;113;133"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -185,6 +188,9 @@ def _build_serve_banner(config: AppConfig | None, *, host: str, port: int, reloa
         *(_paint(line, BANNER_ART_COLORS[index % len(BANNER_ART_COLORS)], color) for index, line in enumerate(art)),
         _paint(rule, BANNER_MUTED, color),
         f"Assistant Agent Kanban v{version}  |  {mode_label}",
+        "",
+        _status_line("STARTING", "Assistant Agent Kanban is booting...", BANNER_STARTING, color),
+        "",
         f"Dashboard   {dashboard_url}",
         f"Listening   {listen_url}",
     ]
@@ -276,7 +282,18 @@ def _paint(text: str, code: str, enabled: bool) -> str:
 
 def _run_uvicorn_with_shutdown_message(app, **kwargs) -> None:
     original_handle_exit = uvicorn.Server.handle_exit
+    original_startup = uvicorn.Server.startup
     shutdown_announced = False
+    online_announced = False
+    host = str(kwargs.get("host") or "127.0.0.1")
+    port = int(kwargs.get("port") or 8000)
+
+    async def startup(self: uvicorn.Server, sockets: list[socket.socket] | None = None) -> None:
+        nonlocal online_announced
+        await original_startup(self, sockets=sockets)
+        if self.started and not online_announced:
+            _print_online_message(host, port)
+            online_announced = True
 
     def handle_exit(self: uvicorn.Server, sig: int, frame: FrameType | None) -> None:
         nonlocal shutdown_announced
@@ -285,17 +302,33 @@ def _run_uvicorn_with_shutdown_message(app, **kwargs) -> None:
             shutdown_announced = True
         original_handle_exit(self, sig, frame)
 
+    uvicorn.Server.startup = startup
     uvicorn.Server.handle_exit = handle_exit
     try:
         uvicorn.run(app, **kwargs)
     finally:
+        uvicorn.Server.startup = original_startup
         uvicorn.Server.handle_exit = original_handle_exit
+
+
+def _print_online_message(host: str, port: int) -> None:
+    if not sys.stdout.isatty():
+        return
+    _print_runtime_status("ONLINE", f"Serving requests at {_dashboard_url(host, port)}", BANNER_ONLINE)
 
 
 def _print_shutdown_message(_sig: int | None = None) -> None:
     if not sys.stdout.isatty():
         return
-    print(_paint("\nShutting down Assistant Agent Kanban...", BANNER_PRIMARY, True), flush=True)
+    _print_runtime_status("STOPPING", "Shutting down Assistant Agent Kanban...", BANNER_SHUTDOWN)
+
+
+def _print_runtime_status(label: str, message: str, color_code: str) -> None:
+    print(f"\n{_status_line(label, message, color_code, True)}\n", flush=True)
+
+
+def _status_line(label: str, message: str, color_code: str, color: bool) -> str:
+    return _paint(f"● {label.ljust(9)} {message}", color_code, color)
 
 
 def _clear_terminal(enabled: bool) -> None:
