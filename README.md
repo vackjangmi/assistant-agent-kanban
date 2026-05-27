@@ -125,6 +125,8 @@ Simplest path:
 ./run.sh
 ```
 
+`./run.sh` binds the server to `0.0.0.0` by default. When remote use is disabled, the FastAPI application still rejects non-loopback clients and only permits localhost access.
+
 On first run (when `config.local.yaml` does not exist yet), `./run.sh` and `./init.sh` both prompt for:
 
 - a **repo discovery root** (press Enter to keep the default `../`)
@@ -610,6 +612,8 @@ pip install -e .[dev]
 ```bash
 ./run.sh
 ```
+
+`./run.sh`는 기본적으로 서버를 `0.0.0.0`에 바인딩합니다. 원격 사용이 비활성화되어 있으면 FastAPI 애플리케이션이 loopback이 아닌 클라이언트를 거절하고 localhost 접속만 허용합니다.
 
 최초 실행 시 (`config.local.yaml`이 아직 없을 때) `./run.sh`와 `./init.sh` 둘 다 다음을 물어봅니다:
 
