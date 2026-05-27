@@ -115,6 +115,19 @@ def test_local_admin_mode_is_loopback_only(configured_paths):
         assert blocked.json()["detail"] == "local admin mode is only available from localhost"
 
 
+def test_local_admin_mode_remote_browser_gets_help_page(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app, base_url="http://192.168.1.50:8765") as remote_client:
+        blocked = remote_client.get("/", headers={"accept": "text/html"})
+        assert blocked.status_code == 403
+        assert blocked.headers["content-type"].startswith("text/html")
+        assert "Assistant Agent Kanban is running in local admin mode." in blocked.text
+        assert "http://localhost:8765/" in blocked.text
+
+
 def test_login_mode_allows_ip_host_after_user_exists(configured_paths):
     config, _, _ = configured_paths
     config.auth.enabled = False
