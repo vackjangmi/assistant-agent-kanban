@@ -145,6 +145,7 @@
             el: node,
             viewer: true,
             initialValue: comment.body_markdown || '',
+            theme: document.body.dataset.theme === 'dark' ? 'dark' : 'default',
           });
           return;
         }

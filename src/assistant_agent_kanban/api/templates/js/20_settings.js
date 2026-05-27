@@ -1166,6 +1166,10 @@
 
     function applyRuntimeTheme(theme) {
       body.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+      const isDark = theme === 'dark';
+      document.querySelectorAll('.toastui-editor-defaultUI, .toastui-editor-contents, .toastui-editor-main, .toastui-editor-md-container, .toastui-editor-ww-container').forEach((el) => {
+        el.classList.toggle('toastui-editor-dark', isDark);
+      });
     }
 
     function closeSettingsModal({ restore = false, force = false } = {}) {
