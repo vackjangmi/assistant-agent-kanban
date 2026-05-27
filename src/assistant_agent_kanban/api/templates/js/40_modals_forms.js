@@ -592,11 +592,15 @@
       if (field && 'focus' in field) field.focus();
     }
 
-    function focusRequestTitleWhenReady(token) {
+    function focusRequestModalWhenReady(token) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (token !== requestModalFocusToken || modal.hidden) return;
-          requestTitleInput.focus();
+          if (activeRequestComposerTab === 'assistant') {
+            requestDraftInput.focus();
+          } else {
+            requestTitleInput.focus();
+          }
         });
       });
     }
@@ -606,7 +610,7 @@
       modal.setAttribute('aria-hidden', String(!isOpen));
       syncBodyModalState();
       requestModalFocusToken += 1;
-      if (isOpen) focusRequestTitleWhenReady(requestModalFocusToken);
+      if (isOpen) focusRequestModalWhenReady(requestModalFocusToken);
     }
 
     function setRequestComposerTab(tab) {
@@ -621,6 +625,7 @@
       requestComposerPanelFields.hidden = !showingFields;
       requestComposerPanelAssistant.hidden = showingFields;
       void syncRequestComposerDraftState({ silent: true });
+      if (submitButton) submitButton.textContent = showingFields ? translateRequest('submit') : translateRequest('reviewDetails');
     }
 
     function setTaskModalOpen(isOpen) {

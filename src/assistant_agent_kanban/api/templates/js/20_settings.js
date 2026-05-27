@@ -437,7 +437,7 @@
       attachRequestDraftImageButton.textContent = translateRequest('draftAttachImage');
       sendRequestDraftButton.textContent = translateRequest('draftSend');
       cancelComposerButton.textContent = translateRequest('close');
-      submitButton.textContent = translateRequest('submit');
+      submitButton.textContent = activeRequestComposerTab === 'assistant' ? translateRequest('reviewDetails') : translateRequest('submit');
       if (btnBrowseTargetRepo) {
         btnBrowseTargetRepo.textContent = translateSettings('dirPickerOpen');
       }
