@@ -20,8 +20,12 @@ These documents are the baseline references for the current design and constrain
 
 ### Development Setup
 
+Python 3.11 or newer is required. Prefer `./init.sh` because it checks the
+detected Python version and gives a clear recovery message when `.venv` was
+created with an older interpreter.
+
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 ```
@@ -188,8 +192,12 @@ Assistant Agent Kanban에 관심을 가져 주셔서 감사합니다. 이 문서
 
 ### 개발 환경 준비
 
+Python 3.11 이상이 필요합니다. 가능하면 `./init.sh`를 사용하세요. 감지된
+Python 버전을 확인하고, 기존 `.venv`가 낮은 버전으로 만들어졌을 때 복구
+방법을 명확히 안내합니다.
+
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 ```

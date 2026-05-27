@@ -17,6 +17,8 @@ LANGUAGE=${ASSISTANT_AGENT_KANBAN_LANGUAGE:-}
 THEME=${ASSISTANT_AGENT_KANBAN_THEME:-}
 DEPS_STAMP_FILE="$VENV_DIR/.assistant-agent-kanban-deps-stamp"
 
+. "$REPO_ROOT/lib/python_runtime.sh"
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --config)
@@ -128,20 +130,14 @@ if [ -n "$THEME" ]; then
     esac
 fi
 
-if [ -d "$VENV_DIR" ]; then
+if [ -x "$VENV_DIR/bin/python" ]; then
     PYTHON_BIN="$VENV_DIR/bin/python"
+    require_python_min_version "$PYTHON_BIN" "existing virtual environment" || exit 1
 else
-    if command -v python3 >/dev/null 2>&1; then
-        PYTHON_CMD=python3
-    elif command -v python >/dev/null 2>&1; then
-        PYTHON_CMD=python
-    else
-        printf '%s\n' "python3 or python is required" >&2
-        exit 1
-    fi
-
+    PYTHON_CMD=$(find_compatible_python) || exit 1
     "$PYTHON_CMD" -m venv "$VENV_DIR"
     PYTHON_BIN="$VENV_DIR/bin/python"
+    require_python_min_version "$PYTHON_BIN" "created virtual environment" || exit 1
 fi
 
 cd "$REPO_ROOT"

@@ -21,6 +21,8 @@ PORT=${PORT:-8000}
 RELOAD=${RELOAD:-0}
 DEPS_STAMP_FILE="$VENV_DIR/.assistant-agent-kanban-deps-stamp"
 
+. "$REPO_ROOT/lib/python_runtime.sh"
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --config)
@@ -121,6 +123,10 @@ fi
 
 . "$REPO_ROOT/lib/firstrun_prompts.sh"
 firstrun_prompts
+
+if [ -x "$VENV_DIR/bin/python" ]; then
+    require_python_min_version "$VENV_DIR/bin/python" "existing virtual environment" || exit 1
+fi
 
 if [ ! -x "$VENV_DIR/bin/assistant-agent-kanban" ] || [ ! -f "$DEPS_STAMP_FILE" ] || [ "$REPO_ROOT/pyproject.toml" -nt "$DEPS_STAMP_FILE" ] || [ ! -f "$CONFIG_PATH" ] || [ -n "$REPO_DISCOVERY_ROOT" ] || [ -n "$KANBAN_ROOT" ] || [ -n "$CODING_ASSISTANT" ] || [ -n "$LANGUAGE" ] || [ -n "$THEME" ]; then
     set -- "$REPO_ROOT/init.sh"

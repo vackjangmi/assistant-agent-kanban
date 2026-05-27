@@ -80,8 +80,12 @@ Its core design principles are:
 
 #### 1. Install
 
+Python 3.11 or newer is required. The easiest path is `./init.sh`, which checks
+for a compatible Python before creating `.venv` and prints a fix-it guide when
+the detected version is too old.
+
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 ```
@@ -100,10 +104,14 @@ On first run, you can point repo discovery at the directory that contains your t
 
 `./init.sh` will:
 
+- check for Python 3.11 or newer
 - create `.venv`
 - run `pip install -e .[dev]`
 - initialize a config file when missing
 - bootstrap the kanban root and runtime directories
+
+If an old virtual environment already exists, remove it and run `./init.sh`
+again after installing a newer Python.
 
 You will additionally need at least one supported CLI installed and authenticated on your machine. The app refuses to start when none of these CLIs are available.
 
@@ -129,10 +137,13 @@ Simplest path:
 
 On first run (when `config.local.yaml` does not exist yet), `./run.sh` and `./init.sh` both prompt for:
 
-- a **repo discovery root** (press Enter to keep the default `../`)
+- a **repo discovery root** — common candidates such as `~/git`, this repository's parent, and the current repository are offered automatically
 - a **default coding assistant** — only CLIs found on `PATH` (from `agy`, `opencode`, `codex`, `gemini`, `claude`) are listed; if exactly one is installed it is auto-selected, and if none are detected the built-in default is kept
 - a **UI language** (`EN` / `KO`)
 - a **UI theme** (`light` / `dark`)
+
+In an interactive terminal, use Up/Down or `j`/`k`, then Enter to choose. In
+non-interactive shells, the prompts fall back to numbered selections.
 
 All answers are written to `config.local.yaml`.
 
@@ -568,8 +579,12 @@ Claude Code, Codex, OpenCode, Gemini CLI 같은 coding agent 도구들은 매우
 
 #### 1. 설치
 
+Python 3.11 이상이 필요합니다. 가장 쉬운 방법은 `./init.sh`를 실행하는
+것입니다. `./init.sh`는 `.venv`를 만들기 전에 호환되는 Python을 확인하고,
+감지된 버전이 너무 낮으면 해결 방법을 안내합니다.
+
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 ```
@@ -588,10 +603,14 @@ pip install -e .[dev]
 
 `./init.sh`는 다음을 수행합니다.
 
+- Python 3.11 이상 확인
 - `.venv` 생성
 - `pip install -e .[dev]`
 - 설정 파일 초기화
 - 기본 칸반 루트와 런타임 디렉토리 bootstrap
+
+이미 만들어진 가상환경의 Python 버전이 낮다면, 더 새 Python을 설치한 뒤
+기존 `.venv`를 제거하고 `./init.sh`를 다시 실행하세요.
 
 추가로 지원되는 CLI 중 최소 하나는 설치·인증되어 있어야 합니다. 사용할 수 있는 CLI가 하나도 없으면 앱은 시작되지 않습니다.
 
@@ -617,10 +636,13 @@ pip install -e .[dev]
 
 최초 실행 시 (`config.local.yaml`이 아직 없을 때) `./run.sh`와 `./init.sh` 둘 다 다음을 물어봅니다:
 
-- **repo discovery root** (기본값 `../`을 그대로 쓰려면 Enter)
+- **repo discovery root** — `~/git`, 현재 repository의 부모 디렉토리, 현재 repository 같은 자주 쓰는 후보를 자동으로 보여줍니다
 - **기본 coding assistant** — `PATH`에서 찾은 CLI(`agy`, `opencode`, `codex`, `gemini`, `claude`)만 목록에 표시합니다. 하나만 설치되어 있으면 자동 선택되고, 하나도 없으면 기본값을 유지합니다
 - **UI 언어** (`EN` / `KO`)
 - **UI 테마** (`light` / `dark`)
+
+대화형 터미널에서는 방향키 또는 `j`/`k`로 이동하고 Enter로 선택합니다.
+자동 실행처럼 대화형 키 입력이 어려운 환경에서는 숫자 선택으로 돌아갑니다.
 
 모든 답변은 `config.local.yaml`에 저장됩니다.
 
