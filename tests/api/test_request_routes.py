@@ -1382,6 +1382,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "requestAnimationFrame(resetArtifactViewerScroll);" in response.text
     assert "let boardTaskSnapshots = new Map();" in response.text
     assert "function setTaskTab(tab, { load = true } = {})" in response.text
+    assert "let activeTaskTabUserSelectionVersion = 0;" in response.text
+    assert "function selectTaskTab(tab)" in response.text
+    assert "activeTaskTabUserSelectionVersion += 1;" in response.text
     assert 'id="task-tab-inspector" hidden' in response.text
     assert "if (tab === 'inspector' && taskTabInspector.hidden) tab = 'overview';" in response.text
     assert "function taskChromeState(state = '')" in response.text
@@ -1391,6 +1394,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "changedFilesVisible: state === 'human-verifying'" in response.text
     assert "const changedFilesVisible = metadata.state !== 'done' && Boolean(detail.changed_files_available || detail.changed_files.length > 0);" in response.text
     assert "hydrateTaskModalChrome(snapshot, { preserveTab });" in response.text
+    assert "const tabSelectionVersion = activeTaskTabUserSelectionVersion;" in response.text
+    assert "const userSelectedTabDuringLoad = activeTaskTabUserSelectionVersion !== tabSelectionVersion;" in response.text
+    assert "const requestedTab = userSelectedTabDuringLoad ? activeTaskTab : nextTab;" in response.text
+    assert "const shouldUseDefaultDetailTab = !preserveTab && !userSelectedTabDuringLoad;" in response.text
     assert "?include_changed_files=true" in response.text
     assert "showLogEntry(entries.findIndex((entry) => entry.name === activeLogName), false);" not in response.text
     assert "/api/tasks/${taskId}/changed-files/${encodeURIComponent(activeChangedFileId)}" in response.text
@@ -1433,6 +1440,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "window.alert('이 모드는 더 많은 토큰을 사용합니다.');" in response.text
     assert "taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);" in response.text
     assert "if (activeTaskTab === 'logs') {" in response.text
+    assert "taskTabInspector.addEventListener('click', () => selectTaskTab('inspector'));" in response.text
+    assert "taskTabLogs.addEventListener('click', () => selectTaskTab('logs'));" in response.text
+    assert "taskTabEditor.addEventListener('click', () => selectTaskTab('editor'));" in response.text
     assert "if (appendWorkerLogPayload(payload)) return;" in response.text
     assert "source.addEventListener('worker_log_file', (event) => {" in response.text
     assert "loadTaskLogs(activeTaskId).catch((error) => {" in response.text

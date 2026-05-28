@@ -234,13 +234,13 @@
       renderBoardPhaseTabs();
       loadBoard();
     });
-    taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
-    taskTabInspector.addEventListener('click', () => setTaskTab('inspector'));
-    taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
-    taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
-    taskTabQaChecklist.addEventListener('click', () => setTaskTab('qa-checklist'));
-    taskTabReviewerQa.addEventListener('click', () => setTaskTab('reviewer-qa'));
-    taskTabReviewNote.addEventListener('click', () => setTaskTab('review-note'));
+    taskTabOverview.addEventListener('click', () => selectTaskTab('overview'));
+    taskTabInspector.addEventListener('click', () => selectTaskTab('inspector'));
+    taskTabLogs.addEventListener('click', () => selectTaskTab('logs'));
+    taskTabChangedFiles.addEventListener('click', () => selectTaskTab('changed-files'));
+    taskTabQaChecklist.addEventListener('click', () => selectTaskTab('qa-checklist'));
+    taskTabReviewerQa.addEventListener('click', () => selectTaskTab('reviewer-qa'));
+    taskTabReviewNote.addEventListener('click', () => selectTaskTab('review-note'));
     taskApprovalGateNotice.addEventListener('click', (event) => {
       const copyButton = event.target.closest('[data-copy-value]');
       if (copyButton) {
@@ -252,7 +252,7 @@
       const action = actionButton.dataset.approvalGateAction;
       if (action === 'qa-checklist') setTaskTab('qa-checklist');
     });
-    taskTabEditor.addEventListener('click', () => setTaskTab('editor'));
+    taskTabEditor.addEventListener('click', () => selectTaskTab('editor'));
     requestComposerTabFields.addEventListener('click', () => setRequestComposerTab('fields'));
     requestComposerTabAssistant.addEventListener('click', () => setRequestComposerTab('assistant'));
     requestComposerTabs.addEventListener('keydown', (event) => {
@@ -436,7 +436,7 @@
         });
       }
       if (action === 'open-inspector') {
-        setTaskTab('inspector');
+        selectTaskTab('inspector');
       }
     });
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);

@@ -307,6 +307,7 @@
       const previousDetail = activeTaskDetail;
       const snapshot = options.snapshot || boardTaskSnapshots.get(taskId) || null;
       const nextTab = preserveTab ? activeTaskTab : taskChromeState(snapshot?.state).defaultTab;
+      const tabSelectionVersion = activeTaskTabUserSelectionVersion;
       const shouldIncludeChangedFiles = nextTab === 'changed-files';
       const requestToken = ++activeTaskRequestToken;
       activeTaskId = taskId;
@@ -372,8 +373,11 @@
           detail.changed_files = previousDetail.changed_files;
         }
         renderTaskOverview(detail);
-        const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
-        let resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
+        const userSelectedTabDuringLoad = activeTaskTabUserSelectionVersion !== tabSelectionVersion;
+        const requestedTab = userSelectedTabDuringLoad ? activeTaskTab : nextTab;
+        const shouldUseDefaultDetailTab = !preserveTab && !userSelectedTabDuringLoad;
+        const preferredInitialTab = shouldUseDefaultDetailTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : requestedTab;
+        let resolvedTab = shouldUseDefaultDetailTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
         if (resolvedTab === 'inspector' && !taskChromeState(detail.metadata.state).inspectorVisible) resolvedTab = 'overview';
         if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab, { load: false });
         if (resolvedTab === 'logs' && (!softRefresh || !activeTaskLogs)) await loadTaskLogs(taskId);

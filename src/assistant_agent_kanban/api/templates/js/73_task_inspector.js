@@ -70,7 +70,9 @@
       if (signal?.label === 'Heartbeat') return translateTask('inspectorSignalHeartbeatDetail', { seconds: inspection?.stale_after_seconds || '' });
       if (signal?.label === 'Latest log') return translateTask('inspectorSignalLatestLogDetail');
       if (signal?.label === 'Workspace') return translateTask('inspectorSignalWorkspaceDetail');
-      if (signal?.label === 'Retry gate') return translateTask('inspectorSignalRetryGateDetail');
+      if (signal?.label === 'Retry gate') {
+        return translateTask(signal.tone === 'warning' ? 'inspectorSignalRetryGatePausedDetail' : 'inspectorSignalRetryGateRecordedDetail');
+      }
       return signal?.detail || '';
     }
 

@@ -83,7 +83,7 @@ class TaskInspectionService:
         workspace_path = Path(task.metadata.implementation.workspace).expanduser() if task.metadata.implementation.workspace else None
         workspace_exists = bool(workspace_path and workspace_path.exists())
         workspace_changes = self._workspace_status(workspace_path) if workspace_path else []
-        health = self._health(task, lease_age_seconds=lease_age_seconds, last_log_age_seconds=last_log_age_seconds)
+        health = self._health(task, lease_age_seconds=lease_age_seconds, last_log_age_seconds=last_log_age_seconds, now=now)
         snapshot = TaskInspectionSnapshot(
             task_id=task.metadata.task_id,
             title=task.metadata.title,
@@ -216,16 +216,17 @@ class TaskInspectionService:
         *,
         lease_age_seconds: int | None,
         last_log_age_seconds: int | None,
+        now: datetime,
     ) -> Literal["active", "stale", "waiting", "blocked", "idle"]:
-        if task.metadata.retry_gate.reason:
-            return "blocked"
         if task.state not in AGENT_ACTIVE_STATES:
             return "idle"
-        if not task.metadata.lease.owner:
-            return "waiting"
-        if lease_age_seconds is not None and lease_age_seconds > self.config.locks.stale_after_seconds:
-            return "stale"
-        return "active"
+        if task.metadata.lease.owner:
+            if lease_age_seconds is not None and lease_age_seconds > self.config.locks.stale_after_seconds:
+                return "stale"
+            return "active"
+        if self._retry_gate_blocks_dispatch(task, now=now):
+            return "blocked"
+        return "waiting"
 
     def _summary(
         self,
@@ -236,7 +237,9 @@ class TaskInspectionService:
         last_log_age_seconds: int | None,
     ) -> str:
         if health == "blocked":
-            return f"Task is gated by retry reason `{task.metadata.retry_gate.reason}`."
+            if task.metadata.review.human_rework_required:
+                return task.metadata.review.human_rework_reason or "Task requires human rework before automatic progress can resume."
+            return f"Task is waiting for retry gate `{task.metadata.retry_gate.reason}`."
         if health == "active":
             lease_text = f"{lease_age_seconds}s ago" if lease_age_seconds is not None else "not recorded"
             log_text = f"; latest log {last_log_age_seconds}s ago" if last_log_age_seconds is not None else ""
@@ -260,6 +263,8 @@ class TaskInspectionService:
         last_log_age_seconds: int | None,
         workspace_changes: list[str],
     ) -> list[TaskInspectionSignal]:
+        now = datetime.now(timezone.utc)
+        retry_gate_blocks = self._retry_gate_blocks_dispatch(task, now=now)
         signals = [
             TaskInspectionSignal(label="Health", value=health, tone=self._health_tone(health), detail=self._health_detail(health)),
             TaskInspectionSignal(
@@ -286,8 +291,12 @@ class TaskInspectionService:
                 TaskInspectionSignal(
                     label="Retry gate",
                     value=task.metadata.retry_gate.reason,
-                    tone="warning",
-                    detail="Automatic dispatch is paused until the retry gate clears or a human resumes it.",
+                    tone="warning" if retry_gate_blocks else "neutral",
+                    detail=(
+                        "Automatic dispatch is paused until the retry gate clears or a human resumes it."
+                        if retry_gate_blocks
+                        else "Retry reason is recorded for history; it is not currently blocking automatic dispatch."
+                    ),
                 )
             )
         if task.metadata.errors:
@@ -314,10 +323,16 @@ class TaskInspectionService:
         if health == "stale":
             return "The worker lease has not heartbeated within the configured threshold."
         if health == "blocked":
-            return "Retry gating is currently preventing automatic progress."
+            return "Automatic progress is paused by a retry gate or human rework requirement."
         if health == "waiting":
             return "The state expects an agent worker, but no lease is attached."
         return "No worker is expected for this state."
+
+    def _retry_gate_blocks_dispatch(self, task: TaskContext, *, now: datetime) -> bool:
+        if task.metadata.review.human_rework_required:
+            return True
+        not_before = task.metadata.retry_gate.not_before
+        return not_before is not None and now < not_before
 
     def _log_summary(self, task_id: str) -> tuple[str | None, datetime | None, list[str]]:
         log_dir = self.config.runs_dir / task_id
