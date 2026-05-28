@@ -540,6 +540,14 @@
 
     const singleVisitStageLabels = new Set(['requests', 'planning', 'plan-approving', 'waiting-check-plans', 'done', 'closed']);
 
+    function isTerminalStageState(state) {
+      return state === 'done' || state === 'closed';
+    }
+
+    function isLiveStageSegment(segment) {
+      return Boolean(segment?.is_current && !isTerminalStageState(segment.state));
+    }
+
     function formatStageVisitLabel(segment) {
       const baseLabel = stateLabel(segment.state);
       if (segment.visit_index === 1 && singleVisitStageLabels.has(segment.state)) return baseLabel;
@@ -548,7 +556,7 @@
 
     function formatStageSegmentEnd(segment) {
       if (segment.exited_at) return formatDateTime(segment.exited_at);
-      if (segment.state === 'done' || segment.state === 'closed') return translateTask('completedLabel');
+      if (isTerminalStageState(segment.state)) return translateTask('completedLabel');
       return translateTask('now');
     }
 
@@ -563,7 +571,7 @@
       const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];
       const bucketDurationAttrs = (durationMs, states, { live = true } = {}) => {
         if (!live) return buildDurationAttributes(Number(durationMs || 0));
-        const liveSegment = segments.find((segment) => segment.is_current && states.includes(segment.state) && segment.state !== 'done');
+        const liveSegment = segments.find((segment) => segment.is_current && states.includes(segment.state) && !isTerminalStageState(segment.state));
         const liveDurationMs = liveSegment ? Number(liveSegment.duration_ms || 0) : 0;
         const baseDurationMs = liveSegment ? Math.max(0, Number(durationMs || 0) - liveDurationMs) : Number(durationMs || 0);
         return buildDurationAttributes(baseDurationMs, liveSegment ? liveSegment.entered_at : '');
@@ -584,7 +592,7 @@
       const humanWorkDurationMs = Math.max(0, Number(stageTiming?.human_work_duration_ms || 0));
       const waitingDurationMs = Math.max(0, Number(stageTiming?.waiting_duration_ms || 0));
       const currentSummary = summaries.find((summary) => summary.is_current) || null;
-      const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done' && currentSummary.state !== 'closed');
+      const currentSummaryIsLive = Boolean(currentSummary && !isTerminalStageState(currentSummary.state));
       const totalBaseDurationMs = currentSummaryIsLive
         ? Math.max(0, totalDurationMs - Number(currentSummary.latest_duration_ms || 0))
         : totalDurationMs;
@@ -621,7 +629,7 @@
             latest_entered_at: '',
             is_current: false,
           };
-          const summaryIsLive = summary.is_current && summary.state !== 'done' && summary.state !== 'closed';
+          const summaryIsLive = summary.is_current && !isTerminalStageState(summary.state);
           const totalBaseMs = summaryIsLive
             ? Math.max(0, Number(summary.total_duration_ms || 0) - Number(summary.latest_duration_ms || 0))
             : Number(summary.total_duration_ms || 0);
@@ -643,18 +651,21 @@
             const ratio = totalDurationMs > 0 ? (Number(segment.duration_ms || 0) / totalDurationMs) * 100 : 100 / segments.length;
             const flexBasis = Math.max(ratio, 4);
             const title = `${formatStageVisitLabel(segment)} - ${formatElapsed(segment.duration_ms || 0)}`;
-            return `<div class="stage-timeline-segment${segment.is_current ? ' current' : ''}" style="--stage-color:${stageColor(segment.state)}; flex: ${flexBasis} 1 0%;" title="${escapeHtml(title)}"></div>`;
+            return `<div class="stage-timeline-segment${isLiveStageSegment(segment) ? ' current' : ''}" style="--stage-color:${stageColor(segment.state)}; flex: ${flexBasis} 1 0%;" title="${escapeHtml(title)}"></div>`;
           }).join('')}</div>`
         : `<div class="muted">${escapeHtml(translateTask('noStageTransitions'))}</div>`;
       const segmentRows = segments.length
-        ? `<div class="stage-segment-list">${segments.map((segment) => `
-            <div class="stage-segment-row">
-              <span class="stage-swatch" style="--stage-color:${stageColor(segment.state)}"></span>
-              <strong>${escapeHtml(formatStageVisitLabel(segment))}</strong>
-              <span class="stage-segment-duration" ${buildDurationAttributes(segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0), segment.is_current && segment.state !== 'done' ? segment.entered_at : '')}>${formatElapsed(segment.duration_ms || 0)}</span>
-              <span class="muted">${escapeHtml(formatDateTime(segment.entered_at))} -> ${escapeHtml(formatStageSegmentEnd(segment))}</span>
-            </div>
-          `).join('')}</div>`
+        ? `<div class="stage-segment-list">${segments.map((segment) => {
+            const segmentIsLive = isLiveStageSegment(segment);
+            return `
+              <div class="stage-segment-row">
+                <span class="stage-swatch" style="--stage-color:${stageColor(segment.state)}"></span>
+                <strong>${escapeHtml(formatStageVisitLabel(segment))}</strong>
+                <span class="stage-segment-duration" ${buildDurationAttributes(segmentIsLive ? 0 : Number(segment.duration_ms || 0), segmentIsLive ? segment.entered_at : '')}>${formatElapsed(segment.duration_ms || 0)}</span>
+                <span class="muted">${escapeHtml(formatDateTime(segment.entered_at))} -> ${escapeHtml(formatStageSegmentEnd(segment))}</span>
+              </div>
+            `;
+          }).join('')}</div>`
         : `<div class="muted">${escapeHtml(translateTask('noStageVisits'))}</div>`;
       return `
         <div class="task-section">

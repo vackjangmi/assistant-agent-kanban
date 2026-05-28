@@ -193,7 +193,7 @@ class _HelpersMixin(_TaskServiceLike):
             end_time = exited_at or now
             raw_duration_ms = max(0, int((end_time - entry.entered_at).total_seconds() * 1000))
             duration_ms = 0 if entry.state in TERMINAL_STATES else raw_duration_ms
-            is_current = next_entry is None and entry.state == metadata.state
+            is_current = next_entry is None and entry.state == metadata.state and entry.state not in TERMINAL_STATES
             visit_counts[entry.state] = visit_counts.get(entry.state, 0) + 1
             segment = StageTimingSegment(
                 state=entry.state,
