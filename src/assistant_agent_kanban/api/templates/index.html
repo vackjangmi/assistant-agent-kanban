@@ -22,7 +22,7 @@
       <button id="open-composer" class="primary">New request</button>
       <button id="open-settings" class="ghost-button">Settings</button>
       <button id="open-onboarding" class="ghost-button">Guide</button>
-      <button id="refresh">Refresh</button>
+      <button id="refresh" hidden>Refresh</button>
       <button id="logout-button" class="ghost-button" hidden>Logout</button>
     </div>
   </header>
@@ -308,19 +308,7 @@
               </div>
             </section>
 
-            <section class="settings-section settings-help-section" style="margin-top: 24px; border-top: 1px solid rgba(99, 102, 241, 0.1); padding-top: 24px;">
-              <div class="settings-section-head">
-                <strong id="settings-help-heading">Help & Guides</strong>
-                <span id="settings-help-description">Access onboarding tutorials and interactive walkthroughs.</span>
-              </div>
-              <div class="settings-grid-basic">
-                <div class="settings-card" style="grid-column: span 2; display: flex; flex-direction: column; gap: 8px;">
-                  <strong id="settings-help-card-title">Onboarding Tour</strong>
-                  <span id="settings-help-card-desc">Re-run the interactive setup walkthrough to learn about models, settings, and Slack integration.</span>
-                  <button type="button" id="restart-onboarding-btn" class="accent-button" style="margin-top: 8px; width: fit-content; align-self: start; padding: 8px 16px; border-radius: 8px; font-weight: 600;">Start Onboarding Tour</button>
-                </div>
-              </div>
-            </section>
+
             <div class="settings-tab-actions">
               <button type="submit" class="primary settings-tab-save" data-settings-save-scope="general">Save</button>
             </div>

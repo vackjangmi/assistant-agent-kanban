@@ -166,10 +166,15 @@
     }
 
     function setSettingsStatus(message, tone = 'neutral', { scope = 'global' } = {}) {
+      if (!settingsStatus) return;
       settingsStatus.textContent = message;
       settingsStatus.dataset.tone = tone;
       settingsStatus.dataset.statusScope = scope;
-      updateSettingsStatusVisibility();
+      if (!message) {
+        settingsStatus.hidden = true;
+      } else {
+        updateSettingsStatusVisibility();
+      }
     }
 
     function setSettingsFormHydrating(isHydrating) {
@@ -1033,6 +1038,11 @@
       if (tab === 'qa-checklist') renderQaChecklistPanel();
       if (tab === 'reviewer-qa' && activeTaskId) loadTaskDetail(activeTaskId, true, { softRefresh: true, reloadArtifact: false });
       if (tab === 'editor' && activeTaskId) loadMarkdownArtifact(activeTaskId, activeArtifactName);
+    }
+
+    function selectTaskTab(tab) {
+      activeTaskTabUserSelectionVersion += 1;
+      setTaskTab(tab);
     }
 
     function taskChromeState(state = '') {

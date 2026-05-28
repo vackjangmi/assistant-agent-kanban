@@ -41,6 +41,54 @@ def test_task_inspection_reports_active_worker_and_workspace_changes(configured_
     assert inspection.workspace_changes == [" M app.txt"]
 
 
+def test_task_inspection_keeps_active_worker_active_with_recorded_retry_reason(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "inspect-active-retry-reason-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+    implementing = transitions.move(scanner.find_task(waiting.metadata.task_id), TaskState.IMPLEMENTING, by="implementer")
+    implementing.metadata.lease.owner = "implementer"
+    implementing.metadata.lease.run_id = "implementer-run-1"
+    implementing.metadata.lease.heartbeat_at = utc_now()
+    implementing.metadata.retry_gate.reason = "review-needs-changes"
+    implementing.metadata.retry_gate.not_before = None
+    metadata_store.save(implementing.task_dir, implementing.metadata)
+
+    inspection = TaskInspectionService(config=config, scanner=scanner).inspect(implementing.metadata.task_id)
+
+    assert inspection.health == "active"
+    retry_signal = next(signal for signal in inspection.signals if signal.label == "Retry gate")
+    assert retry_signal.tone == "neutral"
+    assert "not currently blocking" in retry_signal.detail
+
+
+def test_task_inspection_marks_future_retry_gate_as_blocked_without_worker(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "inspect-blocked-retry-gate-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, TaskLockManager(config, metadata_store))
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    planning.metadata.retry_gate.reason = "implementation-failed"
+    planning.metadata.retry_gate.not_before = utc_now() + timedelta(minutes=5)
+    metadata_store.save(planning.task_dir, planning.metadata)
+
+    inspection = TaskInspectionService(config=config, scanner=scanner).inspect(planning.metadata.task_id)
+
+    assert inspection.health == "blocked"
+    retry_signal = next(signal for signal in inspection.signals if signal.label == "Retry gate")
+    assert retry_signal.tone == "warning"
+    assert "Automatic dispatch is paused" in retry_signal.detail
+
+
 def test_task_inspection_marks_stale_lease(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False

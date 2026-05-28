@@ -317,6 +317,7 @@
     let lastAutoBaseBranch = '';
     let activeTaskId = null;
     let activeTaskTab = 'overview';
+    let activeTaskTabUserSelectionVersion = 0;
     let activeRequestComposerTab = 'assistant';
     let requestDraftList = [];
     let activeTaskDetail = null;

@@ -1839,6 +1839,9 @@
         }
       }
       activeSettingsTab = targetTab;
+      if (typeof setSettingsStatus === 'function') {
+        setSettingsStatus('');
+      }
       const panels = ['general', 'git', 'repositories', 'roles', 'slack', 'slack-channel', 'users'];
       panels.forEach(p => {
         const active = p === targetTab;
