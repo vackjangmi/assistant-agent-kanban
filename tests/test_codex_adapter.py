@@ -101,6 +101,45 @@ def test_codex_adapter_reuses_session_id(monkeypatch, tmp_path):
     assert result.session_id == "thread-existing"
 
 
+def test_codex_adapter_omits_model_flag_for_default_model(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = ['{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n']
+            self.stderr = []
+            self.command = command
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessCodexAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "codex"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-request-draft",
+        prompt="draft this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "request-draft.jsonl",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert "--model" not in command
+    assert command[-1] == "draft this task"
+    assert result.resolved_model is None
+
+
 def test_codex_token_extraction_does_not_double_count_cached_input_tokens():
     stdout = "\n".join(
         [

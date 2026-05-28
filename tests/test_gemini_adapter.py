@@ -174,6 +174,48 @@ def test_gemini_adapter_uses_safer_mode_for_reviewer(monkeypatch, tmp_path):
     assert command[command.index("--approval-mode") + 1] == "auto_edit"
 
 
+def test_gemini_adapter_omits_model_flag_for_default_model(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.command = command
+            self.stdout = ['{"type":"message","role":"assistant","content":"ok"}\n']
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessGeminiAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "gemini"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-request-draft",
+        prompt="draft this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "request-draft.jsonl",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert "--model" not in command
+    assert command[command.index("--prompt") + 1] == "draft this task"
+    assert result.resolved_model is None
+
+
 def test_gemini_adapter_returns_nonzero_result_with_stderr(monkeypatch, tmp_path):
     class FakeProcess:
         def __init__(self):
