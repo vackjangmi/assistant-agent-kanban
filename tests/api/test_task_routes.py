@@ -979,3 +979,46 @@ def test_api_exposes_stage_timing_summary_and_segments(configured_paths):
     assert stage_timing["segments"][1]["duration_ms"] == 180000
     assert stage_timing["segments"][3]["state"] == TaskState.TODOS.value
     assert stage_timing["segments"][3]["is_current"] is True
+
+
+def test_api_stage_timing_does_not_mark_closed_task_as_live(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "closed-stage-timing-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner)
+    task = scanner.scan()[0]
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    closed = transitions.move(planning, TaskState.CLOSED, by="human")
+
+    now = datetime.now(timezone.utc)
+    closed.metadata.history = [
+        HistoryEntry(state=TaskState.REQUESTS, entered_at=now - timedelta(minutes=3), by="human"),
+        HistoryEntry(state=TaskState.PLANNING, entered_at=now - timedelta(minutes=2), by="planner"),
+        HistoryEntry(state=TaskState.CLOSED, entered_at=now - timedelta(minutes=1), by="human"),
+    ]
+    metadata_store.save(closed.task_dir, closed.metadata)
+
+    adapter_registry = _settings_adapter_registry()
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry=adapter_registry,
+    )
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/tasks/{closed.metadata.task_id}")
+
+    assert response.status_code == 200
+    stage_timing = response.json()["stage_timing"]
+    closed_summary = next(item for item in stage_timing["summaries"] if item["state"] == TaskState.CLOSED.value)
+    closed_segment = stage_timing["segments"][-1]
+    assert closed_segment["state"] == TaskState.CLOSED.value
+    assert closed_segment["duration_ms"] == 0
+    assert closed_segment["is_current"] is False
+    assert closed_summary["total_duration_ms"] == 0
+    assert closed_summary["latest_duration_ms"] == 0
+    assert closed_summary["is_current"] is False

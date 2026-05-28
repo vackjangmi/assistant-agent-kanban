@@ -1337,6 +1337,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert ".stage-timing-card.upcoming { opacity: 0.48; background: rgba(255,255,255,0.62); }" in response.text
     assert "const summaries = Array.isArray(stageTiming?.summaries) ? stageTiming.summaries.filter((summary) => summary.state !== 'done' && summary.state !== 'closed') : [];" in response.text
     assert "const segments = Array.isArray(stageTiming?.segments) ? stageTiming.segments : [];" in response.text
+    assert "function isTerminalStageState(state)" in response.text
+    assert "function isLiveStageSegment(segment)" in response.text
     assert "function formatStageVisitLabel(segment)" in response.text
     assert "function formatStageSegmentEnd(segment)" in response.text
     assert "translateTask('completedLabel')" in response.text
@@ -1349,11 +1351,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const hiddenDurationMs = Array.isArray(stageTiming?.segments)" in response.text
     assert "translateTask('timelineFromHistory')" not in response.text
     assert "translateTask('timelineFromHistoryBody')" not in response.text
-    assert "const currentSummaryIsLive = Boolean(currentSummary && currentSummary.state !== 'done' && currentSummary.state !== 'closed');" in response.text
-    assert "const summaryIsLive = summary.is_current && summary.state !== 'done' && summary.state !== 'closed';" in response.text
+    assert "const currentSummaryIsLive = Boolean(currentSummary && !isTerminalStageState(currentSummary.state));" in response.text
+    assert "const summaryIsLive = summary.is_current && !isTerminalStageState(summary.state);" in response.text
     assert "const cardStateClass = summary.is_current ? ' current' : reached ? ' reached' : ' upcoming';" in response.text
     assert "<div class=\"stage-timing-row\" style=\"--stage-columns:${states.length}\">${cards}</div>" in response.text
-    assert "segment.is_current && segment.state !== 'done' ? 0 : Number(segment.duration_ms || 0)" in response.text
+    assert "const segmentIsLive = isLiveStageSegment(segment);" in response.text
+    assert "buildDurationAttributes(segmentIsLive ? 0 : Number(segment.duration_ms || 0), segmentIsLive ? segment.entered_at : '')" in response.text
     assert "/api/tasks/${taskId}/logs" in response.text
     assert "debug_rendered_content" in response.text
     assert "artifact-group-label" in response.text
