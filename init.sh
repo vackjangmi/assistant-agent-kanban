@@ -18,6 +18,7 @@ THEME=${ASSISTANT_AGENT_KANBAN_THEME:-}
 DEPS_STAMP_FILE="$VENV_DIR/.assistant-agent-kanban-deps-stamp"
 
 . "$REPO_ROOT/lib/python_runtime.sh"
+. "$REPO_ROOT/lib/init_summary.sh"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -215,25 +216,4 @@ fi
 ASSISTANT_AGENT_KANBAN_CONFIG=$CONFIG_PATH \
     "$PYTHON_BIN" -c 'import os; from assistant_agent_kanban.config import load_config; load_config(os.environ["ASSISTANT_AGENT_KANBAN_CONFIG"])' >/dev/null
 
-printf '%s\n' "Initialized assistant-agent-kanban"
-printf 'venv: %s\n' "$VENV_DIR"
-printf 'config: %s\n' "$CONFIG_PATH"
-if [ "$CONFIG_WRITE_PATH" != "$CONFIG_PATH" ]; then
-    printf 'local overrides: %s\n' "$CONFIG_WRITE_PATH"
-fi
-if [ -n "$REPO_DISCOVERY_ROOT" ]; then
-    printf 'repo discovery root: %s\n' "$REPO_DISCOVERY_ROOT"
-fi
-if [ -n "$KANBAN_ROOT" ]; then
-    printf 'kanban root: %s\n' "$KANBAN_ROOT"
-fi
-if [ -n "$CODING_ASSISTANT" ]; then
-    printf 'coding assistant: %s\n' "$CODING_ASSISTANT"
-fi
-if [ -n "$LANGUAGE" ]; then
-    printf 'language: %s\n' "$LANGUAGE"
-fi
-if [ -n "$THEME" ]; then
-    printf 'theme: %s\n' "$THEME"
-fi
-printf 'next: ./run.sh\n'
+init_print_summary
