@@ -809,6 +809,7 @@
       activeTaskDetail = detail;
       setTaskDetailStale(false);
       const latestError = latestVisibleError(metadata.errors);
+      const inspectorVisible = taskChromeState(metadata.state).inspectorVisible;
       const changedFilesVisible = metadata.state !== 'done' && Boolean(detail.changed_files_available || detail.changed_files.length > 0);
       const qaChecklistVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
       const reviewerQaVisible = metadata.state === 'completed-reviews' || metadata.state === 'human-verifying';
@@ -816,6 +817,7 @@
       const viewerVisible = detail.markdown_files.length > 0;
       const logsVisible = detail.log_files.length > 0 || ['planning', 'implementing', 'reviewing'].includes(metadata.state);
       const planEditable = metadata.state === 'waiting-check-plans' && detail.markdown_files.includes('PLAN.md');
+      taskTabInspector.hidden = !inspectorVisible;
       taskTabLogs.hidden = !logsVisible;
       taskTabChangedFiles.hidden = !changedFilesVisible;
       taskTabQaChecklist.hidden = !qaChecklistVisible;
@@ -823,6 +825,7 @@
       taskTabReviewNote.hidden = !reviewNoteVisible;
       taskTabEditor.hidden = !viewerVisible;
       if (!logsVisible && taskTabLogs.classList.contains('active')) setTaskTab(viewerVisible ? 'editor' : 'overview');
+      if (!inspectorVisible && taskTabInspector.classList.contains('active')) setTaskTab('overview');
       if (!changedFilesVisible && taskTabChangedFiles.classList.contains('active')) setTaskTab('overview');
       if (!qaChecklistVisible && taskTabQaChecklist.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
       if (!reviewerQaVisible && taskTabReviewerQa.classList.contains('active')) setTaskTab(changedFilesVisible ? 'changed-files' : 'overview');
@@ -849,7 +852,15 @@
       renderArtifactButtons(detail.markdown_files);
       saveBoardScrollPositions();
       taskOverview.innerHTML = `
+        ${renderTaskActivity(detail)}
         ${renderStageTiming(detail.stage_timing)}
+        ${inspectorVisible ? `<div class="task-section">
+          <h3>${escapeHtml(translateTask('inspectorOverviewTitle'))}</h3>
+          <div class="task-inspector-overview">
+            <span>${escapeHtml(translateTask('inspectorOverviewBody'))}</span>
+            <button type="button" class="ghost-button" data-action="open-inspector">${escapeHtml(translateTask('openInspector'))}</button>
+          </div>
+        </div>` : ''}
         <div class="task-section">
           <h3>${escapeHtml(translateTask('latestError'))}</h3>
           <div class="muted">${latestError ? escapeHtml(latestError.message) : escapeHtml(translateTask('noRecordedErrors'))}</div>

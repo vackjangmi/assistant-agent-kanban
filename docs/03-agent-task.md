@@ -19,6 +19,7 @@ This repository covers:
 - planner / plan-approval / implementer / reviewer / committer orchestration
 - request drafting before task creation
 - Antigravity / OpenCode / Codex / Claude / Gemini runtime support
+- read-only task inspection support
 - clone-overlay workspace isolation
 - human verification flow
 - optional Slack notifications and request drafting

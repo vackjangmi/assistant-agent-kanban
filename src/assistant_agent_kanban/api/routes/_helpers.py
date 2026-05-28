@@ -370,6 +370,8 @@ def _reconfigure_runtime_adapters(runtime) -> None:
     runtime.committer.adapter = commit_adapter
     runtime.verification_service.branch_summary_adapter = branch_summary_adapter
     runtime.retrospective_service.adapter = commit_adapter
+    if getattr(runtime, "inspection_service", None) is not None:
+        runtime.inspection_service.adapter_registry = dict(runtime.adapter_registry)
     runtime._task_adapters = [adapter for adapter in runtime._collect_task_adapters() if adapter is not None]
 
 

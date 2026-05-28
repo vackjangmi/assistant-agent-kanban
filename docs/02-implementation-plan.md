@@ -22,6 +22,7 @@ The repository currently includes:
 - retrospective support
 - FastAPI + SSE dashboard
 - request creation, task detail, markdown artifact viewing/editing, and verification-related API/UI
+- read-only task inspection, FAQ diagnostics, and custom inspector Q&A
 
 ## Package Layout
 

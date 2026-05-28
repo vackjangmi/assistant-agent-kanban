@@ -7,7 +7,7 @@ import subprocess
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, cast
+from typing import Any, Callable, Mapping, cast
 
 from ..config import AppConfig, AssistantBackend, AssistantRole
 from ..events import EventBus
@@ -67,6 +67,42 @@ class WorkerBase:
 
     async def announce_log_file(self, task_id: str, log_name: str) -> None:
         await self.emit("worker_log_file", task_id, log_name=log_name)
+
+    async def run_adapter_with_heartbeat(
+        self,
+        adapter: AssistantAdapter,
+        *,
+        task_dir: Path,
+        metadata: TaskMetadata,
+        run_id: str,
+        **run_kwargs: Any,
+    ) -> RunResult:
+        return await self.run_with_heartbeat(
+            task_dir,
+            metadata,
+            run_id=run_id,
+            call=lambda: adapter.run(**run_kwargs),
+        )
+
+    async def run_with_heartbeat(
+        self,
+        task_dir: Path,
+        metadata: TaskMetadata,
+        *,
+        run_id: str,
+        call: Callable[[], RunResult],
+    ) -> RunResult:
+        run_task = asyncio.create_task(asyncio.to_thread(call))
+        heartbeat_seconds = max(float(self.config.locks.heartbeat_seconds), 0.1)
+        try:
+            while True:
+                done, _pending = await asyncio.wait({run_task}, timeout=heartbeat_seconds)
+                if run_task in done:
+                    return run_task.result()
+                self.locks.heartbeat(task_dir, metadata, owner=self.worker_name, run_id=run_id)
+        except asyncio.CancelledError:
+            run_task.cancel()
+            raise
 
     def task_log_dir(self, task_id: str) -> Path:
         path = self.config.runs_dir / task_id

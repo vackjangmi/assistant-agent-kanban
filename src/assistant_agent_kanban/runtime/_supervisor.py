@@ -19,6 +19,7 @@ from ..services.human_verification_service import HumanVerificationService
 from ..services.retrospective_service import RetrospectiveService
 from ..services.task_cancellation_service import TaskCancellationService
 from ..services.task_deletion_service import TaskDeletionService
+from ..services.task_inspection_service import TaskInspectionService
 from ..services.task_rerequest_service import TaskRerequestService
 from ..services.task_service import TaskService
 from ..transitions import TransitionManager
@@ -77,6 +78,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         verification_service: Any,
         deletion_service: Any,
         task_service: Any,
+        inspection_service: Any,
         retrospective_service: Any,
         recovery: RecoveryProvider,
         events: EventBus,
@@ -95,6 +97,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         self.cancellation_service: Any = None
         self.deletion_service = deletion_service
         self.task_service = task_service
+        self.inspection_service = inspection_service
         self.retrospective_service = retrospective_service
         self.rerequest_service: Any = rerequest_service
         self.recovery = recovery
@@ -396,6 +399,7 @@ def build_runtime(
         transitions=transitions,
         locks=locks,
     )
+    inspection_service = TaskInspectionService(config=config, scanner=scanner, adapter_registry=registry)
     retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = build_backend_manager(config=config, adapter_registry=registry)
@@ -411,6 +415,7 @@ def build_runtime(
         verification_service,
         deletion_service,
         task_service,
+        inspection_service,
         retrospective_service,
         recovery,
         events,

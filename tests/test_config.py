@@ -213,6 +213,19 @@ def test_load_config_accepts_role_backend_overrides(tmp_path):
     assert config.role_model("reviewer") == "gpt-5.3-codex"
 
 
+def test_inspector_borrows_commit_runtime_profile():
+    config = AppConfig()
+    config.runtime.coding_assistant = "opencode"
+    config.runtime.role_backends.commit = "codex"
+    config.codex.commit_model = "gpt-5.5 (low)"
+    config.codex.commit_session_token_budget = 123000
+
+    assert config.backend_for_role("inspector") == "codex"
+    assert config.role_model("inspector") == "gpt-5.5 (low)"
+    assert config.role_session_token_budget("inspector") == 123000
+    assert "inspector" not in config.role_backend_overrides()
+
+
 def test_load_config_accepts_claude_role_backend_override(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

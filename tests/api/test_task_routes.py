@@ -65,6 +65,32 @@ def test_api_returns_runtime_logs_for_task(configured_paths):
     assert "content" not in payload["entries"][0]
 
 
+def test_api_exposes_task_inspection_and_inspector_questions(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "inspection-api-task")
+    inspector_adapter = FakeAdapter(["The task is idle and waiting for planning."])
+    app = create_app(config, inspector_adapter, FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    task = KanbanScanner(config).scan()[0]
+
+    with TestClient(app) as client:
+        inspection = client.get(f"/api/tasks/{task.metadata.task_id}/inspection")
+        faqs = client.get(f"/api/tasks/{task.metadata.task_id}/inspection/faqs")
+        answer = client.post(
+            f"/api/tasks/{task.metadata.task_id}/inspection/questions",
+            json={"question_id": "is-running"},
+        )
+
+    assert inspection.status_code == 200
+    assert inspection.json()["health"] == "idle"
+    assert faqs.status_code == 200
+    assert any(item["id"] == "is-running" for item in faqs.json()["items"])
+    assert answer.status_code == 200
+    assert answer.json()["answer"] == "The task is idle and waiting for planning."
+    assert inspector_adapter.run_calls[0]["agent"] == "fs-kanban-inspector"
+    assert "Do not modify files" in str(inspector_adapter.run_calls[0]["prompt"])
+
+
 
 def test_api_renders_tool_only_runtime_logs_for_task(configured_paths):
     config, _, _ = configured_paths

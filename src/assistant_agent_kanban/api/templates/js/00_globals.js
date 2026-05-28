@@ -203,6 +203,7 @@
     const taskApprovalGateNotice = document.getElementById('task-approval-gate-notice');
     const taskOverview = document.getElementById('task-overview');
     const taskTabOverview = document.getElementById('task-tab-overview');
+    const taskTabInspector = document.getElementById('task-tab-inspector');
     const taskTabLogs = document.getElementById('task-tab-logs');
     const taskTabChangedFiles = document.getElementById('task-tab-changed-files');
     const taskTabQaChecklist = document.getElementById('task-tab-qa-checklist');
@@ -210,6 +211,7 @@
     const taskTabReviewNote = document.getElementById('task-tab-review-note');
     const taskTabEditor = document.getElementById('task-tab-editor');
     const taskPanelOverview = document.getElementById('task-panel-overview');
+    const taskPanelInspector = document.getElementById('task-panel-inspector');
     const taskPanelLogs = document.getElementById('task-panel-logs');
     const taskPanelChangedFiles = document.getElementById('task-panel-changed-files');
     const taskPanelQaChecklist = document.getElementById('task-panel-qa-checklist');
@@ -288,6 +290,13 @@
     const taskLogName = document.getElementById('task-log-name');
     const taskLogStatus = document.getElementById('task-log-status');
     const taskLogViewer = document.getElementById('task-log-viewer');
+    const taskInspectorStatus = document.getElementById('task-inspector-status');
+    const taskInspectorSignals = document.getElementById('task-inspector-signals');
+    const taskInspectorFaqButtons = document.getElementById('task-inspector-faq-buttons');
+    const taskInspectorAnswer = document.getElementById('task-inspector-answer');
+    const taskInspectorInput = document.getElementById('task-inspector-input');
+    const refreshTaskInspectionButton = document.getElementById('refresh-task-inspection');
+    const askTaskInspectorButton = document.getElementById('ask-task-inspector');
     const taskViewerHost = document.getElementById('task-viewer-host');
     const taskPlanEditorShell = document.getElementById('task-plan-editor-shell');
     const taskPlanEditorTitle = document.getElementById('task-plan-editor-title');
@@ -312,6 +321,9 @@
     let requestDraftList = [];
     let activeTaskDetail = null;
     let activeTaskLogs = null;
+    let activeTaskInspection = null;
+    let taskInspectionQuestionInFlight = false;
+    let activeTaskInspectionRequestToken = 0;
     let taskLogViewerPinnedToBottom = true;
     let activeChangedFileId = null;
     let activeChangedFileDetail = null;

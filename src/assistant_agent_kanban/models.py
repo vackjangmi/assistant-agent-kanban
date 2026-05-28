@@ -528,6 +528,61 @@ class TaskLogs(BaseModel):
     entries: list[TaskLogEntry]
 
 
+class TaskInspectionSignal(BaseModel):
+    label: str
+    value: str
+    tone: Literal["neutral", "good", "warning", "danger"] = "neutral"
+    detail: str = ""
+
+
+class TaskInspectionFaq(BaseModel):
+    id: str
+    label: str
+    question: str
+
+
+class TaskInspectionSnapshot(BaseModel):
+    task_id: str
+    title: str
+    state: TaskState
+    health: Literal["active", "stale", "waiting", "blocked", "idle"]
+    summary: str
+    generated_at: datetime = Field(default_factory=utc_now)
+    state_entered_at: datetime | None = None
+    lease_owner: str | None = None
+    lease_run_id: str | None = None
+    lease_heartbeat_at: datetime | None = None
+    lease_age_seconds: int | None = None
+    stale_after_seconds: int
+    active_model: str | None = None
+    retry_gate_reason: str | None = None
+    retry_not_before: datetime | None = None
+    last_log_name: str | None = None
+    last_log_updated_at: datetime | None = None
+    last_log_age_seconds: int | None = None
+    log_files: list[str] = Field(default_factory=list)
+    workspace_path: str | None = None
+    workspace_exists: bool = False
+    workspace_change_count: int = 0
+    workspace_changes: list[str] = Field(default_factory=list)
+    recent_log_excerpt: str = ""
+    recent_errors: list[TaskErrorInfo] = Field(default_factory=list)
+    signals: list[TaskInspectionSignal] = Field(default_factory=list)
+    faqs: list[TaskInspectionFaq] = Field(default_factory=list)
+
+
+class TaskInspectionAnswer(BaseModel):
+    task_id: str
+    question: str
+    question_id: str | None = None
+    answer: str
+    inspection: TaskInspectionSnapshot
+    resolved_model: str | None = None
+    session_id: str | None = None
+    total_tokens: int = 0
+    log_name: str | None = None
+
+
 class RunResult(BaseModel):
     ok: bool
     returncode: int

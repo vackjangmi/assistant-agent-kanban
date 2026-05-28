@@ -74,8 +74,11 @@ class PlanApprovalWorker(WorkerBase):
                     budget=run_config.role_session_token_budget("plan_approval"),
                 )
                 prior_session_tokens = task.metadata.plan_approval.session_tokens if session_id else 0
-                result = await asyncio.to_thread(
-                    adapter.run,
+                result = await self.run_adapter_with_heartbeat(
+                    adapter,
+                    task_dir=task.task_dir,
+                    metadata=task.metadata,
+                    run_id=run_id,
                     agent=run_config.role_agent("plan_approval"),
                     prompt=self._build_prompt(task),
                     cwd=self.config.repo_root.expanduser().resolve(),

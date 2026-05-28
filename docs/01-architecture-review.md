@@ -66,6 +66,7 @@ This is the workflow engine.
 - workers
 - recovery
 - optional Slack runtime
+- read-only task inspector runtime
 
 ### 4. FastAPI + SSE Layer
 
@@ -414,6 +415,7 @@ The system should preserve:
 - raw JSON event logs
 - task state transition history
 - worker heartbeat
+- read-only task inspection reports
 - integration apply and commit results
 - branch summary and retrospective artifacts
 

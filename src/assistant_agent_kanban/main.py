@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import json
 import os
 import shutil
 import socket
 import sqlite3
 import subprocess
 import sys
+import time
 import uvicorn
 from pathlib import Path
 from types import FrameType
@@ -15,8 +17,11 @@ from types import FrameType
 from .config import AppConfig, load_config
 from .api.app import create_default_app
 from .api.main import CONFIG_ENV_VAR
+from .assistant_factory import build_adapter_registry
+from .exceptions import AdapterRunError, InspectionError, TaskNotFoundError
 from .request_creator import RequestTemplateData, create_request
 from .scanner import KanbanScanner
+from .services.task_inspection_service import TaskInspectionService
 from .services.task_service import TaskService
 
 
@@ -63,6 +68,16 @@ def main(argv: list[str] | None = None) -> None:
     logs_parser.add_argument("task_id")
     logs_parser.add_argument("--config")
     logs_parser.add_argument("--kanban-root")
+
+    inspect_parser = subparsers.add_parser("inspect")
+    inspect_parser.add_argument("task_id")
+    inspect_parser.add_argument("--config")
+    inspect_parser.add_argument("--kanban-root")
+    inspect_parser.add_argument("--ask")
+    inspect_parser.add_argument("--faq", choices=["is-running", "latest-activity", "why-waiting", "workspace-changes", "next-step"])
+    inspect_parser.add_argument("--watch", action="store_true")
+    inspect_parser.add_argument("--interval", type=float, default=2.0)
+    inspect_parser.add_argument("--json", action="store_true")
 
     args = parser.parse_args(argv)
     if args.command in {None, "serve"}:
@@ -120,6 +135,35 @@ def main(argv: list[str] | None = None) -> None:
             print(f"== {entry.name} ==")
             print((entry.rendered_content or entry.debug_rendered_content or "(no readable log output for this file)").rstrip())
             print()
+        return
+
+    if args.command == "inspect":
+        config = _load_request_config(args.config, args.kanban_root)
+        registry = {str(backend): adapter for backend, adapter in build_adapter_registry().items()} if args.ask or args.faq else {}
+        inspector = TaskInspectionService(config=config, scanner=KanbanScanner(config), adapter_registry=registry)
+        try:
+            if args.watch:
+                while True:
+                    snapshot = inspector.inspect(args.task_id)
+                    print(_format_inspection(snapshot, json_output=args.json), flush=True)
+                    print("", flush=True)
+                    time.sleep(max(0.5, args.interval))
+            if args.ask or args.faq:
+                answer = inspector.answer(args.task_id, question=args.ask, question_id=args.faq)
+                if args.json:
+                    print(json.dumps(answer.model_dump(mode="json"), indent=2))
+                else:
+                    print(_format_inspection(answer.inspection, json_output=False))
+                    print()
+                    print(f"Question: {answer.question}")
+                    print()
+                    print(answer.answer.rstrip())
+                return
+            snapshot = inspector.inspect(args.task_id)
+            print(_format_inspection(snapshot, json_output=args.json))
+        except (TaskNotFoundError, InspectionError, AdapterRunError) as exc:
+            print(str(exc), file=sys.stderr)
+            raise SystemExit(1) from exc
 
 
 def _load_request_config(config_path: str | None, kanban_root: str | None) -> AppConfig:
@@ -128,6 +172,41 @@ def _load_request_config(config_path: str | None, kanban_root: str | None) -> Ap
         config.kanban_root = Path(kanban_root).expanduser().resolve()
         config.bootstrap()
     return config
+
+
+def _format_inspection(snapshot, *, json_output: bool) -> str:
+    if json_output:
+        return json.dumps(snapshot.model_dump(mode="json"), indent=2)
+    lines = [
+        f"Task {snapshot.task_id}: {snapshot.state}",
+        "",
+        f"Health: {snapshot.health}",
+        f"Summary: {snapshot.summary}",
+        f"Worker: {snapshot.lease_owner or 'none'}",
+        f"Heartbeat: {_age_label(snapshot.lease_age_seconds)}",
+        f"Latest log: {snapshot.last_log_name or 'none'} ({_age_label(snapshot.last_log_age_seconds)})",
+        f"Workspace: {snapshot.workspace_path or 'none'}",
+        f"Workspace changes: {snapshot.workspace_change_count}",
+    ]
+    if snapshot.retry_gate_reason:
+        lines.append(f"Retry gate: {snapshot.retry_gate_reason}")
+    if snapshot.recent_errors:
+        latest_error = snapshot.recent_errors[-1]
+        lines.append(f"Latest error: {latest_error.code} - {latest_error.message}")
+    if snapshot.workspace_changes:
+        lines.extend(["", "Changed paths:", *[f"  {line}" for line in snapshot.workspace_changes[:20]]])
+    return "\n".join(lines)
+
+
+def _age_label(age_seconds: int | None) -> str:
+    if age_seconds is None:
+        return "none"
+    if age_seconds < 60:
+        return f"{age_seconds}s ago"
+    minutes = age_seconds // 60
+    if minutes < 60:
+        return f"{minutes}m ago"
+    return f"{minutes // 60}h ago"
 
 
 def _detect_current_branch(repo_root: Path) -> str | None:

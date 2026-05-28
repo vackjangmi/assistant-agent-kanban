@@ -121,6 +121,9 @@ class ReviewerWorker(WorkerBase):
                     log_path=log_path,
                     cycle=cycle,
                     task_id=reviewing.metadata.task_id,
+                    task_dir=reviewing.task_dir,
+                    metadata=reviewing.metadata,
+                    run_id=run_id,
                     session_id=session_id,
                     on_log_line=self.make_log_callback(loop, reviewing.metadata.task_id, log_name),
                 )
@@ -197,8 +200,11 @@ class ReviewerWorker(WorkerBase):
                 return True
 
             self.append_log_marker(log_path=log_path, phase="handshake", cycle=cycle)
-            handshake_result = await asyncio.to_thread(
-                adapter.run,
+            handshake_result = await self.run_adapter_with_heartbeat(
+                adapter,
+                task_dir=reviewing.task_dir,
+                metadata=reviewing.metadata,
+                run_id=run_id,
                 agent=run_config.role_agent("reviewer"),
                 prompt=handshake_prompt,
                 cwd=workspace_path,
@@ -231,8 +237,11 @@ class ReviewerWorker(WorkerBase):
 
             active_session_id = handshake_result.session_id or session_id
             self.append_log_marker(log_path=log_path, phase="live", cycle=cycle)
-            live_result = await asyncio.to_thread(
-                adapter.run,
+            live_result = await self.run_adapter_with_heartbeat(
+                adapter,
+                task_dir=reviewing.task_dir,
+                metadata=reviewing.metadata,
+                run_id=run_id,
                 agent=run_config.role_agent("reviewer"),
                 prompt=live_prompt,
                 cwd=workspace_path,
@@ -263,6 +272,9 @@ class ReviewerWorker(WorkerBase):
                 log_path=log_path,
                 cycle=cycle,
                 task_id=reviewing.metadata.task_id,
+                task_dir=reviewing.task_dir,
+                metadata=reviewing.metadata,
+                run_id=run_id,
                 session_id=live_result.session_id or active_session_id,
             )
             reviewing.metadata.review.resolved_model = finalize_result.resolved_model or live_result.resolved_model or handshake_result.resolved_model
@@ -349,11 +361,17 @@ class ReviewerWorker(WorkerBase):
         log_path: Path,
         cycle: int,
         task_id: str,
+        task_dir: Path,
+        metadata,
+        run_id: str,
         session_id: str | None,
         on_log_line: Callable[[str, str | None], None] | None = None,
     ) -> tuple[RunResult, ReviewFinalizeArtifact | None]:
-        result = await asyncio.to_thread(
-            adapter.run,
+        result = await self.run_adapter_with_heartbeat(
+            adapter,
+            task_dir=task_dir,
+            metadata=metadata,
+            run_id=run_id,
             agent=run_config.role_agent("reviewer"),
             prompt=finalize_prompt,
             cwd=workspace_path,
@@ -370,8 +388,11 @@ class ReviewerWorker(WorkerBase):
             return result, artifact
 
         self.append_log_marker(log_path=log_path, phase="finalize-default-fallback", cycle=cycle)
-        fallback = await asyncio.to_thread(
-            adapter.run,
+        fallback = await self.run_adapter_with_heartbeat(
+            adapter,
+            task_dir=task_dir,
+            metadata=metadata,
+            run_id=run_id,
             agent=run_config.role_agent("reviewer"),
             prompt=finalize_prompt,
             cwd=workspace_path,

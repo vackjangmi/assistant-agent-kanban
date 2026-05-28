@@ -315,6 +315,7 @@
       if (!softRefresh) {
         activeTaskDetail = null;
         activeTaskLogs = null;
+        activeTaskInspection = null;
         activeChangedFileId = null;
         activeChangedFileDetail = null;
         activeInlineCommentAnchor = null;
@@ -329,6 +330,11 @@
         taskLogStatus.textContent = translateTask('selectRuntimeLog');
         taskLogViewer.textContent = translateTask('runtimeLogSummaryEmpty');
         taskLogViewerPinnedToBottom = true;
+        taskInspectorStatus.textContent = translateTask('inspectorIdle');
+        taskInspectorSignals.innerHTML = '';
+        taskInspectorFaqButtons.innerHTML = '';
+        taskInspectorAnswer.innerHTML = `<p class="task-inspector-empty">${escapeHtml(translateTask('inspectorEmpty'))}</p>`;
+        taskInspectorInput.value = '';
         taskChangedFiles.innerHTML = '';
         taskQaChecklistItems.innerHTML = '';
         taskQaChecklistBadges.innerHTML = '';
@@ -367,9 +373,11 @@
         }
         renderTaskOverview(detail);
         const preferredInitialTab = !preserveTab && detail.metadata.state === 'waiting-check-plans' && detail.markdown_files.length ? 'editor' : nextTab;
-        const resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
+        let resolvedTab = !preserveTab && detail.metadata.state === 'human-verifying' && detail.changed_files_available ? 'changed-files' : preferredInitialTab;
+        if (resolvedTab === 'inspector' && !taskChromeState(detail.metadata.state).inspectorVisible) resolvedTab = 'overview';
         if (resolvedTab !== activeTaskTab) setTaskTab(resolvedTab, { load: false });
         if (resolvedTab === 'logs' && (!softRefresh || !activeTaskLogs)) await loadTaskLogs(taskId);
+        if (activeTaskTab === 'inspector' && (!softRefresh || !activeTaskInspection)) await loadTaskInspection(taskId);
         if (resolvedTab === 'changed-files' && detail.changed_files_available) {
           await ensureChangedFileSummaries(taskId);
           if (requestToken !== activeTaskRequestToken || activeTaskId !== taskId || activeTaskTab !== 'changed-files' || !activeTaskDetail?.changed_files.length) return;

@@ -5,10 +5,11 @@ import asyncio
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from ...exceptions import IntegrationError, TaskNotFoundError, TransitionError
+from ...exceptions import AdapterRunError, InspectionError, IntegrationError, TaskNotFoundError, TransitionError
 from ._helpers import _require_task_actor
 from ._payloads import (
     CreateLineCommentPayload,
+    InspectorQuestionPayload,
     UpdateChangedFileViewedPayload,
     UpdateHumanQaChecklistItemPayload,
     UpdateMarkdownPayload,
@@ -31,6 +32,38 @@ def register(router: APIRouter) -> None:
             return runtime.task_service.get_logs(task_id)
         except TaskNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get("/api/tasks/{task_id}/inspection")
+    async def task_inspection(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            return runtime.inspection_service.inspect(task_id)
+        except TaskNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get("/api/tasks/{task_id}/inspection/faqs")
+    async def task_inspection_faqs(task_id: str, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            runtime.inspection_service.inspect(task_id)
+        except TaskNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {"task_id": task_id, "items": runtime.inspection_service.faqs()}
+
+    @router.post("/api/tasks/{task_id}/inspection/questions")
+    async def ask_task_inspector(task_id: str, payload: InspectorQuestionPayload, request: Request):
+        runtime = request.app.state.runtime
+        try:
+            return await asyncio.to_thread(
+                runtime.inspection_service.answer,
+                task_id,
+                question=payload.question,
+                question_id=payload.question_id,
+            )
+        except TaskNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (InspectionError, AdapterRunError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @router.get("/api/tasks/{task_id}/changed-files/{changed_file_id}")
     async def task_changed_file(task_id: str, changed_file_id: str, request: Request):
