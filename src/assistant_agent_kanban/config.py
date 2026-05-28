@@ -17,14 +17,14 @@ DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
-AssistantBackend = Literal["opencode", "codex", "gemini", "claude", "antigravity"]
+AssistantBackend = Literal["claude", "codex", "antigravity", "gemini", "opencode"]
 AssistantRole = Literal["planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit"]
 ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit")
 TASK_RUNTIME_ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
 SUPPORTED_RUNTIME_ASSISTANTS = {
-    "antigravity": "Antigravity CLI",
-    "codex": "Codex CLI",
     "claude": "Claude Code",
+    "codex": "Codex CLI",
+    "antigravity": "Antigravity CLI",
     "gemini": "Gemini CLI",
     "opencode": "OpenCode",
 }

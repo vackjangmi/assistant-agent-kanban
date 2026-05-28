@@ -3,7 +3,7 @@ set -eu
 
 usage() {
     printf '%s\n' "Usage: ./run.sh [--config PATH] [--host HOST] [--port PORT] [--reload] [--root PATH] [--kanban-root PATH] [--assistant NAME] [--language LANG] [--theme THEME]"
-    printf '%s\n' "Assistant names: antigravity, opencode, codex, gemini, claude"
+    printf '%s\n' "Assistant names: claude, codex, antigravity, gemini, opencode"
 }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

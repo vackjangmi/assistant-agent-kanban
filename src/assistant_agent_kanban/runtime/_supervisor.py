@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-from ..config import AppConfig, AssistantBackend
+from ..config import AppConfig, AssistantBackend, SUPPORTED_RUNTIME_ASSISTANTS
 from ..events import EventBus
 from ..exceptions import NoSupportedAssistantError
 from ..locks import TaskLockManager
@@ -179,11 +179,12 @@ class RuntimeSupervisor(_SlackHandlersMixin):
             return
         details = "; ".join(
             f"{backend}: {getattr(status, 'error', None) or 'unavailable'}"
-            for backend, status in sorted(self.backend_availability.items())
+            for backend in SUPPORTED_RUNTIME_ASSISTANTS
+            if (status := self.backend_availability.get(cast(AssistantBackend, backend))) is not None
         )
         raise NoSupportedAssistantError(
             "No supported assistant CLI is available. Install and authenticate at least one of: "
-            "agy, opencode, codex, gemini, claude."
+            "claude, codex, agy, gemini, opencode."
             f" Availability errors: {details}"
         )
 

@@ -4,7 +4,7 @@
 
 ### Overview
 
-`Assistant Agent Kanban` is a filesystem-backed AI workflow orchestration service. It connects Planner, Implementer, Reviewer, and Committer roles built on top of Antigravity, OpenCode, Codex, Claude, or Gemini CLIs, while explicitly preserving human approval gates where they matter.
+`Assistant Agent Kanban` is a filesystem-backed AI workflow orchestration service. It connects Planner, Implementer, Reviewer, and Committer roles built on top of Claude, Codex, Antigravity, Gemini, or OpenCode CLIs, while explicitly preserving human approval gates where they matter.
 
 The project started from hands-on experiments with AI agent-based development in personal side projects. Terminal-first autonomous loops and Ralph-style iteration were powerful, but they did not map cleanly onto the kind of workflow used in real work: writing requirements, reviewing plans, approving stages, iterating on implementation, and performing final human validation.
 
@@ -47,7 +47,7 @@ Full video: [Watch on YouTube](https://youtu.be/gpdcVGiLxaQ)
 
 - Filesystem-backed state machine with `metadata.json` as the source of truth
 - Separate Planner / PlanApproval / Implementer / Reviewer / Committer workers
-- Multi-runtime support: Antigravity, OpenCode, Codex, Claude, Gemini — selectable per role
+- Multi-runtime support: Claude, Codex, Antigravity, Gemini, OpenCode — selectable per role
 - Per-role backend routing (e.g., `planner: claude`, `implementer: codex`, `reviewer: claude`)
 - Per-role model and session token budget configuration
 - Isolated `clone-overlay` workspaces
@@ -119,11 +119,11 @@ Supported assistant CLIs:
 
 | Assistant | Binary | Official link |
 | --- | --- | --- |
-| Antigravity CLI | `agy` | [Google Antigravity CLI overview](https://antigravity.google/docs/cli-overview) |
-| OpenCode | `opencode` | [OpenCode install docs](https://opencode.ai/docs/#install) |
-| Codex CLI | `codex` | [OpenAI Codex CLI quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
 | Claude Code | `claude` | [Anthropic Claude Code native install](https://code.claude.com/docs/en/overview#native-install-recommended) |
+| Codex CLI | `codex` | [OpenAI Codex CLI quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
+| Antigravity CLI | `agy` | [Google Antigravity CLI overview](https://antigravity.google/docs/cli-overview) |
 | Gemini CLI | `gemini` | [Google Gemini CLI quick install](https://google-gemini.github.io/gemini-cli/#quick-install) |
+| OpenCode | `opencode` | [OpenCode install docs](https://opencode.ai/docs/#install) |
 
 #### 2. Run the App
 
@@ -135,15 +135,20 @@ Simplest path:
 
 `./run.sh` binds the server to `0.0.0.0` by default. When remote use is disabled, the FastAPI application still rejects non-loopback clients and only permits localhost access.
 
-On first run (when `config.local.yaml` does not exist yet), `./run.sh` and `./init.sh` both prompt for:
+On first run (when `config.local.yaml` does not exist yet), `./run.sh` and `./init.sh` open a clean setup screen with the Assistant Agent Kanban banner, then prompt for:
 
 - a **repo discovery root** — common candidates such as `~/git`, this repository's parent, and the current repository are offered automatically
-- a **default coding assistant** — only CLIs found on `PATH` (from `agy`, `opencode`, `codex`, `gemini`, `claude`) are listed; if exactly one is installed it is auto-selected, and if none are detected the built-in default is kept
-- a **UI language** (`EN` / `KO`)
+- a **default coding assistant** — only CLIs found on `PATH` are listed in this order: `claude`, `codex`, `agy`/Antigravity, `gemini`, `opencode`; if exactly one is installed it is auto-selected, and if none are detected the built-in default is kept
+- a **UI language** (`EN` / `KO`) — the default selection is `EN`
 - a **UI theme** (`light` / `dark`)
 
-In an interactive terminal, use Up/Down or `j`/`k`, then Enter to choose. In
-non-interactive shells, the prompts fall back to numbered selections.
+In an interactive terminal, each setup step redraws as its own screen and the
+current selection is highlighted. Use Up/Down or `j`/`k`, then Enter to choose.
+From later steps, press `b`, Left, or Backspace to go back. Press `q`, Esc, or
+Ctrl-C to cancel setup. When single-key input is unavailable, the prompts fall
+back to numbered selections where `b` goes back and `q` cancels.
+After the last choice, a review screen shows the selected values. Press Enter
+or type `OK` there to start initialization.
 
 All answers are written to `config.local.yaml`.
 
@@ -428,7 +433,7 @@ runtime:
   - `workers/` — planner, plan-approval, implementer, reviewer, committer
   - `services/` — task, board, human verification, retrospective, plan-approval learning, task deletion
   - `api/` — FastAPI app, routes, SSE, templates (HTML, CSS, modular JS)
-  - `*_adapter.py` — Antigravity, OpenCode, Codex, Claude, Gemini adapters
+  - `*_adapter.py` — Claude, Codex, Antigravity, Gemini, OpenCode adapters
   - `slack_*.py` — Slack runtime, notifications, channel matching, settings tests
 - `tests/` — workflow, service, adapter, and API tests
 - `.opencode/agents/` — role prompt contracts
@@ -471,7 +476,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 
 - Harden packaging and installation paths for non-editable installs
 - Add more deployment guidance and operational safety checks
-- Continue improving role-specific runtime support across Antigravity, OpenCode, Codex, Claude, and Gemini
+- Continue improving role-specific runtime support across Claude, Codex, Antigravity, Gemini, and OpenCode
 - Split larger service, runtime, API, and frontend modules into smaller maintainable units
 - Add more workflow observability around retries, failed runs, and recovery actions
 - Revisit target web application startup during human verification after the remote multi-user workflow is stabilized
@@ -503,7 +508,7 @@ See `CONTRIBUTING.md` for details.
 
 ### 소개
 
-`Assistant Agent Kanban`은 파일시스템 상태를 기반으로 동작하는 AI 작업 오케스트레이션 서비스입니다. Antigravity, OpenCode, Codex, Claude, Gemini CLI 위에서 Planner, Implementer, Reviewer, Committer 역할을 연결하고, 사람 승인 단계가 필요한 구간은 명시적으로 유지합니다.
+`Assistant Agent Kanban`은 파일시스템 상태를 기반으로 동작하는 AI 작업 오케스트레이션 서비스입니다. Claude, Codex, Antigravity, Gemini, OpenCode CLI 위에서 Planner, Implementer, Reviewer, Committer 역할을 연결하고, 사람 승인 단계가 필요한 구간은 명시적으로 유지합니다.
 
 이 프로젝트는 개인 프로젝트에서 AI Agent 기반 개발을 여러 방식으로 실험한 경험에서 출발했습니다. 터미널 중심의 자율 주행 흐름이나 랄프 스타일의 루프는 강력했지만, 실제 업무처럼 요구사항 작성, 계획 검토, 승인, 구현 반복, 인간 최종 검증까지 이어지는 흐름을 한눈에 추적하기는 어려웠습니다.
 
@@ -546,7 +551,7 @@ Claude Code, Codex, OpenCode, Gemini CLI 같은 coding agent 도구들은 매우
 
 - 파일/디렉토리 기반 상태 머신 + `metadata.json`을 source of truth로 사용
 - Planner / PlanApproval / Implementer / Reviewer / Committer를 개별 worker로 분리
-- 멀티 런타임 지원: Antigravity, OpenCode, Codex, Claude, Gemini — 역할별로 선택 가능
+- 멀티 런타임 지원: Claude, Codex, Antigravity, Gemini, OpenCode — 역할별로 선택 가능
 - 역할별 백엔드 라우팅 (예: `planner: claude`, `implementer: codex`, `reviewer: claude`)
 - 역할별 모델·세션 토큰 budget 설정 지원
 - `clone-overlay` 전략 기반의 격리 workspace 생성
@@ -618,11 +623,11 @@ pip install -e .[dev]
 
 | 에이전트 | 실행 파일 | 공식 링크 |
 | --- | --- | --- |
-| Antigravity CLI | `agy` | [Google Antigravity CLI Overview](https://antigravity.google/docs/cli-overview) |
-| OpenCode | `opencode` | [OpenCode 설치 문서](https://opencode.ai/docs/#install) |
-| Codex CLI | `codex` | [OpenAI Codex CLI Quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
 | Claude Code | `claude` | [Anthropic Claude Code Native Install](https://code.claude.com/docs/en/overview#native-install-recommended) |
+| Codex CLI | `codex` | [OpenAI Codex CLI Quickstart](https://developers.openai.com/codex/quickstart?setup=cli) |
+| Antigravity CLI | `agy` | [Google Antigravity CLI Overview](https://antigravity.google/docs/cli-overview) |
 | Gemini CLI | `gemini` | [Google Gemini CLI Quick Install](https://google-gemini.github.io/gemini-cli/#quick-install) |
+| OpenCode | `opencode` | [OpenCode 설치 문서](https://opencode.ai/docs/#install) |
 
 #### 2. 앱 실행
 
@@ -634,15 +639,20 @@ pip install -e .[dev]
 
 `./run.sh`는 기본적으로 서버를 `0.0.0.0`에 바인딩합니다. 원격 사용이 비활성화되어 있으면 FastAPI 애플리케이션이 loopback이 아닌 클라이언트를 거절하고 localhost 접속만 허용합니다.
 
-최초 실행 시 (`config.local.yaml`이 아직 없을 때) `./run.sh`와 `./init.sh` 둘 다 다음을 물어봅니다:
+최초 실행 시 (`config.local.yaml`이 아직 없을 때) `./run.sh`와 `./init.sh`는 Assistant Agent Kanban 배너가 있는 깨끗한 설정 화면을 연 뒤 다음을 물어봅니다:
 
 - **repo discovery root** — `~/git`, 현재 repository의 부모 디렉토리, 현재 repository 같은 자주 쓰는 후보를 자동으로 보여줍니다
-- **기본 coding assistant** — `PATH`에서 찾은 CLI(`agy`, `opencode`, `codex`, `gemini`, `claude`)만 목록에 표시합니다. 하나만 설치되어 있으면 자동 선택되고, 하나도 없으면 기본값을 유지합니다
-- **UI 언어** (`EN` / `KO`)
+- **기본 coding assistant** — `PATH`에서 찾은 CLI를 `claude`, `codex`, `agy`/Antigravity, `gemini`, `opencode` 순서로 표시합니다. 하나만 설치되어 있으면 자동 선택되고, 하나도 없으면 기본값을 유지합니다
+- **UI 언어** (`EN` / `KO`) — 기본 선택값은 `EN`입니다
 - **UI 테마** (`light` / `dark`)
 
-대화형 터미널에서는 방향키 또는 `j`/`k`로 이동하고 Enter로 선택합니다.
-자동 실행처럼 대화형 키 입력이 어려운 환경에서는 숫자 선택으로 돌아갑니다.
+대화형 터미널에서는 각 설정 단계가 별도 화면처럼 다시 그려지고 현재 선택지가
+강조됩니다. 방향키 또는 `j`/`k`로 이동하고 Enter로 선택합니다. 이후 단계에서는
+`b`, 왼쪽 화살표, Backspace로 이전 단계로 돌아갈 수 있습니다. `q`, Esc,
+Ctrl-C를 누르면 설정을 취소하고 종료합니다. 단일 키 입력이 어려운 환경에서는
+숫자 선택으로 돌아가며, 이때도 `b`로 이전 단계 이동, `q`로 취소할 수 있습니다.
+마지막 선택 뒤에는 선택한 값들을 다시 보여주는 확인 화면이 나오며, 거기서
+Enter를 누르거나 `OK`를 입력해야 초기화가 시작됩니다.
 
 모든 답변은 `config.local.yaml`에 저장됩니다.
 
@@ -927,7 +937,7 @@ runtime:
   - `workers/` — planner, plan-approval, implementer, reviewer, committer
   - `services/` — task, board, human verification, retrospective, plan-approval learning, task deletion
   - `api/` — FastAPI app, route, SSE, template (HTML, CSS, 분리된 JS)
-  - `*_adapter.py` — Antigravity, OpenCode, Codex, Claude, Gemini adapter
+  - `*_adapter.py` — Claude, Codex, Antigravity, Gemini, OpenCode adapter
   - `slack_*.py` — Slack runtime, 알림, 채널 매칭, 설정 테스트
 - `tests/` — workflow, service, adapter, API 테스트
 - `.opencode/agents/` — 역할별 프롬프트 계약
@@ -970,7 +980,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 
 - editable install이 아닌 일반 설치 환경에서도 안정적으로 동작하도록 packaging 경로 보강
 - 배포 가이드와 운영 안전장치 강화
-- Antigravity, OpenCode, Codex, Claude, Gemini에 대한 역할별 runtime 지원 개선
+- Claude, Codex, Antigravity, Gemini, OpenCode에 대한 역할별 runtime 지원 개선
 - 큰 service, runtime, API, frontend 모듈을 더 작은 단위로 분리
 - retry, 실패한 run, recovery action에 대한 workflow observability 강화
 - remote 다중 사용자 workflow가 안정화된 뒤 human verification 중 대상 web application 구동 방식 재검토
