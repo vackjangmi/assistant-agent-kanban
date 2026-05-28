@@ -2308,6 +2308,32 @@ body[data-theme="dark"] .directory-picker-path-container input {
 body[data-theme="dark"] .directory-picker-list {
   background: rgba(15, 23, 42, 0.4);
 }
+.directory-picker-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.01);
+  color: var(--muted);
+  text-align: center;
+  box-sizing: border-box;
+}
+body[data-theme="dark"] .directory-picker-empty {
+  background: rgba(255, 255, 255, 0.01);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.directory-picker-empty .empty-icon {
+  font-size: 1.5rem;
+  opacity: 0.65;
+}
+.directory-picker-empty .empty-text {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
 .directory-picker-item {
   display: flex;
   align-items: center;
@@ -2346,6 +2372,39 @@ body[data-theme="dark"] .directory-picker-list {
   color: #ffffff;
   border-color: var(--accent-strong);
 }
+
+/* Directory Picker Header Primary Button Highlight */
+#btn-directory-picker-select {
+  background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.15) !important;
+  font-weight: 600 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+#btn-directory-picker-select:not(:disabled):hover,
+#btn-directory-picker-select:not(:disabled):focus-visible {
+  background: linear-gradient(135deg, #818cf8, #6366f1) !important;
+  border-color: rgba(99, 102, 241, 0.45) !important;
+  box-shadow: 0 6px 14px rgba(99, 102, 241, 0.24) !important;
+  transform: translateY(-1px);
+}
+
+#btn-directory-picker-select:disabled {
+  background: var(--border) !important;
+  color: var(--muted) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+}
+
+body[data-theme="dark"] #btn-directory-picker-select:disabled {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
 
 /* ==========================================================================
    PREMIUM SETTINGS CARD & INPUT STYLES (AESTHETICS OVERRIDES)
