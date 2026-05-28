@@ -103,6 +103,55 @@ def test_antigravity_adapter_builds_print_command_and_temporarily_sets_model(mon
     assert recorded["cwd"] == str(tmp_path)
 
 
+def test_antigravity_adapter_uses_existing_default_model_without_settings_rewrite(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(json.dumps({"enableTelemetry": False, "model": "existing-default"}))
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.command = command
+            self.stdout = ["drafted\n"]
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            recorded["settings_during_run"] = json.loads(settings_path.read_text())
+            return 0
+
+        def poll(self):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        recorded["settings_at_start"] = json.loads(settings_path.read_text())
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessAntigravityAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "antigravity"
+    config.antigravity.settings_path = settings_path
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-request-draft",
+        prompt="draft this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "request-draft.log",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert command[-2] == "--print"
+    assert "draft this task" in command[-1]
+    assert recorded["settings_at_start"] == {"enableTelemetry": False, "model": "existing-default"}
+    assert recorded["settings_during_run"] == {"enableTelemetry": False, "model": "existing-default"}
+    assert result.resolved_model is None
+
+
 def test_bind_prompt_to_cwd_forbids_antigravity_scratch(tmp_path):
     prompt = _bind_prompt_to_cwd("do the work", cwd=tmp_path)
 

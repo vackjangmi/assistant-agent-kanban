@@ -155,7 +155,7 @@ def _normalize_runtime_language(value: str | None) -> str:
 def _normalize_runtime_coding_assistant(value: str | None) -> str:
     normalized = normalize_runtime_assistant(value)
     if normalized is None:
-        raise ValueError("coding assistant must be OpenCode, Codex CLI, Gemini CLI, Claude Code, or Antigravity CLI")
+        raise ValueError("coding assistant must be Claude Code, Codex CLI, Antigravity CLI, Gemini CLI, or OpenCode")
     return normalized
 
 

@@ -111,6 +111,7 @@ def test_claude_adapter_builds_noninteractive_command(monkeypatch, tmp_path):
     assert command[command.index("--model") + 1] == "claude-sonnet-4-6"
     assert "--add-dir" in command
     assert command[command.index("--add-dir") + 1] == str((tmp_path / "target-repo").resolve())
+    assert command[-2] == "--"
     assert command[-1] == "implement this task"
     assert result.assistant_text == "ok"
     assert result.session_id == "claude-session"
@@ -125,6 +126,48 @@ def test_claude_adapter_availability_only_checks_binary(tmp_path):
     config.claude.binary = "/definitely/missing/claude"
 
     assert adapter.availability_error(config=config, backend="claude") is not None
+
+
+def test_claude_adapter_separates_default_model_prompt_from_variadic_options(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.command = command
+            self.stdout = ['{"type":"result","result":"ok"}\n']
+            self.stderr = []
+
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessClaudeAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "claude"
+    config.bootstrap()
+
+    result = adapter.run(
+        agent="fs-kanban-request-draft",
+        prompt="draft this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "request-draft.jsonl",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert "--model" not in command
+    assert command[-2:] == ["--", "draft this task"]
+    assert result.resolved_model is None
 
 
 def test_claude_adapter_returns_curated_aliases_for_model_candidates(tmp_path):

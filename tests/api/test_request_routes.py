@@ -959,6 +959,10 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "runtime_language" in response.text
     assert "runtime_theme" in response.text
     assert "runtime_coding_assistant" in response.text
+    assert response.text.index('<option value="claude">Claude Code</option>') < response.text.index('<option value="codex">Codex CLI</option>')
+    assert response.text.index('<option value="codex">Codex CLI</option>') < response.text.index('<option value="antigravity">Antigravity CLI</option>')
+    assert response.text.index('<option value="antigravity">Antigravity CLI</option>') < response.text.index('<option value="gemini">Gemini CLI</option>')
+    assert response.text.index('<option value="gemini">Gemini CLI</option>') < response.text.index('<option value="opencode">OpenCode</option>')
     assert "worker_live_logs_enabled" in response.text
     assert "slack_enabled" in response.text
     assert "slack_socket_mode_enabled" in response.text

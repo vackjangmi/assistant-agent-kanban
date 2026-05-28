@@ -1239,8 +1239,8 @@
         let html = '';
         const shouldShowParent = !isTargetRepoPicker || relativeDepth > 0;
         if (data.parent_path && shouldShowParent) {
-          const upText = translateSettings('dirPickerUp') || '📁 Up one level (..)';
-          html += `<div class="directory-picker-item parent-dir" data-path="${escapeHtml(data.parent_path)}">
+          const upText = translateSettings('dirPickerUp') || 'Up one level (..)';
+          html += `<div class="directory-picker-item parent-nav" data-path="${escapeHtml(data.parent_path)}">
             <span class="dir-icon">📁</span>
             <span class="dir-name">${escapeHtml(upText)}</span>
           </div>`;
@@ -1254,6 +1254,12 @@
               <span class="dir-name">${escapeHtml(dir.name)}</span>
             </div>`;
           });
+        } else if (shouldShowSubdirs) {
+          const emptyText = translateSettings('dirPickerEmpty') || 'No subfolders found';
+          html += `<div class="directory-picker-empty">
+            <span class="empty-icon">📂</span>
+            <span class="empty-text">${escapeHtml(emptyText)}</span>
+          </div>`;
         }
 
         if (directoryPickerList) {

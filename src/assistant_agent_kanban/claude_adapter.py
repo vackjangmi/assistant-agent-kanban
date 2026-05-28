@@ -76,7 +76,7 @@ class SubprocessClaudeAdapter(AssistantAdapter):
         normalized_include_directories = _normalize_include_directories(include_directories, cwd=cwd)
         for directory in normalized_include_directories:
             command.extend(["--add-dir", directory])
-        command.append(prompt)
+        command.extend(["--", prompt])
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             process = subprocess.Popen(

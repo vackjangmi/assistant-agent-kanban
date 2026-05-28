@@ -298,6 +298,7 @@ def test_subprocess_adapter_skips_model_flag_when_no_override(monkeypatch, tmp_p
 
     command = cast(list[str], recorded["command"])
     assert "--model" not in command
+    assert command[-2:] == ["--", "sample"]
     assert result.resolved_model is None
 
 

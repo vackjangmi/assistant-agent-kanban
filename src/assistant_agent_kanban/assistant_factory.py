@@ -10,26 +10,26 @@ from .opencode_adapter import SubprocessOpenCodeAdapter
 
 
 def build_adapter(backend: AssistantBackend) -> AssistantAdapter:
-    if backend == "antigravity":
-        return SubprocessAntigravityAdapter()
-    if backend == "opencode":
-        return SubprocessOpenCodeAdapter()
-    if backend == "codex":
-        return SubprocessCodexAdapter()
-    if backend == "gemini":
-        return SubprocessGeminiAdapter()
     if backend == "claude":
         return SubprocessClaudeAdapter()
+    if backend == "codex":
+        return SubprocessCodexAdapter()
+    if backend == "antigravity":
+        return SubprocessAntigravityAdapter()
+    if backend == "gemini":
+        return SubprocessGeminiAdapter()
+    if backend == "opencode":
+        return SubprocessOpenCodeAdapter()
     raise NotImplementedError(f"unsupported coding assistant: {backend}")
 
 
 def build_adapter_registry() -> dict[AssistantBackend, AssistantAdapter]:
     return {
-        "antigravity": build_adapter("antigravity"),
-        "opencode": build_adapter("opencode"),
-        "codex": build_adapter("codex"),
-        "gemini": build_adapter("gemini"),
         "claude": build_adapter("claude"),
+        "codex": build_adapter("codex"),
+        "antigravity": build_adapter("antigravity"),
+        "gemini": build_adapter("gemini"),
+        "opencode": build_adapter("opencode"),
     }
 
 

@@ -457,9 +457,9 @@
 
     function resolveAssistantOptions(payload) {
       const defaults = [
-        { value: 'antigravity', label: 'Antigravity CLI' },
-        { value: 'codex', label: 'Codex CLI' },
         { value: 'claude', label: 'Claude Code' },
+        { value: 'codex', label: 'Codex CLI' },
+        { value: 'antigravity', label: 'Antigravity CLI' },
         { value: 'gemini', label: 'Gemini CLI' },
         { value: 'opencode', label: 'OpenCode' },
       ];
@@ -473,9 +473,9 @@
         if (!item || !item.value) return;
         labelByValue.set(item.value, item.label || labelByValue.get(item.value) || item.value);
       });
-      const available = Object.entries(availabilityByBackend)
-        .filter(([, status]) => status && status.available)
-        .map(([value]) => ({ value, label: labelByValue.get(value) || value }));
+      const available = defaults
+        .filter(({ value }) => availabilityByBackend[value] && availabilityByBackend[value].available)
+        .map(({ value }) => ({ value, label: labelByValue.get(value) || value }));
       return available.length ? available : (configured.length ? configured : defaults);
     }
 

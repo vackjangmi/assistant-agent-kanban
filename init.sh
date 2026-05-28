@@ -17,6 +17,9 @@ LANGUAGE=${ASSISTANT_AGENT_KANBAN_LANGUAGE:-}
 THEME=${ASSISTANT_AGENT_KANBAN_THEME:-}
 DEPS_STAMP_FILE="$VENV_DIR/.assistant-agent-kanban-deps-stamp"
 
+. "$REPO_ROOT/lib/python_runtime.sh"
+. "$REPO_ROOT/lib/init_summary.sh"
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --config)
@@ -94,13 +97,13 @@ firstrun_prompts
 
 if [ -n "$CODING_ASSISTANT" ]; then
     case "$CODING_ASSISTANT" in
-        opencode|codex|gemini|claude|antigravity|agy)
+        claude|codex|antigravity|agy|gemini|opencode)
             if [ "$CODING_ASSISTANT" = "agy" ]; then
                 CODING_ASSISTANT=antigravity
             fi
             ;;
         *)
-            printf 'Invalid --assistant value: %s (expected opencode, codex, gemini, claude, or antigravity)\n' "$CODING_ASSISTANT" >&2
+            printf 'Invalid --assistant value: %s (expected claude, codex, antigravity, gemini, or opencode)\n' "$CODING_ASSISTANT" >&2
             exit 1
             ;;
     esac
@@ -128,20 +131,14 @@ if [ -n "$THEME" ]; then
     esac
 fi
 
-if [ -d "$VENV_DIR" ]; then
+if [ -x "$VENV_DIR/bin/python" ]; then
     PYTHON_BIN="$VENV_DIR/bin/python"
+    require_python_min_version "$PYTHON_BIN" "existing virtual environment" || exit 1
 else
-    if command -v python3 >/dev/null 2>&1; then
-        PYTHON_CMD=python3
-    elif command -v python >/dev/null 2>&1; then
-        PYTHON_CMD=python
-    else
-        printf '%s\n' "python3 or python is required" >&2
-        exit 1
-    fi
-
+    PYTHON_CMD=$(find_compatible_python) || exit 1
     "$PYTHON_CMD" -m venv "$VENV_DIR"
     PYTHON_BIN="$VENV_DIR/bin/python"
+    require_python_min_version "$PYTHON_BIN" "created virtual environment" || exit 1
 fi
 
 cd "$REPO_ROOT"
@@ -219,25 +216,4 @@ fi
 ASSISTANT_AGENT_KANBAN_CONFIG=$CONFIG_PATH \
     "$PYTHON_BIN" -c 'import os; from assistant_agent_kanban.config import load_config; load_config(os.environ["ASSISTANT_AGENT_KANBAN_CONFIG"])' >/dev/null
 
-printf '%s\n' "Initialized assistant-agent-kanban"
-printf 'venv: %s\n' "$VENV_DIR"
-printf 'config: %s\n' "$CONFIG_PATH"
-if [ "$CONFIG_WRITE_PATH" != "$CONFIG_PATH" ]; then
-    printf 'local overrides: %s\n' "$CONFIG_WRITE_PATH"
-fi
-if [ -n "$REPO_DISCOVERY_ROOT" ]; then
-    printf 'repo discovery root: %s\n' "$REPO_DISCOVERY_ROOT"
-fi
-if [ -n "$KANBAN_ROOT" ]; then
-    printf 'kanban root: %s\n' "$KANBAN_ROOT"
-fi
-if [ -n "$CODING_ASSISTANT" ]; then
-    printf 'coding assistant: %s\n' "$CODING_ASSISTANT"
-fi
-if [ -n "$LANGUAGE" ]; then
-    printf 'language: %s\n' "$LANGUAGE"
-fi
-if [ -n "$THEME" ]; then
-    printf 'theme: %s\n' "$THEME"
-fi
-printf 'next: ./run.sh\n'
+init_print_summary
