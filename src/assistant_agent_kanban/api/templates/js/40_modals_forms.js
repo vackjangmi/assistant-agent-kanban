@@ -1001,9 +1001,11 @@
     }
 
     function setTaskTab(tab, { load = true } = {}) {
+      if (tab === 'inspector' && taskTabInspector.hidden) tab = 'overview';
       const previousTab = activeTaskTab;
       activeTaskTab = tab;
       taskTabOverview.classList.toggle('active', tab === 'overview');
+      taskTabInspector.classList.toggle('active', tab === 'inspector');
       taskTabLogs.classList.toggle('active', tab === 'logs');
       taskTabChangedFiles.classList.toggle('active', tab === 'changed-files');
       taskTabQaChecklist.classList.toggle('active', tab === 'qa-checklist');
@@ -1011,6 +1013,7 @@
       taskTabReviewNote.classList.toggle('active', tab === 'review-note');
       taskTabEditor.classList.toggle('active', tab === 'editor');
       taskPanelOverview.hidden = tab !== 'overview';
+      taskPanelInspector.hidden = tab !== 'inspector';
       taskPanelLogs.hidden = tab !== 'logs';
       taskPanelChangedFiles.hidden = tab !== 'changed-files';
       taskPanelQaChecklist.hidden = tab !== 'qa-checklist';
@@ -1024,6 +1027,7 @@
       }
       updateReviewerQaLiveRefresh();
       if (!load) return;
+      if (tab === 'inspector' && activeTaskId) loadTaskInspection(activeTaskId);
       if (tab === 'logs' && activeTaskId) loadTaskLogs(activeTaskId);
       if (tab === 'changed-files' && activeTaskId) loadChangedFile(activeTaskId, activeChangedFileId);
       if (tab === 'qa-checklist') renderQaChecklistPanel();
@@ -1032,7 +1036,9 @@
     }
 
     function taskChromeState(state = '') {
+      const inspectorVisible = Boolean(state) && state !== 'done' && state !== 'closed';
       return {
+        inspectorVisible,
         changedFilesVisible: state === 'human-verifying',
         qaChecklistVisible: state === 'completed-reviews' || state === 'human-verifying',
         reviewerQaVisible: state === 'completed-reviews' || state === 'human-verifying',
@@ -1058,6 +1064,7 @@
       const nextTab = preserveTab ? activeTaskTab : chrome.defaultTab;
       document.getElementById('task-modal-title').textContent = snapshot?.title || translateTask('modalTitle');
       document.getElementById('task-modal-subtitle').innerHTML = renderTaskSubtitleTags(snapshot);
+      taskTabInspector.hidden = !chrome.inspectorVisible;
       taskTabChangedFiles.hidden = !chrome.changedFilesVisible;
       taskTabQaChecklist.hidden = !chrome.qaChecklistVisible;
       taskTabReviewerQa.hidden = !chrome.reviewerQaVisible;
@@ -1095,6 +1102,7 @@
       deleteTaskButton.hidden = !snapshot || !canActOnTask;
       deleteTaskButton.disabled = deleteTaskButton.hidden;
       if (state === 'waiting-check-plans' || state === 'plan-approving') activeArtifactName = 'PLAN.md';
+      if (!chrome.inspectorVisible && taskTabInspector.classList.contains('active')) setTaskTab('overview', { load: false });
       setTaskTab(nextTab, { load: false });
       return nextTab;
     }

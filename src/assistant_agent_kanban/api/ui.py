@@ -23,6 +23,7 @@ JS_MANIFEST = [
     "70_task_panels.js",
     "71_task_artifacts.js",
     "72_task_actions.js",
+    "73_task_inspector.js",
     "80_event_wiring.js",
     "99_sse.js",
 ]

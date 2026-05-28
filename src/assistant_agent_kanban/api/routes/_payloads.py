@@ -75,6 +75,11 @@ class ReviewerQuestionPayload(BaseModel):
     question: str = ""
 
 
+class InspectorQuestionPayload(BaseModel):
+    question: str = ""
+    question_id: str | None = None
+
+
 class RetrospectivePayload(BaseModel):
     target_repo_root: str
     base_branch: str

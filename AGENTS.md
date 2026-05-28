@@ -240,5 +240,6 @@ The real prompt contract sources for each role are these files.
 - `.opencode/agents/fs-kanban-implementer.md`
 - `.opencode/agents/fs-kanban-reviewer.md`
 - `.opencode/agents/fs-kanban-committer.md`
+- `.opencode/agents/fs-kanban-inspector.md`
 
 Do not copy long prompts into `AGENTS.md`. Keep only repository rules and invariants here.

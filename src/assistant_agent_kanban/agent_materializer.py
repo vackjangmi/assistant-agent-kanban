@@ -7,6 +7,9 @@ from typing import cast
 from .config import ASSISTANT_ROLES, AppConfig, AssistantRole, PROJECT_ROOT
 
 
+OPENCODE_AGENT_ROLES: tuple[AssistantRole, ...] = (*ASSISTANT_ROLES, "inspector")
+
+
 def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
     role = _role_for_agent_name(config, agent_name)
     if role is None or config.backend_for_role(role) != "opencode":
@@ -25,7 +28,7 @@ def ensure_runtime_agent(config: AppConfig, agent_name: str) -> Path | None:
 def ensure_runtime_agents(config: AppConfig) -> list[Path]:
     materialized: list[Path] = []
     seen: set[str] = set()
-    for role in ASSISTANT_ROLES:
+    for role in OPENCODE_AGENT_ROLES:
         if config.backend_for_role(role) != "opencode":
             continue
         agent_name = config.role_agent(role)
@@ -58,7 +61,7 @@ def _model_for_agent(config: AppConfig, agent_name: str) -> str | None:
 
 
 def _role_for_agent_name(config: AppConfig, agent_name: str) -> AssistantRole | None:
-    for role in ASSISTANT_ROLES:
+    for role in OPENCODE_AGENT_ROLES:
         if getattr(config.opencode, f"{role}_agent") == agent_name:
             return cast(AssistantRole, role)
     return None

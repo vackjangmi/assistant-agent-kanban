@@ -148,10 +148,17 @@
       retrospectiveCreateTargetButton.textContent = translateTask('retrospectiveCreateTarget');
       retrospectiveCreateBranchButton.textContent = translateTask('retrospectiveCreateBranch');
       taskTabOverview.textContent = translateTask('tabOverview');
+      taskTabInspector.textContent = translateTask('tabInspector');
       taskTabLogs.textContent = translateTask('tabLogs');
       taskTabEditor.textContent = translateTask('tabViewer');
       taskTabChangedFiles.textContent = translateTask('tabChangedFiles');
       taskTabQaChecklist.textContent = translateHumanReview('qaChecklistTab');
+      setTaskText('task-inspector-title', 'taskInspector');
+      setTaskText('refresh-task-inspection', 'inspectorRefresh');
+      setTaskText('task-inspector-faq-title', 'inspectorFaqTitle');
+      taskInspectorInput.placeholder = translateTask('inspectorInputPlaceholder');
+      askTaskInspectorButton.textContent = translateTask('inspectorAsk');
+      if (activeTaskInspection && typeof renderTaskInspection === 'function') renderTaskInspection(activeTaskInspection);
       taskQaChecklistTitle.textContent = translateHumanReview('qaChecklistTitle');
       taskTabReviewerQa.textContent = translateTask('tabReviewerQa');
       askReviewerQuestionButton.textContent = translateTask('reviewerQaSend');

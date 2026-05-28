@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 from types import MethodType
 from types import SimpleNamespace
 
 from assistant_agent_kanban.config import AssistantBackend
 from assistant_agent_kanban.events import EventBus
+from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.models import BoardSnapshot
 from assistant_agent_kanban.runtime import RuntimeSupervisor
 from assistant_agent_kanban.scanner import KanbanScanner
 from assistant_agent_kanban.metadata_store import MetadataStore
+from assistant_agent_kanban.transitions import TransitionManager
+from assistant_agent_kanban.workers.base import WorkerBase
 
-from .conftest import create_request_task
+from .conftest import FakeAdapter, create_request_task
 
 
 class DummyBoardService:
@@ -86,6 +90,43 @@ class BlockingWorker:
         return True
 
 
+def test_worker_adapter_run_refreshes_lease_heartbeat(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.locks.heartbeat_seconds = 0.01
+    create_request_task(config, "heartbeat-worker-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    worker = WorkerBase(config, scanner, metadata_store, locks, transitions, EventBus())
+    task = scanner.scan()[0]
+    adapter = FakeAdapter(["done"], side_effect=lambda _cwd: time.sleep(0.25))
+
+    async def scenario() -> None:
+        with locks.acquire(task.task_dir, task.metadata, owner=worker.worker_name, run_id="worker-run-1"):
+            initial_heartbeat = task.metadata.lease.heartbeat_at
+            assert initial_heartbeat is not None
+            await worker.run_adapter_with_heartbeat(
+                adapter,
+                task_dir=task.task_dir,
+                metadata=task.metadata,
+                run_id="worker-run-1",
+                agent="agent",
+                prompt="prompt",
+                cwd=repo_root,
+                run_log_path=config.runs_dir / task.metadata.task_id / "worker.jsonl",
+                config=config,
+                output_format="default",
+            )
+            refreshed = metadata_store.load(task.task_dir)
+            assert refreshed.lease.owner == worker.worker_name
+            assert refreshed.lease.run_id == "worker-run-1"
+            assert refreshed.lease.heartbeat_at is not None
+            assert refreshed.lease.heartbeat_at > initial_heartbeat
+
+    asyncio.run(scenario())
+
+
 def test_runtime_supervisor_schedules_per_role_parallelism_without_duplicate_tasks(configured_paths):
     config, _, _ = configured_paths
     config.runtime.planner_agent_count = 2
@@ -121,6 +162,7 @@ def test_runtime_supervisor_schedules_per_role_parallelism_without_duplicate_tas
         object(),
         scanner,
         DummyBoardService(),
+        object(),
         object(),
         object(),
         object(),
@@ -196,6 +238,7 @@ def test_runtime_supervisor_force_delete_cancels_task_and_deletes(configured_pat
         deletion_service,
         object(),
         object(),
+        object(),
         DummyRecoveryService(),
         EventBus(),
         DummyModelRegistry(),
@@ -233,6 +276,7 @@ def test_runtime_supervisor_restarts_dispatch_loop_after_failure(configured_path
         object(),
         KanbanScanner(config, MetadataStore()),
         DummyBoardService(),
+        object(),
         object(),
         object(),
         object(),
@@ -284,6 +328,7 @@ def test_runtime_supervisor_restarts_watch_loop_after_failure(configured_paths):
         object(),
         object(),
         object(),
+        object(),
         DummyRecoveryService(),
         EventBus(),
         DummyModelRegistry(),
@@ -329,6 +374,7 @@ def test_runtime_supervisor_ignores_runtime_only_watch_changes(configured_paths)
         object(),
         object(),
         object(),
+        object(),
         DummyRecoveryService(),
         EventBus(),
         DummyModelRegistry(),
@@ -348,6 +394,7 @@ def test_runtime_supervisor_rescans_when_non_runtime_path_changes(configured_pat
         object(),
         KanbanScanner(config, MetadataStore()),
         DummyBoardService(),
+        object(),
         object(),
         object(),
         object(),

@@ -18,7 +18,7 @@ DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
 AssistantBackend = Literal["claude", "codex", "antigravity", "gemini", "opencode"]
-AssistantRole = Literal["planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit"]
+AssistantRole = Literal["planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit", "inspector"]
 ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "request_draft", "plan_approval", "implementer", "reviewer", "commit")
 TASK_RUNTIME_ASSISTANT_ROLES: tuple[AssistantRole, ...] = ("planner", "plan_approval", "implementer", "reviewer", "commit")
 SUPPORTED_RUNTIME_ASSISTANTS = {
@@ -63,6 +63,7 @@ class OpenCodeConfig(BaseModel):
     commit_agent: str = "fs-kanban-committer"
     commit_model: str | None = None
     commit_session_token_budget: int = Field(default=DEFAULT_SESSION_TOKEN_BUDGET, ge=1)
+    inspector_agent: str = "fs-kanban-inspector"
     timeout_seconds: int = 1800
 
 
@@ -258,6 +259,7 @@ class AppConfig(BaseModel):
             "_runtime/human-verifications",
             "_runtime/runs",
             "_runtime/archive-runs",
+            "_runtime/inspections",
             "_runtime/request-drafts",
             "_runtime/request-uploads",
             "_runtime/events",
@@ -308,6 +310,8 @@ class AppConfig(BaseModel):
         return self.runtime.coding_assistant
 
     def backend_for_role(self, role: AssistantRole) -> AssistantBackend:
+        if role == "inspector":
+            return self.backend_for_role("commit")
         override = getattr(self.runtime.role_backends, role)
         return override or self.active_backend()
 
@@ -337,12 +341,16 @@ class AppConfig(BaseModel):
         return f"fs-kanban-{role.replace('_', '-')}"
 
     def role_model(self, role: AssistantRole) -> str | None:
+        if role == "inspector":
+            return self.role_model("commit")
         return getattr(self.backend_config(role=role), f"{role}_model")
 
     def set_role_model(self, role: AssistantRole, value: str | None) -> None:
         setattr(self.backend_config(role=role), f"{role}_model", value)
 
     def role_session_token_budget(self, role: AssistantRole) -> int:
+        if role == "inspector":
+            return self.role_session_token_budget("commit")
         return getattr(self.backend_config(role=role), f"{role}_session_token_budget")
 
     def set_role_session_token_budget(self, role: AssistantRole, value: int) -> None:
@@ -412,6 +420,10 @@ class AppConfig(BaseModel):
     @property
     def archive_runs_dir(self) -> Path:
         return self.kanban_root / "_runtime/archive-runs"
+
+    @property
+    def inspections_dir(self) -> Path:
+        return self.kanban_root / "_runtime/inspections"
 
     @property
     def human_verifications_dir(self) -> Path:

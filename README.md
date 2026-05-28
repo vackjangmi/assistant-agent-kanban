@@ -202,7 +202,8 @@ repo-root/
 │     ├─ fs-kanban-request-draft.md
 │     ├─ fs-kanban-implementer.md
 │     ├─ fs-kanban-reviewer.md
-│     └─ fs-kanban-committer.md
+│     ├─ fs-kanban-committer.md
+│     └─ fs-kanban-inspector.md
 ├─ .kanban-agent/
 │  ├─ requests/
 │  ├─ planning/
@@ -350,6 +351,14 @@ assistant-agent-kanban request "Refactor login flow" \
 assistant-agent-kanban logs TASK-0001 --kanban-root ./.kanban-agent
 ```
 
+#### Inspect a Task
+
+```bash
+assistant-agent-kanban inspect TASK-0001 --kanban-root ./.kanban-agent
+assistant-agent-kanban inspect TASK-0001 --faq is-running --kanban-root ./.kanban-agent
+assistant-agent-kanban inspect TASK-0001 --ask "Is this task stuck?" --kanban-root ./.kanban-agent
+```
+
 #### Run the App
 
 ```bash
@@ -360,6 +369,7 @@ assistant-agent-kanban serve --config ./config.local.yaml --host 0.0.0.0 --port 
 
 - view the kanban board (with phase tabs and a final/done board view)
 - inspect tasks by state, including request drafts
+- inspect task health with read-only FAQ diagnostics and custom inspector questions
 - open task detail modal for metadata, logs, artifacts, and token usage summaries
 - read `REQUEST.md`, `PLAN.md`, work/review/human-QA/human-verification documents
 - edit and approve `PLAN.md` in supported states
@@ -400,6 +410,7 @@ Important keys:
 - `workspace.*`
 - `locks.*`
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent counts, auto-dispatch
+- Task inspector Q&A uses a task-scoped inspector session and borrows the `commit` runtime profile for assistant/model/token settings.
 - `repo_discovery.*`
 - `slack.*` (optional)
 - `auth.*` — optional login/session support backed by local SQLite. The first admin account is created from `/login` when auth is enabled and the user table is empty.
@@ -706,7 +717,8 @@ repo-root/
 │     ├─ fs-kanban-request-draft.md
 │     ├─ fs-kanban-implementer.md
 │     ├─ fs-kanban-reviewer.md
-│     └─ fs-kanban-committer.md
+│     ├─ fs-kanban-committer.md
+│     └─ fs-kanban-inspector.md
 ├─ .kanban-agent/
 │  ├─ requests/
 │  ├─ planning/
@@ -854,6 +866,14 @@ assistant-agent-kanban request "로그인 플로우 리팩터링" \
 assistant-agent-kanban logs TASK-0001 --kanban-root ./.kanban-agent
 ```
 
+#### 작업 진단
+
+```bash
+assistant-agent-kanban inspect TASK-0001 --kanban-root ./.kanban-agent
+assistant-agent-kanban inspect TASK-0001 --faq is-running --kanban-root ./.kanban-agent
+assistant-agent-kanban inspect TASK-0001 --ask "이 작업이 멈춘 것 같아?" --kanban-root ./.kanban-agent
+```
+
 #### 앱 실행
 
 ```bash
@@ -864,6 +884,7 @@ assistant-agent-kanban serve --config ./config.local.yaml --host 0.0.0.0 --port 
 
 - 칸반 보드 보기 (phase tab, final/done 보드 포함)
 - 상태별 task 카드 및 request draft 확인
+- read-only FAQ 진단과 직접 질문으로 task health 확인
 - task 상세 팝업에서 metadata/로그/문서/토큰 사용량 요약 확인
 - `REQUEST.md`, `PLAN.md`, 구현/리뷰/사람 QA/사람 검증 문서 열람
 - 특정 상태에서 `PLAN.md` 편집 및 승인
@@ -904,6 +925,7 @@ Slack 설정은 config 파일의 `slack:` 섹션에서 관리하며, bot token (
 - `workspace.*`
 - `locks.*`
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent count, auto-dispatch
+- 작업 인스펙터 Q&A는 task별 inspector 세션 하나를 유지하며 assistant/model/token 설정은 `commit` 런타임 프로필을 공유합니다.
 - `repo_discovery.*`
 - `slack.*` (선택)
 - `auth.*` — local SQLite 기반 로그인/session 설정. auth가 켜져 있고 사용자가 없으면 `/login`에서 첫 admin 계정을 생성합니다.

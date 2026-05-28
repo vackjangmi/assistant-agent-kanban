@@ -70,8 +70,11 @@ class PlanningWorker(WorkerBase):
 
             if not self._uses_multi_phase_planning(run_config):
                 self.append_log_marker(log_path=log_path, phase="run", cycle=revision)
-                result = await asyncio.to_thread(
-                    adapter.run,
+                result = await self.run_adapter_with_heartbeat(
+                    adapter,
+                    task_dir=planning.task_dir,
+                    metadata=planning.metadata,
+                    run_id=run_id,
                     agent=run_config.role_agent("planner"),
                     prompt=live_prompt,
                     cwd=planner_cwd,
@@ -122,11 +125,15 @@ class PlanningWorker(WorkerBase):
                     log_path=log_path,
                     revision=revision,
                     active_session_id=result.session_id or session_id,
+                    run_id=run_id,
                 )
             else:
                 self.append_log_marker(log_path=log_path, phase="handshake", cycle=revision)
-                handshake_result = await asyncio.to_thread(
-                    adapter.run,
+                handshake_result = await self.run_adapter_with_heartbeat(
+                    adapter,
+                    task_dir=planning.task_dir,
+                    metadata=planning.metadata,
+                    run_id=run_id,
                     agent=run_config.role_agent("planner"),
                     prompt=handshake_prompt,
                     cwd=planner_cwd,
@@ -160,8 +167,11 @@ class PlanningWorker(WorkerBase):
 
                 active_session_id = handshake_result.session_id or session_id
                 self.append_log_marker(log_path=log_path, phase="live", cycle=revision)
-                live_result = await asyncio.to_thread(
-                    adapter.run,
+                live_result = await self.run_adapter_with_heartbeat(
+                    adapter,
+                    task_dir=planning.task_dir,
+                    metadata=planning.metadata,
+                    run_id=run_id,
                     agent=run_config.role_agent("planner"),
                     prompt=live_prompt,
                     cwd=planner_cwd,
@@ -204,6 +214,7 @@ class PlanningWorker(WorkerBase):
                     log_path=log_path,
                     revision=revision,
                     active_session_id=live_result.session_id or active_session_id,
+                    run_id=run_id,
                 )
 
             clear_retry_gate(planning.metadata)
@@ -244,10 +255,14 @@ class PlanningWorker(WorkerBase):
         log_path: Path,
         revision: int,
         active_session_id: str | None,
+        run_id: str,
     ) -> RunResult:
         self.append_log_marker(log_path=log_path, phase="finalize", cycle=revision)
-        finalize_result = await asyncio.to_thread(
-            adapter.run,
+        finalize_result = await self.run_adapter_with_heartbeat(
+            adapter,
+            task_dir=planning.task_dir,
+            metadata=planning.metadata,
+            run_id=run_id,
             agent=run_config.role_agent("planner"),
             prompt=self._finalize_prompt(request_text, planning.metadata),
             cwd=planner_cwd,
@@ -268,8 +283,11 @@ class PlanningWorker(WorkerBase):
             self._write_rejected_plan_artifact(planning.task_dir, artifact_result, rejection_reason=failure_reason)
             repair_attempt += 1
             repair_session_id = planning.metadata.plan.session_id
-            repair_result = await asyncio.to_thread(
-                adapter.run,
+            repair_result = await self.run_adapter_with_heartbeat(
+                adapter,
+                task_dir=planning.task_dir,
+                metadata=planning.metadata,
+                run_id=run_id,
                 agent=run_config.role_agent("planner"),
                 prompt=self._repair_finalize_prompt(
                     request_text,

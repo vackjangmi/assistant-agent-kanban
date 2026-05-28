@@ -1379,7 +1379,12 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "requestAnimationFrame(resetArtifactViewerScroll);" in response.text
     assert "let boardTaskSnapshots = new Map();" in response.text
     assert "function setTaskTab(tab, { load = true } = {})" in response.text
+    assert 'id="task-tab-inspector" hidden' in response.text
+    assert "if (tab === 'inspector' && taskTabInspector.hidden) tab = 'overview';" in response.text
     assert "function taskChromeState(state = '')" in response.text
+    assert "const inspectorVisible = Boolean(state) && state !== 'done' && state !== 'closed';" in response.text
+    assert "taskTabInspector.hidden = !chrome.inspectorVisible;" in response.text
+    assert "if (resolvedTab === 'inspector' && !taskChromeState(detail.metadata.state).inspectorVisible) resolvedTab = 'overview';" in response.text
     assert "changedFilesVisible: state === 'human-verifying'" in response.text
     assert "const changedFilesVisible = metadata.state !== 'done' && Boolean(detail.changed_files_available || detail.changed_files.length > 0);" in response.text
     assert "hydrateTaskModalChrome(snapshot, { preserveTab });" in response.text

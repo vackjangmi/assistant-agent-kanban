@@ -205,6 +205,8 @@ def _role_from_agent(agent: str) -> AssistantRole:
         return "implementer"
     if suffix == "reviewer":
         return "reviewer"
+    if suffix == "inspector":
+        return "inspector"
     if suffix == "commit":
         return "commit"
     return "planner"

@@ -23,6 +23,7 @@ opencode:
   commit_agent: fs-kanban-committer
   commit_model: null
   commit_session_token_budget: 250000
+  inspector_agent: fs-kanban-inspector
   timeout_seconds: 1800
 
 codex:

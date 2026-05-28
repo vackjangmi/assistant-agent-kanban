@@ -85,8 +85,11 @@ class ImplementerWorker(WorkerBase):
 
             if not self.worker_live_logs_enabled(run_config):
                 self.append_log_marker(log_path=log_path, phase="run", cycle=cycle)
-                result = await asyncio.to_thread(
-                    adapter.run,
+                result = await self.run_adapter_with_heartbeat(
+                    adapter,
+                    task_dir=implementing.task_dir,
+                    metadata=implementing.metadata,
+                    run_id=run_id,
                     agent=run_config.role_agent("implementer"),
                     prompt=live_prompt,
                     cwd=workspace_repo,
@@ -170,8 +173,11 @@ class ImplementerWorker(WorkerBase):
                 return True
 
             self.append_log_marker(log_path=log_path, phase="handshake", cycle=cycle)
-            handshake_result = await asyncio.to_thread(
-                adapter.run,
+            handshake_result = await self.run_adapter_with_heartbeat(
+                adapter,
+                task_dir=implementing.task_dir,
+                metadata=implementing.metadata,
+                run_id=run_id,
                 agent=run_config.role_agent("implementer"),
                 prompt=handshake_prompt,
                 cwd=workspace_repo,
@@ -225,6 +231,7 @@ class ImplementerWorker(WorkerBase):
                 run_config=run_config,
                 session_id=active_session_id,
                 loop=loop,
+                run_id=run_id,
                 output_format="default",
                 stream_stderr_to_log=True,
             )
@@ -280,8 +287,11 @@ class ImplementerWorker(WorkerBase):
 
             if success:
                 self.append_log_marker(log_path=log_path, phase="finalize", cycle=cycle)
-                finalize_result = await asyncio.to_thread(
-                    adapter.run,
+                finalize_result = await self.run_adapter_with_heartbeat(
+                    adapter,
+                    task_dir=implementing.task_dir,
+                    metadata=implementing.metadata,
+                    run_id=run_id,
                     agent=run_config.role_agent("implementer"),
                     prompt=finalize_prompt,
                     cwd=workspace_repo,
@@ -561,12 +571,16 @@ class ImplementerWorker(WorkerBase):
         run_config,
         session_id: str | None,
         loop,
+        run_id: str,
         output_format: str = "json",
         stream_stderr_to_log: bool = False,
         show_thinking: bool = False,
     ) -> RunResult:
-        result = await asyncio.to_thread(
-            adapter.run,
+        result = await self.run_adapter_with_heartbeat(
+            adapter,
+            task_dir=implementing.task_dir,
+            metadata=implementing.metadata,
+            run_id=run_id,
             agent=run_config.role_agent("implementer"),
             prompt=prompt,
             cwd=workspace_repo,
@@ -582,8 +596,11 @@ class ImplementerWorker(WorkerBase):
         )
         if not self._is_interrupted_run(result):
             return result
-        return await asyncio.to_thread(
-            adapter.run,
+        return await self.run_adapter_with_heartbeat(
+            adapter,
+            task_dir=implementing.task_dir,
+            metadata=implementing.metadata,
+            run_id=run_id,
             agent=run_config.role_agent("implementer"),
             prompt=prompt,
             cwd=workspace_repo,

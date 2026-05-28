@@ -26,6 +26,10 @@ class AdapterRunError(FsKanbanError):
     pass
 
 
+class InspectionError(FsKanbanError):
+    pass
+
+
 class IntegrationError(FsKanbanError):
     pass
 

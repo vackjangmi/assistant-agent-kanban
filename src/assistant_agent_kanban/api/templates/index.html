@@ -747,8 +747,8 @@
                   <small id="settings-reviewer-note">Assistant override, model, token budget, and parallel agents.</small>
                 </div>
                 <div class="settings-card">
-                  <strong id="settings-commit-title">Commit runtime</strong>
-                  <span id="settings-commit-description">Commit message generation.</span>
+                  <strong id="settings-commit-title">Commit / Inspector runtime</strong>
+                  <span id="settings-commit-description">Commit message generation and task inspector Q&amp;A.</span>
                   <div class="settings-role-inline settings-role-inline-no-agents">
                     <div class="settings-field">
                       <label id="settings-commit-assistant-label" for="commit_backend">Assistant</label>
@@ -767,7 +767,7 @@
                       <div class="settings-input-with-suffix"><input id="commit_session_token_budget" name="commit_session_token_budget" type="number" min="1" step="1" placeholder="250"><span class="settings-input-suffix">K</span></div>
                     </div>
                   </div>
-                  <small id="settings-commit-note">Assistant override, model, and token budget.</small>
+                  <small id="settings-commit-note">Assistant override, model, and token budget. The task inspector borrows this runtime profile, but keeps a separate task-scoped session.</small>
                 </div>
               </div>
             </section>
@@ -808,6 +808,7 @@
       <div id="task-approval-gate-notice" class="approval-gate-notice" role="status" aria-live="polite" hidden></div>
       <div class="task-tabs">
         <button type="button" id="task-tab-overview" class="active">Overview</button>
+        <button type="button" id="task-tab-inspector" hidden>Inspector</button>
         <button type="button" id="task-tab-logs" hidden>Logs</button>
         <button type="button" id="task-tab-editor" hidden>Viewer</button>
         <button type="button" id="task-tab-changed-files" hidden>Changed files</button>
@@ -818,6 +819,31 @@
       <section id="task-panel-overview" class="task-panel">
         <div class="task-panel-scroll">
           <div id="task-overview" class="muted">Select a task to inspect.</div>
+        </div>
+      </section>
+      <section id="task-panel-inspector" class="task-panel" hidden>
+        <div id="task-inspector-panel" class="task-inspector-panel">
+          <div class="task-inspector-shell">
+            <div class="task-inspector-summary">
+              <div>
+                <strong id="task-inspector-title">Task inspector</strong>
+                <div id="task-inspector-status" class="muted">Run a read-only diagnosis for this task.</div>
+              </div>
+              <button type="button" id="refresh-task-inspection" class="ghost-button">Refresh</button>
+            </div>
+            <div id="task-inspector-signals" class="task-inspector-signals"></div>
+            <div class="task-inspector-faq">
+              <strong id="task-inspector-faq-title">Frequently asked</strong>
+              <div id="task-inspector-faq-buttons" class="task-inspector-faq-buttons"></div>
+            </div>
+            <div id="task-inspector-answer" class="task-inspector-answer" role="log" aria-live="polite">
+              <p class="task-inspector-empty">Ask a read-only question about this task.</p>
+            </div>
+            <div class="task-inspector-composer">
+              <textarea id="task-inspector-input" class="editor-textarea task-inspector-input" spellcheck="true" placeholder="Ask whether this task is running, waiting, blocked, or what changed..."></textarea>
+              <button type="button" id="ask-task-inspector" class="reviewer-qa-send">Ask</button>
+            </div>
+          </div>
         </div>
       </section>
       <section id="task-panel-logs" class="task-panel" hidden>

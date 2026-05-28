@@ -235,6 +235,7 @@
       loadBoard();
     });
     taskTabOverview.addEventListener('click', () => setTaskTab('overview'));
+    taskTabInspector.addEventListener('click', () => setTaskTab('inspector'));
     taskTabLogs.addEventListener('click', () => setTaskTab('logs'));
     taskTabChangedFiles.addEventListener('click', () => setTaskTab('changed-files'));
     taskTabQaChecklist.addEventListener('click', () => setTaskTab('qa-checklist'));
@@ -401,6 +402,9 @@
     saveHumanReviewNoteButton.addEventListener('click', () => saveHumanReviewNoteIfNeeded().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateHumanReviewPanel(); }));
     askReviewerQuestionButton.addEventListener('click', () => askReviewerQuestion().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateReviewerQaPanel(); }));
     taskReviewerQaInput.addEventListener('input', () => updateReviewerQaPanel());
+    refreshTaskInspectionButton.addEventListener('click', () => loadTaskInspection(activeTaskId, { force: true }).catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; }));
+    askTaskInspectorButton.addEventListener('click', () => askTaskInspector().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateTaskInspectorPanel(); }));
+    taskInspectorInput.addEventListener('input', () => updateTaskInspectorPanel());
     requestChangesButton.addEventListener('click', rejectVerification);
     approveHumanReviewButton.addEventListener('click', openApprovalChoiceModal);
     approvalChoiceTargetButton.addEventListener('click', () => { approveVerification('target-branch'); });
@@ -430,6 +434,9 @@
           taskModalError.textContent = error.message;
           updateCompletedGroupControls();
         });
+      }
+      if (action === 'open-inspector') {
+        setTaskTab('inspector');
       }
     });
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
