@@ -97,7 +97,9 @@
       updatePlanActionState();
       updateHumanVerificationState();
       updateTaskDeleteState();
-      scheduleActiveTaskRefresh({ reloadArtifact: stateChanged });
+      if (stateChanged || activeTaskTab !== 'editor') {
+        scheduleActiveTaskRefresh({ reloadArtifact: stateChanged });
+      }
     }
 
     async function loadBoard() {
@@ -259,6 +261,10 @@
 
     function userIconSvg(className = 'card-user-icon') {
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 8.25a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 1.25c-2.82 0-5.25 1.64-5.25 3.66 0 .49.4.89.89.89h8.72c.49 0 .89-.4.89-.89C13.25 11.14 10.82 9.5 8 9.5Z" fill="currentColor"/></svg>`;
+    }
+
+    function refreshIconSvg(className = 'rerequest-icon') {
+      return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style="width: 13px; height: 13px; display: inline-block; vertical-align: middle; margin-right: 6px;"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>`;
     }
 
     function taskOwnerName(task) {
@@ -814,7 +820,7 @@
         const side = entry.role === 'question' ? 'current' : (entry.role === 'answer' ? 'other' : 'system');
         const liveBadge = entry.pending && entry.role === 'answer' ? `<span class="transcript-live-badge">${escapeHtml(formatTranscriptLiveBadge('live'))}</span>` : '';
         const rerequestAction = allowRerequest && entry.role === 'answer' && !entry.pending && lastAnsweredIndex === index
-          ? `<div class="reviewer-qa-entry-actions"><button type="button" class="ghost-button reviewer-qa-rerequest" data-reviewer-qa-rerequest="true"${rerequestDisabled ? ' disabled' : ''}>재요청하기</button>${rerequestActionStatus}</div>`
+          ? `<div class="reviewer-qa-entry-actions"><button type="button" class="accent-button reviewer-qa-rerequest" data-reviewer-qa-rerequest="true"${rerequestDisabled ? ' disabled' : ''}>${refreshIconSvg('rerequest-btn-icon')}재요청하기</button>${rerequestActionStatus}</div>`
           : '';
         return `<article class="reviewer-qa-entry" data-role="${escapeHtml(entry.role)}" data-side="${side}"${entry.pending ? ' data-pending="true"' : ''}><div class="reviewer-qa-shell"><div class="reviewer-qa-meta"><span class="reviewer-qa-role">${escapeHtml(label)}</span><div class="reviewer-qa-meta-badges">${liveBadge}</div></div><div class="reviewer-qa-bubble">${escapeHtml(entry.text)}</div>${rerequestAction}</div></article>`;
       }).join('');

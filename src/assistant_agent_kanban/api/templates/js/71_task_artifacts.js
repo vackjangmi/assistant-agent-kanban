@@ -167,14 +167,21 @@
       if (!state) return;
       const nextMax = Math.max(0, taskLogViewer.scrollHeight - taskLogViewer.clientHeight);
       if (state.wasNearBottom || (!state.hadScrollableOverflow && nextMax > 0)) {
-        taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
-        taskLogViewerPinnedToBottom = true;
+        scheduleTaskLogViewerScrollToBottom();
         return;
       }
       taskLogViewer.scrollTop = state.scrollTop;
       taskLogViewerPinnedToBottom = false;
     }
 
+    function scheduleTaskLogViewerScrollToBottom(framesRemaining = 4) {
+      window.requestAnimationFrame(() => {
+        scrollTaskLogViewerToBottom();
+        if (framesRemaining > 1) {
+          scheduleTaskLogViewerScrollToBottom(framesRemaining - 1);
+        }
+      });
+    }
 
     function scrollTaskLogViewerToBottom() {
       taskLogViewer.scrollTop = taskLogViewer.scrollHeight;
@@ -354,6 +361,8 @@
         setPlanEditorContent('');
         setArtifactMode(false);
         activeArtifactName = null;
+        activeArtifactRenderedName = null;
+        activeArtifactRenderedContent = null;
         activeLogName = null;
         planEditMode = false;
         savePlanButton.disabled = true;
@@ -664,6 +673,16 @@
       });
     }
 
+    function scheduleArtifactViewerScrollRestore(state, framesRemaining = 4) {
+      if (!state) return;
+      window.requestAnimationFrame(() => {
+        restoreArtifactViewerScrollState(state);
+        if (framesRemaining > 1) {
+          scheduleArtifactViewerScrollRestore(state, framesRemaining - 1);
+        }
+      });
+    }
+
     async function loadMarkdownArtifact(taskId, filename = null) {
       if (!activeTaskDetail || !activeTaskDetail.markdown_files.length) return;
       const resolvedArtifactName = filename && activeTaskDetail.markdown_files.includes(filename) ? filename : preferredArtifact(activeTaskDetail.markdown_files);
@@ -684,14 +703,22 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('unableLoadArtifact', { name: activeArtifactName || 'artifact' }));
         if (requestToken !== activeArtifactRequestToken || taskId !== activeTaskId || activeArtifactName !== resolvedArtifactName) return;
-        planSourceMarkdown = payload.content;
-        setPlanEditorContent(payload.content);
+        const nextContent = payload.content || '';
+        const contentAlreadyRendered = isSameArtifact
+          && activeArtifactRenderedName === resolvedArtifactName
+          && activeArtifactRenderedContent === nextContent;
+        planSourceMarkdown = nextContent;
+        if (!contentAlreadyRendered) {
+          setPlanEditorContent(nextContent);
+          activeArtifactRenderedName = resolvedArtifactName;
+          activeArtifactRenderedContent = nextContent;
+        }
         const editable = activeTaskDetail.metadata.state === 'waiting-check-plans' && activeArtifactName === 'PLAN.md' && planEditMode;
         setArtifactMode(editable);
         updatePlanActionState();
         setTaskEditorMessage('');
         if (isSameArtifact && scrollState) {
-          requestAnimationFrame(() => restoreArtifactViewerScrollState(scrollState));
+          scheduleArtifactViewerScrollRestore(scrollState);
         } else {
           requestAnimationFrame(resetArtifactViewerScroll);
         }
@@ -726,6 +753,8 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || translateTask('failedSavePlan'));
         planSourceMarkdown = normalizedContent;
+        activeArtifactRenderedName = 'PLAN.md';
+        activeArtifactRenderedContent = normalizedContent;
         setTaskEditorMessage(translateTask('savedPlan'));
         if (taskDetailStale) scheduleActiveTaskRefresh();
       } catch (error) {

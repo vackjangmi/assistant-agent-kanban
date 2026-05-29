@@ -329,6 +329,8 @@
     let activeChangedFileId = null;
     let activeChangedFileDetail = null;
     let activeArtifactName = null;
+    let activeArtifactRenderedName = null;
+    let activeArtifactRenderedContent = null;
     let activeLogName = null;
     let activeArtifactRequestToken = 0;
     let activeTaskLogRequestToken = 0;
