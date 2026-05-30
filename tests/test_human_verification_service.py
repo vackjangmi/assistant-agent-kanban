@@ -268,6 +268,56 @@ def test_human_verification_start_includes_untracked_files(configured_paths):
     assert diff.hunks[0].unified_lines[0].content == "brand new"
 
 
+def test_human_verification_start_ignores_generated_workspace_artifacts(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    plain_target = tmp_path / "plain-target"
+    plain_target.mkdir()
+    create_request_task(config, "verify-generated-artifacts-task", target_repo_root=plain_target)
+
+    def create_generated_artifacts(cwd: Path):
+        (cwd / "new-source.txt").write_text("keep me\n")
+        generated_files = [
+            cwd / ".dart_tool" / "package_config.json",
+            cwd / "build" / "app" / "outputs" / "debug.apk",
+            cwd / "coverage" / "lcov.info",
+            cwd / "android" / ".gradle" / "cache.bin",
+            cwd / "android" / "local.properties",
+            cwd / "ios" / "Pods" / "Manifest.lock",
+            cwd / "ios" / "build" / "result.bin",
+            cwd / "ios" / "Flutter" / "ephemeral" / "flutter_lldbinit",
+            cwd / "macos" / "Pods" / "Manifest.lock",
+            cwd / "macos" / "Flutter" / "ephemeral" / "Generated.xcconfig",
+        ]
+        for path in generated_files:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("generated\n")
+
+    scanner, service, completed = _task_ready_for_human_verification(
+        config,
+        workspace_side_effect=create_generated_artifacts,
+    )
+
+    moved = service.start(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    verification_repo = _verification_repo(scanner.find_task(completed.metadata.task_id))
+    assert (verification_repo / "new-source.txt").read_text() == "keep me\n"
+    assert not (verification_repo / ".dart_tool").exists()
+    assert not (verification_repo / "build").exists()
+    assert not (verification_repo / "coverage").exists()
+    assert not (verification_repo / "android" / ".gradle").exists()
+    assert not (verification_repo / "android" / "local.properties").exists()
+    assert not (verification_repo / "ios" / "Pods").exists()
+    assert not (verification_repo / "ios" / "build").exists()
+    assert not (verification_repo / "ios" / "Flutter" / "ephemeral").exists()
+    assert not (verification_repo / "macos" / "Pods").exists()
+    assert not (verification_repo / "macos" / "Flutter" / "ephemeral").exists()
+    task_service = TaskService(scanner, config.runs_dir, config.kanban_root)
+    changed_paths = {file.path for file in task_service.get_task(completed.metadata.task_id).changed_files}
+    assert "new-source.txt" in changed_paths
+    assert not any(path.startswith(("build/", ".dart_tool/", "coverage/", "ios/Pods/")) for path in changed_paths)
+
+
 def test_human_verification_approve_blocks_incomplete_required_qa(configured_paths):
     config, _, _ = configured_paths
     create_request_task(config, "verify-qa-block-task")

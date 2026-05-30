@@ -9,6 +9,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 from .config import AppConfig
 from .exceptions import IntegrationConflictError, IntegrationError
+from .generated_artifacts import ensure_generated_artifact_excludes, is_generated_artifact_path
 from .models import TaskMetadata, utc_now
 from .target_repo_guard import resolve_safe_target_repo_root
 
@@ -31,7 +32,26 @@ class IntegrationManager:
             raise IntegrationError(str(exc)) from exc
         patch_path = self._patch_path(metadata.task_id, metadata.cycle)
         patch_path.parent.mkdir(parents=True, exist_ok=True)
-        if self._is_git_repository(target_repo_root) and not self.config.review_branch_remote.enabled:
+        if not self._is_git_repository(target_repo_root):
+            self._initialize_empty_target_repo(target_repo_root, metadata.target.base_branch)
+            metadata.integration.initialized_target_repo = True
+            try:
+                head = subprocess.run(
+                    ["git", "-C", str(target_repo_root), "rev-parse", metadata.target.base_branch],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if head.returncode != 0:
+                    raise IntegrationError(head.stderr.strip() or "failed to resolve initialized target base branch")
+                metadata.integration.base_commit = head.stdout.strip() or None
+                return self._apply_workspace_snapshot(metadata, workspace_repo, target_repo_root, patch_path)
+            except Exception:
+                self._remove_initialized_target_repo(target_repo_root)
+                metadata.integration.initialized_target_repo = False
+                self._reset_transient_integration_state(metadata)
+                raise
+        if not self.config.review_branch_remote.enabled:
             head = subprocess.run(
                 ["git", "-C", str(target_repo_root), "rev-parse", metadata.target.base_branch],
                 capture_output=True,
@@ -87,6 +107,15 @@ class IntegrationManager:
         *,
         cleanup_verification_workspace: bool,
     ) -> Path:
+        ensure_generated_artifact_excludes(workspace_repo)
+        reset_index = subprocess.run(
+            ["git", "-C", str(workspace_repo), "reset", "-q"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if reset_index.returncode != 0:
+            raise IntegrationError(reset_index.stderr.strip() or "failed to reset workspace index")
         add_all = subprocess.run(
             ["git", "-C", str(workspace_repo), "add", "-A"],
             capture_output=True,
@@ -464,6 +493,7 @@ class IntegrationManager:
         try:
             if not self._is_git_repository(target_repo_root):
                 self._initialize_empty_verification_repo(verification_repo_root, metadata.target.base_branch)
+                ensure_generated_artifact_excludes(verification_repo_root)
                 metadata.integration.verification_repo_root = str(verification_repo_root)
                 return verification_repo_root, True
             clone = subprocess.run(
@@ -487,6 +517,7 @@ class IntegrationManager:
             if switch.returncode != 0:
                 raise IntegrationError(switch.stderr.strip() or "failed to checkout verification base branch")
             self._ensure_local_git_identity(verification_repo_root)
+            ensure_generated_artifact_excludes(verification_repo_root)
             self._copy_target_remotes(target_repo_root, verification_repo_root)
             metadata.integration.verification_repo_root = str(verification_repo_root)
             return verification_repo_root, False
@@ -582,6 +613,8 @@ class IntegrationManager:
         metadata.integration.verification_repo_root = None
 
     def _apply_workspace_snapshot(self, metadata: TaskMetadata, workspace_repo: Path, target_repo_root: Path, patch_path: Path) -> Path:
+        ensure_generated_artifact_excludes(workspace_repo)
+        ensure_generated_artifact_excludes(target_repo_root)
         status = subprocess.run(
             ["git", "-C", str(target_repo_root), "status", "--short"],
             capture_output=True,
@@ -809,6 +842,10 @@ class IntegrationManager:
         )
 
     def _copy_git_workspace_snapshot(self, workspace_repo: Path, target_repo_root: Path) -> None:
+        ensure_generated_artifact_excludes(workspace_repo)
+        reset_index = subprocess.run(["git", "-C", str(workspace_repo), "reset", "-q"], capture_output=True, text=True, check=False)
+        if reset_index.returncode != 0:
+            raise IntegrationError(reset_index.stderr.strip() or "failed to reset workspace index")
         add_all = subprocess.run(["git", "-C", str(workspace_repo), "add", "-A"], capture_output=True, text=True, check=False)
         if add_all.returncode != 0:
             raise IntegrationError(add_all.stderr.strip() or "failed to stage workspace changes")
@@ -820,6 +857,8 @@ class IntegrationManager:
             if not raw_relative:
                 continue
             relative = Path(os.fsdecode(raw_relative))
+            if is_generated_artifact_path(relative):
+                continue
             source = workspace_repo / relative
             if not source.exists() and not source.is_symlink():
                 continue
