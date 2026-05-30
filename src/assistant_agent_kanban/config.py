@@ -14,6 +14,7 @@ from .models import TaskRuntimePin, TaskRuntimeRoleBackends
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 DEFAULT_LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.yaml"
+DEFAULT_KANBAN_ROOT_NAME = ".assistant-agent-kanban"
 DEFAULT_REPO_DISCOVERY_ROOT = "../"
 DEFAULT_SESSION_TOKEN_BUDGET = 250_000
 DEFAULT_TARGET_REPO_DOCS_ROOT = "docs/kanban-agent"
@@ -230,7 +231,7 @@ class ReviewBranchRemoteConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    kanban_root: Path = Path("./.kanban-agent")
+    kanban_root: Path = Field(default_factory=lambda: Path.home() / DEFAULT_KANBAN_ROOT_NAME)
     repo_root: Path = Path(".")
     base_branch: str = "main"
     target_repo_docs_root: str = DEFAULT_TARGET_REPO_DOCS_ROOT
@@ -454,7 +455,7 @@ class AppConfig(BaseModel):
         return self.kanban_root / "retrospectives"
 
 
-def load_config(path: str | Path | None = None) -> AppConfig:
+def load_config(path: str | Path | None = None, *, bootstrap: bool = True) -> AppConfig:
     loaded_from: Path | None = None
     loaded_local_from: Path | None = None
     raw: dict[str, Any] = {}
@@ -480,7 +481,8 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         config.loaded_from = loaded_from
         config.loaded_local_from = loaded_local_from
     _normalize_loaded_root_paths(config)
-    config.bootstrap()
+    if bootstrap:
+        config.bootstrap()
     return config
 
 

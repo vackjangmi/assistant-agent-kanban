@@ -204,29 +204,30 @@ repo-root/
 │     ├─ fs-kanban-reviewer.md
 │     ├─ fs-kanban-committer.md
 │     └─ fs-kanban-inspector.md
-├─ .kanban-agent/
-│  ├─ requests/
-│  ├─ planning/
-│  ├─ plan-approving/
-│  ├─ waiting-check-plans/
-│  ├─ todos/
-│  ├─ implementing/
-│  ├─ waiting-reviews/
-│  ├─ reviewing/
-│  ├─ completed-reviews/
-│  ├─ human-verifying/
-│  ├─ done/
-│  ├─ retrospectives/
-│  └─ _runtime/
-│     ├─ locks/
-│     ├─ workspaces/
-│     ├─ runs/
-│     ├─ archive-runs/
-│     ├─ events/
-│     ├─ request-drafts/
-│     ├─ request-uploads/
-│     └─ board-cache/
 └─ src/assistant_agent_kanban/
+
+default state root (~/.assistant-agent-kanban)/
+├─ requests/
+├─ planning/
+├─ plan-approving/
+├─ waiting-check-plans/
+├─ todos/
+├─ implementing/
+├─ waiting-reviews/
+├─ reviewing/
+├─ completed-reviews/
+├─ human-verifying/
+├─ done/
+├─ retrospectives/
+└─ _runtime/
+   ├─ locks/
+   ├─ workspaces/
+   ├─ runs/
+   ├─ archive-runs/
+   ├─ events/
+   ├─ request-drafts/
+   ├─ request-uploads/
+   └─ board-cache/
 ```
 
 The system has four main layers.
@@ -341,22 +342,21 @@ The semantic target repo summary is written during final approval under `target_
 ```bash
 assistant-agent-kanban request "Refactor login flow" \
   --target-repo /path/to/target-project \
-  --kanban-root ./.kanban-agent \
   --base-branch main
 ```
 
 #### Show Logs
 
 ```bash
-assistant-agent-kanban logs TASK-0001 --kanban-root ./.kanban-agent
+assistant-agent-kanban logs TASK-0001
 ```
 
 #### Inspect a Task
 
 ```bash
-assistant-agent-kanban inspect TASK-0001 --kanban-root ./.kanban-agent
-assistant-agent-kanban inspect TASK-0001 --faq is-running --kanban-root ./.kanban-agent
-assistant-agent-kanban inspect TASK-0001 --ask "Is this task stuck?" --kanban-root ./.kanban-agent
+assistant-agent-kanban inspect TASK-0001
+assistant-agent-kanban inspect TASK-0001 --faq is-running
+assistant-agent-kanban inspect TASK-0001 --ask "Is this task stuck?"
 ```
 
 #### Run the App
@@ -398,7 +398,7 @@ By default the app loads `./config.yaml` and overlays `./config.local.yaml` when
 
 Important keys:
 
-- `kanban_root`
+- `kanban_root` — defaults to `~/.assistant-agent-kanban`
 - `repo_root`
 - `base_branch`
 - `target_repo_docs_root`
@@ -719,29 +719,30 @@ repo-root/
 │     ├─ fs-kanban-reviewer.md
 │     ├─ fs-kanban-committer.md
 │     └─ fs-kanban-inspector.md
-├─ .kanban-agent/
-│  ├─ requests/
-│  ├─ planning/
-│  ├─ plan-approving/
-│  ├─ waiting-check-plans/
-│  ├─ todos/
-│  ├─ implementing/
-│  ├─ waiting-reviews/
-│  ├─ reviewing/
-│  ├─ completed-reviews/
-│  ├─ human-verifying/
-│  ├─ done/
-│  ├─ retrospectives/
-│  └─ _runtime/
-│     ├─ locks/
-│     ├─ workspaces/
-│     ├─ runs/
-│     ├─ archive-runs/
-│     ├─ events/
-│     ├─ request-drafts/
-│     ├─ request-uploads/
-│     └─ board-cache/
 └─ src/assistant_agent_kanban/
+
+default state root (~/.assistant-agent-kanban)/
+├─ requests/
+├─ planning/
+├─ plan-approving/
+├─ waiting-check-plans/
+├─ todos/
+├─ implementing/
+├─ waiting-reviews/
+├─ reviewing/
+├─ completed-reviews/
+├─ human-verifying/
+├─ done/
+├─ retrospectives/
+└─ _runtime/
+   ├─ locks/
+   ├─ workspaces/
+   ├─ runs/
+   ├─ archive-runs/
+   ├─ events/
+   ├─ request-drafts/
+   ├─ request-uploads/
+   └─ board-cache/
 ```
 
 구성 요소는 크게 네 층입니다.
@@ -856,22 +857,21 @@ semantic target repo summary는 최종 승인 시 `target_repo_docs_root/YYYY/MM
 ```bash
 assistant-agent-kanban request "로그인 플로우 리팩터링" \
   --target-repo /path/to/target-project \
-  --kanban-root ./.kanban-agent \
   --base-branch main
 ```
 
 #### 로그 확인
 
 ```bash
-assistant-agent-kanban logs TASK-0001 --kanban-root ./.kanban-agent
+assistant-agent-kanban logs TASK-0001
 ```
 
 #### 작업 진단
 
 ```bash
-assistant-agent-kanban inspect TASK-0001 --kanban-root ./.kanban-agent
-assistant-agent-kanban inspect TASK-0001 --faq is-running --kanban-root ./.kanban-agent
-assistant-agent-kanban inspect TASK-0001 --ask "이 작업이 멈춘 것 같아?" --kanban-root ./.kanban-agent
+assistant-agent-kanban inspect TASK-0001
+assistant-agent-kanban inspect TASK-0001 --faq is-running
+assistant-agent-kanban inspect TASK-0001 --ask "이 작업이 멈춘 것 같아?"
 ```
 
 #### 앱 실행
@@ -913,7 +913,7 @@ Slack 설정은 config 파일의 `slack:` 섹션에서 관리하며, bot token (
 
 중요한 항목:
 
-- `kanban_root`
+- `kanban_root` — 기본값은 `~/.assistant-agent-kanban`
 - `repo_root`
 - `base_branch`
 - `target_repo_docs_root`

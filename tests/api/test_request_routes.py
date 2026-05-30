@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from assistant_agent_kanban.api.app import create_app
 from assistant_agent_kanban.api.ui import TEMPLATE_PATH
+from assistant_agent_kanban import repo_discovery as repo_discovery_module
 from assistant_agent_kanban.config import PROJECT_ROOT
 from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.exceptions import AdapterRunError
@@ -1699,12 +1700,15 @@ def test_api_target_repo_suggestions_respect_depth_limit(configured_paths, tmp_p
 
 
 
-def test_api_target_repo_suggestions_default_to_workboard_parent(configured_paths):
+def test_api_target_repo_suggestions_default_to_workboard_parent(configured_paths, tmp_path, monkeypatch):
     config, _, _ = configured_paths
-    child = PROJECT_ROOT.parent / "tmp-target-root-child"
+    workboard_root = tmp_path / "workboard"
+    workboard_root.mkdir()
+    monkeypatch.setattr(repo_discovery_module, "PROJECT_ROOT", workboard_root)
+    child = workboard_root.parent / "tmp-target-root-child"
     child.mkdir(exist_ok=True)
     try:
-        config.repo_discovery.root = str(PROJECT_ROOT.parent)
+        config.repo_discovery.root = str(workboard_root.parent)
         config.repo_discovery.max_depth = 2
         app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
@@ -1714,23 +1718,26 @@ def test_api_target_repo_suggestions_default_to_workboard_parent(configured_path
         assert response.status_code == 200
         payload = response.json()
         items = payload["items"]
-        assert payload["root"] == str(PROJECT_ROOT.parent)
+        assert payload["root"] == str(workboard_root.parent)
         assert str(child) in items
-        assert str(PROJECT_ROOT) not in items
-        assert all(not item.startswith(f"{PROJECT_ROOT}/") for item in items)
+        assert str(workboard_root) not in items
+        assert all(not item.startswith(f"{workboard_root}/") for item in items)
         assert str(config.kanban_root) not in items
     finally:
         shutil.rmtree(child, ignore_errors=True)
 
 
 
-def test_api_target_repo_suggestions_include_second_depth_from_parent_root(configured_paths):
+def test_api_target_repo_suggestions_include_second_depth_from_parent_root(configured_paths, tmp_path, monkeypatch):
     config, _, _ = configured_paths
-    parent = PROJECT_ROOT.parent / "tmp-repo-discovery"
+    workboard_root = tmp_path / "workboard"
+    workboard_root.mkdir()
+    monkeypatch.setattr(repo_discovery_module, "PROJECT_ROOT", workboard_root)
+    parent = workboard_root.parent / "tmp-repo-discovery"
     nested = parent / "sudoku"
     nested.mkdir(parents=True, exist_ok=True)
     try:
-        config.repo_discovery.root = str(PROJECT_ROOT.parent)
+        config.repo_discovery.root = str(workboard_root.parent)
         config.repo_discovery.max_depth = 2
         app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
 
