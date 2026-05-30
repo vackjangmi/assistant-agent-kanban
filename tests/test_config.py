@@ -1,7 +1,14 @@
 from __future__ import annotations
 
-from assistant_agent_kanban.config import AppConfig, PROJECT_ROOT, load_config
+import pytest
+
+from assistant_agent_kanban.config import AppConfig, DEFAULT_KANBAN_ROOT_NAME, PROJECT_ROOT, load_config
 from assistant_agent_kanban.enums import STATE_ORDER
+
+
+@pytest.fixture(autouse=True)
+def use_temporary_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
 
 
 def test_app_config_bootstrap_creates_state_and_runtime_dirs(tmp_path):
@@ -24,6 +31,18 @@ def test_app_config_bootstrap_creates_state_and_runtime_dirs(tmp_path):
     assert config.runtime.planner_agent_count == 1
     assert config.runtime.implementer_agent_count == 1
     assert config.runtime.reviewer_agent_count == 1
+
+
+def test_app_config_defaults_to_home_managed_kanban_root(tmp_path):
+    config = AppConfig()
+    config.bootstrap()
+
+    assert config.kanban_root == tmp_path / DEFAULT_KANBAN_ROOT_NAME
+    assert config.kanban_root.is_dir()
+    workspace_root = config.workspace.root
+    assert workspace_root is not None
+    assert workspace_root == config.kanban_root / "_runtime/workspaces"
+    assert workspace_root.is_dir()
 
 
 def test_resolve_repo_discovery_root_uses_loaded_config_directory(tmp_path):

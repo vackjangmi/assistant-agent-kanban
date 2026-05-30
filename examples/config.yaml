@@ -1,4 +1,4 @@
-kanban_root: ./.kanban-agent
+kanban_root: ~/.assistant-agent-kanban
 repo_root: .
 base_branch: main
 target_repo_docs_root: docs/kanban-agent
@@ -91,7 +91,7 @@ antigravity:
 
 workspace:
   strategy: clone-overlay
-  root: ./.kanban-agent/_runtime/workspaces
+  root: null
   overlay_copy:
     - .env.example
   overlay_symlink: []

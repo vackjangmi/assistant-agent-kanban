@@ -167,9 +167,14 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _load_request_config(config_path: str | None, kanban_root: str | None) -> AppConfig:
-    config = load_config(config_path)
+    config = load_config(config_path, bootstrap=kanban_root is None)
     if kanban_root is not None:
+        old_kanban_root = config.kanban_root.expanduser().resolve()
+        default_workspace_root = old_kanban_root / "_runtime/workspaces"
+        workspace_root = config.workspace.root
         config.kanban_root = Path(kanban_root).expanduser().resolve()
+        if workspace_root is None or workspace_root.expanduser().resolve() == default_workspace_root:
+            config.workspace.root = config.kanban_root / "_runtime/workspaces"
         config.bootstrap()
     return config
 
