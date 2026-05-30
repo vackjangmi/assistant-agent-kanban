@@ -12,6 +12,7 @@ from typing import Any, Callable, Mapping, cast
 from ..config import AppConfig, AssistantBackend, AssistantRole
 from ..events import EventBus
 from ..exceptions import AdapterRunError
+from ..generated_artifacts import is_generated_artifact_path
 from ..language import generation_language_name
 from ..locks import TaskLockManager
 from ..log_parser import render_assistant_log
@@ -131,15 +132,7 @@ class WorkerBase:
         return "\n".join(instructions)
 
     def workspace_has_changes(self, workspace_repo: Path) -> bool:
-        result = subprocess.run(
-            ["git", "-C", str(workspace_repo), "status", "--short"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            return False
-        return bool(result.stdout.strip())
+        return bool(self.workspace_changes(workspace_repo))
 
     def workspace_changed_paths(self, workspace_repo: Path) -> list[Path]:
         return [change.path for change in self.workspace_changes(workspace_repo)]
@@ -163,7 +156,7 @@ class WorkerBase:
             index_status = chr(entry[0])
             worktree_status = chr(entry[1])
             path_text = entry[3:].decode("utf-8", errors="replace")
-            if path_text:
+            if path_text and not is_generated_artifact_path(path_text):
                 changes.append(
                     WorkspaceChange(
                         path=Path(path_text),
@@ -215,6 +208,8 @@ class WorkerBase:
         digest.update(tracked_patch.encode("utf-8"))
         for raw_path in [part for part in untracked.stdout.split(b"\x00") if part]:
             relative_path = raw_path.decode("utf-8", errors="replace")
+            if is_generated_artifact_path(relative_path):
+                continue
             digest.update(b"\0untracked\0")
             digest.update(relative_path.encode("utf-8", errors="replace"))
             file_path = workspace_repo / relative_path

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import AppConfig
 from .exceptions import WorkspaceSyncError
+from .generated_artifacts import ensure_generated_artifact_excludes
 from .models import TaskMetadata
 
 
@@ -28,6 +29,7 @@ class WorkspaceManager:
                 self._initialize_plain_workspace_repo(repo_dir, metadata.target.base_branch, metadata.task_id)
         elif (target_repo_root / ".git").exists():
             self._refresh_git_workspace(repo_dir, target_repo_root, metadata)
+        ensure_generated_artifact_excludes(repo_dir)
         self._apply_overlays(repo_dir, target_repo_root)
         metadata.implementation.workspace = str(repo_dir)
         metadata.implementation.branch = f"task/{metadata.task_id.lower()}"
@@ -59,6 +61,7 @@ class WorkspaceManager:
         if init.returncode != 0:
             raise WorkspaceSyncError(init.stderr.strip() or "git init failed")
         self._ensure_local_git_identity(repo_dir)
+        ensure_generated_artifact_excludes(repo_dir)
         add_all = subprocess.run(["git", "-C", str(repo_dir), "add", "-A"], capture_output=True, text=True, check=False)
         if add_all.returncode != 0:
             raise WorkspaceSyncError(add_all.stderr.strip() or "failed to stage plain workspace baseline")

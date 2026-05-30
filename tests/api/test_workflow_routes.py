@@ -943,10 +943,11 @@ def test_api_supports_human_verification_start_into_empty_non_git_target(configu
     assert start.status_code == 200
     payload = start.json()
     assert payload["state"] == TaskState.HUMAN_VERIFYING.value
-    assert payload["integration"]["initialized_target_repo"] is False
-    assert not (empty_target / ".git").exists()
-    assert not (empty_target / "app.txt").exists()
+    assert payload["integration"]["initialized_target_repo"] is True
+    assert (empty_target / ".git").exists()
+    assert (empty_target / "app.txt").read_text() == "review me\n"
     verification_repo = _verification_repo_for(scanner, completed.metadata.task_id)
+    assert verification_repo == empty_target.resolve()
     assert (verification_repo / "app.txt").read_text() == "review me\n"
     branch = subprocess.run(["git", "-C", str(verification_repo), "branch", "--show-current"], check=True, capture_output=True, text=True)
     assert branch.stdout.strip() == f"review/{completed.metadata.task_id.lower()}"
