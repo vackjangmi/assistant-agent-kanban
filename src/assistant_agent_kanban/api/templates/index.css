@@ -1457,7 +1457,7 @@ body[data-theme="dark"] .card-button:hover { background-color: rgba(255, 255, 25
 .task-inspector-overview { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); }
 .task-inspector-overview span { color: var(--muted); line-height: 1.5; }
 .task-inspector-panel { height: 100%; min-height: 0; display: grid; }
-.task-inspector-shell { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 12px; min-height: 0; height: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; overflow: hidden; }
+.task-inspector-shell { display: grid; grid-template-rows: auto auto auto minmax(120px, 1fr) auto; gap: 12px; min-height: 0; height: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.9); padding: 12px; overflow: hidden; }
 .task-inspector-summary { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--border); background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(241,245,249,0.95)); }
 .task-inspector-summary strong { display: block; margin-bottom: 4px; }
 .inspection-health-pill { display: inline-flex; align-items: center; min-height: 24px; padding: 3px 8px; margin-right: 8px; border: 1px solid var(--border); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; color: var(--muted); background: rgba(255,255,255,0.9); }
@@ -1465,13 +1465,17 @@ body[data-theme="dark"] .card-button:hover { background-color: rgba(255, 255, 25
 .inspection-health-pill[data-health="stale"] { color: var(--danger); border-color: rgba(163,58,42,0.22); background: rgba(254,242,242,0.94); }
 .inspection-health-pill[data-health="blocked"], .inspection-health-pill[data-health="waiting"] { color: #9a6c2f; border-color: rgba(154,108,47,0.22); background: rgba(255,247,232,0.94); }
 .task-inspector-signals { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-.task-inspector-signal { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); }
+.task-inspector-signal { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.88); height: 140px; min-height: 0; box-sizing: border-box; }
 .task-inspector-signal[data-tone="good"] { border-color: rgba(33,115,73,0.18); background: rgba(244,250,246,0.9); }
 .task-inspector-signal[data-tone="warning"] { border-color: rgba(154,108,47,0.2); background: rgba(255,247,232,0.88); }
 .task-inspector-signal[data-tone="danger"] { border-color: rgba(163,58,42,0.22); background: rgba(254,242,242,0.88); }
 .task-inspector-signal span { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; }
 .task-inspector-signal strong { overflow-wrap: anywhere; }
-.task-inspector-signal small { color: var(--muted); line-height: 1.4; }
+.task-inspector-signal small { color: var(--muted); font-size: 0.82rem; line-height: 1.4; overflow-y: auto; flex: 1; min-height: 0; word-break: break-all; padding-right: 4px; }
+.task-inspector-signal small::-webkit-scrollbar { width: 4px; }
+.task-inspector-signal small::-webkit-scrollbar-track { background: transparent; }
+.task-inspector-signal small::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 99px; }
+body[data-theme="dark"] .task-inspector-signal small::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
 .task-inspector-faq { display: grid; gap: 8px; }
 .task-inspector-faq-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .task-inspector-faq-button { min-height: 34px; padding: 7px 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.86); color: var(--text); font-weight: 700; }
