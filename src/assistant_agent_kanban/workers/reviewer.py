@@ -9,7 +9,7 @@ from typing import Callable, Literal, NotRequired, TypedDict, cast
 
 from ..assistant_adapter import AssistantAdapter
 from ..enums import TaskState
-from ..exceptions import TaskNotFoundError, TransitionError
+from ..exceptions import IntegrationError, TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..language import generation_language_code, generation_language_name
 from ..models import HumanQaChecklistItem, RunResult, TaskErrorInfo
@@ -86,6 +86,21 @@ class ReviewerWorker(WorkerBase):
                 )
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note="review skipped: no workspace changes")
+                await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                return True
+            snapshot_mismatch = self._implementation_snapshot_mismatch(reviewing.metadata, workspace_path)
+            if snapshot_mismatch is not None:
+                apply_retry_gate(reviewing.metadata, reason="review-workspace-snapshot-mismatch")
+                reviewing.metadata.errors.append(
+                    TaskErrorInfo(code="review-workspace-snapshot-mismatch", message=snapshot_mismatch)
+                )
+                self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                done = self.transitions.move(
+                    reviewing,
+                    TaskState.TODOS,
+                    by=self.worker_name,
+                    note="review skipped: workspace changed after implementation",
+                )
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
 
@@ -189,6 +204,19 @@ class ReviewerWorker(WorkerBase):
                         reviewing.metadata.errors.append(TaskErrorInfo(code="review-target-repo-drift", message=drift_note))
                         self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                         done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=drift_note)
+                        await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                        return True
+                    snapshot_failure = self._capture_review_patch(reviewing.metadata, workspace_path)
+                    if snapshot_failure is not None:
+                        apply_retry_gate(reviewing.metadata, reason="review-patch-snapshot-failed")
+                        reviewing.metadata.errors.append(snapshot_failure)
+                        self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                        done = self.transitions.move(
+                            reviewing,
+                            TaskState.WAITING_REVIEWS,
+                            by=self.worker_name,
+                            note="review patch snapshot failed",
+                        )
                         await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                         return True
                     self._write_human_qa_checklist(reviewing.task_dir, reviewing.metadata, artifact)
@@ -343,6 +371,19 @@ class ReviewerWorker(WorkerBase):
                     done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=drift_note)
                     await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                     return True
+                snapshot_failure = self._capture_review_patch(reviewing.metadata, workspace_path)
+                if snapshot_failure is not None:
+                    apply_retry_gate(reviewing.metadata, reason="review-patch-snapshot-failed")
+                    reviewing.metadata.errors.append(snapshot_failure)
+                    self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
+                    done = self.transitions.move(
+                        reviewing,
+                        TaskState.WAITING_REVIEWS,
+                        by=self.worker_name,
+                        note="review patch snapshot failed",
+                    )
+                    await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                    return True
                 self._write_human_qa_checklist(reviewing.task_dir, reviewing.metadata, artifact)
                 reset_review_loop_tracking(reviewing.metadata.review)
                 clear_retry_gate(reviewing.metadata)
@@ -490,6 +531,36 @@ class ReviewerWorker(WorkerBase):
             current_dirty=current.dirty,
             current_status_short=current.status_short,
         )
+
+    def _implementation_snapshot_mismatch(self, metadata, workspace_path: Path) -> str | None:
+        if metadata.implementation.patch_cycle != metadata.cycle:
+            return None
+        expected_sha = metadata.implementation.patch_sha256
+        patch_path_text = metadata.implementation.patch_path
+        if not expected_sha or not patch_path_text:
+            return None
+        patch_path = Path(patch_path_text).expanduser().resolve()
+        if not patch_path.exists():
+            return "implementation patch snapshot is missing"
+        if self.integration_manager._patch_sha256(patch_path.read_text()) != expected_sha:
+            return "implementation patch snapshot checksum mismatch"
+        try:
+            current_sha = self.integration_manager._patch_sha256(self.integration_manager.workspace_patch_text(workspace_path))
+        except IntegrationError as exc:
+            return str(exc)
+        if current_sha != expected_sha:
+            return "workspace changes no longer match the implementation snapshot"
+        return None
+
+    def _capture_review_patch(self, metadata, workspace_path: Path) -> TaskErrorInfo | None:
+        mismatch = self._implementation_snapshot_mismatch(metadata, workspace_path)
+        if mismatch is not None:
+            return TaskErrorInfo(code="review-workspace-snapshot-mismatch", message=mismatch)
+        try:
+            self.integration_manager.capture_workspace_patch(metadata, workspace_path, purpose="review")
+        except IntegrationError as exc:
+            return TaskErrorInfo(code="review-patch-snapshot-failed", message=str(exc))
+        return None
 
     async def answer_human_question_async(self, task_id: str, *, by: str, question: str) -> dict[str, str | int | None]:
         loop = asyncio.get_running_loop()

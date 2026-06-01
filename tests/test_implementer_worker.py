@@ -129,6 +129,12 @@ def test_implementer_worker_uses_external_workspace(configured_paths):
     assert [call["output_format"] for call in adapter.run_calls] == ["json", "default", "json"]
     assert all(call["include_directories"] == [config.repo_root.resolve()] for call in adapter.run_calls)
     assert updated.metadata.implementation.target_repo_baseline is not None
+    assert updated.metadata.implementation.patch_cycle == 1
+    assert updated.metadata.implementation.patch_sha256
+    assert updated.metadata.implementation.patch_path is not None
+    implementation_patch = Path(updated.metadata.implementation.patch_path)
+    assert implementation_patch.exists()
+    assert "+changed" in implementation_patch.read_text()
     baseline = updated.metadata.implementation.target_repo_baseline
     assert baseline.base_branch == "main"
     assert baseline.dirty is False
