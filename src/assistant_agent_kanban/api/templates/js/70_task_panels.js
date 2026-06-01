@@ -791,12 +791,15 @@
       const stash = detail?.metadata?.integration?.pre_verification_stash;
       if (!stash?.active) return '';
       const files = Array.isArray(stash.files) ? stash.files : [];
-      const fileRows = files.slice(0, 12).map((file) => {
+      const fileCount = Number(stash.file_count || files.length || 0);
+      const visibleFiles = files.slice(0, 12);
+      const fileRows = visibleFiles.map((file) => {
         const status = String(file.status || `${file.staged || ' '}${file.unstaged || ' '}`).trim() || '??';
         const originalPath = file.original_path ? `${escapeHtml(file.original_path)} -> ` : '';
         return `<div class="dirty-target-file"><code class="dirty-target-file-status">${escapeHtml(status)}</code><span>${originalPath}${escapeHtml(file.path || '')}</span></div>`;
       }).join('');
-      const remaining = files.length > 12 ? `<div class="muted">${escapeHtml(translateHumanReview('stashNoticeMoreFiles', { count: files.length - 12 }))}</div>` : '';
+      const remainingCount = Math.max(0, fileCount - visibleFiles.length);
+      const remaining = remainingCount > 0 ? `<div class="dirty-target-file-more muted">${escapeHtml(translateHumanReview('stashNoticeMoreFiles', { count: remainingCount }))}</div>` : '';
       return `
         <div class="task-section">
           <div class="pre-verification-stash-notice">
@@ -805,9 +808,9 @@
             <div class="dirty-target-confirmation-summary">
               <div><strong>${escapeHtml(translateHumanReview('dirtyTargetBranchLabel'))}</strong><code>${escapeHtml(stash.original_branch || '(detached)')}</code></div>
               <div><strong>${escapeHtml(translateHumanReview('dirtyTargetHeadLabel'))}</strong><code>${escapeHtml((stash.original_head_sha || '').slice(0, 12) || 'unknown')}</code></div>
-              <div><strong>${escapeHtml(translateHumanReview('dirtyTargetFileCountLabel'))}</strong><span>${escapeHtml(translateHumanReview('dirtyTargetFileCount', { count: files.length }))}</span></div>
+              <div><strong>${escapeHtml(translateHumanReview('dirtyTargetFileCountLabel'))}</strong><span>${escapeHtml(translateHumanReview('dirtyTargetFileCount', { count: fileCount }))}</span></div>
             </div>
-            <div class="dirty-target-confirmation-files">${fileRows || `<div class="muted">${escapeHtml(translateHumanReview('dirtyTargetNoFiles'))}</div>`}${remaining}</div>
+            <div class="dirty-target-confirmation-files">${fileRows || `<div class="dirty-target-file-more muted">${escapeHtml(translateHumanReview('dirtyTargetNoFiles'))}</div>`}${remaining}</div>
           </div>
         </div>
       `;
@@ -930,7 +933,7 @@
         base_branch: metadata.target.base_branch,
         final_branch: metadata.integration.final_branch || '',
         pre_verification_stash_active: metadata.integration.pre_verification_stash?.active || false,
-        pre_verification_stash_file_count: metadata.integration.pre_verification_stash?.files?.length || 0,
+        pre_verification_stash_file_count: metadata.integration.pre_verification_stash?.file_count || metadata.integration.pre_verification_stash?.files?.length || 0,
         stage_timing: detail.stage_timing,
         history: metadata.history || [],
       });
