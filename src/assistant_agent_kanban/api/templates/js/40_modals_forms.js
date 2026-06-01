@@ -734,6 +734,8 @@
         activeRetrospectiveRecord = null;
         retrospectiveCreateTargetButton.hidden = true;
         retrospectiveCreateBranchButton.hidden = true;
+        retrospectiveArchiveOnlyButton.hidden = true;
+        retrospectiveArchiveAfterCreateInput.checked = false;
         retrospectiveMeta.innerHTML = '';
         retrospectiveContent.textContent = translateTask('retrospectiveNoContent');
         retrospectiveStatus.dataset.tone = 'neutral';
@@ -763,8 +765,10 @@
       const shouldOfferCreate = !record?.exists && record?.can_create !== false && !!activeRetrospectiveTargetRepoRoot && !!activeRetrospectiveBaseBranch;
       retrospectiveCreateTargetButton.hidden = !shouldOfferCreate;
       retrospectiveCreateBranchButton.hidden = !shouldOfferCreate;
+      retrospectiveArchiveOnlyButton.hidden = !(!!activeRetrospectiveTargetRepoRoot && !!activeRetrospectiveBaseBranch);
       retrospectiveCreateTargetButton.disabled = false;
       retrospectiveCreateBranchButton.disabled = false;
+      retrospectiveArchiveOnlyButton.disabled = false;
     }
 
     function renderRetrospective(record, statusKey, tone = 'neutral') {
@@ -791,10 +795,12 @@
 
     async function createRetrospective(completionMode) {
       const statusKey = completionMode === 'target-branch' ? 'retrospectiveCreatingTarget' : 'retrospectiveCreatingBranch';
+      retrospectiveStatus.hidden = false;
       retrospectiveStatus.dataset.tone = 'neutral';
       retrospectiveStatus.textContent = translateTask(statusKey);
       retrospectiveCreateTargetButton.disabled = true;
       retrospectiveCreateBranchButton.disabled = true;
+      retrospectiveArchiveOnlyButton.disabled = true;
       const response = await fetch('/api/retrospectives/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -806,7 +812,37 @@
         ? (completionMode === 'target-branch' ? 'retrospectiveCreatedTarget' : 'retrospectiveCreatedBranch')
         : (payload.completion_mode === 'target-branch' ? 'retrospectiveLoadedTarget' : 'retrospectiveLoadedBranch');
       renderRetrospective(payload, resultStatusKey, 'success');
+      if (retrospectiveArchiveAfterCreateInput.checked) {
+        await archiveActiveRetrospectiveGroup({ statusKey: 'archiveAfterRetrospectiveRunning' });
+        return;
+      }
       await loadBoard();
+    }
+
+    async function archiveActiveRetrospectiveGroup(options = {}) {
+      const statusKey = options.statusKey || 'archiveRunning';
+      retrospectiveStatus.hidden = false;
+      retrospectiveStatus.dataset.tone = 'neutral';
+      retrospectiveStatus.textContent = translateTask(statusKey);
+      retrospectiveCreateTargetButton.disabled = true;
+      retrospectiveCreateBranchButton.disabled = true;
+      retrospectiveArchiveOnlyButton.disabled = true;
+      const response = await fetch('/api/archives', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_repo_root: activeRetrospectiveTargetRepoRoot, base_branch: activeRetrospectiveBaseBranch }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateTask('archiveFailed'));
+      retrospectiveStatus.dataset.tone = 'success';
+      retrospectiveStatus.textContent = translateTask('archiveCompleted');
+      activeRetrospectiveRecord = null;
+      await loadBoard();
+      archiveGroupsLoaded = false;
+      await loadArchives().catch(() => {});
+      if (activeBoardPhase !== 'archive') {
+        setRetrospectiveModalOpen(false);
+      }
     }
 
     async function openRetrospectiveModal(targetRepoRoot, baseBranch) {
@@ -826,8 +862,10 @@
       retrospectiveContent.textContent = '';
       retrospectiveCreateTargetButton.hidden = false;
       retrospectiveCreateBranchButton.hidden = false;
+      retrospectiveArchiveOnlyButton.hidden = false;
       retrospectiveCreateTargetButton.disabled = false;
       retrospectiveCreateBranchButton.disabled = false;
+      retrospectiveArchiveOnlyButton.disabled = false;
       setRetrospectiveModalOpen(true);
       try {
         const record = await inspectRetrospective(targetRepoRoot, baseBranch);
@@ -842,6 +880,10 @@
         retrospectiveMeta.innerHTML = '';
         retrospectiveCreateTargetButton.hidden = false;
         retrospectiveCreateBranchButton.hidden = false;
+        retrospectiveArchiveOnlyButton.hidden = false;
+        retrospectiveCreateTargetButton.disabled = false;
+        retrospectiveCreateBranchButton.disabled = false;
+        retrospectiveArchiveOnlyButton.disabled = false;
       }
     }
 

@@ -92,6 +92,7 @@
       retrospectiveCompareLabel.textContent = translateTask('retrospectiveCompareLabel');
       retrospectiveCompareBranchInput.placeholder = translateTask('retrospectiveComparePlaceholder');
       retrospectiveCompareHelp.textContent = translateTask('retrospectiveCompareHelp');
+      retrospectiveArchiveAfterCreateLabel.textContent = translateTask('retrospectiveArchiveAfterCreate');
       startVerificationButton.textContent = translateTask('startVerification');
       retryVerificationApplyButton.textContent = translateTask('retryVerificationApply');
       resumePlannerButton.textContent = translateTask('resumePlanner');
@@ -147,6 +148,7 @@
       closeRetrospectiveModalButton.textContent = translateTask('retrospectiveClose');
       retrospectiveCreateTargetButton.textContent = translateTask('retrospectiveCreateTarget');
       retrospectiveCreateBranchButton.textContent = translateTask('retrospectiveCreateBranch');
+      retrospectiveArchiveOnlyButton.textContent = translateTask('retrospectiveArchiveOnly');
       taskTabOverview.textContent = translateTask('tabOverview');
       taskTabInspector.textContent = translateTask('tabInspector');
       taskTabLogs.textContent = translateTask('tabLogs');
@@ -1193,12 +1195,14 @@
             implementation: '구현 단계',
             final: '최종 완료',
             closed: '취소됨',
+            archive: '아카이브',
           }
         : {
             plan: 'Planning',
             implementation: 'Implementation',
             final: 'Completed',
             closed: 'Closed',
+            archive: 'Archive',
           };
       return labels[phase] || phase;
     }
@@ -1208,7 +1212,7 @@
     }
 
     function shouldShowBoardPhaseCount(phase) {
-      return phase === 'plan' || phase === 'implementation' || phase === 'closed';
+      return phase === 'plan' || phase === 'implementation' || phase === 'closed' || (phase === 'archive' && archiveGroupsLoaded);
     }
 
     function boardPhaseCountLabel(phase, count) {

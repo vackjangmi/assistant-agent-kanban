@@ -1,9 +1,10 @@
     function applyBoardSnapshot(data) {
       saveBoardScrollPositions();
+      activeBoardSnapshot = data;
       const columns = data.columns || [];
       const nextTaskPhases = boardTaskPhasesFromColumns(columns);
       const movedFromPlanToImplementation = hasTaskMovedFromPlanToImplementation(nextTaskPhases);
-      boardPhaseTaskCounts = countBoardPhaseTasks(columns);
+      boardPhaseTaskCounts = { ...countBoardPhaseTasks(columns), archive: archiveGroups.length };
       boardTaskSnapshots = new Map(columns.flatMap((column) => (column.items || []).map((item) => [item.task_id, item])));
       previousBoardTaskPhases = nextTaskPhases;
       if (movedFromPlanToImplementation) {
@@ -19,7 +20,11 @@
       board.classList.toggle('plan-board', activeBoardPhase === 'plan');
       board.classList.toggle('final-board', activeBoardPhase === 'final');
       board.classList.toggle('closed-board', activeBoardPhase === 'closed');
-      if (activeBoardPhase === 'implementation') {
+      board.classList.toggle('archive-board', activeBoardPhase === 'archive');
+      if (activeBoardPhase === 'archive') {
+        board.innerHTML = renderArchiveBoard();
+        if (!archiveGroupsLoaded) loadArchives().catch(console.error);
+      } else if (activeBoardPhase === 'implementation') {
         const columnsByState = new Map(visibleColumns.map((column) => [column.state, column]));
         board.innerHTML = implementationBoardRows.map((states) => `
           <div class="implementation-board-row" style="--implementation-row-columns: ${states.length};">
@@ -55,7 +60,7 @@
     }
 
     function countBoardPhaseTasks(columns) {
-      const counts = { plan: 0, implementation: 0, final: 0, closed: 0 };
+      const counts = { plan: 0, implementation: 0, final: 0, closed: 0, archive: archiveGroups.length };
       (columns || []).forEach((column) => {
         const phase = boardPhaseForState(column.state);
         if (!phase) return;
@@ -434,6 +439,18 @@
       });
     }
 
+    function finalBranchGroupKey(projectPath, branch) {
+      return `${normalizeRepoPath(projectPath) || projectPath || '.'}::${branch || 'unknown'}`;
+    }
+
+    function isFinalBranchGroupExpanded(projectPath, branch, index) {
+      const key = finalBranchGroupKey(projectPath, branch);
+      if (!finalBranchExpandedStates.has(key)) {
+        finalBranchExpandedStates.set(key, index === 0);
+      }
+      return finalBranchExpandedStates.get(key) !== false;
+    }
+
     function renderFinalProjectColumn(projectPath, items) {
       const sortedItems = sortBoardItemsByUpdatedAt(items);
       const projectLabel = sortedItems[0]?.target_repo_label || deriveRepoContext(projectPath).repoName || projectPath || stateLabel('done');
@@ -447,9 +464,9 @@
             <button type="button" class="final-project-new-request" data-project-path="${escapeHtml(projectPath)}">${escapeHtml(translateRequest('openComposer'))}</button>
           </div>
           <div class="final-project-branches">${branchGroups.map(([branch, branchItems], index) => `
-            <section class="target-branch-group" data-branch="${escapeHtml(branch)}" data-expanded="${index === 0 ? 'true' : 'false'}">
-              <div class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? 'true' : 'false'}"><span class="target-branch-label-main"><span class="target-branch-title">${branchIconSvg('target-branch-icon')}<span class="target-branch-name">${escapeHtml(branch)}</span></span></span><span class="target-branch-label-side"><button type="button" class="target-branch-retrospective" data-target-repo="${escapeHtml(branchItems[0].target_repo_root || '')}" data-base-branch="${escapeHtml(branch)}">${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>${caretIconSvg('target-branch-caret')}</span></div>
-              <div class="column-cards">${branchItems.map((item) => renderTaskCard(item, { compactFinal: true })).join('')}</div>
+            <section class="target-branch-group" data-project-path="${escapeHtml(projectPath)}" data-branch="${escapeHtml(branch)}" data-expanded="${isFinalBranchGroupExpanded(projectPath, branch, index) ? 'true' : 'false'}">
+              <div class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${isFinalBranchGroupExpanded(projectPath, branch, index) ? 'true' : 'false'}"><span class="target-branch-label-main"><span class="target-branch-title">${branchIconSvg('target-branch-icon')}<span class="target-branch-name">${escapeHtml(branch)}</span></span></span><span class="target-branch-label-side"><button type="button" class="target-branch-retrospective" data-target-repo="${escapeHtml(branchItems[0].target_repo_root || '')}" data-base-branch="${escapeHtml(branch)}">${escapeHtml(translateTask('retrospectiveArchiveCountLabel', { count: String(branchItems.length) }))}</button>${caretIconSvg('target-branch-caret')}</span></div>
+              <div class="column-cards">${isFinalBranchGroupExpanded(projectPath, branch, index) ? branchItems.map((item) => renderTaskCard(item, { compactFinal: true })).join('') : ''}</div>
             </section>`).join('')}</div>
         </section>`;
     }
@@ -467,8 +484,10 @@
       if (!group) return;
       const expanded = group.dataset.expanded !== 'false';
       const nextExpanded = String(!expanded);
+      finalBranchExpandedStates.set(finalBranchGroupKey(group.dataset.projectPath || '', group.dataset.branch || ''), !expanded);
       group.dataset.expanded = nextExpanded;
       branchLabel.setAttribute('aria-expanded', nextExpanded);
+      if (activeBoardSnapshot) applyBoardSnapshot(activeBoardSnapshot);
     }
 
     function renderFinalBoard(columns) {
@@ -488,6 +507,87 @@
         return rightUpdated - leftUpdated;
       });
       return orderedGroups.map(([projectPath, items]) => renderFinalProjectColumn(projectPath, items)).join('');
+    }
+
+    function renderArchiveBoard() {
+      if (!archiveGroupsLoaded) {
+        return `<section class="column archive-column"><h2>${escapeHtml(phaseLabel('archive'))}</h2><div class="board-empty">${escapeHtml(translateTask('archiveLoading'))}</div></section>`;
+      }
+      if (activeArchiveGroup) return renderArchiveGroupDetail(activeArchiveGroup);
+      if (!archiveGroups.length) {
+        return `<section class="column archive-column"><h2>${escapeHtml(phaseLabel('archive'))}</h2><div class="board-empty">${escapeHtml(translateTask('archiveEmpty'))}</div></section>`;
+      }
+      return `
+        <section class="column archive-column archive-group-list">
+          <h2>${escapeHtml(phaseLabel('archive'))}</h2>
+          <div class="column-cards archive-groups">
+            ${archiveGroups.map((group) => renderArchiveGroupCard(group)).join('')}
+          </div>
+        </section>`;
+    }
+
+    function renderArchiveGroupCard(group) {
+      const repoPath = normalizeRepoPath(group.target_repo_root);
+      const repoLabel = group.target_repo_label || deriveRepoContext(repoPath).repoName || repoPath || 'archive';
+      const repoTone = repoTagTone(repoPath);
+      const cardStyle = ` style="--card-accent:${repoTone.text};--card-accent-dark:${repoTone.darkAccent};"`;
+      return `
+        <article class="card archive-group-card"${cardStyle}>
+          <button class="card-button" data-archive-id="${escapeHtml(group.archive_id)}">
+            <strong class="card-title">${escapeHtml(repoLabel)}</strong>
+            <div class="card-meta-row">
+              <div class="card-tag-row">
+                ${renderTag('', group.base_branch || '', 'card-tag-branch', '', group.base_branch || '', branchIconSvg('card-branch-icon'))}
+                ${renderTag('', translateTask('archiveTaskCount', { count: String(group.task_count || 0) }), 'card-tag-id')}
+              </div>
+            </div>
+            <div class="card-model">${escapeHtml(formatDateTime(group.archived_at))}</div>
+          </button>
+        </article>`;
+    }
+
+    function renderArchiveGroupDetail(group) {
+      return `
+        <section class="column archive-column archive-detail-column">
+          <div class="final-project-heading">
+            <h2 class="final-project-title">${escapeHtml(group.target_repo_label || group.base_branch || phaseLabel('archive'))}</h2>
+            <button type="button" class="ghost-button archive-back-button" data-archive-back="true">${escapeHtml(translateTask('archiveBack'))}</button>
+          </div>
+          <div class="card-tag-row archive-detail-tags">
+            ${renderTag('', group.base_branch || '', 'card-tag-branch', '', group.base_branch || '', branchIconSvg('card-branch-icon'))}
+            ${renderTag('', translateTask('archiveTaskCount', { count: String(group.task_count || 0) }), 'card-tag-id')}
+            ${renderTag('', formatDateTime(group.archived_at), 'card-tag-branch')}
+          </div>
+          <div class="column-cards">${(group.tasks || []).map((item) => renderTaskCard(item, { compactFinal: true })).join('')}</div>
+        </section>`;
+    }
+
+    async function loadArchives(options = {}) {
+      const { preserveDetail = false } = options;
+      const requestToken = ++activeArchiveRequestToken;
+      const response = await fetch('/api/archives');
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateTask('archiveLoadFailed'));
+      if (requestToken !== activeArchiveRequestToken) return;
+      archiveGroups = Array.isArray(payload.groups) ? payload.groups : [];
+      archiveGroupsLoaded = true;
+      boardPhaseTaskCounts.archive = archiveGroups.length;
+      if (!preserveDetail) activeArchiveGroup = null;
+      renderBoardPhaseTabs();
+      if (activeBoardPhase === 'archive') {
+        board.innerHTML = renderArchiveBoard();
+      }
+    }
+
+    async function openArchiveGroup(archiveId) {
+      const requestToken = ++activeArchiveRequestToken;
+      board.innerHTML = `<section class="column archive-column"><h2>${escapeHtml(phaseLabel('archive'))}</h2><div class="board-empty">${escapeHtml(translateTask('archiveLoading'))}</div></section>`;
+      const response = await fetch(`/api/archives/${encodeURIComponent(archiveId)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || translateTask('archiveLoadFailed'));
+      if (requestToken !== activeArchiveRequestToken) return;
+      activeArchiveGroup = payload;
+      board.innerHTML = renderArchiveBoard();
     }
 
     function draftOwnerLabel(draft) {

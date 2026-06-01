@@ -1022,11 +1022,13 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; ove
 #board.implementation-board { grid-template-columns: 1fr; flex: 1 1 auto; min-height: 0; height: 100%; align-items: stretch; grid-template-rows: repeat(2, minmax(0, 1fr)); }
 #board.plan-board { flex: 1 1 auto; min-height: 0; height: 100%; align-items: stretch; grid-auto-rows: minmax(0, 1fr); }
 #board.final-board { display: flex; flex: 1 1 auto; min-height: 0; height: 100%; align-items: stretch; gap: 12px; overflow-x: auto; overflow-y: hidden; padding-bottom: 20px; }
+#board.archive-board { grid-template-columns: minmax(0, 1fr); flex: 1 1 auto; min-height: 0; height: 100%; align-items: stretch; }
 .implementation-board-row { display: grid; gap: 12px; grid-template-columns: repeat(var(--implementation-row-columns, 1), minmax(0, 1fr)); min-height: 0; height: 100%; }
 .column { background: var(--panel); border: 1px solid var(--border); padding: 12px; min-height: 160px; }
 .implementation-board .column { min-width: 0; }
 .plan-board .column, .implementation-board .column, .final-board .column { min-height: 0; height: 100%; display: flex; flex-direction: column; }
 .final-board .column { flex: 1 1 320px; min-width: 320px; }
+.archive-board .column { min-height: 0; height: 100%; display: flex; flex-direction: column; }
 .column h2 { margin-top: 0; }
 .final-project-column { border-top: 6px solid var(--repo-accent, var(--accent)); background: var(--panel); }
 body[data-theme="dark"] .final-project-column { border-top-color: var(--repo-accent-dark, var(--repo-accent, var(--accent-strong))); }
@@ -1057,6 +1059,11 @@ body[data-theme="dark"] .final-project-new-request:hover { background: linear-gr
 .plan-board .column-cards, .implementation-board .column-cards, .final-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
 .final-board .column-cards { overflow-x: hidden; }
 .final-board .column-cards { overflow-y: visible; min-height: auto; height: auto; }
+.archive-board .column-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; align-content: start; }
+.archive-group-list { max-width: 980px; width: 100%; }
+.archive-detail-column { max-width: 980px; width: 100%; }
+.archive-detail-tags { margin-bottom: 12px; }
+.archive-back-button { padding: 5px 10px; font-size: 0.72rem; font-weight: 700; }
 .board-empty { color: var(--muted); padding: 12px; border: 1px dashed var(--border); background: rgba(255,255,255,0.55); text-align: center; min-height: 88px; display: flex; align-items: center; justify-content: center; }
 body[data-theme="dark"] .board-empty { color: rgba(226, 234, 242, 0.82); border-color: rgba(186, 200, 214, 0.2); background: linear-gradient(180deg, rgba(31, 43, 54, 0.92), rgba(23, 32, 41, 0.88)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
 .card { position: relative; background: white; border-left: 4px solid var(--card-accent, var(--accent)); padding: 0; margin: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05); overflow: hidden; transition: transform 180ms ease, box-shadow 180ms ease; }
@@ -1162,8 +1169,11 @@ body[data-theme="dark"] .card-button:hover { background-color: rgba(255, 255, 25
 .retrospective-compare-help { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.4; }
 .retrospective-action-shell { display: grid; gap: 10px; }
 .retrospective-action-shell strong { font-size: 0.9rem; color: var(--accent-strong); }
+.checkbox-inline { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 0.82rem; }
+.checkbox-inline input { width: auto; margin: 0; }
+.retrospective-archive-option { align-self: start; }
 .retrospective-action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
-.retrospective-action-buttons > button { flex: 1 1 calc(50% - 5px); min-width: 0; }
+.retrospective-action-buttons > button { flex: 1 1 170px; min-width: 0; }
 .retrospective-view-copy { display: grid; gap: 6px; }
 .retrospective-view-copy strong { font-size: 1rem; color: var(--accent-strong); }
 .retrospective-view-copy p { margin: 0; color: var(--muted); line-height: 1.5; }

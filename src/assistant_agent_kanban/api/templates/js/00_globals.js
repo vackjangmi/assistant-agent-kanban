@@ -179,6 +179,7 @@
       implementation: ['todos', 'implementing', 'waiting-reviews', 'reviewing', 'completed-reviews', 'human-verifying'],
       final: ['done'],
       closed: ['closed'],
+      archive: [],
     };
     const implementationBoardRows = [
       ['todos', 'implementing'],
@@ -283,6 +284,9 @@
     const retrospectiveContent = document.getElementById('retrospective-content');
     const retrospectiveCreateTargetButton = document.getElementById('retrospective-create-target');
     const retrospectiveCreateBranchButton = document.getElementById('retrospective-create-branch');
+    const retrospectiveArchiveAfterCreateInput = document.getElementById('retrospective-archive-after-create');
+    const retrospectiveArchiveAfterCreateLabel = document.getElementById('retrospective-archive-after-create-label');
+    const retrospectiveArchiveOnlyButton = document.getElementById('retrospective-archive-only');
     const taskMarkdownFiles = document.getElementById('task-markdown-files');
     const taskArtifactSubtabs = document.getElementById('task-artifact-subtabs');
     const taskLogFiles = document.getElementById('task-log-files');
@@ -387,6 +391,12 @@
     let activeSettingsTab = 'general';
     let cachedAssistantOptions = null;
     let boardTaskSnapshots = new Map();
+    let activeBoardSnapshot = null;
+    let finalBranchExpandedStates = new Map();
+    let archiveGroups = [];
+    let archiveGroupsLoaded = false;
+    let activeArchiveGroup = null;
+    let activeArchiveRequestToken = 0;
     let lastLoadedSettingsState = null;
     let targetRepoOptionsLoaded = false;
     let settingsRequestToken = 0;
@@ -397,7 +407,7 @@
     let activeBoardPhase = 'plan';
     let boardPhaseManuallySelected = false;
     let previousBoardTaskPhases = new Map();
-    let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0, closed: 0 };
+    let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0, closed: 0, archive: 0 };
     let approvalSubmissionInFlight = false;
     let resumePlannerSubmissionInFlight = false;
     let resumeImplementerSubmissionInFlight = false;

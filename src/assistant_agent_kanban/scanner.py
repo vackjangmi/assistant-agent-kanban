@@ -10,7 +10,7 @@ from typing import Literal
 from .config import AppConfig
 from .enums import STATE_ORDER, TaskState
 from .metadata_store import MetadataStore, slugify
-from .models import BoardColumn, BoardSnapshot, HistoryEntry, TaskContext, TaskMetadata, TaskSnapshot, utc_now
+from .models import ArchiveGroupManifest, BoardColumn, BoardSnapshot, HistoryEntry, TaskContext, TaskMetadata, TaskSnapshot, utc_now
 from .request_parser import parse_request_markdown, resolve_repo_root
 
 
@@ -206,7 +206,36 @@ class KanbanScanner:
         for task in self.scan():
             if task.metadata.task_id == task_id:
                 return task
+        archived = self._find_archived_task(task_id)
+        if archived is not None:
+            return archived
         raise FileNotFoundError(task_id)
+
+    def _find_archived_task(self, task_id: str) -> TaskContext | None:
+        archives_dir = self.config.archives_dir
+        if not archives_dir.exists():
+            return None
+        for manifest_path in sorted(archives_dir.glob("*/archive.json")):
+            try:
+                manifest = ArchiveGroupManifest.model_validate_json(manifest_path.read_text())
+            except (FileNotFoundError, ValueError):
+                continue
+            location = next((item for item in manifest.task_locations if item.task_id == task_id), None)
+            if location is None:
+                continue
+            archive_dir = manifest_path.parent.resolve()
+            task_dir = (archive_dir / location.relative_path).resolve()
+            try:
+                task_dir.relative_to(archive_dir)
+            except ValueError:
+                continue
+            metadata_path = task_dir / "metadata.json"
+            if not metadata_path.exists():
+                continue
+            metadata = TaskMetadata.model_validate_json(metadata_path.read_text())
+            state = TaskState(metadata.state)
+            return TaskContext(metadata=metadata, task_dir=task_dir, state=state)
+        return None
 
     def _existing_task_ids(self) -> set[str]:
         existing: set[str] = set()

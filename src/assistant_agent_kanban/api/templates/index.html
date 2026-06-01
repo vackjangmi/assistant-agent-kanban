@@ -976,9 +976,14 @@
         </div>
         <div class="retrospective-action-shell">
           <strong id="retrospective-action-title">Commit destination</strong>
+          <label class="checkbox-inline retrospective-archive-option">
+            <input id="retrospective-archive-after-create" type="checkbox">
+            <span id="retrospective-archive-after-create-label">Archive after retrospective</span>
+          </label>
           <div class="retrospective-action-buttons">
             <button type="button" id="retrospective-create-target" class="accent-button" hidden>Commit to target branch</button>
             <button type="button" id="retrospective-create-branch" class="primary" hidden>Create new branch</button>
+            <button type="button" id="retrospective-archive-only" class="ghost-button" hidden>Archive only</button>
           </div>
         </div>
         <div id="retrospective-status" class="retrospective-status approval-choice-status" data-tone="neutral">Choose how to create or view this retrospective.</div>
@@ -1181,6 +1186,7 @@
         <button type="button" data-board-phase="implementation" class="active">Implementation</button>
         <button type="button" data-board-phase="final">Completed</button>
         <button type="button" data-board-phase="closed">Closed</button>
+        <button type="button" data-board-phase="archive">Archive</button>
       </div>
       <div id="board"></div>
     </div>
