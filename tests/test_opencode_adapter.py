@@ -117,6 +117,9 @@ def test_subprocess_adapter_uses_double_dash_before_prompt(monkeypatch, tmp_path
     env = cast(dict[str, str], recorded["env"])
     xdg_config_home = env["XDG_CONFIG_HOME"]
     assert xdg_config_home == str((tmp_path / ".kanban-agent" / "_runtime" / "opencode-config").resolve())
+    permissions = json.loads(env["OPENCODE_PERMISSION"])
+    assert permissions["edit"]["*"] == "deny"
+    assert permissions["bash"]["*"] == "deny"
     agent_file = tmp_path / ".kanban-agent" / "_runtime" / "opencode-config" / "opencode" / "agents" / "fs-kanban-planner.md"
     assert agent_file.exists()
     assert agent_file.read_text().startswith("---\nmodel: openai/gpt-5.4\n---\n")

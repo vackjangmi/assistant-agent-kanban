@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Callable
 
-from .assistant_adapter import AssistantAdapter, _resolve_binary_error
+from .assistant_adapter import AssistantAdapter, _resolve_binary_error, role_allows_workspace_writes
 from .config import AppConfig, AssistantRole
 from .exceptions import AdapterRunError
 from .models import RunResult
@@ -56,16 +56,17 @@ class SubprocessGeminiAdapter(AssistantAdapter):
         show_thinking: bool = False,
     ) -> RunResult:
         del output_format, show_thinking
+        role = _role_from_agent(agent)
         command = [
             config.gemini.binary,
             "--prompt",
             prompt,
             "--approval-mode",
-            _approval_mode_for_role(_role_from_agent(agent)),
+            _approval_mode_for_role(role),
             "--output-format",
             "stream-json",
         ]
-        resolved_model = config.role_model(_role_from_agent(agent))
+        resolved_model = config.role_model(role)
         if resolved_model:
             command.extend(["--model", resolved_model])
         for directory in _normalize_include_directories(include_directories, cwd=cwd):
@@ -179,9 +180,9 @@ def _role_from_agent(agent: str) -> AssistantRole:
 
 
 def _approval_mode_for_role(role: AssistantRole) -> str:
-    if role in {"implementer", "commit"}:
+    if role_allows_workspace_writes(role):
         return "yolo"
-    return "auto_edit"
+    return "plan"
 
 
 def _normalize_include_directories(include_directories: list[Path] | None, *, cwd: Path) -> list[str]:

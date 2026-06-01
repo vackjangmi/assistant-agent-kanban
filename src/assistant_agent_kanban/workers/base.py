@@ -126,6 +126,11 @@ class WorkerBase:
                 "Treat any path outside the current workspace as read-only context. "
                 "Do not return a markdown summary unless you made real workspace file changes."
             )
+        else:
+            instructions.append(
+                "This worker role is read-only. Do not edit files, apply patches, run write commands, create commits, "
+                "or modify the target repo or workflow state."
+            )
         if phase == "reviewer":
             instructions.append("Keep one exact machine-readable line: `Verdict: PASS` or `Verdict: NEEDS_CHANGES`.")
         instructions.extend(["", "<task-document>", source_text.rstrip(), "</task-document>"])

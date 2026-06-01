@@ -8,7 +8,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Callable, cast
 
-from .assistant_adapter import AssistantAdapter, _resolve_binary_error
+from .assistant_adapter import AssistantAdapter, _resolve_binary_error, role_allows_workspace_writes
 from .config import AppConfig, AssistantRole
 from .exceptions import AdapterRunError
 from .models import RunResult
@@ -81,18 +81,18 @@ class SubprocessCodexAdapter(AssistantAdapter):
         show_thinking: bool = False,
     ) -> RunResult:
         del include_directories
+        role = _role_from_agent(agent)
         command = [
             config.codex.binary,
             "exec",
             "-c",
             'approval_policy="never"',
             "-s",
-            "workspace-write",
+            "workspace-write" if role_allows_workspace_writes(role) else "read-only",
         ]
         if session_id:
             command.extend(["resume", session_id])
         command.extend(["--json", "--skip-git-repo-check"])
-        role = _role_from_agent(agent)
         resolved_model = config.role_model(role)
         command_model, reasoning_effort = _split_codex_model_reasoning(resolved_model)
         if reasoning_effort:

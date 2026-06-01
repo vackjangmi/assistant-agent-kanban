@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Callable
 
 from .agent_materializer import ensure_runtime_agent, runtime_config_home
-from .assistant_adapter import AssistantAdapter, _resolve_binary_error
-from .config import AppConfig
+from .assistant_adapter import AssistantAdapter, _resolve_binary_error, role_allows_workspace_writes
+from .config import AppConfig, AssistantRole
 from .exceptions import AdapterRunError
 from .log_parser import render_opencode_event_line
 from .models import RunResult
@@ -66,6 +66,7 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
         stream_stderr_to_log: bool = False,
         show_thinking: bool = False,
     ) -> RunResult:
+        role = _role_from_agent(agent)
         command = [config.opencode.binary, "run"]
         agent_path = ensure_runtime_agent(config, agent)
         resolved_model = _read_agent_model(agent_path)
@@ -79,7 +80,11 @@ class SubprocessOpenCodeAdapter(AssistantAdapter):
         run_log_path.parent.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["XDG_CONFIG_HOME"] = str(runtime_config_home(config))
-        permission_config = _merge_opencode_permission_config(env.get("OPENCODE_PERMISSION"), include_directories)
+        permission_config = _merge_opencode_permission_config(
+            env.get("OPENCODE_PERMISSION"),
+            include_directories,
+            read_only=not role_allows_workspace_writes(role),
+        )
         if permission_config is not None:
             env["OPENCODE_PERMISSION"] = permission_config
         try:
@@ -255,8 +260,27 @@ def _read_agent_model(path: Path | None) -> str | None:
     return _extract_agent_model(path.read_text())
 
 
-def _merge_opencode_permission_config(existing: str | None, include_directories: list[Path] | None) -> str | None:
-    if not include_directories:
+def _role_from_agent(agent: str) -> AssistantRole:
+    suffix = agent.removeprefix("fs-kanban-")
+    if suffix == "planner":
+        return "planner"
+    if suffix in {"request-draft", "request_draft"}:
+        return "request_draft"
+    if suffix in {"plan-approval", "plan_approval"}:
+        return "plan_approval"
+    if suffix == "implementer":
+        return "implementer"
+    if suffix == "reviewer":
+        return "reviewer"
+    if suffix == "inspector":
+        return "inspector"
+    if suffix == "commit":
+        return "commit"
+    return "planner"
+
+
+def _merge_opencode_permission_config(existing: str | None, include_directories: list[Path] | None, *, read_only: bool = False) -> str | None:
+    if not include_directories and not read_only:
         return existing
 
     permissions: dict[str, object]
@@ -273,7 +297,7 @@ def _merge_opencode_permission_config(existing: str | None, include_directories:
     edit_rules = _coerce_permission_rule(permissions.get("edit"))
     bash_rules = _coerce_permission_rule(permissions.get("bash"))
 
-    for directory in include_directories:
+    for directory in include_directories or []:
         resolved = directory.expanduser().resolve()
         direct_pattern = str(resolved)
         child_pattern = str(resolved / "**")
@@ -282,6 +306,10 @@ def _merge_opencode_permission_config(existing: str | None, include_directories:
         edit_rules[direct_pattern] = "deny"
         edit_rules[child_pattern] = "deny"
         bash_rules[f"*{direct_pattern}*"] = "deny"
+
+    if read_only:
+        edit_rules["*"] = "deny"
+        bash_rules["*"] = "deny"
 
     permissions["external_directory"] = external_rules
     permissions["edit"] = edit_rules

@@ -7,7 +7,7 @@ from typing import Callable, cast
 
 from pathlib import Path
 
-from .config import AppConfig, AssistantBackend
+from .config import AppConfig, AssistantBackend, AssistantRole
 from .exceptions import AdapterRunError
 from .models import RunResult
 
@@ -41,6 +41,13 @@ class AssistantAdapter:
 
     def cancel_task(self, task_id: str) -> None:
         return None
+
+
+WRITE_ENABLED_ROLES: frozenset[AssistantRole] = frozenset({"implementer"})
+
+
+def role_allows_workspace_writes(role: AssistantRole) -> bool:
+    return role in WRITE_ENABLED_ROLES
 
 
 @dataclass(slots=True)

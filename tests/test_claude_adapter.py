@@ -230,4 +230,7 @@ def test_claude_adapter_uses_request_draft_model_for_request_draft_agent(monkeyp
 
     command = cast(list[str], recorded["command"])
     assert command[command.index("--model") + 1] == "claude-haiku-4-5"
+    assert command[command.index("--permission-mode") + 1] == "plan"
+    assert command[command.index("--allowedTools") + 1] == "Read,Glob,Grep"
+    assert command[command.index("--disallowedTools") + 1] == "Bash,Edit,Write,MultiEdit"
     assert result.resolved_model == "claude-haiku-4-5"
