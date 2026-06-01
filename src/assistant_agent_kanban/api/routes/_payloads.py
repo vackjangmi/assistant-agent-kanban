@@ -59,6 +59,11 @@ class GitUnlockPayload(BaseModel):
     git_token_unlock_key: str | None = None
 
 
+class StartVerificationPayload(GitUnlockPayload):
+    confirm_dirty_target_repo: bool = False
+    dirty_snapshot_id: str | None = None
+
+
 class HumanVerificationPayload(GitUnlockPayload):
     note: str = ""
 

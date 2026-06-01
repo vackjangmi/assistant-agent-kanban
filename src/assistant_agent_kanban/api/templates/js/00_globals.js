@@ -10,6 +10,7 @@
     const taskModal = document.getElementById('task-modal');
     const retrospectiveModal = document.getElementById('retrospective-modal');
     const approvalChoiceModal = document.getElementById('approval-choice-modal');
+    const dirtyTargetConfirmationModal = document.getElementById('dirty-target-confirmation-modal');
     const resumePlannerChoiceModal = document.getElementById('resume-planner-choice-modal');
     const resumeImplementerChoiceModal = document.getElementById('resume-implementer-choice-modal');
     const resumeReviewerChoiceModal = document.getElementById('resume-reviewer-choice-modal');
@@ -22,6 +23,8 @@
     const closeAccountModalButton = document.getElementById('close-account-modal');
     const closeRetrospectiveModalButton = document.getElementById('close-retrospective-modal');
     const closeApprovalChoiceButton = document.getElementById('close-approval-choice');
+    const cancelDirtyTargetConfirmationButton = document.getElementById('cancel-dirty-target-confirmation');
+    const confirmDirtyTargetConfirmationButton = document.getElementById('confirm-dirty-target-confirmation');
     const closeResumePlannerChoiceButton = document.getElementById('close-resume-planner-choice');
     const closeResumeImplementerChoiceButton = document.getElementById('close-resume-implementer-choice');
     const closeResumeReviewerChoiceButton = document.getElementById('close-resume-reviewer-choice');
@@ -270,6 +273,10 @@
     const approvalChoiceTargetButton = document.getElementById('approval-choice-target-button');
     const approvalChoiceNewBranchButton = document.getElementById('approval-choice-new-branch-button');
     const approvalChoiceStatus = document.getElementById('approval-choice-status');
+    const dirtyTargetConfirmationWarning = document.getElementById('dirty-target-confirmation-warning');
+    const dirtyTargetConfirmationSummary = document.getElementById('dirty-target-confirmation-summary');
+    const dirtyTargetConfirmationFiles = document.getElementById('dirty-target-confirmation-files');
+    const dirtyTargetConfirmationStatus = document.getElementById('dirty-target-confirmation-status');
     const retrospectiveChoiceShell = document.getElementById('retrospective-choice-shell');
     const retrospectiveViewShell = document.getElementById('retrospective-view-shell');
     const retrospectiveViewTitle = document.getElementById('retrospective-view-title');
@@ -409,6 +416,9 @@
     let previousBoardTaskPhases = new Map();
     let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0, closed: 0, archive: 0 };
     let approvalSubmissionInFlight = false;
+    let dirtyTargetConfirmationInFlight = false;
+    let pendingDirtyTargetConfirmation = null;
+    let pendingDirtyTargetStartBody = null;
     let resumePlannerSubmissionInFlight = false;
     let resumeImplementerSubmissionInFlight = false;
     let resumeReviewerSubmissionInFlight = false;

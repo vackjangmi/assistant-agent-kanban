@@ -14,7 +14,7 @@ from typing import Mapping
 
 from ..commit_manager import CommitManager
 from ..enums import TaskState
-from ..exceptions import AdapterRunError, IntegrationConflictError, IntegrationError, TaskNotFoundError, TransitionError
+from ..exceptions import AdapterRunError, DirtyTargetRepoConfirmationRequired, IntegrationConflictError, IntegrationError, TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
 from ..markdown_attachments import normalize_markdown_attachments
@@ -61,11 +61,31 @@ class HumanVerificationService:
         git_token: str | None = None,
         git_token_username: str | None = None,
         operation_config: AppConfig | None = None,
+        confirm_dirty_target_repo: bool = False,
+        dirty_snapshot_id: str | None = None,
     ) -> TaskContext:
         with self._acquire_current_task_lease(task_id, owner=by, run_id="manual-human-verifying") as context:
             if context.state != TaskState.COMPLETED_REVIEWS:
                 raise TransitionError("human verification can only start from completed-reviews")
-            drift_note = self._target_repo_state_drift_note(context.metadata)
+            integration_manager = self._integration_manager(operation_config)
+            drift_note = self._target_repo_state_drift_note(context.metadata, ignore_dirty=True)
+            if drift_note is not None:
+                apply_retry_gate(context.metadata, reason="verification-target-repo-drift")
+                context.metadata.errors.append(TaskErrorInfo(code="verification-target-repo-drift", message=drift_note))
+                self.metadata_store.save(context.task_dir, context.metadata)
+                return self.transitions.move(context, TaskState.TODOS, by=by, note=drift_note)
+            dirty_confirmation = self._dirty_target_repo_confirmation(context.metadata, integration_manager)
+            if dirty_confirmation is not None:
+                if not confirm_dirty_target_repo:
+                    raise DirtyTargetRepoConfirmationRequired(dirty_confirmation)
+                if dirty_snapshot_id != dirty_confirmation.snapshot_id:
+                    raise DirtyTargetRepoConfirmationRequired(dirty_confirmation)
+                integration_manager.stash_pre_verification_changes(
+                    context.metadata,
+                    expected_snapshot_id=dirty_confirmation.snapshot_id,
+                )
+                self.metadata_store.save(context.task_dir, context.metadata)
+            drift_note = self._target_repo_state_drift_note(context.metadata, ignore_dirty=dirty_confirmation is not None)
             if drift_note is not None:
                 apply_retry_gate(context.metadata, reason="verification-target-repo-drift")
                 context.metadata.errors.append(TaskErrorInfo(code="verification-target-repo-drift", message=drift_note))
@@ -81,9 +101,10 @@ class HumanVerificationService:
             try:
                 return self.transitions.move(context, TaskState.HUMAN_VERIFYING, by=by, note="human verification started")
             except Exception:
-                if context.metadata.integration.applied:
-                    self._integration_manager(operation_config).rollback_workspace(
-                        context.metadata,
+                if context.metadata.integration.applied or context.metadata.integration.pre_verification_stash.active:
+                    self._rollback_workspace_for_context(
+                        context,
+                        operation_config=operation_config,
                         git_token=git_token,
                         git_token_username=git_token_username,
                     )
@@ -242,8 +263,9 @@ class HumanVerificationService:
                         raise
                     recapture_error = str(exc)
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="REQUEST_CHANGES")
-            self._integration_manager(operation_config).rollback_workspace(
-                context.metadata,
+            self._rollback_workspace_for_context(
+                context,
+                operation_config=operation_config,
                 git_token=git_token,
                 git_token_username=git_token_username,
                 delete_remote_review_branch=False,
@@ -315,6 +337,10 @@ class HumanVerificationService:
             try:
                 if not context.metadata.integration.applied:
                     raise TransitionError("approval is blocked until verification apply succeeds")
+                if completion_mode == "target-branch" and context.metadata.integration.pre_verification_stash.active:
+                    raise TransitionError(
+                        "target-branch completion is blocked while pre-existing target repo changes are stashed; finalize on a new branch instead"
+                    )
                 if context.metadata.human_verification.note_markdown.strip():
                     raise TransitionError("approval is blocked until the review note is cleared")
                 incomplete_qa_items = [
@@ -384,8 +410,9 @@ class HumanVerificationService:
                 raise
             except Exception as exc:
                 try:
-                    self._integration_manager(operation_config).rollback_workspace(
-                        context.metadata,
+                    self._rollback_workspace_for_context(
+                        context,
+                        operation_config=operation_config,
                         git_token=git_token,
                         git_token_username=git_token_username,
                     )
@@ -410,6 +437,34 @@ class HumanVerificationService:
         if operation_config is None:
             return self.integration_manager
         return IntegrationManager(operation_config)
+
+    def _rollback_workspace_for_context(
+        self,
+        context: TaskContext,
+        *,
+        operation_config: AppConfig | None,
+        git_token: str | None,
+        git_token_username: str | None,
+        delete_remote_review_branch: bool = True,
+        preserve_remote_review_branch: bool = False,
+    ) -> None:
+        try:
+            self._integration_manager(operation_config).rollback_workspace(
+                context.metadata,
+                git_token=git_token,
+                git_token_username=git_token_username,
+                delete_remote_review_branch=delete_remote_review_branch,
+                preserve_remote_review_branch=preserve_remote_review_branch,
+            )
+        except IntegrationError as exc:
+            code = (
+                "pre-verification-stash-restore-failed"
+                if context.metadata.integration.pre_verification_stash.active
+                else "integration-rollback-failed"
+            )
+            context.metadata.errors.append(TaskErrorInfo(code=code, message=str(exc)))
+            self.metadata_store.save(context.task_dir, context.metadata)
+            raise
 
     def _invoke_run_verification_apply(
         self,
@@ -794,8 +849,9 @@ class HumanVerificationService:
             context.metadata.commit.sha = review_sha
             self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="IN_PROGRESS")
         except IntegrationConflictError as exc:
-            self._integration_manager(operation_config).rollback_workspace(
-                context.metadata,
+            self._rollback_workspace_for_context(
+                context,
+                operation_config=operation_config,
                 git_token=git_token,
                 git_token_username=git_token_username,
             )
@@ -807,8 +863,9 @@ class HumanVerificationService:
             clear_retry_gate(context.metadata)
         except Exception as exc:
             try:
-                self._integration_manager(operation_config).rollback_workspace(
-                    context.metadata,
+                self._rollback_workspace_for_context(
+                    context,
+                    operation_config=operation_config,
                     git_token=git_token,
                     git_token_username=git_token_username,
                 )
@@ -825,7 +882,12 @@ class HumanVerificationService:
         metadata.implementation.resolved_model = None
         metadata.implementation.last_run_tokens = 0
 
-    def _target_repo_state_drift_note(self, metadata) -> str | None:
+    def _dirty_target_repo_confirmation(self, metadata, integration_manager: IntegrationManager):
+        if integration_manager.config.review_branch_remote.enabled:
+            return None
+        return integration_manager.dirty_target_repo_confirmation(metadata)
+
+    def _target_repo_state_drift_note(self, metadata, *, ignore_dirty: bool = False) -> str | None:
         baseline = metadata.implementation.target_repo_baseline
         if baseline is None:
             return None
@@ -838,6 +900,8 @@ class HumanVerificationService:
         )
         if head_drift is not None:
             return head_drift
+        if ignore_dirty:
+            return None
         return describe_target_repo_dirty_drift(
             expected_dirty=baseline.dirty,
             current_branch=current.current_branch,

@@ -5,7 +5,7 @@ import inspect
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ...exceptions import CommitError, IntegrationError, TaskNotFoundError, TransitionError
+from ...exceptions import CommitError, DirtyTargetRepoConfirmationRequired, IntegrationError, TaskNotFoundError, TransitionError
 from ...settings_resolver import effective_config_for_user_and_project
 from ..auth import auth_is_required
 from ._helpers import _require_task_actor
@@ -22,6 +22,7 @@ from ._payloads import (
     RetrospectiveCreatePayload,
     RetrospectivePayload,
     ReviewerQuestionPayload,
+    StartVerificationPayload,
 )
 
 
@@ -135,7 +136,7 @@ def register(router: APIRouter) -> None:
         return moved.metadata
 
     @router.post("/api/tasks/{task_id}/start-verification")
-    async def start_verification(task_id: str, request: Request, payload: GitUnlockPayload | None = None):
+    async def start_verification(task_id: str, request: Request, payload: StartVerificationPayload | None = None):
         runtime = request.app.state.runtime
         user = _require_task_actor(request, task_id)
         git_token, git_token_username = _git_credentials_for_request(
@@ -153,7 +154,11 @@ def register(router: APIRouter) -> None:
                 git_token=git_token,
                 git_token_username=git_token_username,
                 operation_config=operation_config,
+                confirm_dirty_target_repo=bool(payload.confirm_dirty_target_repo) if payload else False,
+                dirty_snapshot_id=payload.dirty_snapshot_id if payload else None,
             )
+        except DirtyTargetRepoConfirmationRequired as exc:
+            raise HTTPException(status_code=409, detail=exc.confirmation.model_dump(mode="json")) from exc
         except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         await runtime.rescan_and_publish()

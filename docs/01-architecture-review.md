@@ -352,7 +352,8 @@ The target repo is not touched immediately after review passes. The flow is:
 
 Operating assumptions:
 
-- The target repo must be clean before verification begins.
+- Committed target repo drift still blocks verification and sends the task back for re-implementation.
+- Uncommitted local target repo changes require explicit human confirmation; when confirmed, the app stores the affected file list in metadata, creates a managed git stash, runs verification in the same target repo path, and restores the stash when verification is rejected, cancelled, deleted, or completed.
 - The target repo is not the active implementation workspace before verification.
 - Approval requires a successful verification apply, no human verification note, completed or skipped required QA items, and no unresolved inline comments.
 - Approval can finalize onto a new final branch or directly onto the target branch, depending on the selected completion mode.

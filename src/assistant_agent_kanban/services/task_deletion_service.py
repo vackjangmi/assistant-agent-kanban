@@ -4,10 +4,10 @@ import shutil
 from pathlib import Path
 
 from ..config import AppConfig
-from ..exceptions import TaskNotFoundError, TransitionError
+from ..exceptions import IntegrationError, TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
-from ..models import TaskContext, TaskMetadata
+from ..models import TaskContext, TaskErrorInfo, TaskMetadata
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
 
@@ -41,8 +41,13 @@ class TaskDeletionService:
     def _prepare_for_deletion(self, context: TaskContext) -> None:
         self._validate_managed_workspace(context.metadata)
         self._validate_managed_patch(context.metadata)
-        if context.metadata.integration.applied:
-            self.integration_manager.rollback_workspace(context.metadata)
+        if context.metadata.integration.applied or context.metadata.integration.pre_verification_stash.active:
+            try:
+                self.integration_manager.rollback_workspace(context.metadata)
+            except IntegrationError as exc:
+                context.metadata.errors.append(TaskErrorInfo(code="integration-rollback-failed", message=str(exc)))
+                self.scanner.metadata_store.save(context.task_dir, context.metadata)
+                raise
 
     def _workspace_root(self, task_id: str, metadata: TaskMetadata) -> Path:
         workspace_root = metadata.implementation.workspace

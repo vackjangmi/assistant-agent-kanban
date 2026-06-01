@@ -472,7 +472,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 - Run lint and type checks with `python -m ruff check .` and `python -m pyright`
 - This project emphasizes a reviewable workflow more than raw AI automation
 - Human approval stages are intentional and should not be removed
-- The target repo should be clean when verification begins
+- Committed target repo drift sends work back for re-implementation; uncommitted local target repo changes require explicit confirmation and are temporarily stashed during human verification
 - The full workspace must not live inside the task directory
 - Internal CLI state files (Antigravity/OpenCode/Codex/Claude/Gemini) are not the source of truth
 

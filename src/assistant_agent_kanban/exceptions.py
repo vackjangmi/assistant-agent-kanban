@@ -6,6 +6,12 @@ class TransitionError(FsKanbanError):
     pass
 
 
+class DirtyTargetRepoConfirmationRequired(TransitionError):
+    def __init__(self, confirmation) -> None:
+        self.confirmation = confirmation
+        super().__init__("target repo has local changes; confirmation is required before human verification")
+
+
 class LockError(FsKanbanError):
     pass
 

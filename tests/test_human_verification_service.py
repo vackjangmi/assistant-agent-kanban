@@ -16,7 +16,7 @@ from assistant_agent_kanban.commit_manager import CommitManager
 from assistant_agent_kanban.config import AppConfig
 from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.events import EventBus
-from assistant_agent_kanban.exceptions import IntegrationError, TransitionError
+from assistant_agent_kanban.exceptions import DirtyTargetRepoConfirmationRequired, IntegrationError, TransitionError
 from assistant_agent_kanban.integration_manager import IntegrationManager
 from assistant_agent_kanban.locks import TaskLockManager
 from assistant_agent_kanban.metadata_store import MetadataStore
@@ -445,13 +445,16 @@ def test_human_verification_start_returns_to_todos_when_target_repo_becomes_dirt
     scanner, service, completed = _task_ready_for_human_verification(config)
     (repo_root / "app.txt").write_text("dirty outside workspace\n")
 
-    moved = service.start(completed.metadata.task_id, by="human")
+    with pytest.raises(DirtyTargetRepoConfirmationRequired) as exc_info:
+        service.start(completed.metadata.task_id, by="human")
 
-    assert moved.state == TaskState.TODOS
+    confirmation = exc_info.value.confirmation
+    assert confirmation.file_count == 1
+    assert confirmation.files[0].path == "app.txt"
     refreshed = scanner.find_task(completed.metadata.task_id)
-    assert refreshed.state == TaskState.TODOS
-    assert refreshed.metadata.retry_gate.reason == "verification-target-repo-drift"
-    assert any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
+    assert refreshed.state == TaskState.COMPLETED_REVIEWS
+    assert refreshed.metadata.retry_gate.reason is None
+    assert not any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
 
 
 def test_human_verification_start_blocks_other_review_branch_dirt(configured_paths):
@@ -461,13 +464,104 @@ def test_human_verification_start_blocks_other_review_branch_dirt(configured_pat
     subprocess.run(["git", "-C", str(repo_root), "switch", "-c", "review/other-task"], check=True, capture_output=True, text=True)
     (repo_root / "app.txt").write_text("human review edits\n")
 
-    with pytest.raises(IntegrationError, match="target repo must be clean before apply"):
+    with pytest.raises(DirtyTargetRepoConfirmationRequired) as exc_info:
         service.start(completed.metadata.task_id, by="human")
 
+    assert exc_info.value.confirmation.original_branch == "review/other-task"
+    assert exc_info.value.confirmation.files[0].path == "app.txt"
     refreshed = scanner.find_task(completed.metadata.task_id)
     assert refreshed.state == TaskState.COMPLETED_REVIEWS
     assert (repo_root / "app.txt").read_text() == "human review edits\n"
     assert not any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
+
+
+def test_human_verification_confirm_stashes_dirty_target_repo_and_reject_restores(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-dirty-stash-reject-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    (repo_root / "app.txt").write_text("dirty outside workspace\n")
+    untracked = repo_root / "notes.txt"
+    untracked.write_text("local note\n")
+
+    with pytest.raises(DirtyTargetRepoConfirmationRequired) as exc_info:
+        service.start(completed.metadata.task_id, by="human")
+    confirmation = exc_info.value.confirmation
+
+    moved = service.start(
+        completed.metadata.task_id,
+        by="human",
+        confirm_dirty_target_repo=True,
+        dirty_snapshot_id=confirmation.snapshot_id,
+    )
+
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    verifying = scanner.find_task(completed.metadata.task_id)
+    stash = verifying.metadata.integration.pre_verification_stash
+    assert stash.active is True
+    assert stash.stash_sha
+    assert {file.path for file in stash.files} == {"app.txt", "notes.txt"}
+    assert (repo_root / "app.txt").read_text() == "review me\n"
+    assert not untracked.exists()
+    assert subprocess.run(["git", "-C", str(repo_root), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip() == ""
+
+    rejected = service.reject(completed.metadata.task_id, by="human", note="Need another pass")
+
+    assert rejected.state == TaskState.TODOS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    restored_stash = refreshed.metadata.integration.pre_verification_stash
+    assert restored_stash.active is False
+    assert restored_stash.restored_at is not None
+    assert restored_stash.restore_error is None
+    assert (repo_root / "app.txt").read_text() == "dirty outside workspace\n"
+    assert untracked.read_text() == "local note\n"
+    current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == "main"
+
+
+def test_human_verification_confirm_stash_blocks_target_branch_completion(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-dirty-stash-target-branch-task")
+    _, service, completed = _task_ready_for_human_verification(config)
+    (repo_root / "app.txt").write_text("dirty outside workspace\n")
+
+    with pytest.raises(DirtyTargetRepoConfirmationRequired) as exc_info:
+        service.start(completed.metadata.task_id, by="human")
+    service.start(
+        completed.metadata.task_id,
+        by="human",
+        confirm_dirty_target_repo=True,
+        dirty_snapshot_id=exc_info.value.confirmation.snapshot_id,
+    )
+
+    with pytest.raises(TransitionError, match="target-branch completion is blocked"):
+        service.approve(completed.metadata.task_id, by="human", completion_mode="target-branch")
+
+
+def test_human_verification_confirm_stash_approve_new_branch_restores_original_worktree(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-dirty-stash-approve-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    (repo_root / "app.txt").write_text("dirty outside workspace\n")
+
+    with pytest.raises(DirtyTargetRepoConfirmationRequired) as exc_info:
+        service.start(completed.metadata.task_id, by="human")
+    service.start(
+        completed.metadata.task_id,
+        by="human",
+        confirm_dirty_target_repo=True,
+        dirty_snapshot_id=exc_info.value.confirmation.snapshot_id,
+    )
+    moved = service.approve(completed.metadata.task_id, by="human", completion_mode="new-branch")
+
+    assert moved.state == TaskState.DONE
+    done = scanner.find_task(completed.metadata.task_id)
+    assert done.metadata.integration.final_branch
+    assert _git_ref_exists(repo_root, done.metadata.integration.final_branch)
+    assert done.metadata.integration.pre_verification_stash.active is False
+    assert done.metadata.integration.pre_verification_stash.restored_at is not None
+    assert (repo_root / "app.txt").read_text() == "dirty outside workspace\n"
+    current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == "main"
 
 
 def test_human_verification_start_uses_absolute_patch_path_from_relative_config(monkeypatch, tmp_path):

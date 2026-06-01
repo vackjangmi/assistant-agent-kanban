@@ -638,6 +638,7 @@
       taskModal.setAttribute('aria-hidden', String(!isOpen));
       if (!isOpen) {
         setApprovalChoiceModalOpen(false, { force: true });
+        setDirtyTargetConfirmationModalOpen(false, { force: true });
         setResumePlannerChoiceModalOpen(false, { force: true });
         setResumeImplementerChoiceModalOpen(false, { force: true });
         setResumeReviewerChoiceModalOpen(false, { force: true });
@@ -668,8 +669,25 @@
         approvalChoiceStatus.textContent = '';
         approvalChoiceStatus.dataset.tone = 'neutral';
         approvalChoiceTargetButton.disabled = false;
+        approvalChoiceTargetButton.removeAttribute('title');
         approvalChoiceNewBranchButton.disabled = false;
         closeApprovalChoiceButton.disabled = false;
+      }
+      syncBodyModalState();
+    }
+
+    function setDirtyTargetConfirmationModalOpen(isOpen, { force = false } = {}) {
+      if (!isOpen && dirtyTargetConfirmationInFlight && !force) return;
+      dirtyTargetConfirmationModal.hidden = !isOpen;
+      dirtyTargetConfirmationModal.setAttribute('aria-hidden', String(!isOpen));
+      if (!isOpen) {
+        dirtyTargetConfirmationStatus.hidden = true;
+        dirtyTargetConfirmationStatus.textContent = '';
+        dirtyTargetConfirmationStatus.dataset.tone = 'neutral';
+        confirmDirtyTargetConfirmationButton.disabled = false;
+        cancelDirtyTargetConfirmationButton.disabled = false;
+        pendingDirtyTargetConfirmation = null;
+        pendingDirtyTargetStartBody = null;
       }
       syncBodyModalState();
     }
@@ -748,7 +766,7 @@
     }
 
     function syncBodyModalState() {
-      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || (accountModal && !accountModal.hidden) || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden || !directoryPickerModal.hidden);
+      body.classList.toggle('modal-open', !modal.hidden || !settingsModal.hidden || (accountModal && !accountModal.hidden) || !taskModal.hidden || !retrospectiveModal.hidden || !approvalChoiceModal.hidden || !dirtyTargetConfirmationModal.hidden || !resumeImplementerChoiceModal.hidden || !resumeReviewerChoiceModal.hidden || !directoryPickerModal.hidden);
     }
 
     function renderRetrospectiveMeta(record) {

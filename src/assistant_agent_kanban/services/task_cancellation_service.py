@@ -6,10 +6,10 @@ import subprocess
 
 from ..config import AppConfig
 from ..enums import CANCELABLE_STATES, TaskState
-from ..exceptions import TaskNotFoundError, TransitionError
+from ..exceptions import IntegrationError, TaskNotFoundError, TransitionError
 from ..integration_manager import IntegrationManager
 from ..locks import TaskLockManager
-from ..models import TaskContext, TaskMetadata, WorkerLease, utc_now
+from ..models import TaskContext, TaskErrorInfo, TaskMetadata, WorkerLease, utc_now
 from ..retry_policy import clear_retry_gate
 from ..scanner import KanbanScanner
 from ..target_repo_guard import resolve_safe_target_repo_root
@@ -59,8 +59,13 @@ class TaskCancellationService:
     def _prepare_for_cancellation(self, context: TaskContext) -> None:
         self._validate_managed_workspace(context.metadata)
         self._validate_managed_patch(context.metadata)
-        if context.metadata.integration.applied:
-            self.integration_manager.rollback_workspace(context.metadata)
+        if context.metadata.integration.applied or context.metadata.integration.pre_verification_stash.active:
+            try:
+                self.integration_manager.rollback_workspace(context.metadata)
+            except IntegrationError as exc:
+                context.metadata.errors.append(TaskErrorInfo(code="integration-rollback-failed", message=str(exc)))
+                self.scanner.metadata_store.save(context.task_dir, context.metadata)
+                raise
             self._delete_target_repo_docs(context.metadata)
 
     def _archive_workspace_changes(self, context: TaskContext) -> list[str]:

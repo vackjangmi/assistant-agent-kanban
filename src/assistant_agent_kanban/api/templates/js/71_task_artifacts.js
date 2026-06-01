@@ -820,19 +820,65 @@
       }
     }
 
+    function dirtyTargetConfirmationFromPayload(payload) {
+      const detail = payload?.detail || payload;
+      if (detail?.code === 'dirty-target-repo-confirmation-required') return detail;
+      return null;
+    }
+
+    function dirtyTargetStatusLabel(file) {
+      return String(file?.status || `${file?.staged || ' '}${file?.unstaged || ' '}`).trim() || '??';
+    }
+
+    function renderDirtyTargetConfirmation(confirmation) {
+      const fileCount = Number(confirmation?.file_count || confirmation?.files?.length || 0);
+      dirtyTargetConfirmationWarning.textContent = translateHumanReview('dirtyTargetWarning');
+      dirtyTargetConfirmationSummary.innerHTML = [
+        `<div><strong>${escapeHtml(translateHumanReview('dirtyTargetRepoLabel'))}</strong><code>${escapeHtml(confirmation?.repo_root || '')}</code></div>`,
+        `<div><strong>${escapeHtml(translateHumanReview('dirtyTargetBranchLabel'))}</strong><code>${escapeHtml(confirmation?.original_branch || '(detached)')}</code></div>`,
+        `<div><strong>${escapeHtml(translateHumanReview('dirtyTargetHeadLabel'))}</strong><code>${escapeHtml((confirmation?.original_head_sha || '').slice(0, 12) || 'unknown')}</code></div>`,
+        `<div><strong>${escapeHtml(translateHumanReview('dirtyTargetFileCountLabel'))}</strong><span>${escapeHtml(translateHumanReview('dirtyTargetFileCount', { count: fileCount }))}</span></div>`,
+      ].join('');
+      dirtyTargetConfirmationFiles.innerHTML = (confirmation?.files || []).map((file) => {
+        const status = dirtyTargetStatusLabel(file);
+        const originalPath = file.original_path ? `${escapeHtml(file.original_path)} -> ` : '';
+        return `<div class="dirty-target-file"><code class="dirty-target-file-status">${escapeHtml(status)}</code><span>${originalPath}${escapeHtml(file.path || '')}</span></div>`;
+      }).join('') || `<div class="muted">${escapeHtml(translateHumanReview('dirtyTargetNoFiles'))}</div>`;
+    }
+
+    function openDirtyTargetConfirmation(confirmation, requestBody) {
+      pendingDirtyTargetConfirmation = confirmation;
+      pendingDirtyTargetStartBody = requestBody || {};
+      renderDirtyTargetConfirmation(confirmation);
+      dirtyTargetConfirmationStatus.hidden = true;
+      dirtyTargetConfirmationStatus.textContent = '';
+      setDirtyTargetConfirmationModalOpen(true);
+    }
+
+    async function performStartVerification(requestBody) {
+      const response = await fetch(`/api/tasks/${activeTaskId}/start-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+      const payload = await response.json();
+      const dirtyConfirmation = dirtyTargetConfirmationFromPayload(payload);
+      if (!response.ok && dirtyConfirmation) {
+        openDirtyTargetConfirmation(dirtyConfirmation, requestBody);
+        return null;
+      }
+      if (!response.ok) throw new Error(payload.detail || translateTask('failedStartVerification'));
+      return payload;
+    }
+
     async function startVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'completed-reviews' || activeTaskDetail?.metadata?.lease?.run_id === 'manual-human-verifying') return;
       startVerificationButton.disabled = true;
       try {
         const requestBody = gitUnlockBodyForOperation();
         if (requestBody === null) return;
-        const response = await fetch(`/api/tasks/${activeTaskId}/start-verification`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || translateTask('failedStartVerification'));
+        const payload = await performStartVerification(requestBody);
+        if (payload === null) return;
         await loadBoard();
         await loadTaskDetail(activeTaskId, true);
         if (!taskTabChangedFiles.hidden) setTaskTab('changed-files');
@@ -840,6 +886,40 @@
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
       } finally {
+        updateHumanVerificationState();
+      }
+    }
+
+    async function confirmDirtyTargetVerificationStart() {
+      if (!activeTaskId || !pendingDirtyTargetConfirmation || !pendingDirtyTargetStartBody) return;
+      dirtyTargetConfirmationInFlight = true;
+      confirmDirtyTargetConfirmationButton.disabled = true;
+      cancelDirtyTargetConfirmationButton.disabled = true;
+      dirtyTargetConfirmationStatus.hidden = false;
+      dirtyTargetConfirmationStatus.dataset.tone = 'warning';
+      dirtyTargetConfirmationStatus.textContent = translateHumanReview('dirtyTargetStarting');
+      try {
+        const requestBody = {
+          ...pendingDirtyTargetStartBody,
+          confirm_dirty_target_repo: true,
+          dirty_snapshot_id: pendingDirtyTargetConfirmation.snapshot_id,
+        };
+        const payload = await performStartVerification(requestBody);
+        if (payload === null) return;
+        setDirtyTargetConfirmationModalOpen(false, { force: true });
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true);
+        if (!taskTabChangedFiles.hidden) setTaskTab('changed-files');
+      } catch (error) {
+        dirtyTargetConfirmationStatus.hidden = false;
+        dirtyTargetConfirmationStatus.dataset.tone = 'error';
+        dirtyTargetConfirmationStatus.textContent = error.message;
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+      } finally {
+        dirtyTargetConfirmationInFlight = false;
+        confirmDirtyTargetConfirmationButton.disabled = false;
+        cancelDirtyTargetConfirmationButton.disabled = false;
         updateHumanVerificationState();
       }
     }

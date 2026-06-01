@@ -256,6 +256,10 @@
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.25 3.75A1.75 1.75 0 0 1 5 2h6a1.75 1.75 0 0 1 1.75 1.75v8.5A1.75 1.75 0 0 1 11 14H5a1.75 1.75 0 0 1-1.75-1.75v-8.5Z" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.25h5M5.5 7.75h5M5.5 10.25H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M2.25 5.5h1.5M2.25 8h1.5M2.25 10.5h1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
     }
 
+    function warningIconSvg(className = 'card-warning-icon') {
+      return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.25 14 13H2L8 2.25Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 5.75v3.1M8 11.1v.15" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/></svg>`;
+    }
+
     function caretIconSvg(className = 'target-branch-caret') {
       return `<svg class="${escapeHtml(className)}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.47 6.22a.75.75 0 0 1 1.06 0L8 8.69l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z" fill="currentColor"/></svg>`;
     }
@@ -307,6 +311,8 @@
       const repoLabel = item.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
       const branchLabel = item.base_branch || '';
       const finalBranchLabel = item.final_branch || '';
+      const stashActive = Boolean(item.pre_verification_stash_active);
+      const stashLabel = stashActive ? translateHumanReview('stashBadge', { count: item.pre_verification_stash_file_count || 0 }) : '';
       const ownerLabel = taskOwnerName(item);
       const repoTone = repoTagTone(repoPath);
       const repoStyle = `--tag-bg:${repoTone.background};--tag-border:${repoTone.border};--tag-text:${repoTone.text};--tag-bg-dark:${repoTone.darkBackground};--tag-border-dark:${repoTone.darkBorder};--tag-text-dark:${repoTone.darkText};`;
@@ -315,6 +321,7 @@
         renderTag('', ownerLabel, 'card-tag-owner', '', taskOwnerTitle(item), userIconSvg()),
         compactFinal ? '' : renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
         compactFinal ? '' : renderTag('', branchLabel, 'card-tag-branch', '', branchLabel, branchIconSvg('card-branch-icon')),
+        stashActive ? renderTag('', stashLabel, 'card-tag-stash-warning', '', translateHumanReview('stashBadgeTitle'), warningIconSvg('card-warning-icon')) : '',
         compactFinal ? renderTag('', finalBranchLabel, 'card-tag-branch card-tag-final-branch', '', finalBranchLabel, branchIconSvg('card-branch-icon')) : '',
       ].filter(Boolean);
       const runtimeValue = renderCardRuntime(item);
@@ -351,6 +358,8 @@
       const repoLabel = task.target_repo_label || deriveRepoContext(repoPath).repoName || 'target repo';
       const baseBranch = task.base_branch || '';
       const finalBranch = task.final_branch || '';
+      const stashActive = Boolean(task.pre_verification_stash_active);
+      const stashLabel = stashActive ? translateHumanReview('stashBadge', { count: task.pre_verification_stash_file_count || 0 }) : '';
       const ownerLabel = taskOwnerName(task);
       const state = task.state || '';
       const completedAt = task.completed_at || resolveTaskCompletedAt(task);
@@ -363,6 +372,7 @@
         renderTag('', repoLabel, 'card-tag-repo', repoStyle, repoPath || repoLabel, repoIconSvg('card-repo-icon')),
         renderTag('', baseBranch, 'card-tag-branch', '', baseBranch, branchIconSvg('card-branch-icon')),
         renderTag('', finalBranch, 'card-tag-branch card-tag-final-branch', '', finalBranch, branchIconSvg('card-branch-icon')),
+        stashActive ? renderTag('', stashLabel, 'card-tag-stash-warning', '', translateHumanReview('stashBadgeTitle'), warningIconSvg('card-warning-icon')) : '',
       ].filter(Boolean).join('');
       const rightTags = [
         state ? renderTag('', state === 'done' && completedAt ? `${stateLabel(state)} · ${formatDateTime(completedAt)}` : stateLabel(state), 'card-tag-branch card-tag-final-branch', statusStyle, stateLabel(state), workHistoryIconSvg()) : '',
