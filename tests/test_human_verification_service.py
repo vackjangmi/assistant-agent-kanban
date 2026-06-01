@@ -457,6 +457,24 @@ def test_human_verification_start_returns_to_todos_when_target_repo_becomes_dirt
     assert not any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
 
 
+def test_human_verification_start_blocks_parallel_local_review_for_same_target_repo(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-local-review-one-task")
+    scanner, service, first = _task_ready_for_human_verification(config)
+    create_request_task(config, "verify-local-review-two-task")
+    _, second_service, second = _task_ready_for_human_verification(config)
+
+    started = service.start(first.metadata.task_id, by="human")
+
+    assert started.state == TaskState.HUMAN_VERIFYING
+    with pytest.raises(TransitionError, match="local human verification is already in progress"):
+        second_service.start(second.metadata.task_id, by="human")
+    assert scanner.find_task(first.metadata.task_id).state == TaskState.HUMAN_VERIFYING
+    assert scanner.find_task(second.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
+    current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == f"review/{first.metadata.task_id.lower()}"
+
+
 def test_human_verification_start_blocks_other_review_branch_dirt(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-other-review-branch-dirty-task")

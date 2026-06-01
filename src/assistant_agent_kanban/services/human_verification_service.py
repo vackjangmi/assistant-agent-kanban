@@ -68,6 +68,9 @@ class HumanVerificationService:
             if context.state != TaskState.COMPLETED_REVIEWS:
                 raise TransitionError("human verification can only start from completed-reviews")
             integration_manager = self._integration_manager(operation_config)
+            conflict_note = self._local_human_verification_conflict_note(context, integration_manager)
+            if conflict_note is not None:
+                raise TransitionError(conflict_note)
             drift_note = self._target_repo_state_drift_note(context.metadata, ignore_dirty=True)
             if drift_note is not None:
                 apply_retry_gate(context.metadata, reason="verification-target-repo-drift")
@@ -889,6 +892,30 @@ class HumanVerificationService:
         if integration_manager.config.review_branch_remote.enabled:
             return None
         return integration_manager.dirty_target_repo_confirmation(metadata)
+
+    def _local_human_verification_conflict_note(self, context: TaskContext, integration_manager: IntegrationManager) -> str | None:
+        if integration_manager.config.review_branch_remote.enabled:
+            return None
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(context.metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+        for item in self.scanner.scan():
+            if item.metadata.task_id == context.metadata.task_id:
+                continue
+            if item.state != TaskState.HUMAN_VERIFYING and item.metadata.lease.run_id != "manual-human-verifying":
+                continue
+            try:
+                item_repo_root = resolve_safe_target_repo_root(Path(item.metadata.target.repo_root))
+            except ValueError:
+                continue
+            if item_repo_root != target_repo_root:
+                continue
+            return (
+                "local human verification is already in progress for this target repo "
+                f"({target_repo_root}) by task {item.metadata.task_id}: {item.metadata.title}"
+            )
+        return None
 
     def _target_repo_state_drift_note(self, metadata, *, ignore_dirty: bool = False) -> str | None:
         baseline = metadata.implementation.target_repo_baseline
