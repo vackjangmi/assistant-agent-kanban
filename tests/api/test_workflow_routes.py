@@ -899,12 +899,43 @@ def test_api_blocks_human_verification_start_when_target_worktree_is_dirty(confi
         start = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
 
     assert start.status_code == 409
-    assert "target repo must be clean before apply" in start.json()["detail"]
+    detail = start.json()["detail"]
+    assert detail["code"] == "dirty-target-repo-confirmation-required"
+    assert detail["file_count"] == 1
+    assert detail["files"][0]["path"] == "docs/unrelated.md"
     assert scanner.find_task(completed.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
     assert (repo_root / "app.txt").read_text() == "hello\n"
     assert not dirty_file.exists()
     status = subprocess.run(["git", "-C", str(repo_root), "status", "--short"], check=True, capture_output=True, text=True)
     assert "D docs/unrelated.md" in status.stdout
+
+
+def test_api_confirms_dirty_target_stash_before_human_verification(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-confirm-dirty-target-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, completed = _task_ready_for_completed_reviews(config, "human-verify-confirm-dirty-target-task")
+    (repo_root / "app.txt").write_text("dirty outside workspace\n")
+
+    with TestClient(app) as client:
+        preflight = client.post(f"/api/tasks/{completed.metadata.task_id}/start-verification")
+        detail = preflight.json()["detail"]
+        start = client.post(
+            f"/api/tasks/{completed.metadata.task_id}/start-verification",
+            json={
+                "confirm_dirty_target_repo": True,
+                "dirty_snapshot_id": detail["snapshot_id"],
+            },
+        )
+
+    assert preflight.status_code == 409
+    assert start.status_code == 200
+    assert start.json()["state"] == TaskState.HUMAN_VERIFYING.value
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.pre_verification_stash.active is True
+    assert refreshed.metadata.integration.pre_verification_stash.files[0].path == "app.txt"
+    assert (repo_root / "app.txt").read_text() == "review me\n"
 
 
 def test_api_rejects_retry_when_verification_apply_is_already_active(configured_paths):

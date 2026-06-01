@@ -204,6 +204,11 @@
       approvalChoiceTargetButton.textContent = translateHumanReview('approvalChoiceTargetAction');
       approvalChoiceNewBranchButton.textContent = translateHumanReview('approvalChoiceNewBranchAction');
       closeApprovalChoiceButton.textContent = translateHumanReview('approvalChoiceClose');
+      document.getElementById('dirty-target-confirmation-title').textContent = translateHumanReview('dirtyTargetTitle');
+      document.getElementById('dirty-target-confirmation-description').textContent = translateHumanReview('dirtyTargetDescription');
+      document.getElementById('dirty-target-confirmation-files-title').textContent = translateHumanReview('dirtyTargetFilesTitle');
+      cancelDirtyTargetConfirmationButton.textContent = translateHumanReview('dirtyTargetCancel');
+      confirmDirtyTargetConfirmationButton.textContent = translateHumanReview('dirtyTargetConfirm');
       if (!activeTaskDetail || activeTaskDetail?.metadata?.state !== 'human-verifying') {
         taskHumanReviewApprovalStatus.textContent = translateHumanReview('approvalReady');
         taskHumanReviewApprovalStatus.dataset.tone = 'neutral';

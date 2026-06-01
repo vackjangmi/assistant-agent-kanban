@@ -787,6 +787,32 @@
       `;
     }
 
+    function renderPreVerificationStashNotice(detail) {
+      const stash = detail?.metadata?.integration?.pre_verification_stash;
+      if (!stash?.active) return '';
+      const files = Array.isArray(stash.files) ? stash.files : [];
+      const fileRows = files.slice(0, 12).map((file) => {
+        const status = String(file.status || `${file.staged || ' '}${file.unstaged || ' '}`).trim() || '??';
+        const originalPath = file.original_path ? `${escapeHtml(file.original_path)} -> ` : '';
+        return `<div class="dirty-target-file"><code class="dirty-target-file-status">${escapeHtml(status)}</code><span>${originalPath}${escapeHtml(file.path || '')}</span></div>`;
+      }).join('');
+      const remaining = files.length > 12 ? `<div class="muted">${escapeHtml(translateHumanReview('stashNoticeMoreFiles', { count: files.length - 12 }))}</div>` : '';
+      return `
+        <div class="task-section">
+          <div class="pre-verification-stash-notice">
+            <strong>${escapeHtml(translateHumanReview('stashNoticeTitle'))}</strong>
+            <p>${escapeHtml(translateHumanReview('stashNoticeBody'))}</p>
+            <div class="dirty-target-confirmation-summary">
+              <div><strong>${escapeHtml(translateHumanReview('dirtyTargetBranchLabel'))}</strong><code>${escapeHtml(stash.original_branch || '(detached)')}</code></div>
+              <div><strong>${escapeHtml(translateHumanReview('dirtyTargetHeadLabel'))}</strong><code>${escapeHtml((stash.original_head_sha || '').slice(0, 12) || 'unknown')}</code></div>
+              <div><strong>${escapeHtml(translateHumanReview('dirtyTargetFileCountLabel'))}</strong><span>${escapeHtml(translateHumanReview('dirtyTargetFileCount', { count: files.length }))}</span></div>
+            </div>
+            <div class="dirty-target-confirmation-files">${fileRows || `<div class="muted">${escapeHtml(translateHumanReview('dirtyTargetNoFiles'))}</div>`}${remaining}</div>
+          </div>
+        </div>
+      `;
+    }
+
     function completedGroupInput() {
       return document.getElementById('completed-group-input');
     }
@@ -876,6 +902,7 @@
       renderArtifactButtons(detail.markdown_files);
       saveBoardScrollPositions();
       taskOverview.innerHTML = `
+        ${renderPreVerificationStashNotice(detail)}
         ${renderTaskActivity(detail)}
         ${renderStageTiming(detail.stage_timing)}
         ${inspectorVisible ? `<div class="task-section">
@@ -902,6 +929,8 @@
         target_repo_label: metadata.target.repo_label,
         base_branch: metadata.target.base_branch,
         final_branch: metadata.integration.final_branch || '',
+        pre_verification_stash_active: metadata.integration.pre_verification_stash?.active || false,
+        pre_verification_stash_file_count: metadata.integration.pre_verification_stash?.files?.length || 0,
         stage_timing: detail.stage_timing,
         history: metadata.history || [],
       });

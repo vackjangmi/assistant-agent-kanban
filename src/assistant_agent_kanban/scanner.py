@@ -198,6 +198,8 @@ class KanbanScanner:
             base_branch=base_branch,
             completed_group=completed_group,
             final_branch=item.metadata.integration.final_branch,
+            pre_verification_stash_active=item.metadata.integration.pre_verification_stash.active,
+            pre_verification_stash_file_count=len(item.metadata.integration.pre_verification_stash.files),
             total_duration_ms=total_task_duration_ms(item.metadata, state),
             current_state_duration_ms=current_state_duration_ms(item.metadata, state),
         )

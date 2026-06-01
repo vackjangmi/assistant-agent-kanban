@@ -11,7 +11,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 from .config import AppConfig
 from .exceptions import IntegrationConflictError, IntegrationError
 from .generated_artifacts import ensure_generated_artifact_excludes, is_generated_artifact_path
-from .models import TaskMetadata, utc_now
+from .models import DirtyTargetRepoConfirmation, PreVerificationStashInfo, TargetRepoDirtyFile, TaskMetadata, utc_now
 from .target_repo_guard import resolve_safe_target_repo_root
 
 
@@ -172,6 +172,77 @@ class IntegrationManager:
             cleanup_verification_workspace=True,
         )
 
+    def dirty_target_repo_confirmation(self, metadata: TaskMetadata) -> DirtyTargetRepoConfirmation | None:
+        try:
+            target_repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+        if not self._is_git_repository(target_repo_root):
+            return None
+        status_short = self._status_short(target_repo_root)
+        if not status_short.strip():
+            return None
+        original_branch = self._current_branch(target_repo_root)
+        original_head_sha = self._current_head(target_repo_root)
+        files = self._parse_status_short(status_short)
+        snapshot_id = self._dirty_snapshot_id(
+            repo_root=target_repo_root,
+            base_branch=metadata.target.base_branch,
+            original_branch=original_branch,
+            original_head_sha=original_head_sha,
+            status_short=status_short,
+        )
+        return DirtyTargetRepoConfirmation(
+            task_id=metadata.task_id,
+            repo_root=str(target_repo_root),
+            original_branch=original_branch,
+            original_head_sha=original_head_sha,
+            base_branch=metadata.target.base_branch,
+            status_short=status_short,
+            files=files,
+            file_count=len(files),
+            snapshot_id=snapshot_id,
+        )
+
+    def stash_pre_verification_changes(self, metadata: TaskMetadata, *, expected_snapshot_id: str) -> None:
+        confirmation = self.dirty_target_repo_confirmation(metadata)
+        if confirmation is None:
+            metadata.integration.pre_verification_stash = PreVerificationStashInfo()
+            return
+        if confirmation.snapshot_id != expected_snapshot_id:
+            raise IntegrationError("target repo local changes changed after confirmation; review the file list again")
+        target_repo_root = Path(confirmation.repo_root)
+        message = f"assistant-agent-kanban pre-verification {metadata.task_id}"
+        stashed = subprocess.run(
+            ["git", "-C", str(target_repo_root), "stash", "push", "--include-untracked", "-m", message],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if stashed.returncode != 0:
+            raise IntegrationError(stashed.stderr.strip() or "failed to stash target repo local changes")
+        if "No local changes to save" in f"{stashed.stdout}\n{stashed.stderr}":
+            metadata.integration.pre_verification_stash = PreVerificationStashInfo()
+            return
+        stash_sha = self._resolve_ref(target_repo_root, "stash@{0}")
+        metadata.integration.pre_verification_stash = PreVerificationStashInfo(
+            active=True,
+            stash_ref="stash@{0}",
+            stash_sha=stash_sha,
+            original_branch=confirmation.original_branch,
+            original_head_sha=confirmation.original_head_sha,
+            status_short=confirmation.status_short,
+            files=confirmation.files,
+            snapshot_id=confirmation.snapshot_id,
+            created_at=utc_now(),
+            restored_at=None,
+            restore_error=None,
+        )
+        status_after = self._status_short(target_repo_root)
+        if status_after.strip():
+            metadata.integration.pre_verification_stash.restore_error = status_after
+            raise IntegrationError("target repo still has local changes after stash")
+
     def _apply_workspace_patch_to_git_repo(
         self,
         metadata: TaskMetadata,
@@ -311,6 +382,7 @@ class IntegrationManager:
                         git_token_username=git_token_username,
                     )
                 self._cleanup_managed_branches(repo_root, metadata)
+                self._restore_pre_verification_stash(metadata)
             self._delete_verification_workspace(metadata)
             self._reset_transient_integration_state(metadata)
             if preserve_remote_review_branch:
@@ -346,6 +418,11 @@ class IntegrationManager:
             git_token=git_token,
             git_token_username=git_token_username,
         )
+        if metadata.integration.pre_verification_stash.active:
+            original_branch = metadata.integration.pre_verification_stash.original_branch or metadata.integration.original_branch
+            if original_branch:
+                self._restore_original_branch(repo_root, original_branch)
+            self._restore_pre_verification_stash(metadata)
         if review_branch and not metadata.integration.verification_repo_root:
             self._delete_branch(repo_root, review_branch)
         self._delete_verification_workspace(metadata)
@@ -585,6 +662,7 @@ class IntegrationManager:
             or metadata.integration.review_branch
             or metadata.integration.final_branch
             or metadata.integration.initialized_target_repo
+            or metadata.integration.pre_verification_stash.active
         )
 
     def _prepare_verification_repo(self, metadata: TaskMetadata) -> tuple[Path, bool]:
@@ -897,6 +975,57 @@ class IntegrationManager:
             return patch_path
         return (self.config.kanban_root.expanduser().resolve().parent / patch_path).resolve()
 
+    def _status_short(self, repo_root: Path) -> str:
+        status = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain=v1", "--untracked-files=all"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if status.returncode != 0:
+            raise IntegrationError(status.stderr.strip() or "failed to inspect target repository status")
+        return status.stdout.rstrip()
+
+    def _parse_status_short(self, status_short: str) -> list[TargetRepoDirtyFile]:
+        files: list[TargetRepoDirtyFile] = []
+        for raw_line in status_short.splitlines():
+            if len(raw_line) < 3:
+                continue
+            staged = raw_line[0]
+            unstaged = raw_line[1]
+            path_text = raw_line[3:].strip()
+            original_path: str | None = None
+            if " -> " in path_text and (staged in {"R", "C"} or unstaged in {"R", "C"}):
+                original_path, path_text = path_text.split(" -> ", 1)
+            files.append(
+                TargetRepoDirtyFile(
+                    path=path_text,
+                    original_path=original_path,
+                    staged=staged,
+                    unstaged=unstaged,
+                    status=f"{staged}{unstaged}",
+                )
+            )
+        return files
+
+    def _dirty_snapshot_id(
+        self,
+        *,
+        repo_root: Path,
+        base_branch: str,
+        original_branch: str | None,
+        original_head_sha: str | None,
+        status_short: str,
+    ) -> str:
+        pieces = [
+            str(repo_root),
+            base_branch,
+            original_branch or "",
+            original_head_sha or "",
+            status_short,
+        ]
+        return hashlib.sha256("\0".join(pieces).encode("utf-8")).hexdigest()
+
     def _current_branch(self, repo_root: Path) -> str | None:
         result = subprocess.run(
             ["git", "-C", str(repo_root), "symbolic-ref", "--quiet", "--short", "HEAD"],
@@ -908,6 +1037,17 @@ class IntegrationManager:
             return None
         branch = result.stdout.strip()
         return branch or None
+
+    def _current_head(self, repo_root: Path) -> str | None:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() or None
 
     def _cached_diff_status(self, repo_root: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -1171,6 +1311,85 @@ class IntegrationManager:
         )
         if switched.returncode != 0:
             raise IntegrationError(switched.stderr.strip() or "failed to restore original branch")
+
+    def _restore_original_checkout_for_stash(self, repo_root: Path, stash: PreVerificationStashInfo) -> None:
+        if stash.original_branch:
+            self._restore_original_branch(repo_root, stash.original_branch)
+            return
+        if not stash.original_head_sha:
+            return
+        switched = subprocess.run(
+            ["git", "-C", str(repo_root), "switch", "--detach", stash.original_head_sha],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if switched.returncode != 0:
+            raise IntegrationError(switched.stderr.strip() or "failed to restore original detached HEAD")
+
+    def _restore_pre_verification_stash(self, metadata: TaskMetadata) -> None:
+        stash = metadata.integration.pre_verification_stash
+        if not stash.active:
+            return
+        try:
+            repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+        if not self._is_git_repository(repo_root):
+            stash.restore_error = "target repository is no longer a git repository"
+            raise IntegrationError(stash.restore_error)
+        self._restore_original_checkout_for_stash(repo_root, stash)
+        status_before = self._status_short(repo_root)
+        if status_before.strip():
+            stash.restore_error = status_before
+            raise IntegrationError("target repo must be clean before restoring pre-verification stash")
+        stash_ref = self._find_stash_ref(repo_root, stash.stash_sha) or stash.stash_ref
+        if not stash_ref:
+            stash.restore_error = "pre-verification stash ref is missing"
+            raise IntegrationError(stash.restore_error)
+        restored = subprocess.run(
+            ["git", "-C", str(repo_root), "stash", "apply", "--index", stash_ref],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if restored.returncode != 0:
+            stash.restore_error = (restored.stderr or restored.stdout).strip() or "failed to restore pre-verification stash"
+            raise IntegrationError(stash.restore_error)
+        drop_ref = self._find_stash_ref(repo_root, stash.stash_sha) or stash_ref
+        if drop_ref:
+            dropped = subprocess.run(
+                ["git", "-C", str(repo_root), "stash", "drop", drop_ref],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if dropped.returncode != 0:
+                stash.restore_error = (dropped.stderr or dropped.stdout).strip() or "restored local changes but failed to drop stash"
+                raise IntegrationError(stash.restore_error)
+        stash.active = False
+        stash.restored_at = utc_now()
+        stash.restore_error = None
+
+    def _find_stash_ref(self, repo_root: Path, stash_sha: str | None) -> str | None:
+        if not stash_sha:
+            return None
+        listed = subprocess.run(
+            ["git", "-C", str(repo_root), "stash", "list", "--format=%gd%x00%H"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if listed.returncode != 0:
+            return None
+        for line in listed.stdout.splitlines():
+            try:
+                ref, sha = line.split("\0", 1)
+            except ValueError:
+                continue
+            if sha.strip() == stash_sha:
+                return ref.strip() or None
+        return None
 
     def _delete_branch(self, repo_root: Path, review_branch: str) -> None:
         deleted = subprocess.run(

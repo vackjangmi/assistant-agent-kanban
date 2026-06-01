@@ -1033,6 +1033,31 @@
       </div>
     </div>
   </section>
+  <section id="dirty-target-confirmation-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-panel dirty-target-confirmation-panel" role="dialog" aria-modal="true" aria-labelledby="dirty-target-confirmation-title">
+      <div class="modal-head">
+        <div class="modal-copy">
+          <h2 id="dirty-target-confirmation-title">Target repo has local changes</h2>
+          <p id="dirty-target-confirmation-description">Review start will temporarily stash these changes and switch this repo to the review branch.</p>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" id="cancel-dirty-target-confirmation">Cancel</button>
+        </div>
+      </div>
+      <div class="dirty-target-confirmation-shell">
+        <div id="dirty-target-confirmation-warning" class="dirty-target-confirmation-warning"></div>
+        <div id="dirty-target-confirmation-summary" class="dirty-target-confirmation-summary"></div>
+        <div class="dirty-target-confirmation-files-shell">
+          <strong id="dirty-target-confirmation-files-title">Files that will be stashed</strong>
+          <div id="dirty-target-confirmation-files" class="dirty-target-confirmation-files"></div>
+        </div>
+        <div id="dirty-target-confirmation-status" class="approval-choice-status" hidden></div>
+        <div class="dirty-target-confirmation-actions">
+          <button type="button" id="confirm-dirty-target-confirmation" class="danger-button">Stash existing changes and start human review</button>
+        </div>
+      </div>
+    </div>
+  </section>
   <section id="resume-planner-choice-modal" class="modal" hidden aria-hidden="true">
     <div class="modal-panel approval-choice-panel" role="dialog" aria-modal="true" aria-labelledby="resume-planner-choice-title">
       <div class="modal-head">

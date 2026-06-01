@@ -198,6 +198,41 @@ class RetryGateInfo(BaseModel):
     not_before: datetime | None = None
 
 
+class TargetRepoDirtyFile(BaseModel):
+    path: str
+    status: str
+    staged: str = " "
+    unstaged: str = " "
+    original_path: str | None = None
+
+
+class DirtyTargetRepoConfirmation(BaseModel):
+    code: Literal["dirty-target-repo-confirmation-required"] = "dirty-target-repo-confirmation-required"
+    task_id: str
+    repo_root: str
+    original_branch: str | None = None
+    original_head_sha: str | None = None
+    base_branch: str
+    status_short: str = ""
+    files: list[TargetRepoDirtyFile] = Field(default_factory=list)
+    file_count: int = 0
+    snapshot_id: str
+
+
+class PreVerificationStashInfo(BaseModel):
+    active: bool = False
+    stash_ref: str | None = None
+    stash_sha: str | None = None
+    original_branch: str | None = None
+    original_head_sha: str | None = None
+    status_short: str = ""
+    files: list[TargetRepoDirtyFile] = Field(default_factory=list)
+    snapshot_id: str | None = None
+    created_at: datetime | None = None
+    restored_at: datetime | None = None
+    restore_error: str | None = None
+
+
 class IntegrationInfo(BaseModel):
     applied: bool = False
     base_branch: str = "main"
@@ -220,6 +255,7 @@ class IntegrationInfo(BaseModel):
     final_remote_pushed_at: datetime | None = None
     remote_merge_request_url: str | None = None
     initialized_target_repo: bool = False
+    pre_verification_stash: PreVerificationStashInfo = Field(default_factory=PreVerificationStashInfo)
 
 
 class CommitInfo(BaseModel):
@@ -357,6 +393,8 @@ class TaskSnapshot(BaseModel):
     base_branch: str = "main"
     completed_group: str = "main"
     final_branch: str | None = None
+    pre_verification_stash_active: bool = False
+    pre_verification_stash_file_count: int = 0
     total_duration_ms: int = 0
     current_state_duration_ms: int = 0
 
