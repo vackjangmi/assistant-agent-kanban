@@ -213,6 +213,19 @@
       return getHumanReviewEditorContent().replace(/\s+$/, '') !== humanReviewSourceMarkdown.replace(/\s+$/, '');
     }
 
+    function setDisabledActionReason(shell, button, reason) {
+      const normalizedReason = (reason || '').trim();
+      shell.removeAttribute('title');
+      button.removeAttribute('title');
+      if (normalizedReason && button.disabled) {
+        shell.dataset.disabledReason = normalizedReason;
+        button.dataset.disabledReason = normalizedReason;
+        return;
+      }
+      delete shell.dataset.disabledReason;
+      delete button.dataset.disabledReason;
+    }
+
     async function saveHumanReviewNoteIfNeeded() {
       if (!activeTaskId || activeTaskDetail?.metadata?.state !== 'human-verifying') return;
       if (!humanReviewNoteDirty()) return;
@@ -243,6 +256,8 @@
       requestChangesShell.hidden = !canVerify;
       approveHumanReviewShell.hidden = !canVerify;
       if (!canVerify) {
+        setDisabledActionReason(requestChangesShell, requestChangesButton, '');
+        setDisabledActionReason(approveHumanReviewShell, approveHumanReviewButton, '');
         setApprovalGateNotice();
         return;
       }
@@ -274,10 +289,8 @@
         approvalReason = translateHumanReview(incompleteQaCount === 1 ? 'approvalBlockedQaOne' : 'approvalBlockedQaMany', { count: incompleteQaCount });
       }
 
-      requestChangesShell.title = requestChangesReason;
-      requestChangesButton.title = requestChangesReason;
-      approveHumanReviewShell.title = approvalReason;
-      approveHumanReviewButton.title = approvalReason;
+      setDisabledActionReason(requestChangesShell, requestChangesButton, requestChangesReason);
+      setDisabledActionReason(approveHumanReviewShell, approveHumanReviewButton, approvalReason);
 
       taskHumanReviewApprovalStatus.hidden = !approvalReason;
       taskHumanReviewApprovalStatus.textContent = approvalReason || '';

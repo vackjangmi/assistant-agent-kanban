@@ -305,8 +305,7 @@
       return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.75 2A1.75 1.75 0 0 0 4 3.75V4h-.25A1.75 1.75 0 0 0 2 5.75v6.5C2 13.216 2.784 14 3.75 14h6.5A1.75 1.75 0 0 0 12 12.25V12h.25A1.75 1.75 0 0 0 14 10.25v-6.5A1.75 1.75 0 0 0 12.25 2h-6.5ZM12 10.5V5.75A1.75 1.75 0 0 0 10.25 4H5.5v-.25a.25.25 0 0 1 .25-.25h6.5a.25.25 0 0 1 .25.25v6.5a.25.25 0 0 1-.25.25H12Zm-8.25-5h6.5a.25.25 0 0 1 .25.25v6.5a.25.25 0 0 1-.25.25h-6.5a.25.25 0 0 1-.25-.25v-6.5a.25.25 0 0 1 .25-.25Z" fill="currentColor"/></svg>';
     }
 
-    function renderCopyIconButton(value) {
-      const label = translateHumanReview('copyValue');
+    function renderCopyIconButton(value, label = translateHumanReview('copyValue')) {
       return `<button type="button" class="ghost-button approval-copy-button" data-copy-value="${escapeHtml(value)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${copyIconMarkup('copy')}</button>`;
     }
 
@@ -504,7 +503,7 @@
       const commentCount = Array.isArray(activeChangedFileDetail?.comments) ? activeChangedFileDetail.comments.length : 0;
       const historicalCount = commentCount ? activeChangedFileDetail.comments.filter((comment) => comment.editable === false).length : 0;
       const threadCount = commentCount ? new Set((activeChangedFileDetail.comments || []).map((comment) => buildLineAnchorKey(comment.anchor || {}))).size : 0;
-      const headingMarkup = renderChangedFilePathHeading(summary.display_path, 'diff-summary-copy');
+      const headingMarkup = renderChangedFilePathHeading(summary.display_path, 'diff-summary-copy', { copyPath: true });
       const threadBadge = threadCount
         ? `<span class="diff-badge">${escapeHtml(translateHumanReview(threadCount === 1 ? 'commentsExistingOne' : 'commentsExistingMany', { count: threadCount }))}</span>`
         : '';
@@ -549,13 +548,20 @@
       };
     }
 
-    function renderChangedFilePathHeading(displayPath, containerClass = 'diff-file-heading') {
+    function renderChangedFilePathHeading(displayPath, containerClass = 'diff-file-heading', options = {}) {
       const { filename, directory } = splitDisplayPath(displayPath);
+      const normalizedPath = typeof displayPath === 'string' ? displayPath.trim() : '';
       const safeFilename = escapeHtml(filename || displayPath || '');
       const safeDirectory = directory ? `<span class="diff-file-path">${escapeHtml(directory)}</span>` : '';
+      const copyButton = options.copyPath && normalizedPath
+        ? renderCopyIconButton(normalizedPath, translateHumanReview('copyPath'))
+        : '';
       return `
         <span class="${escapeHtml(containerClass)}">
-          <span class="diff-file-title">${safeFilename}</span>
+          <span class="diff-file-title-row">
+            <span class="diff-file-title">${safeFilename}</span>
+            ${copyButton}
+          </span>
           ${safeDirectory}
         </span>`;
     }

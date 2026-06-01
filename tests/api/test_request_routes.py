@@ -1145,6 +1145,20 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "save-human-review-note" in response.text
     assert "request-changes-button" in response.text
     assert "approve-human-review-button" in response.text
+    assert "button:not(.toastui-editor-defaultUI button):disabled" in response.text
+    assert ".header-action-shell:has(> button:disabled)" in response.text
+    assert "cursor: not-allowed !important;" in response.text
+    assert ".header-action-shell[data-disabled-reason]::after" in response.text
+    assert "content: attr(data-disabled-reason);" in response.text
+    assert "function setDisabledActionReason(shell, button, reason)" in response.text
+    assert "shell.removeAttribute('title');" in response.text
+    assert "button.removeAttribute('title');" in response.text
+    assert "shell.dataset.disabledReason = normalizedReason;" in response.text
+    assert "requestChangesNeedsFeedback: 'Add a review note or inline comment before requesting changes.'" in response.text
+    assert "requestChangesNeedsFeedback: '재요청하려면 재요청 노트나 줄 코멘트를 먼저 남겨주세요.'" in response.text
+    assert "approvalBlockedNoteOnly: 'Approval is blocked until the request-change note is cleared.'" in response.text
+    assert "setDisabledActionReason(requestChangesShell, requestChangesButton, requestChangesMessage);" in response.text
+    assert "setDisabledActionReason(approveHumanReviewShell, approveHumanReviewButton, approvalMessage);" in response.text
     assert "/api/tasks/${activeTaskId}/human-review-note" in response.text
     assert "/api/tasks/${activeTaskId}/reviewer-qa" in response.text
     assert "/api/retrospectives/inspect" in response.text
@@ -1158,6 +1172,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function captureQaChecklistScrollState()" in response.text
     assert "function rememberQaChecklistScrollState()" in response.text
     assert "function renderQaChecklistPanel({ preserveScroll = false, scrollState = null } = {})" in response.text
+    assert "copyPath: 'Copy path'" in response.text
+    assert "copyPath: '경로 복사'" in response.text
+    assert "renderChangedFilePathHeading(summary.display_path, 'diff-summary-copy', { copyPath: true })" in response.text
+    assert "taskChangedFileSummary.addEventListener('click', (event) => {" in response.text
+    assert ".approval-copy-button svg path { fill: currentColor; }" in response.text
     assert "const scrollState = consumeQaChecklistScrollState();" in response.text
     assert "setQaChecklistItemState(activeTaskId, itemId, patch, { scrollState })" in response.text
     assert 'id="task-tab-review-note"' in response.text

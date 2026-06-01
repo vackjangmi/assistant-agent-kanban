@@ -290,6 +290,11 @@
       });
     });
     taskChangedFiles.addEventListener('click', (event) => { const button = event.target.closest('[data-changed-file-id]'); if (!button) return; loadChangedFile(activeTaskId, button.dataset.changedFileId); });
+    taskChangedFileSummary.addEventListener('click', (event) => {
+      const copyButton = event.target.closest('[data-copy-value]');
+      if (!copyButton) return;
+      copyTextToClipboard(copyButton.dataset.copyValue || '', copyButton);
+    });
     async function handleChangedFileViewedToggleChange(event) {
       const toggle = event.target.closest('[data-viewed-changed-file-id]');
       if (!toggle || !activeTaskId) return;
