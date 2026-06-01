@@ -17,6 +17,8 @@ from .target_repo_guard import resolve_safe_target_repo_root
 
 
 class IntegrationManager:
+    DIRTY_TARGET_REPO_FILE_DISPLAY_LIMIT = 100
+
     def __init__(self, config: AppConfig) -> None:
         self.config = config
 
@@ -186,6 +188,8 @@ class IntegrationManager:
         original_branch = self._current_branch(target_repo_root)
         original_head_sha = self._current_head(target_repo_root)
         files = self._parse_status_short(status_short)
+        preview_files = files[: self.DIRTY_TARGET_REPO_FILE_DISPLAY_LIMIT]
+        preview_status_short = self._status_short_preview(status_short)
         snapshot_id = self._dirty_snapshot_id(
             repo_root=target_repo_root,
             base_branch=metadata.target.base_branch,
@@ -199,9 +203,10 @@ class IntegrationManager:
             original_branch=original_branch,
             original_head_sha=original_head_sha,
             base_branch=metadata.target.base_branch,
-            status_short=status_short,
-            files=files,
+            status_short=preview_status_short,
+            files=preview_files,
             file_count=len(files),
+            files_truncated=len(preview_files) < len(files),
             snapshot_id=snapshot_id,
         )
 
@@ -234,6 +239,8 @@ class IntegrationManager:
             original_head_sha=confirmation.original_head_sha,
             status_short=confirmation.status_short,
             files=confirmation.files,
+            file_count=confirmation.file_count,
+            files_truncated=confirmation.files_truncated,
             snapshot_id=confirmation.snapshot_id,
             created_at=utc_now(),
             restored_at=None,
@@ -1098,6 +1105,9 @@ class IntegrationManager:
                 )
             )
         return files
+
+    def _status_short_preview(self, status_short: str) -> str:
+        return "\n".join(status_short.splitlines()[: self.DIRTY_TARGET_REPO_FILE_DISPLAY_LIMIT])
 
     def _dirty_snapshot_id(
         self,

@@ -1524,6 +1524,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "approveVerification('target-branch');" in response.text
     assert "approveVerification('new-branch');" in response.text
     assert "approvalChoiceTargetStashNotice" in response.text
+    assert "const renderedFiles = files.slice(0, 100);" in response.text
+    assert "Math.max(0, fileCount - renderedFiles.length)" in response.text
+    assert "pre_verification_stash_file_count: metadata.integration.pre_verification_stash?.file_count" in response.text
     assert "approvalChoiceTargetButton.disabled = Boolean(activeTaskDetail?.metadata?.integration?.pre_verification_stash?.active)" not in response.text
     assert "gitUnlockBodyForOperation({ completion_mode: completionMode || 'new-branch' })" in response.text
     assert "body: JSON.stringify(requestBody)" in response.text

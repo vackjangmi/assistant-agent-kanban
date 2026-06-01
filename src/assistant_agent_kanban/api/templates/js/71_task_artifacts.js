@@ -831,7 +831,10 @@
     }
 
     function renderDirtyTargetConfirmation(confirmation) {
-      const fileCount = Number(confirmation?.file_count || confirmation?.files?.length || 0);
+      const files = Array.isArray(confirmation?.files) ? confirmation.files : [];
+      const fileCount = Number(confirmation?.file_count || files.length || 0);
+      const renderedFiles = files.slice(0, 100);
+      const remainingCount = Math.max(0, fileCount - renderedFiles.length);
       dirtyTargetConfirmationWarning.textContent = translateHumanReview('dirtyTargetWarning');
       dirtyTargetConfirmationSummary.innerHTML = [
         `<div><strong>${escapeHtml(translateHumanReview('dirtyTargetRepoLabel'))}</strong><code>${escapeHtml(confirmation?.repo_root || '')}</code></div>`,
@@ -839,11 +842,15 @@
         `<div><strong>${escapeHtml(translateHumanReview('dirtyTargetHeadLabel'))}</strong><code>${escapeHtml((confirmation?.original_head_sha || '').slice(0, 12) || 'unknown')}</code></div>`,
         `<div><strong>${escapeHtml(translateHumanReview('dirtyTargetFileCountLabel'))}</strong><span>${escapeHtml(translateHumanReview('dirtyTargetFileCount', { count: fileCount }))}</span></div>`,
       ].join('');
-      dirtyTargetConfirmationFiles.innerHTML = (confirmation?.files || []).map((file) => {
+      const fileRows = renderedFiles.map((file) => {
         const status = dirtyTargetStatusLabel(file);
         const originalPath = file.original_path ? `${escapeHtml(file.original_path)} -> ` : '';
         return `<div class="dirty-target-file"><code class="dirty-target-file-status">${escapeHtml(status)}</code><span>${originalPath}${escapeHtml(file.path || '')}</span></div>`;
-      }).join('') || `<div class="muted">${escapeHtml(translateHumanReview('dirtyTargetNoFiles'))}</div>`;
+      }).join('');
+      const remainingRow = remainingCount > 0
+        ? `<div class="dirty-target-file-more muted">${escapeHtml(translateHumanReview('stashNoticeMoreFiles', { count: remainingCount }))}</div>`
+        : '';
+      dirtyTargetConfirmationFiles.innerHTML = `${fileRows || `<div class="dirty-target-file-more muted">${escapeHtml(translateHumanReview('dirtyTargetNoFiles'))}</div>`}${remainingRow}`;
     }
 
     function openDirtyTargetConfirmation(confirmation, requestBody) {

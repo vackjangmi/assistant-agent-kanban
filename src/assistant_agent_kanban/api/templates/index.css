@@ -1583,6 +1583,7 @@ body[data-theme="dark"] .task-inspector-signal small::-webkit-scrollbar-thumb { 
 .dirty-target-file:last-child { border-bottom: 0; }
 .dirty-target-file-status { text-align: center; font-weight: 700; }
 .dirty-target-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dirty-target-file-more { padding: 8px 12px; }
 .dirty-target-confirmation-actions { display: flex; justify-content: flex-end; }
 
 /* Settings Modal Tabs & Panels */

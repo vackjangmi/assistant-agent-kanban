@@ -216,6 +216,7 @@ class DirtyTargetRepoConfirmation(BaseModel):
     status_short: str = ""
     files: list[TargetRepoDirtyFile] = Field(default_factory=list)
     file_count: int = 0
+    files_truncated: bool = False
     snapshot_id: str
 
 
@@ -227,6 +228,8 @@ class PreVerificationStashInfo(BaseModel):
     original_head_sha: str | None = None
     status_short: str = ""
     files: list[TargetRepoDirtyFile] = Field(default_factory=list)
+    file_count: int = 0
+    files_truncated: bool = False
     snapshot_id: str | None = None
     created_at: datetime | None = None
     restored_at: datetime | None = None

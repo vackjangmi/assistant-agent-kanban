@@ -457,6 +457,39 @@ def test_human_verification_start_returns_to_todos_when_target_repo_becomes_dirt
     assert not any(error.code == "verification-target-repo-drift" for error in refreshed.metadata.errors)
 
 
+def test_human_verification_dirty_target_confirmation_limits_displayed_files(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-many-dirty-files-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    display_limit = IntegrationManager.DIRTY_TARGET_REPO_FILE_DISPLAY_LIMIT
+    dirty_count = display_limit + 7
+    for index in range(dirty_count):
+        (repo_root / f"scratch-{index:03}.txt").write_text("local\n")
+
+    with pytest.raises(DirtyTargetRepoConfirmationRequired) as exc_info:
+        service.start(completed.metadata.task_id, by="human")
+
+    confirmation = exc_info.value.confirmation
+    assert confirmation.file_count == dirty_count
+    assert len(confirmation.files) == display_limit
+    assert confirmation.files_truncated is True
+    assert len(confirmation.status_short.splitlines()) == display_limit
+
+    started = service.start(
+        completed.metadata.task_id,
+        by="human",
+        confirm_dirty_target_repo=True,
+        dirty_snapshot_id=confirmation.snapshot_id,
+    )
+
+    assert started.state == TaskState.HUMAN_VERIFYING
+    stash = scanner.find_task(completed.metadata.task_id).metadata.integration.pre_verification_stash
+    assert stash.active is True
+    assert stash.file_count == dirty_count
+    assert len(stash.files) == display_limit
+    assert stash.files_truncated is True
+
+
 def test_human_verification_start_blocks_parallel_local_review_for_same_target_repo(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-local-review-one-task")
