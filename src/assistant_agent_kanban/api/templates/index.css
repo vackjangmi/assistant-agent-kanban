@@ -1245,12 +1245,158 @@ body[data-theme="dark"] .archive-detail-column .final-project-title {
   border-radius: 6px;
 }
 
-/* Grid of Task Cards in Detail View */
-.archive-detail-column .column-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 16px;
+/* Premium Archive Task List (GitHub-style List of completed/archived tasks) */
+.archive-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
+  max-width: 960px;
+  margin: 20px auto 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px 24px 4px;
+}
+
+.archive-task-item {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+}
+
+body[data-theme="dark"] .archive-task-item {
+  background: rgba(30, 41, 59, 0.45);
+  border-color: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.archive-task-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 6px 15px rgba(99, 102, 241, 0.08);
+  background: rgba(99, 102, 241, 0.015);
+}
+
+body[data-theme="dark"] .archive-task-item:hover {
+  border-color: var(--accent-strong);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.archive-task-item-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.archive-task-status-icon {
+  color: #4f8a5b; /* Elegant green icon representing passed/completed review state */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+body[data-theme="dark"] .archive-task-status-icon {
+  color: #4ade80;
+}
+
+.archive-task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.archive-task-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+body[data-theme="dark"] .archive-task-title {
+  color: #f1f5f9;
+}
+
+.archive-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.archive-task-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.76rem;
+  color: var(--accent-strong);
+  background: rgba(99, 102, 241, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+}
+
+body[data-theme="dark"] .archive-task-id {
+  color: #a5b4fc;
+}
+
+.archive-task-owner {
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.archive-task-owner svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.8;
+}
+
+.archive-task-time {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.archive-task-item-right {
+  flex: 0 0 auto;
+}
+
+.archive-task-view-btn {
+  padding: 6px 12px !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  border-color: var(--border) !important;
+  background: var(--panel) !important;
+  transition: all 0.2s ease !important;
+}
+
+.archive-task-item:hover .archive-task-view-btn {
+  border-color: var(--accent) !important;
+  color: var(--accent-strong) !important;
+}
+
+body[data-theme="dark"] .archive-task-item:hover .archive-task-view-btn {
+  border-color: var(--accent-strong) !important;
+  color: #f1f5f9 !important;
 }
 .board-empty { color: var(--muted); padding: 12px; border: 1px dashed var(--border); background: rgba(255,255,255,0.55); text-align: center; min-height: 88px; display: flex; align-items: center; justify-content: center; }
 body[data-theme="dark"] .board-empty { color: rgba(226, 234, 242, 0.82); border-color: rgba(186, 200, 214, 0.2); background: linear-gradient(180deg, rgba(31, 43, 54, 0.92), rgba(23, 32, 41, 0.88)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }

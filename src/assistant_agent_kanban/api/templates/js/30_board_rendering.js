@@ -568,8 +568,36 @@
               ${renderTag('', formatDateTime(group.archived_at), 'card-tag-branch')}
             </div>
           </div>
-          <div class="column-cards">${(group.tasks || []).map((item) => renderTaskCard(item, { compactFinal: true })).join('')}</div>
+          <div class="archive-task-list">${(group.tasks || []).map((item) => renderArchiveTaskItem(item)).join('')}</div>
         </section>`;
+    }
+
+    function renderArchiveTaskItem(item) {
+      const ownerLabel = taskOwnerName(item);
+      const completedAt = item.completed_at || resolveTaskCompletedAt(item);
+      const taskId = item.task_id || '';
+      return `
+        <div class="archive-task-item" data-task-id="${escapeHtml(taskId)}">
+          <div class="archive-task-item-left">
+            <span class="archive-task-status-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1v14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16zm3.78-9.72a.75.75 0 0 0-1.06-1.06L7 8.94 5.28 7.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.06 0l4.25-4.25z"/></svg>
+            </span>
+            <div class="archive-task-info">
+              <strong class="archive-task-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</strong>
+              <div class="archive-task-meta">
+                <span class="archive-task-id">#${escapeHtml(taskId)}</span>
+                ${ownerLabel ? `<span class="archive-task-owner">${userIconSvg('card-user-icon')}${escapeHtml(ownerLabel)}</span>` : ''}
+                ${completedAt ? `<span class="archive-task-time">${escapeHtml(formatDateTime(completedAt))}</span>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="archive-task-item-right">
+            <button type="button" class="ghost-button archive-task-view-btn" data-task-id="${escapeHtml(taskId)}">
+              ${currentUiLanguage() === 'KO' ? '상세 보기' : 'View Details'}
+            </button>
+          </div>
+        </div>
+      `;
     }
 
     async function loadArchives(options = {}) {
