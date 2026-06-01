@@ -223,11 +223,10 @@
       }
       setApprovalChoiceModalOpen(true);
       if (activeTaskDetail?.metadata?.integration?.pre_verification_stash?.active) {
-        approvalChoiceTargetButton.disabled = true;
-        approvalChoiceTargetButton.title = translateHumanReview('approvalChoiceTargetStashBlocked');
+        approvalChoiceTargetButton.title = translateHumanReview('approvalChoiceTargetStashNotice');
         approvalChoiceStatus.hidden = false;
         approvalChoiceStatus.dataset.tone = 'warning';
-        approvalChoiceStatus.textContent = translateHumanReview('approvalChoiceTargetStashBlocked');
+        approvalChoiceStatus.textContent = translateHumanReview('approvalChoiceTargetStashNotice');
       } else {
         approvalChoiceTargetButton.removeAttribute('title');
       }
@@ -281,7 +280,7 @@
         approvalSubmissionInFlight = false;
         updateHumanVerificationState();
         if (!approvalChoiceModal.hidden) {
-          approvalChoiceTargetButton.disabled = Boolean(activeTaskDetail?.metadata?.integration?.pre_verification_stash?.active);
+          approvalChoiceTargetButton.disabled = false;
           approvalChoiceNewBranchButton.disabled = false;
           closeApprovalChoiceButton.disabled = false;
         }

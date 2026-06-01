@@ -354,6 +354,7 @@ Operating assumptions:
 
 - Committed target repo drift still blocks verification and sends the task back for re-implementation.
 - Uncommitted local target repo changes require explicit human confirmation; when confirmed, the app stores the affected file list in metadata, creates a managed git stash, runs verification in the same target repo path, and restores the stash when verification is rejected, cancelled, deleted, or completed.
+- If target-branch approval is selected while a managed stash is active, the app preflights stash restoration in a temporary worktree before committing the target branch. Clean restores complete automatically; conflicts stop the approval before the target branch is changed so the human can choose another completion path or resolve the local changes.
 - The target repo is not the active implementation workspace before verification.
 - Approval requires a successful verification apply, no human verification note, completed or skipped required QA items, and no unresolved inline comments.
 - Approval can finalize onto a new final branch or directly onto the target branch, depending on the selected completion mode.

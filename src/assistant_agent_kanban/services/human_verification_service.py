@@ -337,10 +337,6 @@ class HumanVerificationService:
             try:
                 if not context.metadata.integration.applied:
                     raise TransitionError("approval is blocked until verification apply succeeds")
-                if completion_mode == "target-branch" and context.metadata.integration.pre_verification_stash.active:
-                    raise TransitionError(
-                        "target-branch completion is blocked while pre-existing target repo changes are stashed; finalize on a new branch instead"
-                    )
                 if context.metadata.human_verification.note_markdown.strip():
                     raise TransitionError("approval is blocked until the review note is cleared")
                 incomplete_qa_items = [
@@ -389,6 +385,13 @@ class HumanVerificationService:
                         context.metadata,
                         summary_markdown=summary_markdown,
                     )
+                    if completion_mode == "target-branch" and context.metadata.integration.pre_verification_stash.active:
+                        context.metadata.commit.review_sha = self.commit_manager.ensure_review_branch_tip(context.task_dir, context.metadata)
+                        self.metadata_store.save(context.task_dir, context.metadata)
+                        try:
+                            integration_manager.ensure_pre_verification_stash_applies_after_target_branch_completion(context.metadata)
+                        except IntegrationError as exc:
+                            raise TransitionError(str(exc)) from exc
                     sha = self.commit_manager.finalize_review_branch(
                         context.task_dir,
                         context.metadata,

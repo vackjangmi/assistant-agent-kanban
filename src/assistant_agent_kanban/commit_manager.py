@@ -59,6 +59,9 @@ class CommitManager:
             self._publish_final_branch(repo_root, target_repo_root, final_branch)
         return final_sha
 
+    def ensure_review_branch_tip(self, task_dir: Path, metadata: TaskMetadata) -> str:
+        return self._ensure_review_branch_tip(task_dir, metadata)
+
     def preferred_final_branch(self, metadata: TaskMetadata) -> str:
         return self._preferred_final_branch(metadata)
 

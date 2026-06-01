@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import shutil
+import tempfile
 from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
@@ -427,6 +428,96 @@ class IntegrationManager:
             self._delete_branch(repo_root, review_branch)
         self._delete_verification_workspace(metadata)
         self._reset_transient_review_state_after_finalize(metadata)
+
+    def ensure_pre_verification_stash_applies_after_target_branch_completion(self, metadata: TaskMetadata) -> None:
+        stash = metadata.integration.pre_verification_stash
+        if not stash.active:
+            return
+        try:
+            repo_root = resolve_safe_target_repo_root(Path(metadata.target.repo_root))
+        except ValueError as exc:
+            raise IntegrationError(str(exc)) from exc
+        if not self._is_git_repository(repo_root):
+            raise IntegrationError("target repository is no longer a git repository")
+        review_branch = metadata.integration.review_branch
+        if not review_branch:
+            raise IntegrationError("review branch is missing")
+        stash_ref = self._find_stash_ref(repo_root, stash.stash_sha) or stash.stash_ref
+        if not stash_ref:
+            raise IntegrationError("pre-verification stash ref is missing")
+
+        with tempfile.TemporaryDirectory(prefix="aak-stash-preflight-") as temp_root:
+            worktree_root = Path(temp_root) / "repo"
+            added = subprocess.run(
+                ["git", "-C", str(repo_root), "worktree", "add", "--detach", str(worktree_root), metadata.target.base_branch],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if added.returncode != 0:
+                raise IntegrationError(added.stderr.strip() or "failed to prepare target-branch stash preflight worktree")
+            try:
+                squash = subprocess.run(
+                    ["git", "-C", str(worktree_root), "merge", "--squash", review_branch],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if squash.returncode != 0:
+                    subprocess.run(["git", "-C", str(worktree_root), "merge", "--abort"], capture_output=True, text=True, check=False)
+                    raise IntegrationError(squash.stderr.strip() or "target-branch completion would conflict before stash restore")
+                staged = subprocess.run(
+                    ["git", "-C", str(worktree_root), "diff", "--cached", "--quiet"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if staged.returncode == 0:
+                    raise IntegrationError("target-branch completion has no squashed changes")
+                if staged.returncode not in (0, 1):
+                    raise IntegrationError(staged.stderr.strip() or "failed to inspect target-branch stash preflight changes")
+                committed = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(worktree_root),
+                        "-c",
+                        "user.name=Assistant Agent Kanban",
+                        "-c",
+                        "user.email=assistant-agent-kanban@example.invalid",
+                        "commit",
+                        "-m",
+                        "Assistant Agent Kanban stash preflight",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if committed.returncode != 0:
+                    raise IntegrationError(committed.stderr.strip() or "failed to commit target-branch stash preflight")
+                restored = subprocess.run(
+                    ["git", "-C", str(worktree_root), "stash", "apply", "--index", stash_ref],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if restored.returncode != 0:
+                    detail = (restored.stderr or restored.stdout).strip()
+                    message = (
+                        "pre-existing target repo changes do not apply cleanly after target-branch completion; "
+                        "choose new-branch completion or resolve those local changes before committing on the base branch"
+                    )
+                    if detail:
+                        message = f"{message}: {detail}"
+                    raise IntegrationError(message)
+            finally:
+                subprocess.run(
+                    ["git", "-C", str(repo_root), "worktree", "remove", "--force", str(worktree_root)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                subprocess.run(["git", "-C", str(repo_root), "worktree", "prune"], capture_output=True, text=True, check=False)
 
     def push_review_branch(
         self,
