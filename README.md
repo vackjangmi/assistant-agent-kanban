@@ -473,6 +473,7 @@ app = create_app(config, planner, implementer, reviewer, committer, branch_summa
 - This project emphasizes a reviewable workflow more than raw AI automation
 - Human approval stages are intentional and should not be removed
 - Committed target repo drift sends work back for re-implementation; uncommitted local target repo changes require explicit confirmation and are temporarily stashed during human verification
+- If stashed local changes exist, target-branch approval first preflights stash restoration against the reviewed target-branch result; clean restores complete automatically, while restore conflicts stop before the target branch is committed
 - The full workspace must not live inside the task directory
 - Internal CLI state files (Antigravity/OpenCode/Codex/Claude/Gemini) are not the source of truth
 

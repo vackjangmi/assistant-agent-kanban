@@ -1523,6 +1523,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "function openApprovalChoiceModal()" in response.text
     assert "approveVerification('target-branch');" in response.text
     assert "approveVerification('new-branch');" in response.text
+    assert "approvalChoiceTargetStashNotice" in response.text
+    assert "approvalChoiceTargetButton.disabled = Boolean(activeTaskDetail?.metadata?.integration?.pre_verification_stash?.active)" not in response.text
     assert "gitUnlockBodyForOperation({ completion_mode: completionMode || 'new-branch' })" in response.text
     assert "body: JSON.stringify(requestBody)" in response.text
     assert "function setApprovalChoiceModalOpen(isOpen, { force = false } = {})" in response.text
