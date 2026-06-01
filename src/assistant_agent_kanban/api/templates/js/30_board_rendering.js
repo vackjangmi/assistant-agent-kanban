@@ -519,7 +519,12 @@
       }
       return `
         <section class="column archive-column archive-group-list">
-          <h2>${escapeHtml(phaseLabel('archive'))}</h2>
+          <div class="archive-header">
+            <div class="archive-header-info">
+              <h2>${escapeHtml(phaseLabel('archive'))}</h2>
+              <p class="archive-subtitle">${currentUiLanguage() === 'KO' ? '완료되어 보관된 작업 그룹 목록입니다.' : 'List of completed and archived task groups.'}</p>
+            </div>
+          </div>
           <div class="column-cards archive-groups">
             ${archiveGroups.map((group) => renderArchiveGroupCard(group)).join('')}
           </div>
@@ -534,7 +539,7 @@
       return `
         <article class="card archive-group-card"${cardStyle}>
           <button class="card-button" data-archive-id="${escapeHtml(group.archive_id)}">
-            <strong class="card-title">${escapeHtml(repoLabel)}</strong>
+            <strong class="card-title">${repoIconSvg('card-repo-icon')}${escapeHtml(repoLabel)}</strong>
             <div class="card-meta-row">
               <div class="card-tag-row">
                 ${renderTag('', group.base_branch || '', 'card-tag-branch', '', group.base_branch || '', branchIconSvg('card-branch-icon'))}
@@ -547,16 +552,21 @@
     }
 
     function renderArchiveGroupDetail(group) {
+      const title = group.target_repo_label || group.base_branch || phaseLabel('archive');
       return `
         <section class="column archive-column archive-detail-column">
-          <div class="final-project-heading">
-            <h2 class="final-project-title">${escapeHtml(group.target_repo_label || group.base_branch || phaseLabel('archive'))}</h2>
-            <button type="button" class="ghost-button archive-back-button" data-archive-back="true">${escapeHtml(translateTask('archiveBack'))}</button>
-          </div>
-          <div class="card-tag-row archive-detail-tags">
-            ${renderTag('', group.base_branch || '', 'card-tag-branch', '', group.base_branch || '', branchIconSvg('card-branch-icon'))}
-            ${renderTag('', translateTask('archiveTaskCount', { count: String(group.task_count || 0) }), 'card-tag-id')}
-            ${renderTag('', formatDateTime(group.archived_at), 'card-tag-branch')}
+          <div class="archive-detail-header">
+            <div class="archive-detail-title-row">
+              <h2 class="final-project-title">${repoIconSvg('card-repo-icon')}${escapeHtml(title)}</h2>
+              <button type="button" class="ghost-button archive-back-button" data-archive-back="true">
+                <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14" style="margin-right:4px; vertical-align: middle;"><path fill-rule="evenodd" d="M15 8a.75.75 0 0 1-.75.75H2.56l3.72 3.72a.75.75 0 1 1-1.06 1.06l-5-5a.75.75 0 0 1 0-1.06l5-5a.75.75 0 0 1 1.06 1.06L2.56 7.25h11.69A.75.75 0 0 1 15 8z"/></svg>${escapeHtml(translateTask('archiveBack'))}
+              </button>
+            </div>
+            <div class="card-tag-row archive-detail-tags">
+              ${renderTag('', group.base_branch || '', 'card-tag-branch', '', group.base_branch || '', branchIconSvg('card-branch-icon'))}
+              ${renderTag('', translateTask('archiveTaskCount', { count: String(group.task_count || 0) }), 'card-tag-id')}
+              ${renderTag('', formatDateTime(group.archived_at), 'card-tag-branch')}
+            </div>
           </div>
           <div class="column-cards">${(group.tasks || []).map((item) => renderTaskCard(item, { compactFinal: true })).join('')}</div>
         </section>`;
