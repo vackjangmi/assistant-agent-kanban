@@ -6,7 +6,8 @@ from pathlib import Path
 from ..assistant_adapter import AssistantAdapter
 from ..exceptions import AdapterRunError
 from ..enums import TaskState
-from ..exceptions import WorkspaceSyncError
+from ..exceptions import IntegrationError, WorkspaceSyncError
+from ..integration_manager import IntegrationManager
 from ..language import generation_language_name
 from ..repo_branches import describe_target_repo_head_drift, snapshot_target_repo_state
 from ..models import RunResult, TaskErrorInfo
@@ -146,6 +147,20 @@ class ImplementerWorker(WorkerBase):
                     implementing.metadata.implementation.last_result = "failure"
                     implementing.metadata.errors.append(TaskErrorInfo(code="implementation-artifact-failed", message="implementer did not produce a final work artifact"))
                 if success:
+                    snapshot_error = self._capture_implementation_patch(implementing.metadata, workspace_repo)
+                    if snapshot_error is not None:
+                        implementing.metadata.implementation.last_result = "failure"
+                        implementing.metadata.errors.append(snapshot_error)
+                        apply_retry_gate(implementing.metadata, reason="implementation-patch-snapshot-failed")
+                        self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                        done = self.transitions.move(
+                            implementing,
+                            TaskState.TODOS,
+                            by=self.worker_name,
+                            note="implementation patch snapshot failed",
+                        )
+                        await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                        return True
                     work_name = f"WORK-{implementing.metadata.cycle:03d}"
                     self.write_result_artifacts(implementing.task_dir, work_name, result)
                     clear_retry_gate(implementing.metadata)
@@ -354,6 +369,20 @@ class ImplementerWorker(WorkerBase):
                     total_tokens=finalize_result.total_tokens,
                     session_budget_tokens=finalize_result.session_budget_tokens,
                 )
+                snapshot_error = self._capture_implementation_patch(implementing.metadata, workspace_repo)
+                if snapshot_error is not None:
+                    implementing.metadata.implementation.last_result = "failure"
+                    implementing.metadata.errors.append(snapshot_error)
+                    apply_retry_gate(implementing.metadata, reason="implementation-patch-snapshot-failed")
+                    self.metadata_store.save(implementing.task_dir, implementing.metadata)
+                    done = self.transitions.move(
+                        implementing,
+                        TaskState.TODOS,
+                        by=self.worker_name,
+                        note="implementation patch snapshot failed",
+                    )
+                    await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
+                    return True
                 work_name = f"WORK-{implementing.metadata.cycle:03d}"
                 self.write_result_artifacts(implementing.task_dir, work_name, finalized_result)
                 clear_retry_gate(implementing.metadata)
@@ -403,6 +432,13 @@ class ImplementerWorker(WorkerBase):
     def _capture_target_repo_baseline(self, metadata) -> None:
         snapshot = snapshot_target_repo_state(Path(metadata.target.repo_root), base_branch=metadata.target.base_branch)
         metadata.implementation.target_repo_baseline = snapshot.model_copy(deep=True)
+
+    def _capture_implementation_patch(self, metadata, workspace_repo: Path) -> TaskErrorInfo | None:
+        try:
+            IntegrationManager(self.config).capture_workspace_patch(metadata, workspace_repo, purpose="implementation")
+        except IntegrationError as exc:
+            return TaskErrorInfo(code="implementation-patch-snapshot-failed", message=str(exc))
+        return None
 
     def _target_repo_state_drift_note(self, metadata) -> str | None:
         baseline = metadata.implementation.target_repo_baseline

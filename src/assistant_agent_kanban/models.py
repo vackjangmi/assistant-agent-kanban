@@ -142,6 +142,9 @@ class ImplementationInfo(BaseModel):
     iteration: int = 0
     workspace: str | None = None
     branch: str | None = None
+    patch_path: str | None = None
+    patch_sha256: str | None = None
+    patch_cycle: int | None = None
     target_repo_baseline: "TargetRepoBaselineInfo | None" = None
     last_result: str | None = None
     resolved_model: str | None = None
@@ -200,6 +203,8 @@ class IntegrationInfo(BaseModel):
     base_branch: str = "main"
     base_commit: str | None = None
     patch_path: str | None = None
+    patch_sha256: str | None = None
+    patch_cycle: int | None = None
     verification_repo_root: str | None = None
     applied_at: datetime | None = None
     original_branch: str | None = None

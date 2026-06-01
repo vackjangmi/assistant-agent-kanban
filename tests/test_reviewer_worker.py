@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -310,6 +311,38 @@ def test_reviewer_worker_waits_for_human_verification_on_pass(configured_paths):
     assert review_json["resolved_model"] == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.review.resolved_model == "github-copilot/gpt-5"
     assert scanner.scan()[0].metadata.retry_gate.reason is None
+    assert scanner.scan()[0].metadata.integration.patch_cycle == 1
+    assert scanner.scan()[0].metadata.integration.patch_sha256
+    assert scanner.scan()[0].metadata.integration.patch_path is not None
+    review_patch = Path(scanner.scan()[0].metadata.integration.patch_path or "")
+    assert "+review me" in review_patch.read_text()
+
+
+def test_reviewer_worker_blocks_when_workspace_no_longer_matches_implementation_snapshot(configured_paths):
+    config, _, _ = configured_paths
+    create_request_task(config, "review-lost-workspace-task")
+    metadata_store, scanner, locks, transitions = _task_ready_for_review(config)
+    task = scanner.scan()[0]
+    workspace_path = Path(task.metadata.implementation.workspace or "")
+    subprocess.run(["git", "-C", str(workspace_path), "reset", "--hard"], check=True, capture_output=True, text=True)
+    (workspace_path / "only.http").write_text("GET /health\n")
+    worker = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(reviewer_cycle_responses()),
+        integration_manager=IntegrationManager(config),
+    )
+
+    assert asyncio.run(worker.run_once()) is True
+    updated = scanner.scan()[0]
+    assert updated.state == TaskState.TODOS
+    assert updated.metadata.retry_gate.reason == "review-workspace-snapshot-mismatch"
+    assert any(error.code == "review-workspace-snapshot-mismatch" for error in updated.metadata.errors)
+    assert not (updated.task_dir / "REVIEW-001.md").exists()
 
 
 def test_reviewer_worker_writes_human_qa_checklist_on_pass(configured_paths):

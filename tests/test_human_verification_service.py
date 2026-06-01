@@ -4,6 +4,7 @@ import asyncio
 import base64
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -26,6 +27,7 @@ from assistant_agent_kanban.services.human_verification_service import HumanVeri
 from assistant_agent_kanban.transitions import TransitionManager
 from assistant_agent_kanban.workspace_manager import WorkspaceManager
 from assistant_agent_kanban.workers.implementer import ImplementerWorker
+from assistant_agent_kanban.workers.reviewer import ReviewerWorker
 
 from .conftest import FakeAdapter, create_request_task, init_git_repo
 
@@ -84,6 +86,24 @@ def _git_ref_exists(repo_root: Path, ref: str) -> bool:
     return result.returncode == 0
 
 
+def _reviewer_pass_responses(task_id: str, cycle: int) -> list[str]:
+    return [
+        "hello",
+        "live review",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "artifact_type": "review",
+                "task_id": task_id,
+                "cycle": cycle,
+                "verdict": "PASS",
+                "primary_blocker": None,
+                "markdown": "Verdict: PASS\n\n## Acceptance Criteria Check\nReady",
+            }
+        ),
+    ]
+
+
 def test_human_verification_start_applies_patch_and_moves_state(configured_paths):
     config, repo_root, _ = configured_paths
     create_request_task(config, "verify-start-task")
@@ -111,6 +131,62 @@ def test_human_verification_start_applies_patch_and_moves_state(configured_paths
     assert updated.metadata.commit.sha == updated.metadata.commit.review_sha
     status = subprocess.run(["git", "-C", str(verification_repo), "status", "--short"], check=True, capture_output=True, text=True).stdout.strip()
     assert status == ""
+
+
+def test_human_verification_start_uses_reviewed_patch_when_workspace_was_reset(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-reviewed-patch-survives-reset-task")
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = next(item for item in scanner.scan() if item.state == TaskState.REQUESTS)
+    planning = transitions.move(task, TaskState.PLANNING, by="planner")
+    (planning.task_dir / "PLAN.md").write_text("plan\n")
+    metadata_store.save(planning.task_dir, planning.metadata)
+    waiting = transitions.move(planning, TaskState.WAITING_CHECK_PLANS, by="planner")
+    transitions.manual_move(waiting.metadata.task_id, TaskState.TODOS, by="human")
+
+    def modify_workspace(cwd: Path):
+        (cwd / "app.txt").write_text("reviewed implementation\n")
+
+    implementer = ImplementerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(["hello", "implemented live", "## Summary\nimplemented"], side_effect=modify_workspace),
+        workspace_manager=WorkspaceManager(config),
+    )
+    asyncio.run(implementer.run_once())
+    waiting_review = scanner.find_task(waiting.metadata.task_id)
+    reviewer = ReviewerWorker(
+        config,
+        scanner,
+        metadata_store,
+        locks,
+        transitions,
+        EventBus(),
+        adapter=FakeAdapter(_reviewer_pass_responses(waiting_review.metadata.task_id, waiting_review.metadata.cycle)),
+        integration_manager=IntegrationManager(config),
+    )
+    asyncio.run(reviewer.run_once())
+    completed = scanner.find_task(waiting.metadata.task_id)
+    workspace_path = Path(completed.metadata.implementation.workspace or "")
+    subprocess.run(["git", "-C", str(workspace_path), "reset", "--hard"], check=True, capture_output=True, text=True)
+    (workspace_path / "only.http").write_text("GET /health\n")
+    service = HumanVerificationService(scanner, config, metadata_store, locks, transitions, IntegrationManager(config), CommitManager())
+
+    moved = service.start(completed.metadata.task_id, by="human")
+
+    assert moved.state == TaskState.HUMAN_VERIFYING
+    assert (repo_root / "app.txt").read_text() == "reviewed implementation\n"
+    assert not (repo_root / "only.http").exists()
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.metadata.integration.patch_cycle == refreshed.metadata.cycle
+    assert refreshed.metadata.integration.patch_sha256
 
 
 def test_human_verification_start_pushes_and_reject_keeps_remote_review_branch(configured_paths, tmp_path):

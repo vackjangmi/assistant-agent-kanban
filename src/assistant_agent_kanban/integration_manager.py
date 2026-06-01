@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
@@ -17,6 +18,61 @@ from .target_repo_guard import resolve_safe_target_repo_root
 class IntegrationManager:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
+
+    def capture_workspace_patch(self, metadata: TaskMetadata, workspace_repo: Path, *, purpose: str) -> Path:
+        if purpose not in {"implementation", "review"}:
+            raise IntegrationError(f"unsupported patch snapshot purpose: {purpose}")
+        patch_text = self.workspace_patch_text(workspace_repo)
+        if not patch_text.strip():
+            raise IntegrationError("workspace has no changes to snapshot")
+        patch_path = self._patch_path(metadata.task_id, metadata.cycle)
+        self._write_patch(patch_path, patch_text)
+        patch_sha256 = self._patch_sha256(patch_text)
+        if purpose == "implementation":
+            metadata.implementation.patch_path = str(patch_path)
+            metadata.implementation.patch_sha256 = patch_sha256
+            metadata.implementation.patch_cycle = metadata.cycle
+        else:
+            metadata.integration.patch_path = str(patch_path)
+            metadata.integration.patch_sha256 = patch_sha256
+            metadata.integration.patch_cycle = metadata.cycle
+        return patch_path
+
+    def workspace_patch_text(self, workspace_repo: Path) -> str:
+        ensure_generated_artifact_excludes(workspace_repo)
+        reset_index = subprocess.run(
+            ["git", "-C", str(workspace_repo), "reset", "-q"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if reset_index.returncode != 0:
+            raise IntegrationError(reset_index.stderr.strip() or "failed to reset workspace index")
+        try:
+            add_all = subprocess.run(
+                ["git", "-C", str(workspace_repo), "add", "-A"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if add_all.returncode != 0:
+                raise IntegrationError(add_all.stderr.strip() or "failed to stage workspace changes")
+            diff = subprocess.run(
+                ["git", "-C", str(workspace_repo), "diff", "--cached", "--binary"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if diff.returncode != 0:
+                raise IntegrationError(diff.stderr.strip() or "failed to generate patch")
+            return diff.stdout
+        finally:
+            subprocess.run(
+                ["git", "-C", str(workspace_repo), "reset", "-q"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
     def apply_workspace(
         self,
@@ -61,6 +117,14 @@ class IntegrationManager:
             if head.returncode != 0:
                 raise IntegrationError(head.stderr.strip() or "failed to resolve target base branch")
             metadata.integration.base_commit = head.stdout.strip() or None
+            stored_patch = self._current_cycle_review_patch(metadata)
+            if stored_patch is not None:
+                return self._apply_stored_patch_to_git_repo(
+                    metadata,
+                    target_repo_root,
+                    stored_patch,
+                    cleanup_verification_workspace=False,
+                )
             return self._apply_workspace_patch_to_git_repo(
                 metadata,
                 workspace_repo,
@@ -81,7 +145,10 @@ class IntegrationManager:
         metadata.integration.base_commit = head.stdout.strip() or None
         if initialized_empty_verification_repo:
             return self._apply_workspace_snapshot(metadata, workspace_repo, verification_repo_root, patch_path)
+        stored_patch = self._current_cycle_review_patch(metadata)
         if self.config.review_branch_remote.enabled and metadata.integration.remote_review_branch:
+            if stored_patch is not None:
+                self._ensure_workspace_matches_stored_patch(metadata, workspace_repo, stored_patch)
             return self._apply_workspace_on_remote_review_branch(
                 metadata,
                 workspace_repo,
@@ -89,6 +156,13 @@ class IntegrationManager:
                 patch_path,
                 git_token=git_token,
                 git_token_username=git_token_username,
+            )
+        if stored_patch is not None:
+            return self._apply_stored_patch_to_git_repo(
+                metadata,
+                verification_repo_root,
+                stored_patch,
+                cleanup_verification_workspace=True,
             )
         return self._apply_workspace_patch_to_git_repo(
             metadata,
@@ -107,34 +181,12 @@ class IntegrationManager:
         *,
         cleanup_verification_workspace: bool,
     ) -> Path:
-        ensure_generated_artifact_excludes(workspace_repo)
-        reset_index = subprocess.run(
-            ["git", "-C", str(workspace_repo), "reset", "-q"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if reset_index.returncode != 0:
-            raise IntegrationError(reset_index.stderr.strip() or "failed to reset workspace index")
-        add_all = subprocess.run(
-            ["git", "-C", str(workspace_repo), "add", "-A"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if add_all.returncode != 0:
-            raise IntegrationError(add_all.stderr.strip() or "failed to stage workspace changes")
-        diff = subprocess.run(
-            ["git", "-C", str(workspace_repo), "diff", "--cached", "--binary"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if diff.returncode != 0:
-            raise IntegrationError(diff.stderr.strip() or "failed to generate patch")
-        patch_path.write_text(diff.stdout)
+        patch_text = self.workspace_patch_text(workspace_repo)
+        self._write_patch(patch_path, patch_text)
         metadata.integration.patch_path = str(patch_path)
-        if not diff.stdout.strip():
+        metadata.integration.patch_sha256 = self._patch_sha256(patch_text)
+        metadata.integration.patch_cycle = metadata.cycle
+        if not patch_text.strip():
             metadata.integration.applied = False
             metadata.integration.applied_at = None
             if cleanup_verification_workspace:
@@ -146,6 +198,9 @@ class IntegrationManager:
             text=True,
             check=False,
         )
+        if status.returncode != 0:
+            repo_label = "verification repo" if cleanup_verification_workspace else "target repo"
+            raise IntegrationError(status.stderr.strip() or f"failed to inspect {repo_label} status")
         if status.stdout.strip():
             repo_label = "verification repo" if cleanup_verification_workspace else "target repo"
             raise IntegrationError(f"{repo_label} must be clean before apply")
@@ -166,6 +221,57 @@ class IntegrationManager:
                 self._delete_verification_workspace(metadata)
             self._reset_transient_integration_state(metadata)
             raise IntegrationConflictError(apply_result.stderr.strip() or "failed to apply patch")
+        metadata.integration.applied = True
+        metadata.integration.applied_at = utc_now()
+        return patch_path
+
+    def _apply_stored_patch_to_git_repo(
+        self,
+        metadata: TaskMetadata,
+        repo_root: Path,
+        patch_path: Path,
+        *,
+        cleanup_verification_workspace: bool,
+    ) -> Path:
+        patch_text = patch_path.read_text()
+        metadata.integration.patch_path = str(patch_path)
+        metadata.integration.patch_sha256 = self._patch_sha256(patch_text)
+        metadata.integration.patch_cycle = metadata.cycle
+        if not patch_text.strip():
+            metadata.integration.applied = False
+            metadata.integration.applied_at = None
+            if cleanup_verification_workspace:
+                self._delete_verification_workspace(metadata)
+            raise IntegrationError("review patch has no changes to apply")
+        status = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if status.returncode != 0:
+            repo_label = "verification repo" if cleanup_verification_workspace else "target repo"
+            raise IntegrationError(status.stderr.strip() or f"failed to inspect {repo_label} status")
+        if status.stdout.strip():
+            repo_label = "verification repo" if cleanup_verification_workspace else "target repo"
+            raise IntegrationError(f"{repo_label} must be clean before apply")
+        original_branch = self._current_branch(repo_root) or metadata.target.base_branch
+        review_branch = metadata.integration.review_branch or self._review_branch_name(metadata)
+        self._switch_to_review_branch(repo_root, metadata.target.base_branch, review_branch)
+        metadata.integration.original_branch = original_branch
+        metadata.integration.review_branch = review_branch
+        apply_result = subprocess.run(
+            ["git", "-C", str(repo_root), "apply", "--3way", "--index", str(patch_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if apply_result.returncode != 0:
+            self._cleanup_review_branch(repo_root, metadata)
+            if cleanup_verification_workspace:
+                self._delete_verification_workspace(metadata)
+            self._reset_transient_integration_state(metadata)
+            raise IntegrationConflictError(apply_result.stderr.strip() or "failed to apply review patch")
         metadata.integration.applied = True
         metadata.integration.applied_at = utc_now()
         return patch_path
@@ -642,8 +748,10 @@ class IntegrationManager:
         )
         if diff.returncode != 0:
             raise IntegrationError(diff.stderr.strip() or "failed to generate workspace snapshot patch")
-        patch_path.write_text(diff.stdout)
+        self._write_patch(patch_path, diff.stdout)
         metadata.integration.patch_path = str(patch_path)
+        metadata.integration.patch_sha256 = self._patch_sha256(diff.stdout)
+        metadata.integration.patch_cycle = metadata.cycle
         if not diff.stdout.strip():
             metadata.integration.applied = False
             metadata.integration.applied_at = None
@@ -722,8 +830,10 @@ class IntegrationManager:
         )
         if diff.returncode != 0:
             raise IntegrationError(diff.stderr.strip() or "failed to generate workspace snapshot patch")
-        patch_path.write_text(diff.stdout)
+        self._write_patch(patch_path, diff.stdout)
         metadata.integration.patch_path = str(patch_path)
+        metadata.integration.patch_sha256 = self._patch_sha256(diff.stdout)
+        metadata.integration.patch_cycle = metadata.cycle
         if not diff.stdout.strip():
             metadata.integration.applied = False
             metadata.integration.applied_at = None
@@ -740,6 +850,44 @@ class IntegrationManager:
 
     def _patch_path(self, task_id: str, cycle: int) -> Path:
         return (self.config.runs_dir / task_id / f"review-{cycle:03d}.patch").expanduser().resolve()
+
+    def _current_cycle_review_patch(self, metadata: TaskMetadata) -> Path | None:
+        if metadata.review.iteration != metadata.cycle or metadata.review.last_verdict != "PASS":
+            return None
+        if metadata.integration.patch_cycle != metadata.cycle:
+            return None
+        patch_path = self._stored_patch_path(metadata)
+        if patch_path is None:
+            return None
+        if not patch_path.exists():
+            raise IntegrationError("review patch snapshot is missing")
+        patch_text = patch_path.read_text()
+        expected_sha = metadata.integration.patch_sha256
+        if expected_sha and expected_sha != self._patch_sha256(patch_text):
+            raise IntegrationError("review patch snapshot checksum mismatch")
+        if not patch_text.strip():
+            raise IntegrationError("review patch snapshot is empty")
+        return patch_path
+
+    def _ensure_workspace_matches_stored_patch(
+        self,
+        metadata: TaskMetadata,
+        workspace_repo: Path,
+        patch_path: Path,
+    ) -> None:
+        expected_sha = metadata.integration.patch_sha256 or self._patch_sha256(patch_path.read_text())
+        current_patch_sha = self._patch_sha256(self.workspace_patch_text(workspace_repo))
+        if current_patch_sha != expected_sha:
+            raise IntegrationError("workspace changes no longer match the reviewed patch snapshot")
+
+    def _write_patch(self, patch_path: Path, patch_text: str) -> None:
+        patch_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = patch_path.with_suffix(f"{patch_path.suffix}.tmp")
+        tmp_path.write_text(patch_text)
+        os.replace(tmp_path, patch_path)
+
+    def _patch_sha256(self, patch_text: str) -> str:
+        return hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
 
     def _stored_patch_path(self, metadata: TaskMetadata) -> Path | None:
         if not metadata.integration.patch_path:
