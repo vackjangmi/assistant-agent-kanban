@@ -242,7 +242,12 @@ def _normalize_field_update_value(value: object) -> str | None:
 
 
 def _resolve_drafting_cwd(*, config: AppConfig, payload: RequestDraftPayload, temp_dir: Path) -> Path:
-    del config, payload
+    del config
+    normalized_target_repo = (payload.target_repo or "").strip()
+    if normalized_target_repo:
+        repo_root = resolve_safe_target_repo_root(Path(normalized_target_repo))
+        if not repo_root.is_dir():
+            raise ValueError(f"target repo `{repo_root}` must be an existing directory")
     return temp_dir.resolve()
 
 

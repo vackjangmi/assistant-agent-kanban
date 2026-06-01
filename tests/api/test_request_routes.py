@@ -177,7 +177,10 @@ def test_api_drafts_request_without_creating_task_dirs(configured_paths):
         assert after == before
 
     assert draft_adapter.run_calls[0]["agent"] == "fs-kanban-request-draft"
-    assert draft_adapter.run_calls[0]["cwd"] == config.repo_root.resolve()
+    cwd = draft_adapter.run_calls[0]["cwd"]
+    assert isinstance(cwd, Path)
+    assert cwd != config.repo_root.resolve()
+    assert config.repo_root.resolve() not in cwd.parents
     assert "Please tighten the goal and acceptance criteria." in str(draft_adapter.run_calls[0]["prompt"])
 
 
