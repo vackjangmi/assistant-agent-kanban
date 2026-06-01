@@ -938,6 +938,29 @@ def test_api_confirms_dirty_target_stash_before_human_verification(configured_pa
     assert (repo_root / "app.txt").read_text() == "review me\n"
 
 
+def test_api_blocks_parallel_local_human_verification_for_same_target_repo(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    create_request_task(config, "human-verify-local-parallel-one-task")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    scanner, first = _task_ready_for_completed_reviews(config, "human-verify-local-parallel-one-task")
+    create_request_task(config, "human-verify-local-parallel-two-task")
+    _, second = _task_ready_for_completed_reviews(config, "human-verify-local-parallel-two-task")
+
+    with TestClient(app) as client:
+        first_start = client.post(f"/api/tasks/{first.metadata.task_id}/start-verification")
+        second_start = client.post(f"/api/tasks/{second.metadata.task_id}/start-verification")
+
+    assert first_start.status_code == 200
+    assert first_start.json()["state"] == TaskState.HUMAN_VERIFYING.value
+    assert second_start.status_code == 409
+    assert "local human verification is already in progress" in second_start.json()["detail"]
+    assert scanner.find_task(first.metadata.task_id).state == TaskState.HUMAN_VERIFYING
+    assert scanner.find_task(second.metadata.task_id).state == TaskState.COMPLETED_REVIEWS
+    current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == f"review/{first.metadata.task_id.lower()}"
+
+
 def test_api_rejects_retry_when_verification_apply_is_already_active(configured_paths):
     config, _, _ = configured_paths
     config.runtime.auto_dispatch = False
