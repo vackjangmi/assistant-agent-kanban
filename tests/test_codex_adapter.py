@@ -50,7 +50,7 @@ def test_codex_adapter_builds_exec_command(monkeypatch, tmp_path):
     )
 
     command = cast(list[str], recorded["command"])
-    assert command[:6] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "workspace-write"]
+    assert command[:6] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "read-only"]
     assert "--json" in command
     assert "--model" in command
     assert command[command.index("--model") + 1] == "gpt-5.5"
@@ -97,8 +97,45 @@ def test_codex_adapter_reuses_session_id(monkeypatch, tmp_path):
     )
 
     command = cast(list[str], recorded["command"])
-    assert command[:8] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "workspace-write", "resume", "thread-existing"]
+    assert command[:8] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "read-only", "resume", "thread-existing"]
     assert result.session_id == "thread-existing"
+
+
+def test_codex_adapter_uses_workspace_write_only_for_implementer(monkeypatch, tmp_path):
+    recorded: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self, command):
+            self.stdout = ['{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}\n']
+            self.stderr = []
+            self.command = command
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        recorded["command"] = command
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    adapter = SubprocessCodexAdapter()
+    config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
+    config.runtime.coding_assistant = "codex"
+    config.bootstrap()
+
+    adapter.run(
+        agent="fs-kanban-implementer",
+        prompt="implement this task",
+        cwd=tmp_path,
+        run_log_path=tmp_path / "implementer.jsonl",
+        config=config,
+    )
+
+    command = cast(list[str], recorded["command"])
+    assert command[:6] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "workspace-write"]
 
 
 def test_codex_adapter_omits_model_flag_for_default_model(monkeypatch, tmp_path):

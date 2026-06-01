@@ -130,6 +130,7 @@ def build_request_drafting_prompt(*, config: AppConfig, payload: RequestDraftPay
         [
             "You are helping a user draft a pre-submit request for Assistant Agent Kanban.",
             "This is only for the request composer before task creation.",
+            "This assistant is read-only. Do not edit files, run write commands, create commits, or modify the target repository.",
             "Do not create or imply any task directory, state transition, or workflow artifact.",
             "The final REQUEST.md is created only later by the existing request creation flow, and REQUEST.md remains the authoritative planner input.",
             "Use the conversation to improve the request fields non-destructively.",
@@ -241,13 +242,8 @@ def _normalize_field_update_value(value: object) -> str | None:
 
 
 def _resolve_drafting_cwd(*, config: AppConfig, payload: RequestDraftPayload, temp_dir: Path) -> Path:
-    target_repo = (payload.target_repo or "").strip()
-    if not target_repo:
-        return temp_dir.resolve()
-    resolved = resolve_safe_target_repo_root(Path(target_repo))
-    if not resolved.exists() or not resolved.is_dir():
-        raise ValueError("target repo must be an existing directory")
-    return resolved
+    del config, payload
+    return temp_dir.resolve()
 
 
 def _discover_baseline_reference_paths(target_repo: str) -> list[str]:

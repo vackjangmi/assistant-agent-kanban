@@ -316,7 +316,8 @@ The default strategy is `clone-overlay`.
 - they start from a local clone
 - needed ignored/untracked files can be added through overlay copy or symlink
 - the target repo is separated from the implementation workspace to reduce contamination
-- Codex runs in workspace-write mode; OpenCode/Claude/Gemini treat the target repo as read-only during implementation
+- only the implementer role runs in a write-capable assistant mode; planner, plan approval, request drafting, reviewer, and commit/verification helpers run read-only
+- the target repo stays separated and read-only until human verification applies the reviewed patch
 
 ### Task Artifacts
 
@@ -831,7 +832,8 @@ human-verifying -> closed
 - local clone 기반으로 준비
 - 필요한 ignored/untracked 파일은 overlay copy 또는 symlink로 보강
 - target repo와 구현 workspace를 분리해 오염 방지
-- Codex는 workspace-write 모드로 실행, OpenCode/Claude/Gemini는 구현 시 target repo를 read-only로 다룸
+- implementer 역할만 write-capable assistant mode로 실행하고, planner/plan approval/request draft/reviewer/commit-verification 보조 역할은 read-only로 실행
+- target repo는 분리된 read-only 대상이며, 사람 검증에서 검토 완료 patch를 적용할 때까지 수정하지 않음
 
 ### Task 산출물
 

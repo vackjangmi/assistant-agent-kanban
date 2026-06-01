@@ -147,6 +147,9 @@ def test_antigravity_adapter_uses_existing_default_model_without_settings_rewrit
     command = cast(list[str], recorded["command"])
     assert command[-2] == "--print"
     assert "draft this task" in command[-1]
+    assert "--dangerously-skip-permissions" not in command
+    assert "--sandbox" in command
+    assert "read-only workspace binding" in command[-1]
     assert recorded["settings_at_start"] == {"enableTelemetry": False, "model": "existing-default"}
     assert recorded["settings_during_run"] == {"enableTelemetry": False, "model": "existing-default"}
     assert result.resolved_model is None
@@ -158,6 +161,15 @@ def test_bind_prompt_to_cwd_forbids_antigravity_scratch(tmp_path):
     assert str(tmp_path.resolve()) in prompt
     assert "Do not copy the repository to Antigravity scratch space" in prompt
     assert prompt.endswith("do the work")
+
+
+def test_bind_prompt_to_cwd_can_mark_workspace_read_only(tmp_path):
+    prompt = _bind_prompt_to_cwd("plan the work", cwd=tmp_path, writable=False)
+
+    assert str(tmp_path.resolve()) in prompt
+    assert "read-only workspace binding" in prompt
+    assert "Do not edit files" in prompt
+    assert prompt.endswith("plan the work")
 
 
 def test_antigravity_adapter_discovers_configured_and_settings_models(tmp_path):

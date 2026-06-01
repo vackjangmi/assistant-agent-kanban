@@ -186,6 +186,7 @@ class PlanApprovalWorker(WorkerBase):
             [
                 "You are the fs-kanban plan approval worker.",
                 "Decide whether the generated plan should auto-approve, require human review, or recommend human review.",
+                "This worker role is read-only. Do not edit files, apply patches, run write commands, create commits, or modify workflow state.",
                 "Return only strict JSON with keys: disposition, confidence, risk_signals, rationale.",
                 "Allowed disposition values: auto_approve, review_required, review_recommended.",
                 "Use review_required for destructive change risk, DB/schema changes, API contract changes, ambiguous requirements, or low confidence.",

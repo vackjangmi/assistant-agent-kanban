@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .assistant_adapter import AssistantAdapter, _resolve_binary_error
+from .assistant_adapter import AssistantAdapter, _resolve_binary_error, role_allows_workspace_writes
 from .config import AppConfig, AssistantRole
 from .exceptions import AdapterRunError
 from .models import RunResult
@@ -60,16 +60,17 @@ class SubprocessAntigravityAdapter(AssistantAdapter):
     ) -> RunResult:
         del output_format, show_thinking
         role = _role_from_agent(agent)
+        can_write = role_allows_workspace_writes(role)
         resolved_model = config.role_model(role)
-        bound_prompt = _bind_prompt_to_cwd(prompt, cwd=cwd)
+        bound_prompt = _bind_prompt_to_cwd(prompt, cwd=cwd, writable=can_write)
         command = [
             config.antigravity.binary,
             "--print-timeout",
             f"{max(1, config.antigravity.timeout_seconds)}s",
         ]
-        if config.antigravity.dangerously_skip_permissions:
+        if can_write and config.antigravity.dangerously_skip_permissions:
             command.append("--dangerously-skip-permissions")
-        if config.antigravity.sandbox:
+        if config.antigravity.sandbox or not can_write:
             command.append("--sandbox")
         if session_id:
             command.extend(["--conversation", session_id])
@@ -226,8 +227,20 @@ def _popen_antigravity(*, command: list[str], cwd: Path, agent: str) -> subproce
         raise AdapterRunError(f"failed to start antigravity for agent {agent}") from exc
 
 
-def _bind_prompt_to_cwd(prompt: str, *, cwd: Path) -> str:
+def _bind_prompt_to_cwd(prompt: str, *, cwd: Path, writable: bool = True) -> str:
     workspace = str(cwd.expanduser().resolve())
+    if not writable:
+        return "\n".join(
+            [
+                "Antigravity read-only workspace binding:",
+                f"- The workspace context is `{workspace}`.",
+                "- Treat every file and directory in this session as read-only.",
+                "- Do not edit files, apply patches, run write commands, create commits, or change workflow state.",
+                "- Return only the requested artifact in your final response.",
+                "",
+                prompt,
+            ]
+        )
     return "\n".join(
         [
             "Antigravity workspace binding:",

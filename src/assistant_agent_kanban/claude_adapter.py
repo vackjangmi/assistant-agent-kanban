@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable
 
-from .assistant_adapter import AssistantAdapter, _resolve_binary_error
+from .assistant_adapter import AssistantAdapter, _resolve_binary_error, role_allows_workspace_writes
 from .config import AppConfig, AssistantRole
 from .exceptions import AdapterRunError
 from .models import RunResult
@@ -63,10 +63,7 @@ class SubprocessClaudeAdapter(AssistantAdapter):
             "stream-json",
             "--verbose",
             "--include-partial-messages",
-            "--permission-mode",
-            "acceptEdits",
-            "--allowedTools",
-            "Bash,Read,Edit,Write,Glob,Grep,MultiEdit",
+            *_permission_args_for_role(role),
         ]
         resolved_model = config.role_model(role)
         if session_id:
@@ -181,6 +178,24 @@ def _role_from_agent(agent: str) -> AssistantRole:
     if suffix == "commit":
         return "commit"
     return "planner"
+
+
+def _permission_args_for_role(role: AssistantRole) -> list[str]:
+    if role_allows_workspace_writes(role):
+        return [
+            "--permission-mode",
+            "acceptEdits",
+            "--allowedTools",
+            "Bash,Read,Edit,Write,Glob,Grep,MultiEdit",
+        ]
+    return [
+        "--permission-mode",
+        "plan",
+        "--allowedTools",
+        "Read,Glob,Grep",
+        "--disallowedTools",
+        "Bash,Edit,Write,MultiEdit",
+    ]
 
 
 def _normalize_include_directories(include_directories: list[Path] | None, *, cwd: Path) -> list[str]:

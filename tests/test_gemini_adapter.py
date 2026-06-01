@@ -171,7 +171,7 @@ def test_gemini_adapter_uses_safer_mode_for_reviewer(monkeypatch, tmp_path):
     )
 
     command = cast(list[str], recorded["command"])
-    assert command[command.index("--approval-mode") + 1] == "auto_edit"
+    assert command[command.index("--approval-mode") + 1] == "plan"
 
 
 def test_gemini_adapter_omits_model_flag_for_default_model(monkeypatch, tmp_path):

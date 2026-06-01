@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from assistant_agent_kanban.api.app import create_app
 from assistant_agent_kanban.request_drafting import RequestDraftPayload, build_request_drafting_prompt
@@ -93,6 +94,29 @@ def test_draft_request_reapplies_baseline_references_when_model_omits_them(confi
 
     assert result.field_updates["goal"] == "Sharper goal."
     assert result.field_updates["references"] == "docs/spec.md\nAGENTS.md\nCLAUDE.md"
+
+
+def test_draft_request_runs_assistant_outside_target_repo(configured_paths):
+    config, repo_root, _ = configured_paths
+    config.runtime.role_backends.request_draft = "codex"
+    draft_adapter = FakeAdapter([json.dumps({"reply": "Updated request.", "field_updates": {}})])
+
+    from assistant_agent_kanban.request_drafting import draft_request
+
+    draft_request(
+        config=config,
+        adapter_registry={"codex": draft_adapter},
+        payload=RequestDraftPayload(
+            target_repo=str(repo_root),
+            base_branch="main",
+            message="Improve this request.",
+        ),
+    )
+
+    cwd = draft_adapter.run_calls[0]["cwd"]
+    assert isinstance(cwd, Path)
+    assert cwd != repo_root.resolve()
+    assert repo_root.resolve() not in cwd.parents
 
 
 def test_draft_request_reapplies_baseline_references_when_model_replaces_references(configured_paths):
