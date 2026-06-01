@@ -267,6 +267,7 @@ class AppConfig(BaseModel):
             "_runtime/board-cache",
             "_runtime/secrets",
             "retrospectives",
+            "archives",
         ]:
             (self.kanban_root / relative).mkdir(parents=True, exist_ok=True)
         if self.workspace.root is None:
@@ -453,6 +454,10 @@ class AppConfig(BaseModel):
     @property
     def retrospectives_dir(self) -> Path:
         return self.kanban_root / "retrospectives"
+
+    @property
+    def archives_dir(self) -> Path:
+        return self.kanban_root / "archives"
 
 
 def load_config(path: str | Path | None = None, *, bootstrap: bool = True) -> AppConfig:

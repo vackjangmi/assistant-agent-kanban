@@ -75,6 +75,7 @@
     });
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
+    retrospectiveArchiveOnlyButton.addEventListener('click', () => archiveActiveRetrospectiveGroup().catch((error) => { retrospectiveStatus.hidden = false; retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && accountModal && !accountModal.hidden) setAccountModalOpen(false); if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } if (event.key === 'Escape' && directoryPickerModal && !directoryPickerModal.hidden) { setDirectoryPickerModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     requestForm.addEventListener('input', () => void syncRequestComposerDraftState({ silent: true }));
@@ -195,6 +196,17 @@
       });
     });
     board.addEventListener('click', (event) => {
+      const archiveBackButton = event.target.closest('[data-archive-back]');
+      if (archiveBackButton) {
+        activeArchiveGroup = null;
+        board.innerHTML = renderArchiveBoard();
+        return;
+      }
+      const archiveButton = event.target.closest('[data-archive-id]');
+      if (archiveButton) {
+        openArchiveGroup(archiveButton.dataset.archiveId || '').catch(console.error);
+        return;
+      }
       const newRequestBtn = event.target.closest('.final-project-new-request');
       if (newRequestBtn) {
         openComposerWithRepo(newRequestBtn.dataset.projectPath || '').catch(console.error);
@@ -232,6 +244,16 @@
       boardPhaseManuallySelected = true;
       activeBoardPhase = button.dataset.boardPhase;
       renderBoardPhaseTabs();
+      if (activeBoardPhase === 'archive') {
+        if (activeBoardSnapshot) {
+          applyBoardSnapshot(activeBoardSnapshot);
+        } else {
+          board.classList.add('archive-board');
+          board.innerHTML = renderArchiveBoard();
+          loadArchives().catch(console.error);
+        }
+        return;
+      }
       loadBoard();
     });
     taskTabOverview.addEventListener('click', () => selectTaskTab('overview'));

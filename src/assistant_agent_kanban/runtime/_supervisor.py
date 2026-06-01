@@ -15,6 +15,7 @@ from ..models import TaskContext
 from ..recovery import RecoveryService
 from ..scanner import KanbanScanner
 from ..services.board_service import BoardService
+from ..services.archive_service import ArchiveService
 from ..services.human_verification_service import HumanVerificationService
 from ..services.retrospective_service import RetrospectiveService
 from ..services.task_cancellation_service import TaskCancellationService
@@ -84,6 +85,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         events: EventBus,
         model_registry: ModelRegistryProvider,
         rerequest_service: Any | None = None,
+        archive_service: Any | None = None,
     ) -> None:
         self.config = config
         self.planner = planner
@@ -98,6 +100,7 @@ class RuntimeSupervisor(_SlackHandlersMixin):
         self.deletion_service = deletion_service
         self.task_service = task_service
         self.inspection_service = inspection_service
+        self.archive_service = archive_service
         self.retrospective_service = retrospective_service
         self.rerequest_service: Any = rerequest_service
         self.recovery = recovery
@@ -400,6 +403,7 @@ def build_runtime(
         locks=locks,
     )
     inspection_service = TaskInspectionService(config=config, scanner=scanner, adapter_registry=registry)
+    archive_service = ArchiveService(config, scanner, locks)
     retrospective_service = RetrospectiveService(scanner, config, locks, commit_manager, adapter=commit_adapter)
     recovery = RecoveryService(config, scanner, transitions, locks)
     model_registry = build_backend_manager(config=config, adapter_registry=registry)
@@ -421,6 +425,7 @@ def build_runtime(
         events,
         model_registry,
         rerequest_service=rerequest_service,
+        archive_service=archive_service,
     )
     runtime.adapter_registry = registry
     runtime.cancellation_service = cancellation_service

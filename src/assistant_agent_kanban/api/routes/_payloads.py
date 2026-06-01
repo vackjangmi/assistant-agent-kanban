@@ -90,6 +90,11 @@ class RetrospectiveCreatePayload(RetrospectivePayload):
     completion_mode: Literal["new-branch", "target-branch"]
 
 
+class ArchiveGroupPayload(BaseModel):
+    target_repo_root: str
+    base_branch: str
+
+
 class CreateLineCommentPayload(BaseModel):
     path: str
     side: Literal["left", "right"]

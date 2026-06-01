@@ -900,6 +900,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert 'data-board-phase="implementation"' in response.text
     assert 'data-board-phase="final"' in response.text
     assert 'data-board-phase="closed"' in response.text
+    assert 'data-board-phase="archive"' in response.text
     assert "Settings" in response.text
     assert "Refresh" in response.text
     assert "Acceptance criteria" in response.text
@@ -1249,11 +1250,11 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "applyBoardSnapshot(message.payload);" in response.text
     assert "function phaseLabel(phase)" in response.text
     assert "let previousBoardTaskPhases = new Map();" in response.text
-    assert "let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0, closed: 0 };" in response.text
+    assert "let boardPhaseTaskCounts = { plan: 0, implementation: 0, final: 0, closed: 0, archive: 0 };" in response.text
     assert "function boardPhaseForState(state)" in response.text
     assert "function hasTaskMovedFromPlanToImplementation(nextTaskPhases)" in response.text
     assert "previousBoardTaskPhases.get(taskId) === 'plan' && nextPhase === 'implementation'" in response.text
-    assert "boardPhaseTaskCounts = countBoardPhaseTasks(columns);" in response.text
+    assert "boardPhaseTaskCounts = { ...countBoardPhaseTasks(columns), archive: archiveGroups.length };" in response.text
     assert 'class="board-phase-tab-count" aria-hidden="true"' in response.text
     assert ".board-phase-tab-count { display: inline-grid;" in response.text
     assert "function repoTagTone(path)" in response.text
@@ -1313,7 +1314,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospectiveCountLabel: '{count} retrospectives'" in response.text
     assert "retrospectiveCountLabel: '{count}건 회고'" in response.text
     assert "retrospectiveModalSubtitle" not in response.text
-    assert "${escapeHtml(translateTask('retrospectiveCountLabel', { count: String(branchItems.length) }))}</button>" in response.text
+    assert "${escapeHtml(translateTask('retrospectiveArchiveCountLabel', { count: String(branchItems.length) }))}</button>" in response.text
     assert "data-target-repo=\"${escapeHtml(branchItems[0].target_repo_root || '')}\"" in response.text
     assert 'data-base-branch="${escapeHtml(branch)}"' in response.text
     assert "function openRetrospectiveModal(targetRepoRoot, baseBranch)" in response.text
@@ -1340,7 +1341,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "retrospectiveCreateBranchButton.hidden = false;" in response.text
     assert "comparison_branch: normalizedRetrospectiveComparisonBranch() || null" in response.text
     assert "retrospectiveCompareBranchInput.addEventListener('input'" in response.text
-    assert 'class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${index === 0 ? ' in response.text
+    assert 'class="target-branch-label" title="${escapeHtml(branch)}" tabindex="0" role="button" aria-expanded="${isFinalBranchGroupExpanded(projectPath, branch, index) ? ' in response.text
     assert '.target-branch-caret { flex: 0 0 auto; width: 20px; height: 20px; margin-left: 2px;' in response.text
     assert ".final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text
     assert ".final-board .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }" in response.text

@@ -366,6 +366,44 @@ class BoardSnapshot(BaseModel):
     columns: list[BoardColumn]
 
 
+class ArchiveTaskLocation(BaseModel):
+    task_id: str
+    state: TaskState = TaskState.DONE
+    relative_path: str
+
+
+class ArchiveGroupManifest(BaseModel):
+    version: int = 1
+    archive_id: str
+    target_repo_root: str = "."
+    target_repo_label: str = "."
+    base_branch: str = "main"
+    task_count: int = 0
+    task_ids: list[str] = Field(default_factory=list)
+    task_locations: list[ArchiveTaskLocation] = Field(default_factory=list)
+    archived_at: datetime = Field(default_factory=utc_now)
+    archived_by: str = "human"
+
+
+class ArchiveGroupSummary(BaseModel):
+    archive_id: str
+    target_repo_root: str = "."
+    target_repo_label: str = "."
+    base_branch: str = "main"
+    task_count: int = 0
+    task_ids: list[str] = Field(default_factory=list)
+    archived_at: datetime
+    archived_by: str = "human"
+
+
+class ArchiveGroupDetail(ArchiveGroupSummary):
+    tasks: list[TaskSnapshot] = Field(default_factory=list)
+
+
+class ArchiveList(BaseModel):
+    groups: list[ArchiveGroupSummary] = Field(default_factory=list)
+
+
 class StageTimingSummary(BaseModel):
     state: TaskState
     total_duration_ms: int = 0
