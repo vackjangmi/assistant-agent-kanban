@@ -186,7 +186,10 @@
       setApprovalChoiceModalOpen(false);
       requestChangesButton.disabled = true;
       approveHumanReviewButton.disabled = true;
-      taskHumanReviewNoteStatus.textContent = translateHumanReview('requestingChanges');
+      const requestChangesMessage = translateHumanReview('requestingChanges');
+      setDisabledActionReason(requestChangesShell, requestChangesButton, requestChangesMessage);
+      setDisabledActionReason(approveHumanReviewShell, approveHumanReviewButton, requestChangesMessage);
+      taskHumanReviewNoteStatus.textContent = requestChangesMessage;
       try {
         await saveHumanReviewNoteIfNeeded();
         const requestBody = gitUnlockBodyForOperation({ note: getHumanReviewEditorContent() });
@@ -232,6 +235,8 @@
       approvalChoiceStatus.hidden = false;
       approvalChoiceStatus.dataset.tone = 'neutral';
       const approvalMessage = translateHumanReview('approving');
+      setDisabledActionReason(requestChangesShell, requestChangesButton, approvalMessage);
+      setDisabledActionReason(approveHumanReviewShell, approveHumanReviewButton, approvalMessage);
       approvalChoiceStatus.textContent = approvalMessage;
       taskHumanReviewNoteStatus.textContent = approvalMessage;
       try {
