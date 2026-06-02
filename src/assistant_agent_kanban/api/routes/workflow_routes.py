@@ -189,6 +189,31 @@ def register(router: APIRouter) -> None:
         await runtime.rescan_and_publish()
         return context.metadata
 
+    @router.post("/api/tasks/{task_id}/return-verification")
+    async def return_verification(task_id: str, request: Request, payload: GitUnlockPayload | None = None):
+        runtime = request.app.state.runtime
+        user = _require_task_actor(request, task_id)
+        git_token, git_token_username = _git_credentials_for_request(
+            request,
+            user,
+            require_token=_remote_review_push_is_required(request, user),
+            unlock_key=payload.git_token_unlock_key if payload else None,
+        )
+        operation_config = _operation_config_for_task(request, task_id, user)
+        try:
+            moved = await _to_thread_compatible(
+                runtime.verification_service.return_to_completed_reviews,
+                task_id,
+                by=_actor(user),
+                git_token=git_token,
+                git_token_username=git_token_username,
+                operation_config=operation_config,
+            )
+        except (TransitionError, TaskNotFoundError, IntegrationError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await runtime.rescan_and_publish()
+        return moved.metadata
+
     @router.put("/api/tasks/{task_id}/human-review-note")
     async def save_human_review_note(task_id: str, payload: HumanReviewNotePayload, request: Request):
         runtime = request.app.state.runtime

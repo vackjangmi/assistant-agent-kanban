@@ -71,6 +71,7 @@ Never break the following rules while working here.
 
 ### `human-verifying`
 - a human is validating the reviewed result in the target repo
+- a human may roll this back to `completed-reviews` to free the target repo without requesting implementation changes
 
 ### `done`
 - final approval and commit are complete

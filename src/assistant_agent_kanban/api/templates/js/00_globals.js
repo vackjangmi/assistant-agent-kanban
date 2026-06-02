@@ -226,6 +226,7 @@
     const taskPanelEditor = document.getElementById('task-panel-editor');
     const startVerificationButton = document.getElementById('start-verification');
     const retryVerificationApplyButton = document.getElementById('retry-verification-apply');
+    const returnVerificationButton = document.getElementById('return-verification');
     const resumePlannerButton = document.getElementById('resume-planner');
     const resumePlannerMessageInput = document.getElementById('resume-planner-message');
     const resumePlannerChoiceButton = document.getElementById('resume-planner-choice-button');

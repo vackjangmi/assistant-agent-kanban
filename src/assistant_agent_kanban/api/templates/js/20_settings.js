@@ -191,6 +191,7 @@
       taskTabReviewNote.textContent = translateHumanReview('tab');
       document.getElementById('task-human-review-note-title').textContent = translateHumanReview('noteTitle');
       saveHumanReviewNoteButton.textContent = translateHumanReview('saveNote');
+      returnVerificationButton.textContent = translateHumanReview('returnToCompletedReviews');
       requestChangesButton.textContent = translateHumanReview('requestChanges');
       approveHumanReviewButton.textContent = translateHumanReview('approve');
       document.getElementById('approval-choice-title').textContent = translateHumanReview('approvalChoiceTitle');

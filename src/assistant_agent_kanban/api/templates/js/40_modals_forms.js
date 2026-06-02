@@ -1152,6 +1152,8 @@
       startVerificationButton.disabled = state !== 'completed-reviews' || !canActOnTask;
       retryVerificationApplyButton.hidden = state !== 'human-verifying' || !canActOnTask;
       retryVerificationApplyButton.disabled = state !== 'human-verifying' || !canActOnTask;
+      returnVerificationButton.hidden = state !== 'human-verifying' || !canActOnTask;
+      returnVerificationButton.disabled = state !== 'human-verifying' || !canActOnTask;
       resumePlannerButton.hidden = !canResumePlannerFromSnapshot || !canActOnTask;
       resumePlannerButton.disabled = !canResumePlannerFromSnapshot || !canActOnTask;
       resumeImplementerButton.hidden = !canResumeImplementerFromSnapshot || !canActOnTask;

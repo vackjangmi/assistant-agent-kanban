@@ -1493,12 +1493,14 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "/api/tasks/${activeTaskId}/approve-plan" in response.text
     assert "/api/tasks/${activeTaskId}/start-verification" in response.text
     assert "/api/tasks/${activeTaskId}/retry-verification-apply" in response.text
+    assert "/api/tasks/${activeTaskId}/return-verification" in response.text
     assert "/api/tasks/${activeTaskId}/resume-implementer" in response.text
     assert "/api/tasks/${activeTaskId}/resume-reviewer" in response.text
     assert "/api/tasks/${activeTaskId}/resume-review-loop" in response.text
     assert "/api/tasks/${activeTaskId}/reject-verification" in response.text
     assert "/api/tasks/${activeTaskId}/approve-verification" in response.text
     assert 'id="retry-verification-apply"' in response.text
+    assert 'id="return-verification"' in response.text
     assert 'id="resume-implementer"' in response.text
     assert 'id="resume-reviewer"' in response.text
     assert 'id="resume-review-loop"' in response.text
@@ -1509,6 +1511,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "const canResumeReviewLoopFromSnapshot = state === 'todos' && snapshot?.metadata?.review?.human_rework_required === true;" in response.text
     assert "...(snapshotMetadata.review || {})," in response.text
     assert "function retryVerificationApply()" in response.text
+    assert "function returnVerificationToCompletedReviews()" in response.text
     assert "function canResumeImplementerForMetadata(metadata, state)" in response.text
     assert "return retryReason === 'review-rework-backstop' && metadata?.review?.human_rework_required !== true;" in response.text
     assert "if (!canResumeImplementerForMetadata(activeTaskDetail.metadata, activeTaskDetail.metadata.state)) return;" in response.text
@@ -1524,6 +1527,7 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "approveVerification('target-branch');" in response.text
     assert "approveVerification('new-branch');" in response.text
     assert "approvalChoiceTargetStashNotice" in response.text
+    assert "returnToCompletedReviews" in response.text
     assert "const renderedFiles = files.slice(0, 100);" in response.text
     assert "Math.max(0, fileCount - renderedFiles.length)" in response.text
     assert "pre_verification_stash_file_count: metadata.integration.pre_verification_stash?.file_count" in response.text

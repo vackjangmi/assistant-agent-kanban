@@ -43,7 +43,7 @@ ALLOWED_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.WAITING_REVIEWS: {TaskState.REVIEWING, TaskState.CLOSED},
     TaskState.REVIEWING: {TaskState.TODOS, TaskState.WAITING_REVIEWS, TaskState.COMPLETED_REVIEWS, TaskState.CLOSED},
     TaskState.COMPLETED_REVIEWS: {TaskState.TODOS, TaskState.HUMAN_VERIFYING, TaskState.CLOSED},
-    TaskState.HUMAN_VERIFYING: {TaskState.TODOS, TaskState.DONE, TaskState.CLOSED},
+    TaskState.HUMAN_VERIFYING: {TaskState.COMPLETED_REVIEWS, TaskState.TODOS, TaskState.DONE, TaskState.CLOSED},
     TaskState.DONE: set(),
     TaskState.CLOSED: set(),
 }
@@ -54,6 +54,7 @@ MANUAL_TRANSITIONS = {
     (TaskState.WAITING_CHECK_PLANS, TaskState.TODOS),
     (TaskState.WAITING_CHECK_PLANS, TaskState.CLOSED),
     (TaskState.COMPLETED_REVIEWS, TaskState.HUMAN_VERIFYING),
+    (TaskState.HUMAN_VERIFYING, TaskState.COMPLETED_REVIEWS),
     (TaskState.HUMAN_VERIFYING, TaskState.TODOS),
     (TaskState.HUMAN_VERIFYING, TaskState.DONE),
 }
