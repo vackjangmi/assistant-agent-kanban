@@ -92,9 +92,12 @@ def test_manual_transition_supports_human_verifying_edges(configured_paths):
     completed = transitions.move(reviewing, TaskState.COMPLETED_REVIEWS, by="reviewer")
 
     human_verifying = transitions.manual_move(completed.metadata.task_id, TaskState.HUMAN_VERIFYING, by="human")
-    rejected = transitions.manual_move(human_verifying.metadata.task_id, TaskState.TODOS, by="human")
+    returned = transitions.manual_move(human_verifying.metadata.task_id, TaskState.COMPLETED_REVIEWS, by="human")
+    human_verifying_again = transitions.manual_move(returned.metadata.task_id, TaskState.HUMAN_VERIFYING, by="human")
+    rejected = transitions.manual_move(human_verifying_again.metadata.task_id, TaskState.TODOS, by="human")
 
     assert human_verifying.state == TaskState.HUMAN_VERIFYING
+    assert returned.state == TaskState.COMPLETED_REVIEWS
     assert rejected.state == TaskState.TODOS
 
 

@@ -508,6 +508,7 @@
       const verificationStartInFlight = state === 'completed-reviews' && verificationLeaseRunId === 'manual-human-verifying';
       const canStart = canActOnTask && state === 'completed-reviews' && !verificationStartInFlight;
       const canApproveOrReject = canActOnTask && state === 'human-verifying';
+      const canReturnVerification = canActOnTask && state === 'human-verifying';
       const canRetryApply = canApproveOrReject && !integrationApplied;
       resumePlannerButton.hidden = !canResumePlanner;
       resumePlannerButton.disabled = !canResumePlanner || taskDetailStale;
@@ -521,6 +522,8 @@
       startVerificationButton.disabled = !canStart || taskDetailStale;
       retryVerificationApplyButton.hidden = !canRetryApply;
       retryVerificationApplyButton.disabled = !canRetryApply || taskDetailStale;
+      returnVerificationButton.hidden = !canReturnVerification;
+      returnVerificationButton.disabled = !canReturnVerification || taskDetailStale;
       requestChangesButton.hidden = !canApproveOrReject;
       requestChangesShell.hidden = !canApproveOrReject;
       approveHumanReviewButton.hidden = !canApproveOrReject;

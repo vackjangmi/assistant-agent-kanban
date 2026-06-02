@@ -282,6 +282,7 @@ reviewing -> closed
 completed-reviews -> human-verifying
 completed-reviews -> todos
 completed-reviews -> closed
+human-verifying -> completed-reviews
 human-verifying -> todos
 human-verifying -> done
 human-verifying -> closed
@@ -295,6 +296,7 @@ Rules:
 - human cancellation can move any nonterminal task except `done` into `closed`; changed workspace work is archived on the task before the managed workspace is removed
 - `completed-reviews` does not mean the target repo is already updated
 - patch apply happens only during `completed-reviews -> human-verifying`
+- active human verification can return to `completed-reviews` after rolling back the target repo apply
 - final commit happens only during `human-verifying -> done`
 - `closed` is terminal but not a completed implementation or commit; cancellations are recorded with `metadata.closure.reason = cancelled_by_human`
 
@@ -374,7 +376,7 @@ assistant-agent-kanban serve --config ./config.local.yaml --host 0.0.0.0 --port 
 - open task detail modal for metadata, logs, artifacts, and token usage summaries
 - read `REQUEST.md`, `PLAN.md`, work/review/human-QA/human-verification documents
 - edit and approve `PLAN.md` in supported states
-- start / reject / approve human verification (approval is gated on verification apply success, completed/skipped required QA items, no human verification note, and no unresolved inline comments)
+- start / return / reject / approve human verification (approval is gated on verification apply success, completed/skipped required QA items, no human verification note, and no unresolved inline comments)
 - resume planner / implementer / reviewer with explicit choice modals
 - delete tasks, including tasks whose target repo is no longer reachable
 - create new requests, including assistant-drafted requests
@@ -801,6 +803,7 @@ reviewing -> closed
 completed-reviews -> human-verifying
 completed-reviews -> todos
 completed-reviews -> closed
+human-verifying -> completed-reviews
 human-verifying -> todos
 human-verifying -> done
 human-verifying -> closed
@@ -814,6 +817,7 @@ human-verifying -> closed
 - 사람의 취소는 `done`을 제외한 모든 비종료 작업을 `closed`로 이동할 수 있으며, 변경된 workspace 작업은 task에 보관한 뒤 관리 workspace를 제거
 - `completed-reviews`는 target repo 반영 완료 상태가 아님
 - patch apply는 `completed-reviews -> human-verifying`에서만 수행
+- 진행 중인 human verification은 target repo 적용분을 원복한 뒤 `completed-reviews`로 되돌릴 수 있음
 - 최종 commit은 `human-verifying -> done`에서만 수행
 - `closed`는 terminal 상태지만 구현 완료나 commit 완료가 아니며, 취소는 `metadata.closure.reason = cancelled_by_human`으로 기록
 
@@ -893,7 +897,7 @@ assistant-agent-kanban serve --config ./config.local.yaml --host 0.0.0.0 --port 
 - task 상세 팝업에서 metadata/로그/문서/토큰 사용량 요약 확인
 - `REQUEST.md`, `PLAN.md`, 구현/리뷰/사람 QA/사람 검증 문서 열람
 - 특정 상태에서 `PLAN.md` 편집 및 승인
-- human verification 시작 / reject / approve (apply 성공, required QA 완료/skip, 사람 검증 note 없음, 미해결 inline comment 없음 기준으로 approve 게이팅)
+- human verification 시작 / 되돌리기 / reject / approve (apply 성공, required QA 완료/skip, 사람 검증 note 없음, 미해결 inline comment 없음 기준으로 approve 게이팅)
 - planner / implementer / reviewer를 명시적 선택 modal로 resume
 - task 삭제 (target repo가 unsafe한 경우도 처리)
 - 새 요청 생성 (assistant가 함께 작성)

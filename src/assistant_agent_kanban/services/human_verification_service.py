@@ -287,6 +287,39 @@ class HumanVerificationService:
             self.metadata_store.save(context.task_dir, context.metadata)
             return self.transitions.move(context, TaskState.TODOS, by=by, note=summary or "human verification requested changes")
 
+    def return_to_completed_reviews(
+        self,
+        task_id: str,
+        *,
+        by: str,
+        git_token: str | None = None,
+        git_token_username: str | None = None,
+        operation_config: AppConfig | None = None,
+    ) -> TaskContext:
+        context = self._find_task(task_id)
+        if context.state != TaskState.HUMAN_VERIFYING:
+            raise TransitionError("human verification can only return to completed-reviews from human-verifying")
+        with self.locks.acquire(context.task_dir, context.metadata, owner=by, run_id="manual-human-verification-return"):
+            if context.metadata.integration.applied or context.metadata.integration.pre_verification_stash.active:
+                self._rollback_workspace_for_context(
+                    context,
+                    operation_config=operation_config,
+                    git_token=git_token,
+                    git_token_username=git_token_username,
+                )
+            context.metadata.commit.status = "pending"
+            context.metadata.commit.sha = None
+            context.metadata.commit.review_sha = None
+            self._write_human_verification_artifact(context.task_dir, context.metadata, verdict="RETURNED_TO_COMPLETED_REVIEWS")
+            clear_retry_gate(context.metadata)
+            self.metadata_store.save(context.task_dir, context.metadata)
+            return self.transitions.move(
+                context,
+                TaskState.COMPLETED_REVIEWS,
+                by=by,
+                note="human verification returned to completed reviews",
+            )
+
     def rerequest_from_reviewer_qa(
         self,
         task_id: str,

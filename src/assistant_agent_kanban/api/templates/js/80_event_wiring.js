@@ -433,6 +433,7 @@
     refreshTaskInspectionButton.addEventListener('click', () => loadTaskInspection(activeTaskId, { force: true }).catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; }));
     askTaskInspectorButton.addEventListener('click', () => askTaskInspector().catch((error) => { taskModalError.hidden = false; taskModalError.textContent = error.message; updateTaskInspectorPanel(); }));
     taskInspectorInput.addEventListener('input', () => updateTaskInspectorPanel());
+    returnVerificationButton.addEventListener('click', returnVerificationToCompletedReviews);
     requestChangesButton.addEventListener('click', rejectVerification);
     approveHumanReviewButton.addEventListener('click', openApprovalChoiceModal);
     approvalChoiceTargetButton.addEventListener('click', () => { approveVerification('target-branch'); });

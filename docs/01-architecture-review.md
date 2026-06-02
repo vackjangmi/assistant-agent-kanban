@@ -19,7 +19,7 @@ The high-level flow is:
 3. The plan-approval worker either auto-approves the plan or routes it to a human.
 4. The implementer and reviewer iterate on the task.
 5. After review passes, a human starts verification in the target repo.
-6. Reject returns the task to `todos`; approve creates the final commit and finishes the task.
+6. Return rolls verification back to `completed-reviews`; reject returns the task to `todos`; approve creates the final commit and finishes the task.
 7. Completed work can later be grouped into retrospective summaries.
 
 ## Architectural Invariants
@@ -240,6 +240,7 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 - `completed-reviews -> todos`
 - `completed-reviews -> human-verifying`
 - `completed-reviews -> closed`
+- `human-verifying -> completed-reviews`
 - `human-verifying -> todos`
 - `human-verifying -> done`
 - `human-verifying -> closed`
@@ -251,6 +252,7 @@ Avoid this unless you change the state machine in `enums.py` + `transitions.py` 
 - `waiting-check-plans -> closed`
 - any nonterminal state except `done` can be cancelled by a human into `closed`
 - `completed-reviews -> human-verifying`
+- `human-verifying -> completed-reviews`
 - `human-verifying -> done`
 
 ### State Meaning
@@ -348,13 +350,14 @@ The target repo is not touched immediately after review passes. The flow is:
 2. A human explicitly starts verification.
 3. Only then is the reviewed result applied to the target repo.
 4. A human runs and validates the result.
-5. Reject returns to `todos`; approve creates the final commit and moves to `done`.
+5. Return rolls back the target repo apply and moves back to `completed-reviews`; reject returns to `todos`; approve creates the final commit and moves to `done`.
 
 Operating assumptions:
 
 - Committed target repo drift still blocks verification and sends the task back for re-implementation.
 - Uncommitted local target repo changes require explicit human confirmation; when confirmed, the app stores the affected file count plus a capped preview list in metadata, creates a managed git stash, runs verification in the same target repo path, and restores the stash when verification is rejected, cancelled, deleted, or completed.
 - In local verification mode, only one task per target repo can be in human verification at a time because the target repo worktree is the active review surface.
+- A human can return an active verification to `completed-reviews` to free that target repo without requesting implementation changes.
 - If target-branch approval is selected while a managed stash is active, the app preflights stash restoration in a temporary worktree before committing the target branch. Clean restores complete automatically; conflicts stop the approval before the target branch is changed so the human can choose another completion path or resolve the local changes.
 - The target repo is not the active implementation workspace before verification.
 - Approval requires a successful verification apply, no human verification note, completed or skipped required QA items, and no unresolved inline comments.
@@ -399,7 +402,7 @@ Core endpoints:
 Extended endpoints cover:
 
 - plan approval
-- human verification start / reject / approve
+- human verification start / return / reject / approve
 - human review notes
 - retrospective generation
 - settings and repo discovery

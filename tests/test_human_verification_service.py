@@ -507,6 +507,13 @@ def test_human_verification_start_blocks_parallel_local_review_for_same_target_r
     current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == f"review/{first.metadata.task_id.lower()}"
 
+    returned = service.return_to_completed_reviews(first.metadata.task_id, by="human")
+    second_started = second_service.start(second.metadata.task_id, by="human")
+
+    assert returned.state == TaskState.COMPLETED_REVIEWS
+    assert second_started.state == TaskState.HUMAN_VERIFYING
+    assert (repo_root / "app.txt").read_text() == "review me\n"
+
 
 def test_human_verification_start_blocks_other_review_branch_dirt(configured_paths):
     config, repo_root, _ = configured_paths
@@ -565,6 +572,54 @@ def test_human_verification_confirm_stashes_dirty_target_repo_and_reject_restore
     assert restored_stash.restore_error is None
     assert (repo_root / "app.txt").read_text() == "dirty outside workspace\n"
     assert untracked.read_text() == "local note\n"
+    current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
+    assert current_branch == "main"
+
+
+def test_human_verification_return_to_completed_reviews_restores_dirty_target_repo(configured_paths):
+    config, repo_root, _ = configured_paths
+    create_request_task(config, "verify-dirty-stash-return-task")
+    scanner, service, completed = _task_ready_for_human_verification(config)
+    (repo_root / "app.txt").write_text("dirty outside workspace\n")
+
+    with pytest.raises(DirtyTargetRepoConfirmationRequired) as exc_info:
+        service.start(completed.metadata.task_id, by="human")
+    service.start(
+        completed.metadata.task_id,
+        by="human",
+        confirm_dirty_target_repo=True,
+        dirty_snapshot_id=exc_info.value.confirmation.snapshot_id,
+    )
+    service.save_note(completed.metadata.task_id, by="human", content="Pause this verification for now.")
+    service.add_line_comment(
+        completed.metadata.task_id,
+        by="human",
+        path="app.txt",
+        side="right",
+        line_number=1,
+        line_kind="add",
+        hunk_header="@@ -1 +1 @@",
+        body_markdown="Keep this note when returning to review complete.",
+    )
+
+    returned = service.return_to_completed_reviews(completed.metadata.task_id, by="human")
+
+    assert returned.state == TaskState.COMPLETED_REVIEWS
+    refreshed = scanner.find_task(completed.metadata.task_id)
+    assert refreshed.state == TaskState.COMPLETED_REVIEWS
+    assert refreshed.metadata.integration.applied is False
+    assert refreshed.metadata.integration.pre_verification_stash.active is False
+    assert refreshed.metadata.commit.status == "pending"
+    assert refreshed.metadata.commit.sha is None
+    assert refreshed.metadata.human_verification.note_markdown == "Pause this verification for now."
+    comments_path = refreshed.task_dir / "HUMAN-VERIFY-001.comments.json"
+    comments = HumanLineCommentsArtifact.model_validate_json(comments_path.read_text())
+    assert len(comments.comments) == 1
+    artifact = (refreshed.task_dir / "HUMAN-VERIFY-001.md").read_text()
+    assert "Verdict: RETURNED_TO_COMPLETED_REVIEWS" in artifact
+    assert "Pause this verification for now." in artifact
+    assert "Keep this note when returning to review complete." in artifact
+    assert (repo_root / "app.txt").read_text() == "dirty outside workspace\n"
     current_branch = subprocess.run(["git", "-C", str(repo_root), "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
     assert current_branch == "main"
 

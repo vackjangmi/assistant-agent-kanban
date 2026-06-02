@@ -184,6 +184,7 @@
     async function rejectVerification() {
       if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
       setApprovalChoiceModalOpen(false);
+      returnVerificationButton.disabled = true;
       requestChangesButton.disabled = true;
       approveHumanReviewButton.disabled = true;
       const requestChangesMessage = translateHumanReview('requestingChanges');
@@ -203,6 +204,38 @@
         if (!response.ok) throw new Error(payload.detail || translateTask('failedRejectVerification'));
         await loadBoard();
         setTaskModalOpen(false);
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message;
+        taskHumanReviewNoteStatus.textContent = error.message;
+      } finally {
+        updateHumanVerificationState();
+      }
+    }
+
+    async function returnVerificationToCompletedReviews() {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'human-verifying') return;
+      setApprovalChoiceModalOpen(false);
+      returnVerificationButton.disabled = true;
+      requestChangesButton.disabled = true;
+      approveHumanReviewButton.disabled = true;
+      const returnMessage = translateHumanReview('returningToCompletedReviews');
+      setDisabledActionReason(requestChangesShell, requestChangesButton, returnMessage);
+      setDisabledActionReason(approveHumanReviewShell, approveHumanReviewButton, returnMessage);
+      taskHumanReviewNoteStatus.textContent = returnMessage;
+      try {
+        const requestBody = gitUnlockBodyForOperation();
+        if (requestBody === null) return;
+        const response = await fetch(`/api/tasks/${activeTaskId}/return-verification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || translateTask('failedReturnVerification'));
+        await loadBoard();
+        await loadTaskDetail(activeTaskId, true);
+        setTaskTab('overview');
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -237,6 +270,7 @@
       approvalSubmissionInFlight = true;
       requestChangesButton.disabled = true;
       approveHumanReviewButton.disabled = true;
+      returnVerificationButton.disabled = true;
       approvalChoiceTargetButton.disabled = true;
       approvalChoiceNewBranchButton.disabled = true;
       closeApprovalChoiceButton.disabled = true;
