@@ -468,7 +468,6 @@
             </div>
             <ol class="qa-checklist-steps">${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}</ol>
             <div class="qa-checklist-expected"><strong>${escapeHtml(translateHumanReview('qaChecklistExpected'))}:</strong> ${escapeHtml(item.expected_result || '')}</div>
-            <input class="qa-checklist-note" data-qa-note="${escapeHtml(item.id)}" value="${escapeHtml(item.note || '')}" placeholder="${escapeHtml(translateHumanReview('qaChecklistNotePlaceholder'))}" ${canToggle ? '' : 'disabled'}>
           </article>`;
       }).join('');
       scheduleQaChecklistScrollRestore(nextScrollState);

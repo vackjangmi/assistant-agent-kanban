@@ -339,25 +339,22 @@
     taskChangedFiles.addEventListener('change', handleChangedFileViewedToggleChange);
     taskChangedFileSummary.addEventListener('change', handleChangedFileViewedToggleChange);
     taskQaChecklistItems.addEventListener('pointerdown', (event) => {
-      if (!event.target.closest('[data-qa-check], [data-qa-skip], [data-qa-note]')) return;
+      if (!event.target.closest('[data-qa-check], [data-qa-skip]')) return;
       rememberQaChecklistScrollState();
     });
     taskQaChecklistItems.addEventListener('keydown', (event) => {
       if (event.key !== ' ' && event.key !== 'Enter') return;
-      if (!event.target.closest('[data-qa-check], [data-qa-skip], [data-qa-note]')) return;
+      if (!event.target.closest('[data-qa-check], [data-qa-skip]')) return;
       rememberQaChecklistScrollState();
     });
     taskQaChecklistItems.addEventListener('change', (event) => {
       const checkToggle = event.target.closest('[data-qa-check]');
       const skipToggle = event.target.closest('[data-qa-skip]');
-      const noteInput = event.target.closest('[data-qa-note]');
-      const itemId = checkToggle?.dataset.qaCheck || skipToggle?.dataset.qaSkip || noteInput?.dataset.qaNote || '';
+      const itemId = checkToggle?.dataset.qaCheck || skipToggle?.dataset.qaSkip || '';
       if (!activeTaskId || !itemId) return;
       const patch = checkToggle
         ? { checked: Boolean(checkToggle.checked), skipped: false }
-        : skipToggle
-          ? { skipped: Boolean(skipToggle.checked), checked: false }
-          : { note: noteInput.value || '' };
+        : { skipped: Boolean(skipToggle.checked), checked: false };
       const scrollState = consumeQaChecklistScrollState();
       setQaChecklistItemState(activeTaskId, itemId, patch, { scrollState }).catch((error) => {
         taskModalError.hidden = false;
