@@ -1243,7 +1243,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "if (targetInput === 'target_repo' && !cachedResolvedRepoDiscoveryRoot)" in response.text
     assert "await loadTargetRepoOptions().catch(() => {});" in response.text
     assert "if (!await restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });" in response.text
-    assert "void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false);" in response.text
+    assert "function navigateToRequestComposerTab(tab = 'assistant', options = {})" in response.text
+    assert "navigateToBoardPhase(activeBoardPhase || 'plan', { replace: true });" in response.text
+    assert "function initializeUiRouting()" in response.text
     assert "let activeRequestComposerTab = 'assistant';" in response.text
     assert "setRequestComposerTab('assistant');" in response.text
     assert "function seedRequestDraftInput(force = false)" in response.text
@@ -1430,7 +1432,8 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "height: min(86vh, calc(100vh - 64px))" in response.text
     assert ".diff-desktop { font-size: 0.82rem; }" in response.text
     assert ".diff-mobile { font-size: 0.82rem; }" in response.text
-    assert "loadTaskDetail(button.dataset.taskId, false, { snapshot: boardTaskSnapshots.get(button.dataset.taskId) || null });" in response.text
+    assert "navigateToTask(button.dataset.taskId || '');" in response.text
+    assert "function navigateToTask(taskId, tab = '', options = {})" in response.text
     assert "worker_log" in response.text
     assert "worker_log_file" in response.text
     assert 'id="task-tab-logs"' in response.text
@@ -1464,9 +1467,9 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "window.alert('이 모드는 더 많은 토큰을 사용합니다.');" in response.text
     assert "taskLogViewer.addEventListener('scroll', updateTaskLogViewerPinnedToBottom);" in response.text
     assert "if (activeTaskTab === 'logs') {" in response.text
-    assert "taskTabInspector.addEventListener('click', () => selectTaskTab('inspector'));" in response.text
-    assert "taskTabLogs.addEventListener('click', () => selectTaskTab('logs'));" in response.text
-    assert "taskTabEditor.addEventListener('click', () => selectTaskTab('editor'));" in response.text
+    assert "taskTabInspector.addEventListener('click', () => navigateToTaskTab('inspector'));" in response.text
+    assert "taskTabLogs.addEventListener('click', () => navigateToTaskTab('logs'));" in response.text
+    assert "taskTabEditor.addEventListener('click', () => navigateToTaskTab('editor'));" in response.text
     assert "if (appendWorkerLogPayload(payload)) return;" in response.text
     assert "source.addEventListener('worker_log_file', (event) => {" in response.text
     assert "loadTaskLogs(activeTaskId).catch((error) => {" in response.text

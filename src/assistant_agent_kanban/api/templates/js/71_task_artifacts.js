@@ -446,6 +446,7 @@
         if (!response.ok) throw new Error(payload && payload.detail ? payload.detail : 'Failed to delete task.');
         await loadBoard();
         setTaskModalOpen(false);
+        if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: true });
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -781,6 +782,7 @@
         boardPhaseManuallySelected = true;
         await loadBoard();
         setTaskModalOpen(false);
+        if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: true });
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -811,6 +813,7 @@
         boardPhaseManuallySelected = true;
         await loadBoard();
         setTaskModalOpen(false);
+        if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: true });
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;

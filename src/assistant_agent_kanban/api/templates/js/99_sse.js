@@ -36,4 +36,7 @@
         taskModalError.textContent = error.message;
       });
     });
-    loadBoard();
+    initializeUiRouting().catch((error) => {
+      console.error(error);
+      loadBoard();
+    });

@@ -204,6 +204,7 @@
         if (!response.ok) throw new Error(payload.detail || translateTask('failedRejectVerification'));
         await loadBoard();
         setTaskModalOpen(false);
+        if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: true });
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -303,6 +304,7 @@
         }
         setApprovalChoiceModalOpen(false, { force: true });
         setTaskModalOpen(false);
+        if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: true });
       } catch (error) {
         taskModalError.hidden = false;
         taskModalError.textContent = error.message;
@@ -390,6 +392,7 @@
         boardPhaseManuallySelected = true;
         activeBoardPhase = 'plan';
         await loadBoard();
+        if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: true });
       } catch (error) {
         formError.hidden = false;
         formError.textContent = error.message;

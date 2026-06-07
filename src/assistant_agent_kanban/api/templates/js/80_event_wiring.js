@@ -1,11 +1,5 @@
     document.getElementById('refresh').addEventListener('click', loadBoard);
-    openComposerButton.addEventListener('click', async () => {
-      clearMessages();
-      applyRequestTranslations();
-      if (!await restoreRequestComposerDraftState()) resetFormState({ clearSavedDraft: false });
-      setModalOpen(true);
-      await loadTargetRepoBranches();
-    });
+    openComposerButton.addEventListener('click', () => navigateToRequestComposerTab('assistant'));
     requestDraftsGrid.addEventListener('click', (event) => {
       const openButton = event.target.closest('[data-request-draft-open]');
       if (openButton) {
@@ -15,7 +9,7 @@
       const deleteButton = event.target.closest('[data-request-draft-delete]');
       if (deleteButton) void deleteRequestDraftFromList(deleteButton.dataset.requestDraftDelete || '');
     });
-    openSettingsButton.addEventListener('click', openSettingsModal);
+    openSettingsButton.addEventListener('click', () => navigateToSettingsTab(activeSettingsTab || 'general'));
     if (authUserLabel) authUserLabel.addEventListener('click', () => openAccountModal());
     if (closeAccountModalButton) closeAccountModalButton.addEventListener('click', () => setAccountModalOpen(false));
     if (accountModal) {
@@ -61,9 +55,11 @@
       });
     });
     runtimeLanguageInput.addEventListener('change', () => { applyRuntimeSettingsTranslations(); applyRequestTranslations(); applyHumanReviewTranslations(); applyTaskTranslations(); if (activeTaskDetail) renderTaskOverview(activeTaskDetail); refreshRequestDerivedText(); });
-    cancelComposerButton.addEventListener('click', () => { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); });
-    cancelSettingsButton.addEventListener('click', () => closeSettingsModal({ restore: true }));
-    closeTaskModalButton.addEventListener('click', () => { setTaskModalOpen(false); });
+    cancelComposerButton.addEventListener('click', () => { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); navigateToBoardPhase(activeBoardPhase || 'plan', { replace: true }); });
+    cancelSettingsButton.addEventListener('click', () => {
+      if (closeSettingsModal({ restore: true })) navigateToBoardPhase(activeBoardPhase || 'plan', { replace: true });
+    });
+    closeTaskModalButton.addEventListener('click', () => { navigateToBoardPhase(activeBoardPhase || 'plan', { replace: true }); });
     closeRetrospectiveModalButton.addEventListener('click', () => { setRetrospectiveModalOpen(false); });
     closeApprovalChoiceButton.addEventListener('click', () => { setApprovalChoiceModalOpen(false); });
     cancelDirtyTargetConfirmationButton.addEventListener('click', () => { setDirtyTargetConfirmationModalOpen(false); });
@@ -77,7 +73,7 @@
     retrospectiveCreateTargetButton.addEventListener('click', () => createRetrospective('target-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveCreateBranchButton.addEventListener('click', () => createRetrospective('new-branch').catch((error) => { retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
     retrospectiveArchiveOnlyButton.addEventListener('click', () => archiveActiveRetrospectiveGroup().catch((error) => { retrospectiveStatus.hidden = false; retrospectiveStatus.dataset.tone = 'error'; retrospectiveStatus.textContent = error.message; updateRetrospectiveButtons(activeRetrospectiveRecord || {}); }));
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); setModalOpen(false); } if (event.key === 'Escape' && !settingsModal.hidden) closeSettingsModal({ restore: true }); if (event.key === 'Escape' && accountModal && !accountModal.hidden) setAccountModalOpen(false); if (event.key === 'Escape' && !dirtyTargetConfirmationModal.hidden) { if (dirtyTargetConfirmationInFlight) return; setDirtyTargetConfirmationModalOpen(false); } else if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { setTaskModalOpen(false); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } if (event.key === 'Escape' && directoryPickerModal && !directoryPickerModal.hidden) { setDirectoryPickerModalOpen(false); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) { clearMessages(); void syncRequestComposerDraftState({ immediate: true, silent: true }); navigateToBoardPhase(activeBoardPhase || 'plan', { replace: true }); } if (event.key === 'Escape' && !settingsModal.hidden) { if (closeSettingsModal({ restore: true })) navigateToBoardPhase(activeBoardPhase || 'plan', { replace: true }); } if (event.key === 'Escape' && accountModal && !accountModal.hidden) setAccountModalOpen(false); if (event.key === 'Escape' && !dirtyTargetConfirmationModal.hidden) { if (dirtyTargetConfirmationInFlight) return; setDirtyTargetConfirmationModalOpen(false); } else if (event.key === 'Escape' && !approvalChoiceModal.hidden) { if (approvalSubmissionInFlight) return; setApprovalChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumePlannerChoiceModal.hidden) { if (resumePlannerSubmissionInFlight) return; setResumePlannerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeImplementerChoiceModal.hidden) { if (resumeImplementerSubmissionInFlight) return; setResumeImplementerChoiceModalOpen(false); } else if (event.key === 'Escape' && !resumeReviewerChoiceModal.hidden) { if (resumeReviewerSubmissionInFlight) return; setResumeReviewerChoiceModalOpen(false); } else if (event.key === 'Escape' && !taskModal.hidden) { navigateToBoardPhase(activeBoardPhase || 'plan', { replace: true }); } if (event.key === 'Escape' && !retrospectiveModal.hidden) { setRetrospectiveModalOpen(false); } if (event.key === 'Escape' && directoryPickerModal && !directoryPickerModal.hidden) { setDirectoryPickerModalOpen(false); } });
     requestForm.addEventListener('submit', submitRequest);
     requestForm.addEventListener('input', () => void syncRequestComposerDraftState({ silent: true }));
     requestForm.addEventListener('change', () => void syncRequestComposerDraftState({ silent: true }));
@@ -229,7 +225,7 @@
       }
       const button = event.target.closest('[data-task-id]');
       if (!button) return;
-      loadTaskDetail(button.dataset.taskId, false, { snapshot: boardTaskSnapshots.get(button.dataset.taskId) || null });
+      navigateToTask(button.dataset.taskId || '');
     });
     board.addEventListener('keydown', (event) => {
       const branchLabel = event.target.closest('.target-branch-label');
@@ -242,28 +238,15 @@
     boardPhaseTabs.addEventListener('click', (event) => {
       const button = event.target.closest('[data-board-phase]');
       if (!button) return;
-      boardPhaseManuallySelected = true;
-      activeBoardPhase = button.dataset.boardPhase;
-      renderBoardPhaseTabs();
-      if (activeBoardPhase === 'archive') {
-        if (activeBoardSnapshot) {
-          applyBoardSnapshot(activeBoardSnapshot);
-        } else {
-          board.classList.add('archive-board');
-          board.innerHTML = renderArchiveBoard();
-          loadArchives().catch(console.error);
-        }
-        return;
-      }
-      loadBoard();
+      navigateToBoardPhase(button.dataset.boardPhase || 'plan');
     });
-    taskTabOverview.addEventListener('click', () => selectTaskTab('overview'));
-    taskTabInspector.addEventListener('click', () => selectTaskTab('inspector'));
-    taskTabLogs.addEventListener('click', () => selectTaskTab('logs'));
-    taskTabChangedFiles.addEventListener('click', () => selectTaskTab('changed-files'));
-    taskTabQaChecklist.addEventListener('click', () => selectTaskTab('qa-checklist'));
-    taskTabReviewerQa.addEventListener('click', () => selectTaskTab('reviewer-qa'));
-    taskTabReviewNote.addEventListener('click', () => selectTaskTab('review-note'));
+    taskTabOverview.addEventListener('click', () => navigateToTaskTab('overview'));
+    taskTabInspector.addEventListener('click', () => navigateToTaskTab('inspector'));
+    taskTabLogs.addEventListener('click', () => navigateToTaskTab('logs'));
+    taskTabChangedFiles.addEventListener('click', () => navigateToTaskTab('changed-files'));
+    taskTabQaChecklist.addEventListener('click', () => navigateToTaskTab('qa-checklist'));
+    taskTabReviewerQa.addEventListener('click', () => navigateToTaskTab('reviewer-qa'));
+    taskTabReviewNote.addEventListener('click', () => navigateToTaskTab('review-note'));
     taskApprovalGateNotice.addEventListener('click', (event) => {
       const copyButton = event.target.closest('[data-copy-value]');
       if (copyButton) {
@@ -273,26 +256,26 @@
       const actionButton = event.target.closest('[data-approval-gate-action]');
       if (!actionButton) return;
       const action = actionButton.dataset.approvalGateAction;
-      if (action === 'qa-checklist') setTaskTab('qa-checklist');
+      if (action === 'qa-checklist') navigateToTaskTab('qa-checklist');
     });
-    taskTabEditor.addEventListener('click', () => selectTaskTab('editor'));
-    requestComposerTabFields.addEventListener('click', () => setRequestComposerTab('fields'));
-    requestComposerTabAssistant.addEventListener('click', () => setRequestComposerTab('assistant'));
+    taskTabEditor.addEventListener('click', () => navigateToTaskTab('editor'));
+    requestComposerTabFields.addEventListener('click', () => navigateToRequestComposerTab('fields'));
+    requestComposerTabAssistant.addEventListener('click', () => navigateToRequestComposerTab('assistant'));
     requestComposerTabs.addEventListener('keydown', (event) => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
       if (event.key === 'Home') {
-        setRequestComposerTab('assistant');
+        navigateToRequestComposerTab('assistant');
         requestComposerTabAssistant.focus();
         return;
       }
       if (event.key === 'End') {
-        setRequestComposerTab('fields');
+        navigateToRequestComposerTab('fields');
         requestComposerTabFields.focus();
         return;
       }
       const nextTab = activeRequestComposerTab === 'fields' ? 'assistant' : 'fields';
-      setRequestComposerTab(nextTab);
+      navigateToRequestComposerTab(nextTab);
       (nextTab === 'fields' ? requestComposerTabFields : requestComposerTabAssistant).focus();
     });
     taskLogFiles.addEventListener('click', (event) => {
@@ -463,7 +446,7 @@
         });
       }
       if (action === 'open-inspector') {
-        selectTaskTab('inspector');
+        navigateToTaskTab('inspector');
       }
     });
     togglePlanEditButton.addEventListener('click', togglePlanEditMode);
