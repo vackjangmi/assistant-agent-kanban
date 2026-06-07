@@ -1188,9 +1188,10 @@
     }
 
     function closeSettingsModal({ restore = false, force = false } = {}) {
-      if (!force && !confirmUnsavedSettingsBeforeClose()) return;
+      if (!force && !confirmUnsavedSettingsBeforeClose()) return false;
       if (restore) restoreSettingsState(lastLoadedSettingsState);
       setSettingsModalOpen(false);
+      return true;
     }
     window.closeSettingsModal = closeSettingsModal;
 
@@ -1876,15 +1877,25 @@
     window.setSettingsTab = setSettingsTab;
 
 
-    document.getElementById('settings-tab-general').addEventListener('click', () => setSettingsTab('general'));
-    if (settingsGitTab) settingsGitTab.addEventListener('click', () => setSettingsTab('git'));
-    document.getElementById('settings-tab-slack').addEventListener('click', () => setSettingsTab('slack'));
-    if (settingsSlackChannelTab) settingsSlackChannelTab.addEventListener('click', () => setSettingsTab('slack-channel'));
-    if (settingsRolesTab) settingsRolesTab.addEventListener('click', () => setSettingsTab('roles'));
-    if (settingsRepositoriesTab) settingsRepositoriesTab.addEventListener('click', () => setSettingsTab('repositories'));
+    function navigateSettingsTabOrSet(tab) {
+      if (typeof navigateToSettingsTab === 'function') {
+        navigateToSettingsTab(tab);
+        return true;
+      }
+      return setSettingsTab(tab);
+    }
+
+    document.getElementById('settings-tab-general').addEventListener('click', () => navigateSettingsTabOrSet('general'));
+    if (settingsGitTab) settingsGitTab.addEventListener('click', () => navigateSettingsTabOrSet('git'));
+    document.getElementById('settings-tab-slack').addEventListener('click', () => navigateSettingsTabOrSet('slack'));
+    if (settingsSlackChannelTab) settingsSlackChannelTab.addEventListener('click', () => navigateSettingsTabOrSet('slack-channel'));
+    if (settingsRolesTab) settingsRolesTab.addEventListener('click', () => navigateSettingsTabOrSet('roles'));
+    if (settingsRepositoriesTab) settingsRepositoriesTab.addEventListener('click', () => navigateSettingsTabOrSet('repositories'));
     if (settingsUsersTab) settingsUsersTab.addEventListener('click', () => {
-      if (!setSettingsTab('users')) return;
-      loadUsers().catch((error) => setCreateUserStatus(error.message, 'error'));
+      if (!navigateSettingsTabOrSet('users')) return;
+      if (typeof navigateToSettingsTab !== 'function') {
+        loadUsers().catch((error) => setCreateUserStatus(error.message, 'error'));
+      }
     });
     if (remoteUsageEnabledInput) remoteUsageEnabledInput.addEventListener('change', () => {
       handleRemoteUsageToggleChange().catch((error) => {

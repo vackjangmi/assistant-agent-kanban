@@ -1058,6 +1058,7 @@
       targetRepoInput.dataset.autofilled = 'true';
       applyRepoDefaults();
       setModalOpen(true);
+      if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: false });
       await loadTargetRepoBranches();
     }
 

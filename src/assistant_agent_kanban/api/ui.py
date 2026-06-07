@@ -24,6 +24,7 @@ JS_MANIFEST = [
     "71_task_artifacts.js",
     "72_task_actions.js",
     "73_task_inspector.js",
+    "75_ui_history.js",
     "80_event_wiring.js",
     "99_sse.js",
 ]
@@ -56,8 +57,7 @@ def _render_index_html(*, default_target_repo: str, default_base_branch: str, in
 def build_ui_router() -> APIRouter:
     router = APIRouter()
 
-    @router.get("/", response_class=HTMLResponse)
-    async def index(request: Request) -> str:
+    async def _index_response(request: Request) -> str:
         runtime = request.app.state.runtime
         return _render_index_html(
             default_target_repo="",
@@ -66,5 +66,16 @@ def build_ui_router() -> APIRouter:
             initial_runtime_theme=runtime.config.runtime.theme,
             target_repo_docs_root=runtime.config.target_repo_docs_root_value(),
         )
+
+    @router.get("/", response_class=HTMLResponse)
+    @router.get("/board", response_class=HTMLResponse)
+    @router.get("/board/{route_path:path}", response_class=HTMLResponse)
+    @router.get("/tasks/{route_path:path}", response_class=HTMLResponse)
+    @router.get("/settings", response_class=HTMLResponse)
+    @router.get("/settings/{route_path:path}", response_class=HTMLResponse)
+    @router.get("/requests/new", response_class=HTMLResponse)
+    @router.get("/requests/new/{route_path:path}", response_class=HTMLResponse)
+    async def index(request: Request) -> str:
+        return await _index_response(request)
 
     return router
