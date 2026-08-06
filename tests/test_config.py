@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from assistant_agent_kanban.config import AppConfig, DEFAULT_KANBAN_ROOT_NAME, PROJECT_ROOT, load_config
+from assistant_agent_kanban.config import ASSISTANT_ROLES, AppConfig, DEFAULT_KANBAN_ROOT_NAME, PROJECT_ROOT, load_config
 from assistant_agent_kanban.enums import STATE_ORDER
 
 
@@ -109,6 +109,19 @@ def test_load_config_merges_base_and_local_override(tmp_path, monkeypatch):
     assert config.slack.app_token is None
     assert config.loaded_from == base_path.resolve()
     assert config.loaded_local_from == local_path.resolve()
+
+
+def test_tracked_default_config_selects_recommended_models_without_local_overlay(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text((PROJECT_ROOT / "config.yaml").read_text())
+
+    config = load_config(config_path, bootstrap=False)
+
+    assert config.loaded_local_from is None
+    for role in ASSISTANT_ROLES:
+        assert getattr(config.opencode, f"{role}_model") == "openai/gpt-5.6-sol"
+        assert getattr(config.codex, f"{role}_model") == "gpt-5.6-sol"
+        assert getattr(config.claude, f"{role}_model") == "best"
 
 
 def test_load_config_normalizes_root_paths_against_loaded_local_config(tmp_path):
