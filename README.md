@@ -410,6 +410,7 @@ Important keys:
 - `codex.*` — per-role model and session token budget
 - `claude.*` — per-role model and session token budget
 - `gemini.*` — per-role model and session token budget
+- Recommended selectors in the tracked defaults are `openai/gpt-5.6-sol` for OpenCode roles, `gpt-5.6-sol` for Codex roles, and Claude Code's moving `best` alias for Claude roles. These selectors require CLI versions and account access that recognize them; otherwise choose an available model from the settings modal.
 - `workspace.*`
 - `locks.*`
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent counts, auto-dispatch
@@ -931,6 +932,7 @@ Slack 설정은 config 파일의 `slack:` 섹션에서 관리하며, bot token (
 - `codex.*` — 역할별 모델, 세션 토큰 budget
 - `claude.*` — 역할별 모델, 세션 토큰 budget
 - `gemini.*` — 역할별 모델, 세션 토큰 budget
+- tracked 기본 설정의 권장 selector는 OpenCode 역할에 `openai/gpt-5.6-sol`, Codex 역할에 `gpt-5.6-sol`, Claude 역할에 Claude Code의 이동 alias인 `best`입니다. 해당 selector를 인식하는 CLI 버전과 계정 접근 권한이 필요하며, 사용할 수 없으면 설정 modal에서 현재 가능한 모델을 선택하세요.
 - `workspace.*`
 - `locks.*`
 - `runtime.*` — `coding_assistant`, `role_backends`, `language`, `theme`, agent count, auto-dispatch
