@@ -96,12 +96,13 @@ def test_api_reads_and_updates_model_settings(configured_paths, tmp_path, monkey
         assert get_response.json()["available_models"] == ["gpt-5", "o3-mini"]
         assert get_response.json()["available_models_by_backend"]["antigravity"] == ["Gemini 3.5 Flash (High)"]
         assert get_response.json()["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
-        assert get_response.json()["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
+        assert get_response.json()["available_models_by_backend"]["codex"] == ["gpt-5.6-sol", "gpt-5.6-terra"]
         assert get_response.json()["available_models_by_backend"]["claude"] == [
             "default",
             "best",
             "sonnet",
             "opus",
+            "fable",
             "haiku",
             "opus[1m]",
             "opusplan",
@@ -677,7 +678,7 @@ def test_api_includes_persisted_claude_custom_models_in_candidates(configured_pa
     config.claude.implementer_model = "my-bedrock-profile"
     adapter_registry = {
         "opencode": FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]]),
-        "codex": FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]]),
+        "codex": FakeAdapter(["codex"], discovery_responses=[["gpt-5.6-sol", "gpt-5.6-terra"]]),
     }
     app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry=adapter_registry)
 
@@ -692,6 +693,7 @@ def test_api_includes_persisted_claude_custom_models_in_candidates(configured_pa
         "best",
         "sonnet",
         "opus",
+        "fable",
         "haiku",
         "opus[1m]",
         "opusplan",
@@ -811,7 +813,7 @@ def test_api_refresh_can_preview_codex_models_without_switching_runtime(configur
     assert response.status_code == 200
     payload = response.json()
     assert payload["coding_assistant"] == "codex"
-    assert "gpt-5.4" in payload["available_models"]
+    assert "gpt-5.6-sol" in payload["available_models"]
     assert payload["planner_model"] == config.codex.planner_model
     assert app.state.runtime.config.runtime.coding_assistant == "opencode"
 
@@ -1008,7 +1010,7 @@ def test_api_settings_initial_load_discovers_only_active_backend(configured_path
     config, _, _ = configured_paths
     config.runtime.coding_assistant = "opencode"
     opencode_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
-    codex_adapter = FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]])
+    codex_adapter = FakeAdapter(["codex"], discovery_responses=[["gpt-5.6-sol", "gpt-5.6-terra"]])
     claude_adapter = FakeAdapter(["claude"], discovery_responses=[["default", "sonnet"]])
     adapter_registry = _settings_adapter_registry(
         opencode_adapter=opencode_adapter,
@@ -1023,8 +1025,17 @@ def test_api_settings_initial_load_discovers_only_active_backend(configured_path
     assert response.status_code == 200
     payload = response.json()
     assert payload["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
-    assert payload["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
-    assert payload["available_models_by_backend"]["claude"] == ["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]
+    assert payload["available_models_by_backend"]["codex"] == ["gpt-5.6-sol", "gpt-5.6-terra"]
+    assert payload["available_models_by_backend"]["claude"] == [
+        "default",
+        "best",
+        "sonnet",
+        "opus",
+        "fable",
+        "haiku",
+        "opus[1m]",
+        "opusplan",
+    ]
     assert opencode_adapter.discovery_calls == [False]
     assert codex_adapter.discovery_calls == [False]
     assert claude_adapter.discovery_calls == [False]
@@ -1034,7 +1045,7 @@ def test_api_settings_initial_load_discovers_only_active_backend(configured_path
 def test_api_settings_refresh_discovers_only_requested_backend(configured_paths):
     config, _, _ = configured_paths
     opencode_adapter = FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]])
-    codex_adapter = FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]])
+    codex_adapter = FakeAdapter(["codex"], discovery_responses=[["gpt-5.6-sol", "gpt-5.6-terra"]])
     claude_adapter = FakeAdapter(["claude"], discovery_responses=[["default", "sonnet"]])
     adapter_registry = _settings_adapter_registry(
         opencode_adapter=opencode_adapter,
@@ -1049,9 +1060,18 @@ def test_api_settings_refresh_discovers_only_requested_backend(configured_paths)
     assert response.status_code == 200
     payload = response.json()
     assert payload["coding_assistant"] == "codex"
-    assert payload["available_models_by_backend"]["codex"] == ["gpt-5.4", "gpt-5"]
+    assert payload["available_models_by_backend"]["codex"] == ["gpt-5.6-sol", "gpt-5.6-terra"]
     assert payload["available_models_by_backend"]["opencode"] == ["gpt-5", "o3-mini"]
-    assert payload["available_models_by_backend"]["claude"] == ["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]
+    assert payload["available_models_by_backend"]["claude"] == [
+        "default",
+        "best",
+        "sonnet",
+        "opus",
+        "fable",
+        "haiku",
+        "opus[1m]",
+        "opusplan",
+    ]
     assert opencode_adapter.discovery_calls == [False]
     assert codex_adapter.discovery_calls == [False, True]
     assert claude_adapter.discovery_calls == [False]

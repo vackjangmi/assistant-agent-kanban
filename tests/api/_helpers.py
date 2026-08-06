@@ -52,8 +52,8 @@ def valid_plan_markdown(summary: str = "plan") -> str:
 
 def _settings_adapter_registry(opencode_adapter=None, codex_adapter=None, gemini_adapter=None, claude_adapter=None, antigravity_adapter=None):
     return {
-        "claude": claude_adapter or FakeAdapter(["claude"], discovery_responses=[["default", "best", "sonnet", "opus", "haiku", "opus[1m]", "opusplan"]]),
-        "codex": codex_adapter or FakeAdapter(["codex"], discovery_responses=[["gpt-5.4", "gpt-5"]]),
+        "claude": claude_adapter or FakeAdapter(["claude"], discovery_responses=[["default", "best", "sonnet", "opus", "fable", "haiku", "opus[1m]", "opusplan"]]),
+        "codex": codex_adapter or FakeAdapter(["codex"], discovery_responses=[["gpt-5.6-sol", "gpt-5.6-terra"]]),
         "antigravity": antigravity_adapter or FakeAdapter(["antigravity"], discovery_responses=[["Gemini 3.5 Flash (High)"]]),
         "gemini": gemini_adapter or FakeAdapter(["gemini"], discovery_responses=[["gemini-2.5-pro", "gemini-2.5-flash"]]),
         "opencode": opencode_adapter or FakeAdapter(["plan"], discovery_responses=[["gpt-5", "o3-mini"]]),

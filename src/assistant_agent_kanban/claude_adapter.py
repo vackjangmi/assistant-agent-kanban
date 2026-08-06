@@ -18,6 +18,7 @@ CLAUDE_MODEL_ALIASES = [
     "best",
     "sonnet",
     "opus",
+    "fable",
     "haiku",
     "opus[1m]",
     "opusplan",

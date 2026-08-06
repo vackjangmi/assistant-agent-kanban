@@ -38,7 +38,7 @@ def test_codex_adapter_builds_exec_command(monkeypatch, tmp_path):
     adapter = SubprocessCodexAdapter()
     config = AppConfig(kanban_root=tmp_path / ".kanban-agent", repo_root=tmp_path / "repo")
     config.runtime.coding_assistant = "codex"
-    config.codex.planner_model = "gpt-5.5 (xhigh)"
+    config.codex.planner_model = "gpt-5.6-sol (medium)"
     config.bootstrap()
 
     result = adapter.run(
@@ -53,11 +53,11 @@ def test_codex_adapter_builds_exec_command(monkeypatch, tmp_path):
     assert command[:6] == ["codex", "exec", "-c", 'approval_policy="never"', "-s", "read-only"]
     assert "--json" in command
     assert "--model" in command
-    assert command[command.index("--model") + 1] == "gpt-5.5"
-    assert 'model_reasoning_effort="xhigh"' in command
+    assert command[command.index("--model") + 1] == "gpt-5.6-sol"
+    assert 'model_reasoning_effort="medium"' in command
     assert command[-1] == "plan this task"
     assert result.assistant_text == "ok"
-    assert result.resolved_model == "gpt-5.5 (xhigh)"
+    assert result.resolved_model == "gpt-5.6-sol (medium)"
     assert result.session_id == "thread-123"
     assert recorded["cwd"] == str(tmp_path)
 
@@ -240,8 +240,10 @@ def test_codex_adapter_falls_back_to_known_models_when_discovery_fails(monkeypat
     config.runtime.coding_assistant = "codex"
     config.bootstrap()
 
-    assert adapter.discover_models(config=config)[:5] == ["gpt-5.5", "gpt-5.5 (low)", "gpt-5.5 (medium)", "gpt-5.5 (high)", "gpt-5.5 (xhigh)"]
-    assert CODEX_KNOWN_MODELS[0] == "gpt-5.5"
+    candidates = adapter.discover_models(config=config)
+    assert candidates[:4] == ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6"]
+    assert candidates[4:9] == ["gpt-5.5", "gpt-5.5 (low)", "gpt-5.5 (medium)", "gpt-5.5 (high)", "gpt-5.5 (xhigh)"]
+    assert CODEX_KNOWN_MODELS[:4] == ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6"]
 
 
 def test_parse_codex_discovered_models_uses_visible_catalog_slugs():
