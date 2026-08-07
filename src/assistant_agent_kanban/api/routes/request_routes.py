@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from ...exceptions import AdapterRunError
+from ...exceptions import AdapterRunError, SourceWorkspaceBaseError
 from ...repo_branches import describe_target_repo_branches
 from ...repo_discovery import discover_target_repos
 from ...request_creator import (
@@ -20,9 +20,11 @@ from ..auth import auth_is_required, current_user_or_none
 from ._helpers import (
     _filter_request_drafts_for_current_user,
     _request_draft_owner_fields,
+    _request_draft_source_state,
     _request_draft_state_from_payload,
     _request_draft_store,
     _require_request_draft_access,
+    _resolve_request_draft_source_context,
 )
 from ._payloads import (
     CreateRequestDraftPayload,
@@ -66,42 +68,60 @@ def register(router: APIRouter) -> None:
             if draft_id:
                 draft = store.load(draft_id)
                 _require_request_draft_access(request, draft)
+                supplied_source_id = (payload.source_task_id or "").strip()
+                source_context = _resolve_request_draft_source_context(request, supplied_source_id or draft.source_task_id)
             else:
-                draft = store.create(_request_draft_owner_fields(request))
-            draft = store.update(draft.draft_id, _request_draft_state_from_payload(payload))
+                source_context = _resolve_request_draft_source_context(request, payload.source_task_id)
+                draft = store.create({
+                    **_request_draft_owner_fields(request),
+                    **_request_draft_source_state(source_context),
+                })
+            draft = store.update(draft.draft_id, {
+                **_request_draft_state_from_payload(payload),
+                **_request_draft_source_state(source_context),
+            })
             user_message = payload.message.strip()
             draft_for_run = draft.model_copy(update={
                 "request_draft_input": "",
             })
+            draft_payload = draft_for_run.to_drafting_payload(message=user_message)
+            draft_payload.source_context = source_context
             result = await asyncio.to_thread(
                 draft_request,
                 config=runtime.config,
                 adapter_registry=runtime.adapter_registry,
-                payload=draft_for_run.to_drafting_payload(message=user_message),
+                payload=draft_payload,
             )
+            field_updates = _request_draft_field_updates_for_response(result.field_updates, has_source=source_context is not None)
             draft = store.update(draft.draft_id, {
-                **_request_draft_field_updates_state(result.field_updates),
+                **_request_draft_field_updates_state(field_updates),
+                **_request_draft_source_state(source_context),
                 "request_draft_input": "",
                 "transcript": [
                     *draft.transcript,
                     {"role": "user", "content": user_message},
-                    {"role": "assistant", "content": result.reply, "field_updates": result.field_updates},
+                    {"role": "assistant", "content": result.reply, "field_updates": field_updates},
                 ],
             })
         except HTTPException:
             raise
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
+        except SourceWorkspaceBaseError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             detail = str(exc).strip() or "request drafting failed"
             raise HTTPException(status_code=500, detail=detail) from exc
         response = result.model_dump(mode="json")
+        response["field_updates"] = field_updates
         response.update(
             {
                 "request_draft_id": draft.draft_id,
                 "request_upload_token": draft.request_upload_token,
+                "source_task_id": draft.source_task_id,
+                "source_title": draft.source_title,
                 "transcript": [entry.model_dump(mode="json") for entry in draft.transcript],
             }
         )
@@ -111,10 +131,14 @@ def register(router: APIRouter) -> None:
     async def create_request_draft_state(payload: CreateRequestDraftPayload, request: Request):
         store = _request_draft_store(request)
         try:
+            source_context = _resolve_request_draft_source_context(request, payload.source_task_id)
             draft = store.create({
                 **_request_draft_owner_fields(request),
                 **_request_draft_state_from_payload(payload),
+                **_request_draft_source_state(source_context),
             })
+        except HTTPException:
+            raise
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return draft.model_dump(mode="json")
@@ -134,6 +158,8 @@ def register(router: APIRouter) -> None:
                     "updated_at": draft.updated_at,
                     "created_at": draft.created_at,
                     "active_tab": draft.active_tab,
+                    "source_task_id": draft.source_task_id,
+                    "source_title": draft.source_title,
                     "has_transcript": bool(draft.transcript),
                     "has_unsent_input": bool((draft.request_draft_input or "").strip()),
                 }
@@ -158,7 +184,13 @@ def register(router: APIRouter) -> None:
         try:
             draft = store.load(draft_id)
             _require_request_draft_access(request, draft)
-            draft = store.update(draft_id, _request_draft_state_from_payload(payload))
+            source_context = _resolve_request_draft_source_context(request, payload.source_task_id or draft.source_task_id)
+            draft = store.update(draft_id, {
+                **_request_draft_state_from_payload(payload),
+                **_request_draft_source_state(source_context),
+            })
+        except HTTPException:
+            raise
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
         except ValueError as exc:
@@ -208,22 +240,52 @@ def register(router: APIRouter) -> None:
         runtime = request.app.state.runtime
         user = current_user_or_none(request)
         effective_auth_enabled = auth_is_required(request)
+        request_draft_id = (payload.request_draft_id or "").strip()
+        asserted_source_task_id = (payload.source_task_id or "").strip()
+        follow_up_intent = payload.follow_up or bool(asserted_source_task_id)
+        source_task_id = None
+        target_repo = payload.target_repo
+        base_branch = payload.base_branch
+        try:
+            if follow_up_intent and not request_draft_id:
+                raise HTTPException(status_code=400, detail="follow-up request creation requires a stored source request draft")
+            if request_draft_id:
+                draft_store = _request_draft_store(request)
+                stored_draft = draft_store.load(request_draft_id)
+                _require_request_draft_access(request, stored_draft)
+                stored_source_task_id = stored_draft.source_task_id.strip()
+                if follow_up_intent and not stored_source_task_id:
+                    raise HTTPException(status_code=400, detail="follow-up request creation requires a source-linked request draft")
+                if asserted_source_task_id and stored_source_task_id != asserted_source_task_id:
+                    raise HTTPException(status_code=400, detail="follow-up source assertion does not match stored request draft")
+                source_context = _resolve_request_draft_source_context(request, stored_draft.source_task_id)
+                if source_context is not None:
+                    draft_store.update(stored_draft.draft_id, _request_draft_source_state(source_context))
+                    source_task_id = source_context.task_id
+                    target_repo = source_context.target_repo
+                    base_branch = source_context.base_branch
+            if target_repo is None or not target_repo.strip():
+                raise HTTPException(status_code=400, detail="target_repo is required")
+            resolved_target_repo = target_repo.strip()
+        except HTTPException:
+            raise
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="request draft not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         effective_config = effective_config_for_user_and_project(
             runtime.config,
             request.app.state.user_settings_store,
-            target_repo=payload.target_repo,
+            target_repo=resolved_target_repo,
             user_id=user.user_id if user and effective_auth_enabled else None,
         )
         slack_channel_id = _initial_slack_channel(
             runtime.config,
             request.app.state.user_settings_store,
-            target_repo=payload.target_repo,
+            target_repo=resolved_target_repo,
             user_id=user.user_id if user and effective_auth_enabled else None,
         )
         try:
-            request_draft_id = (payload.request_draft_id or "").strip()
-            if request_draft_id:
-                _require_request_draft_access(request, _request_draft_store(request).load(request_draft_id))
             task_dir = await asyncio.to_thread(
                 runtime.create_request_from_submission,
                 title=payload.title,
@@ -235,8 +297,8 @@ def register(router: APIRouter) -> None:
                 constraints=payload.constraints,
                 references=payload.references,
                 acceptance_criteria=payload.acceptance_criteria,
-                target_repo=payload.target_repo,
-                base_branch=payload.base_branch,
+                target_repo=resolved_target_repo,
+                base_branch=base_branch,
                 request_upload_token=payload.request_upload_token,
                 request_draft_id=payload.request_draft_id,
                 request_draft_markdown=payload.request_draft_markdown,
@@ -244,9 +306,12 @@ def register(router: APIRouter) -> None:
                 request_config=effective_config,
                 created_by_user_id=user.user_id if user and effective_auth_enabled else None,
                 created_by_username=user.username if user and effective_auth_enabled else None,
+                parent_task_id=source_task_id,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="request draft not found") from exc
+        except SourceWorkspaceBaseError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (ValueError, AdapterRunError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         await runtime.rescan_and_publish()
@@ -269,4 +334,14 @@ def _request_draft_field_updates_state(field_updates: dict[str, str]) -> dict[st
         field_name: value
         for field_name, value in field_updates.items()
         if field_name in ALLOWED_DRAFT_UPDATE_FIELDS and value is not None
+    }
+
+
+def _request_draft_field_updates_for_response(field_updates: dict[str, str], *, has_source: bool) -> dict[str, str]:
+    if not has_source:
+        return field_updates
+    return {
+        field_name: value
+        for field_name, value in field_updates.items()
+        if field_name not in {"target_repo", "base_branch"}
     }

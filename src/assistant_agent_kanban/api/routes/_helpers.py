@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import cast
 
 from fastapi import HTTPException, Request
@@ -21,7 +22,8 @@ from ...config import (
 from ...language import normalize_runtime_language
 from ...omo_config import read_omo_delegation_snapshot
 from ...request_draft_store import RequestDraftStore, StoredRequestDraft
-from ...request_drafting import RequestDraftPayload as RequestDraftRoutePayload
+from ...request_drafting import RequestDraftPayload as RequestDraftRoutePayload, RequestDraftSourceContext
+from ...enums import TaskState
 from ..auth import auth_is_required, current_user_or_none
 from ._payloads import UpdateRequestDraftPayload
 
@@ -85,6 +87,40 @@ def _require_task_actor(request: Request, task_id: str):
     raise HTTPException(status_code=403, detail="task action is only available to the task creator or an admin")
 
 
+def _resolve_request_draft_source_context(request: Request, source_task_id: str | None) -> RequestDraftSourceContext | None:
+    normalized_source_id = (source_task_id or "").strip()
+    if not normalized_source_id:
+        return None
+    runtime = request.app.state.runtime
+    scanner = getattr(runtime, "scanner", None) or runtime.task_service.scanner
+    try:
+        source = scanner.find_task(normalized_source_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"source task not found: {normalized_source_id}") from exc
+    if auth_is_required(request):
+        user = current_user_or_none(request)
+        if user is None:
+            raise HTTPException(status_code=401, detail="authentication required")
+        if not user.is_admin and source.metadata.created_by_user_id != user.user_id:
+            raise HTTPException(status_code=403, detail="task action is only available to the task creator or an admin")
+    if source.state != TaskState.DONE or source.metadata.state != TaskState.DONE:
+        raise HTTPException(status_code=400, detail="source task must be done")
+    resolved_base_branch = source.metadata.integration.final_branch or source.metadata.target.base_branch
+    return RequestDraftSourceContext(
+        task_id=source.metadata.task_id,
+        title=source.metadata.title,
+        state=TaskState.DONE.value,
+        target_repo=source.metadata.target.repo_root,
+        base_branch=resolved_base_branch,
+        commit_sha=source.metadata.commit.sha,
+        final_remote_name=source.metadata.integration.final_remote_name,
+        final_remote_branch=source.metadata.integration.final_remote_branch,
+        request_markdown=_read_bounded_human_artifact(source.task_dir, Path(source.metadata.request.path), limit=6000),
+        commit_markdown=_read_bounded_human_artifact(source.task_dir, Path("COMMIT.md"), limit=2500),
+        review_markdown=_read_latest_bounded_human_artifact(source.task_dir, "REVIEW-*.md", limit=2500),
+    )
+
+
 def _request_draft_state_from_payload(payload: UpdateRequestDraftPayload | RequestDraftRoutePayload) -> dict[str, object]:
     state: dict[str, object] = {}
     for field_name in [
@@ -101,6 +137,7 @@ def _request_draft_state_from_payload(payload: UpdateRequestDraftPayload | Reque
         "request_upload_token",
         "active_tab",
         "request_draft_input",
+        "source_task_id",
     ]:
         value = getattr(payload, field_name, None)
         if value is not None:
@@ -108,6 +145,44 @@ def _request_draft_state_from_payload(payload: UpdateRequestDraftPayload | Reque
     if getattr(payload, "plan_auto_approve", None) is not None:
         state["plan_auto_approve"] = payload.plan_auto_approve
     return state
+
+
+def _request_draft_source_state(source_context: RequestDraftSourceContext | None) -> dict[str, object]:
+    if source_context is None:
+        return {}
+    return {
+        "source_task_id": source_context.task_id,
+        "source_title": source_context.title,
+        "source_commit_sha": source_context.commit_sha or "",
+        "source_final_remote_name": source_context.final_remote_name or "",
+        "source_final_remote_branch": source_context.final_remote_branch or "",
+        "target_repo": source_context.target_repo,
+        "base_branch": source_context.base_branch,
+    }
+
+
+def _read_latest_bounded_human_artifact(task_dir: Path, pattern: str, *, limit: int) -> str:
+    paths = sorted(task_dir.glob(pattern))
+    if not paths:
+        return ""
+    return _read_bounded_human_artifact(task_dir, paths[-1], limit=limit)
+
+
+def _read_bounded_human_artifact(task_dir: Path, path: Path, *, limit: int) -> str:
+    resolved_task_dir = task_dir.resolve()
+    resolved_path = (resolved_task_dir / path).resolve() if not path.is_absolute() else path.resolve()
+    try:
+        resolved_path.relative_to(resolved_task_dir)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="source task artifact path escapes task directory") from exc
+    try:
+        content = resolved_path.read_text()
+    except FileNotFoundError:
+        return ""
+    normalized = content.strip()
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 1].rstrip() + "…"
 
 
 def _normalize_model_override(value: str | None) -> str | None:

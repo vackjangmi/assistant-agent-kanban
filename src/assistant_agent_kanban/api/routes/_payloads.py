@@ -18,6 +18,8 @@ class CreateRequestPayload(BaseModel):
     goal: str
     request_upload_token: str | None = None
     request_draft_id: str | None = None
+    follow_up: bool = False
+    source_task_id: str | None = None
     request_draft_markdown: str | None = None
     background: str | None = None
     plan_auto_approve: bool = True
@@ -26,7 +28,7 @@ class CreateRequestPayload(BaseModel):
     constraints: str | None = None
     references: str | None = None
     acceptance_criteria: str | None = None
-    target_repo: str
+    target_repo: str | None = None
     base_branch: str | None = None
 
 
@@ -49,6 +51,7 @@ class UpdateRequestDraftPayload(BaseModel):
     request_upload_token: str | None = None
     active_tab: Literal["assistant", "fields"] | None = None
     request_draft_input: str | None = None
+    source_task_id: str | None = None
 
 
 class CreateRequestDraftPayload(UpdateRequestDraftPayload):

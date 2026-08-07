@@ -14,13 +14,41 @@ from assistant_agent_kanban import repo_discovery as repo_discovery_module
 from assistant_agent_kanban.config import PROJECT_ROOT
 from assistant_agent_kanban.enums import TaskState
 from assistant_agent_kanban.exceptions import AdapterRunError
+from assistant_agent_kanban.locks import TaskLockManager
+from assistant_agent_kanban.metadata_store import MetadataStore
 from assistant_agent_kanban.scanner import KanbanScanner
+from assistant_agent_kanban.services.archive_service import ArchiveService
+from assistant_agent_kanban.transitions import TransitionManager
 from assistant_agent_kanban.user_settings_store import ProjectSettings, RuntimePreferenceSettings
+from assistant_agent_kanban.workspace_manager import WorkspaceManager
 
-from ..conftest import FakeAdapter
+from ..conftest import FakeAdapter, create_request_task
 
 
 from ._helpers import _locate_task_dir
+
+
+def _create_done_source_task(config, name: str = "follow-up-source"):
+    create_request_task(config, name, plan_auto_approve=True)
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    transitions = TransitionManager(config, metadata_store, scanner, locks)
+    task = next(task for task in scanner.scan() if task.metadata.title == name)
+    task.metadata.created_by_user_id = ""
+    task.metadata.created_by_username = ""
+    task.metadata.commit.sha = subprocess.run(
+        ["git", "-C", str(config.repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    metadata_store.save(task.task_dir, task.metadata)
+    done = transitions.recover_move(task, TaskState.DONE, by="test")
+    (done.task_dir / "COMMIT.md").write_text("feat: complete source\n\nSource final summary.\n")
+    (done.task_dir / "REVIEW-1.md").write_text("Verdict: PASS\nSource review summary.\n")
+    return done
+
 
 def test_api_creates_request_with_plan_auto_approve_flag(configured_paths):
     config, _, _ = configured_paths
@@ -182,6 +210,604 @@ def test_api_drafts_request_without_creating_task_dirs(configured_paths):
     assert cwd != config.repo_root.resolve()
     assert config.repo_root.resolve() not in cwd.parents
     assert "Please tighten the goal and acceptance criteria." in str(draft_adapter.run_calls[0]["prompt"])
+
+
+
+def test_api_follow_up_request_draft_uses_server_resolved_done_source_context(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.runtime.role_backends.request_draft = "codex"
+    source = _create_done_source_task(config, "completed-follow-up-source")
+    source_metadata_before = (source.task_dir / "metadata.json").read_text()
+    draft_adapter = FakeAdapter([json.dumps({"reply": "Drafted follow-up.", "field_updates": {}})])
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": draft_adapter},
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Follow-up request",
+                "goal": "Add the next increment.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "source_task_id": source.metadata.task_id,
+                "source_context": {"request_markdown": "client supplied content must be ignored"},
+                "message": "Draft a follow-up based on the completed work.",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["source_task_id"] == source.metadata.task_id
+        loaded = client.get(f"/api/request-drafts/{payload['request_draft_id']}")
+        assert loaded.status_code == 200
+        assert loaded.json()["source_task_id"] == source.metadata.task_id
+        listing = client.get("/api/request-drafts")
+        assert listing.status_code == 200
+        assert listing.json()["items"][0]["source_task_id"] == source.metadata.task_id
+
+    prompt = str(draft_adapter.run_calls[0]["prompt"])
+    assert "read-only completed-work context" in prompt
+    assert source.metadata.task_id in prompt
+    assert "Implement completed-follow-up-source." in prompt
+    assert "Source final summary." in prompt
+    assert "Source review summary." in prompt
+    assert "client supplied content must be ignored" not in prompt
+    reloaded_source = KanbanScanner(config).find_task(source.metadata.task_id)
+    assert reloaded_source.state == TaskState.DONE
+    assert (reloaded_source.task_dir / "metadata.json").read_text() == source_metadata_before
+
+
+def test_api_follow_up_request_uses_source_final_branch_and_ignores_spoofed_target(configured_paths, tmp_path):
+    config, _, _ = configured_paths
+    config.runtime.auto_dispatch = False
+    config.runtime.role_backends.request_draft = "codex"
+    source = _create_done_source_task(config, "completed-final-branch-source")
+    source.metadata.target.base_branch = "main"
+    source.metadata.integration.final_branch = "feature/completed-work"
+    MetadataStore().save(source.task_dir, source.metadata)
+    source_metadata_before = (source.task_dir / "metadata.json").read_text()
+    spoof_repo = tmp_path / "spoof-repo"
+    spoof_repo.mkdir()
+    draft_adapter = FakeAdapter(
+        [
+            json.dumps(
+                {
+                    "reply": "Drafted follow-up.",
+                    "field_updates": {
+                        "target_repo": str(spoof_repo),
+                        "base_branch": "assistant/spoofed-branch",
+                    },
+                }
+            )
+        ]
+    )
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": draft_adapter},
+    )
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/request-drafts/state",
+            json={
+                "title": "Final branch follow-up draft",
+                "goal": "Continue completed work.",
+                "target_repo": str(spoof_repo),
+                "base_branch": "browser/spoofed-branch",
+                "source_task_id": source.metadata.task_id,
+            },
+        )
+        assert created.status_code == 200
+        draft_id = created.json()["draft_id"]
+        assert created.json()["target_repo"] == source.metadata.target.repo_root
+        assert created.json()["base_branch"] == "feature/completed-work"
+
+        updated = client.put(
+            f"/api/request-drafts/{draft_id}",
+            json={
+                "target_repo": str(spoof_repo),
+                "base_branch": "update/spoofed-branch",
+            },
+        )
+        assert updated.status_code == 200
+        assert updated.json()["target_repo"] == source.metadata.target.repo_root
+        assert updated.json()["base_branch"] == "feature/completed-work"
+
+        sent = client.post(
+            "/api/request-drafts",
+            json={
+                "request_draft_id": draft_id,
+                "title": "Final branch follow-up draft",
+                "goal": "Continue completed work.",
+                "target_repo": str(spoof_repo),
+                "base_branch": "send/spoofed-branch",
+                "message": "Draft the follow-up on the actual completed branch.",
+            },
+        )
+        assert sent.status_code == 200
+        assert "target_repo" not in sent.json()["field_updates"]
+        assert "base_branch" not in sent.json()["field_updates"]
+        loaded = client.get(f"/api/request-drafts/{draft_id}")
+        assert loaded.status_code == 200
+        assert loaded.json()["target_repo"] == source.metadata.target.repo_root
+        assert loaded.json()["base_branch"] == "feature/completed-work"
+        stored_assistant_updates = loaded.json()["transcript"][-1]["field_updates"]
+        assert "target_repo" not in stored_assistant_updates
+        assert "base_branch" not in stored_assistant_updates
+
+        finalized = client.post(
+            "/api/requests",
+            json={
+                "title": "Final branch follow-up request",
+                "goal": "Continue completed work.",
+                "target_repo": str(spoof_repo),
+                "base_branch": "final/spoofed-branch",
+                "request_draft_id": draft_id,
+            },
+        )
+        assert finalized.status_code == 200
+
+    prompt = str(draft_adapter.run_calls[0]["prompt"])
+    assert '"target_repo": "' + source.metadata.target.repo_root + '"' in prompt
+    assert '"base_branch": "feature/completed-work"' in prompt
+    assert "assistant/spoofed-branch" not in prompt
+    created_task = next(task for task in KanbanScanner(config).scan() if task.metadata.title == "Final branch follow-up request")
+    assert created_task.metadata.parent_task_id == source.metadata.task_id
+    assert created_task.metadata.target.repo_root == source.metadata.target.repo_root
+    assert created_task.metadata.target.base_branch == "feature/completed-work"
+    assert "base_branch: feature/completed-work" in (created_task.task_dir / "REQUEST.md").read_text()
+    reloaded_source = KanbanScanner(config).find_task(source.metadata.task_id)
+    assert reloaded_source.state == TaskState.DONE
+    assert (reloaded_source.task_dir / "metadata.json").read_text() == source_metadata_before
+
+
+def test_api_follow_up_workspace_uses_exact_local_source_sha_when_branch_moves(configured_paths):
+    config, repo_root, _ = configured_paths
+    source = _create_done_source_task(config, "exact-local-source")
+    source_sha = source.metadata.commit.sha
+    assert source_sha is not None
+    source.metadata.integration.final_branch = "feature/exact-local-source"
+    MetadataStore().save(source.task_dir, source.metadata)
+    subprocess.run(["git", "-C", str(repo_root), "branch", "-f", "feature/exact-local-source", source_sha], check=True, capture_output=True, text=True)
+    (repo_root / "app.txt").write_text("branch moved later\n")
+    subprocess.run(["git", "-C", str(repo_root), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "move final branch"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "branch", "-f", "feature/exact-local-source", "HEAD"], check=True, capture_output=True, text=True)
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        draft = client.post("/api/request-drafts/state", json={"title": "Follow exact", "goal": "Continue.", "source_task_id": source.metadata.task_id})
+        assert draft.status_code == 200
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Follow exact",
+                "goal": "Continue.",
+                "target_repo": str(repo_root),
+                "base_branch": "main",
+                "request_draft_id": draft.json()["draft_id"],
+            },
+        )
+        assert response.status_code == 200
+
+    created = next(task for task in KanbanScanner(config).scan() if task.metadata.title == "Follow exact")
+    assert created.metadata.implementation.workspace_base is not None
+    assert created.metadata.implementation.workspace_base.commit_sha == source_sha
+    workspace = WorkspaceManager(config).prepare(created.metadata)
+    head = subprocess.run(["git", "-C", str(workspace), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    assert head == source_sha
+
+
+def test_api_follow_up_remote_only_source_seed_survives_branch_deletion(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    producer = tmp_path / "producer"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "push", "origin", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "--git-dir", str(remote_repo), "symbolic-ref", "HEAD", "refs/heads/main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "clone", str(remote_repo), str(producer)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(producer), "config", "user.name", "Test User"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(producer), "config", "user.email", "test@example.com"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(producer), "switch", "-c", "feature/remote-only-source"], check=True, capture_output=True, text=True)
+    (producer / "app.txt").write_text("remote only final\n")
+    subprocess.run(["git", "-C", str(producer), "add", "app.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(producer), "commit", "-m", "remote only final"], check=True, capture_output=True, text=True)
+    source_sha = subprocess.run(["git", "-C", str(producer), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "-C", str(producer), "push", "origin", "feature/remote-only-source"], check=True, capture_output=True, text=True)
+    source = _create_done_source_task(config, "remote-only-source")
+    source.metadata.commit.sha = source_sha
+    source.metadata.integration.final_branch = "feature/remote-only-source"
+    source.metadata.integration.final_remote_name = "origin"
+    source.metadata.integration.final_remote_branch = "feature/remote-only-source"
+    MetadataStore().save(source.task_dir, source.metadata)
+    assert subprocess.run(["git", "-C", str(repo_root), "rev-parse", "--verify", "--quiet", f"{source_sha}^{{commit}}"], capture_output=True, text=True, check=False).returncode != 0
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        draft = client.post("/api/request-drafts/state", json={"title": "Remote follow", "goal": "Continue.", "source_task_id": source.metadata.task_id})
+        assert draft.status_code == 200
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Remote follow",
+                "goal": "Continue.",
+                "target_repo": str(repo_root),
+                "base_branch": "main",
+                "request_draft_id": draft.json()["draft_id"],
+            },
+        )
+        assert response.status_code == 200
+
+    created = next(task for task in KanbanScanner(config).scan() if task.metadata.title == "Remote follow")
+    workspace_base = created.metadata.implementation.workspace_base
+    assert workspace_base is not None
+    assert workspace_base.commit_sha == source_sha
+    assert workspace_base.final_remote_name == "origin"
+    assert workspace_base.final_remote_branch == "feature/remote-only-source"
+    assert workspace_base.managed_seed_path is not None
+    assert not (Path(workspace_base.managed_seed_path) / "FETCH_HEAD").exists()
+    subprocess.run(["git", "--git-dir", str(remote_repo), "update-ref", "-d", "refs/heads/feature/remote-only-source"], check=True, capture_output=True, text=True)
+    workspace = WorkspaceManager(config).prepare(created.metadata)
+    head = subprocess.run(["git", "-C", str(workspace), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    assert head == source_sha
+
+
+def test_api_follow_up_from_archived_done_source_uses_exact_sha(configured_paths):
+    config, repo_root, _ = configured_paths
+    source = _create_done_source_task(config, "archived-exact-source")
+    source_sha = source.metadata.commit.sha
+    assert source_sha is not None
+    metadata_store = MetadataStore()
+    scanner = KanbanScanner(config, metadata_store)
+    locks = TaskLockManager(config, metadata_store)
+    ArchiveService(config, scanner, locks).archive_done_group(str(repo_root), "main", by="human")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        draft = client.post("/api/request-drafts/state", json={"title": "Archived follow", "goal": "Continue.", "source_task_id": source.metadata.task_id})
+        assert draft.status_code == 200
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Archived follow",
+                "goal": "Continue.",
+                "target_repo": str(repo_root),
+                "base_branch": "main",
+                "request_draft_id": draft.json()["draft_id"],
+            },
+        )
+        assert response.status_code == 200
+
+    created = next(task for task in KanbanScanner(config).scan() if task.metadata.title == "Archived follow")
+    assert created.metadata.parent_task_id == source.metadata.task_id
+    assert created.metadata.implementation.workspace_base is not None
+    assert created.metadata.implementation.workspace_base.commit_sha == source_sha
+    workspace = WorkspaceManager(config).prepare(created.metadata)
+    head = subprocess.run(["git", "-C", str(workspace), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    assert head == source_sha
+
+
+def test_api_follow_up_missing_source_sha_fails_without_task_or_workspace(configured_paths):
+    config, _, _ = configured_paths
+    source = _create_done_source_task(config, "missing-source-sha")
+    source.metadata.commit.sha = None
+    MetadataStore().save(source.task_dir, source.metadata)
+    before_task_ids = {task.metadata.task_id for task in KanbanScanner(config).scan()}
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        draft = client.post("/api/request-drafts/state", json={"title": "Missing sha follow", "goal": "Continue.", "source_task_id": source.metadata.task_id})
+        assert draft.status_code == 200
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Missing sha follow",
+                "goal": "Continue.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_draft_id": draft.json()["draft_id"],
+            },
+        )
+        assert response.status_code == 409
+
+    after_tasks = KanbanScanner(config).scan()
+    assert {task.metadata.task_id for task in after_tasks} == before_task_ids
+    workspace_root = config.workspace.root or (config.kanban_root / "_runtime/workspaces")
+    assert not any(path.name not in before_task_ids for path in workspace_root.iterdir())
+
+
+def test_api_follow_up_mismatched_remote_seed_fails_and_cleans_artifacts(configured_paths, tmp_path):
+    config, repo_root, _ = configured_paths
+    remote_repo = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "remote", "add", "origin", str(remote_repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "push", "origin", "main:feature/mismatched-source"], check=True, capture_output=True, text=True)
+    source = _create_done_source_task(config, "mismatched-remote-source")
+    source.metadata.commit.sha = "f" * 40
+    source.metadata.integration.final_branch = "feature/mismatched-source"
+    source.metadata.integration.final_remote_name = "origin"
+    source.metadata.integration.final_remote_branch = "feature/mismatched-source"
+    MetadataStore().save(source.task_dir, source.metadata)
+    before_task_ids = {task.metadata.task_id for task in KanbanScanner(config).scan()}
+    workspace_root = config.workspace.root or (config.kanban_root / "_runtime/workspaces")
+    before_workspaces = {path.name for path in workspace_root.iterdir()}
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        draft = client.post("/api/request-drafts/state", json={"title": "Mismatched remote follow", "goal": "Continue.", "source_task_id": source.metadata.task_id})
+        assert draft.status_code == 200
+        response = client.post(
+            "/api/requests",
+            json={
+                "title": "Mismatched remote follow",
+                "goal": "Continue.",
+                "target_repo": str(repo_root),
+                "base_branch": "main",
+                "request_draft_id": draft.json()["draft_id"],
+            },
+        )
+        assert response.status_code == 409
+        assert "remote" in response.json()["detail"]
+        assert str(remote_repo) not in response.json()["detail"]
+
+    assert {task.metadata.task_id for task in KanbanScanner(config).scan()} == before_task_ids
+    assert {path.name for path in workspace_root.iterdir()} == before_workspaces
+
+
+def test_api_source_free_request_has_no_workspace_base_and_prepares_from_branch(configured_paths):
+    config, repo_root, _ = configured_paths
+    expected_head = subprocess.run(["git", "-C", str(repo_root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        response = client.post("/api/requests", json={"title": "Source free", "goal": "Implement.", "target_repo": str(repo_root), "base_branch": "main"})
+        assert response.status_code == 200
+
+    created = next(task for task in KanbanScanner(config).scan() if task.metadata.title == "Source free")
+    assert created.metadata.implementation.workspace_base is None
+    workspace = WorkspaceManager(config).prepare(created.metadata)
+    head = subprocess.run(["git", "-C", str(workspace), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    assert head == expected_head
+
+
+def test_api_follow_up_request_draft_rejects_escaped_source_request_path(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.role_backends.request_draft = "codex"
+    source = _create_done_source_task(config, "escaped-source-request-path")
+    outside_secret = source.task_dir.parent / "outside-secret.md"
+    outside_secret.write_text("do not disclose this outside file\n")
+    source.metadata.request.path = "../outside-secret.md"
+    MetadataStore().save(source.task_dir, source.metadata)
+    draft_adapter = FakeAdapter([json.dumps({"reply": "should not run", "field_updates": {}})])
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": draft_adapter},
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/request-drafts",
+            json={
+                "title": "Escaped source path",
+                "goal": "Do not disclose escaped files.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "source_task_id": source.metadata.task_id,
+                "message": "Draft a follow-up.",
+            },
+        )
+
+    assert response.status_code == 400
+    assert "escapes task directory" in response.json()["detail"]
+    assert draft_adapter.run_calls == []
+
+
+def test_api_follow_up_draft_source_validation_failures(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.role_backends.request_draft = "codex"
+    create_request_task(config, "unfinished-source", plan_auto_approve=True)
+    unfinished = next(task for task in KanbanScanner(config).scan() if task.metadata.title == "unfinished-source")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]), adapter_registry={"codex": FakeAdapter([])})
+
+    with TestClient(app) as client:
+        missing = client.post(
+            "/api/request-drafts/state",
+            json={"title": "Missing source", "source_task_id": "missing-source-task"},
+        )
+        not_done = client.post(
+            "/api/request-drafts/state",
+            json={"title": "Not done source", "source_task_id": unfinished.metadata.task_id},
+        )
+
+    assert missing.status_code == 404
+    assert not_done.status_code == 400
+    assert "source task must be done" in not_done.json()["detail"]
+
+
+def test_api_rejects_converting_existing_draft_into_follow_up(configured_paths):
+    config, _, _ = configured_paths
+    config.runtime.role_backends.request_draft = "codex"
+    source = _create_done_source_task(config, "conversion-block-source")
+    draft_adapter = FakeAdapter([json.dumps({"reply": "should not run", "field_updates": {}})])
+    app = create_app(
+        config,
+        FakeAdapter(["plan"]),
+        FakeAdapter(["impl"]),
+        FakeAdapter(["Verdict: PASS"]),
+        adapter_registry={"codex": draft_adapter},
+    )
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/request-drafts/state",
+            json={"title": "Ordinary draft", "goal": "Keep this source-free."},
+        )
+        assert created.status_code == 200
+        draft_id = created.json()["draft_id"]
+
+        updated = client.put(
+            f"/api/request-drafts/{draft_id}",
+            json={"source_task_id": source.metadata.task_id},
+        )
+        assert updated.status_code == 400
+        assert "cannot be attached" in updated.json()["detail"]
+
+        sent = client.post(
+            "/api/request-drafts",
+            json={
+                "request_draft_id": draft_id,
+                "source_task_id": source.metadata.task_id,
+                "message": "Convert this draft into a follow-up.",
+            },
+        )
+        assert sent.status_code == 400
+        assert "cannot be attached" in sent.json()["detail"]
+
+        preserved = client.get(f"/api/request-drafts/{draft_id}")
+        assert preserved.status_code == 200
+        assert preserved.json()["source_task_id"] == ""
+        assert preserved.json()["title"] == "Ordinary draft"
+    assert draft_adapter.run_calls == []
+    reloaded_source = KanbanScanner(config).find_task(source.metadata.task_id)
+    assert reloaded_source.state == TaskState.DONE
+
+
+def test_api_follow_up_draft_source_auth_preserves_403(configured_paths):
+    config, _, _ = configured_paths
+    config.auth.enabled = False
+    source = _create_done_source_task(config, "private-completed-source")
+    metadata_store = MetadataStore()
+    source.metadata.created_by_user_id = "owner-id"
+    source.metadata.created_by_username = "owner"
+    metadata_store.save(source.task_dir, source.metadata)
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+    owner = app.state.user_settings_store.create_user("owner", "owner-password", is_admin=False)
+    app.state.user_settings_store.create_user("other", "other-password", is_admin=False)
+    source.metadata.created_by_user_id = owner.user_id
+    metadata_store.save(source.task_dir, source.metadata)
+
+    with TestClient(app) as other_client:
+        assert other_client.post("/api/auth/login", json={"username": "other", "password": "other-password"}).status_code == 200
+        blocked = other_client.post(
+            "/api/request-drafts/state",
+            json={"title": "Blocked source", "source_task_id": source.metadata.task_id},
+        )
+
+    assert blocked.status_code == 403
+
+
+def test_api_final_request_from_follow_up_draft_records_parent_and_draft_relation(configured_paths):
+    config, _, _ = configured_paths
+    source = _create_done_source_task(config, "finalized-follow-up-source")
+    app = create_app(config, FakeAdapter(["plan"]), FakeAdapter(["impl"]), FakeAdapter(["Verdict: PASS"]))
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/request-drafts/state",
+            json={
+                "title": "Follow-up final request",
+                "goal": "Create durable lineage.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "source_task_id": source.metadata.task_id,
+            },
+        )
+        assert created.status_code == 200
+        draft_id = created.json()["draft_id"]
+        missing_draft_follow_up = client.post(
+            "/api/requests",
+            json={
+                "title": "Missing draft follow-up",
+                "goal": "Must not silently degrade.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "source_task_id": source.metadata.task_id,
+            },
+        )
+        assert missing_draft_follow_up.status_code == 400
+        assert "requires a stored source request draft" in missing_draft_follow_up.json()["detail"]
+
+        mismatch = client.post(
+            "/api/requests",
+            json={
+                "title": "Follow-up final request",
+                "goal": "Create durable lineage.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_draft_id": draft_id,
+                "source_task_id": "ignored-client-spoof",
+            },
+        )
+        assert mismatch.status_code == 400
+        assert "source assertion does not match" in mismatch.json()["detail"]
+
+        invalid_draft = client.post(
+            "/api/requests",
+            json={
+                "title": "Invalid draft follow-up",
+                "goal": "Must require a real stored draft.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_draft_id": "missing-draft",
+                "source_task_id": source.metadata.task_id,
+            },
+        )
+        assert invalid_draft.status_code == 404
+
+        ordinary_draft = client.post(
+            "/api/request-drafts/state",
+            json={"title": "Ordinary final draft", "goal": "No source lineage."},
+        )
+        assert ordinary_draft.status_code == 200
+        ordinary_follow_up = client.post(
+            "/api/requests",
+            json={
+                "title": "Ordinary final draft",
+                "goal": "No source lineage.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_draft_id": ordinary_draft.json()["draft_id"],
+                "follow_up": True,
+            },
+        )
+        assert ordinary_follow_up.status_code == 400
+        assert "requires a source-linked request draft" in ordinary_follow_up.json()["detail"]
+
+        valid = client.post(
+            "/api/requests",
+            json={
+                "title": "Follow-up final request",
+                "goal": "Create durable lineage.",
+                "target_repo": str(config.repo_root),
+                "base_branch": "main",
+                "request_draft_id": draft_id,
+                "source_task_id": source.metadata.task_id,
+                "follow_up": True,
+            },
+        )
+        assert valid.status_code == 200
+        assert client.get(f"/api/request-drafts/{draft_id}").status_code == 404
+
+    created_task = next(task for task in KanbanScanner(config).scan() if task.metadata.title == "Follow-up final request")
+    assert created_task.metadata.parent_task_id == source.metadata.task_id
+    draft_markdown = (created_task.task_dir / "REQUEST-DRAFT.md").read_text()
+    assert "## Source Completed Task" in draft_markdown
+    assert source.metadata.task_id in draft_markdown
+    reloaded_source = KanbanScanner(config).find_task(source.metadata.task_id)
+    assert reloaded_source.state == TaskState.DONE
 
 
 
@@ -915,6 +1541,49 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert "Browse to choose the repository used for this request." in response.text
     assert "base-branch-options" in response.text
     assert "request-modal" in response.text
+    assert 'id="request-draft-source-panel"' in response.text
+    assert 'aria-labelledby="request-draft-source-heading"' in response.text
+    assert 'aria-describedby="request-draft-source-description"' in response.text
+    assert "request-draft-source-summary" in response.text
+    assert "Follow-up source" in response.text
+    assert "추가 작업 원본" in response.text
+    assert "This draft uses the completed task below as read-only context and starts from its completed branch. The completed task stays unchanged." in response.text
+    assert "아래 완료 작업을 읽기 전용 맥락으로 사용하고 해당 완료 브랜치에서 추가 작업을 시작합니다. 완료된 원본 작업은 변경되지 않습니다." in response.text
+    assert "Locked to the completed source branch. Follow-up work must continue from the branch where the source task was committed." in response.text
+    assert "완료된 원본 브랜치로 고정됩니다. 추가 작업은 원본 작업이 커밋된 브랜치에서 이어서 진행해야 합니다." in response.text
+    assert "Could not save the active request draft. The composer stayed open so your edits are not lost." in response.text
+    assert "현재 임시 요청서를 저장하지 못했습니다. 편집 내용을 잃지 않도록 작성 창을 열린 상태로 유지했습니다." in response.text
+    assert "Could not save the follow-up draft before creating the request. Please try again; the completed source task was not changed." in response.text
+    assert "요청을 생성하기 전에 추가 작업 초안을 저장하지 못했습니다. 다시 시도해 주세요. 완료된 원본 작업은 변경되지 않았습니다." in response.text
+    assert "Untitled completed task" in response.text
+    assert "제목 없는 완료 작업" in response.text
+    assert "let requestDraftSourceTaskId = ''" in response.text
+    assert "let requestDraftSourceTitle = ''" in response.text
+    assert "function setRequestDraftSource" in response.text
+    assert "function updateRequestDraftSourcePanel" in response.text
+    assert "baseBranchInput.readOnly = hasSource" in response.text
+    assert "baseBranchInput.setAttribute('aria-readonly', String(hasSource))" in response.text
+    assert "updateBaseBranchHelp(translateRequest(hasSource ? 'baseBranchSourceLockedHelp' : 'baseBranchHelp'))" in response.text
+    assert "const branchHelpLocked = Boolean((requestDraftSourceTaskId || '').trim())" in response.text
+    assert "if (branchHelpLocked) return" in response.text
+    assert "payload.source_task_id = requestDraftSourceTaskId || null" in response.text
+    assert "source_task_id: requestDraftSourceTaskId || null" in response.text
+    assert "const { silent = false, sessionToken = requestDraftSessionToken } = options" in response.text
+    assert "if (sessionToken !== requestDraftSessionToken) return ''" in response.text
+    assert "if (!payload.draft_id)" in response.text
+    assert "const sessionToken = requestDraftSessionToken" in response.text
+    assert "if (sessionToken !== requestDraftSessionToken) return" in response.text
+    assert "requestDraftSessionToken += 1" in response.text
+    assert "window.clearTimeout(requestDraftSyncTimer)" in response.text
+    assert "const isSourceLinkedFollowUp = Boolean((requestDraftSourceTaskId || '').trim())" in response.text
+    assert "await syncRequestComposerDraftState({ immediate: true, silent: !isSourceLinkedFollowUp })" in response.text
+    assert "if (!isSourceLinkedFollowUp) throw error" in response.text
+    assert "if (isSourceLinkedFollowUp && !requestDraftId)" in response.text
+    assert "setRequestDraftSource(saved.source_task_id || '', saved.source_title || '')" in response.text
+    assert "await syncRequestComposerDraftState({ immediate: true, silent: false })" in response.text
+    assert "syncCurrentUiRoute({ replace: true })" in response.text
+    assert "void syncRequestComposerDraftState({ immediate: true, silent: true }); navigateToBoardPhase" not in response.text
+    assert "source_context" not in response.text
     assert "settings-modal" in response.text
     assert "request-copy-title" in response.text
     assert "request-basics-heading" in response.text
@@ -928,6 +1597,19 @@ def test_dashboard_page_includes_request_form(configured_paths):
     assert '.field-checkbox-row input[type="checkbox"] { width: auto;' in response.text
     assert "task-modal" in response.text
     assert 'id="task-approval-gate-notice"' in response.text
+    assert 'id="request-follow-up-work"' in response.text
+    assert "Request follow-up work" in response.text
+    assert "추가 작업 요청" in response.text
+    assert "requestFollowUpWorkButton.hidden = !(canActOnTask && state === 'done')" in response.text
+    assert "requestFollowUpWorkButton.hidden = state !== 'done' || !canActOnTask" in response.text
+    assert "activeTaskDetail.metadata.state !== 'done'" in response.text
+    assert "metadata.integration?.final_branch || metadata.target?.base_branch" in response.text
+    assert "openComposerWithRepo(repoRoot, {" in response.text
+    assert "baseBranch," in response.text
+    assert "baseBranchInput.value = sourceBaseBranch" in response.text
+    assert "await loadTargetRepoBranches()" in response.text
+    assert "sourceTaskId" in response.text
+    assert "requestFollowUpWorkButton.addEventListener('click'" in response.text
     assert "approval-gate-notice" in response.text
     assert "function setApprovalGateNotice" in response.text
     assert "data-approval-gate-action" in response.text
