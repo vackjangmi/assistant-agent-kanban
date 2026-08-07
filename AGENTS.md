@@ -181,6 +181,8 @@ Additional rules:
 - Use atomic writes for metadata updates.
 - Place lock files in a stable runtime path, not inside a moving task directory.
 - `metadata.state` must always match the actual directory state.
+- `parent_task_id` may represent either a split-plan parent or the completed source of a follow-up request; split-only meaning belongs in `split_index` and `split_count`.
+- Follow-up tasks must keep the completed source terminal and use the source's exact final commit as their managed workspace base.
 
 ## OpenCode / Codex / Claude / Gemini Runtime Rules
 
