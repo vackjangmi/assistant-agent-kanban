@@ -5,6 +5,7 @@ import binascii
 import mimetypes
 import re
 import shutil
+import subprocess
 import uuid
 import secrets
 from pathlib import Path
@@ -14,9 +15,10 @@ import yaml
 
 from .config import AppConfig
 from .enums import TaskState
+from .exceptions import SourceWorkspaceBaseError
 from .language import runtime_language_code_to_request_language
 from .metadata_store import MetadataStore, slugify
-from .models import TaskRuntimePin
+from .models import TaskRuntimePin, WorkspaceBaseInfo
 from .target_repo_guard import resolve_safe_target_repo_root
 
 
@@ -26,6 +28,7 @@ EMBEDDED_IMAGE_RE = re.compile(
     r"!\[(?P<alt>[^\]]*)\]\((?P<url>data:image/(?P<subtype>png|jpeg|jpg|gif|webp);base64,(?P<data>[^)]+))\)"
 )
 REQUEST_UPLOAD_TOKEN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
+COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 class RequestTemplateData(BaseModel):
@@ -102,6 +105,8 @@ def create_request(
     created_by_user_id: str | None = None,
     created_by_username: str | None = None,
     runtime_pin: TaskRuntimePin | None = None,
+    parent_task_id: str | None = None,
+    workspace_base: WorkspaceBaseInfo | None = None,
 ) -> Path:
     title = template.title.strip()
     goal = (template.goal or "").strip()
@@ -109,9 +114,12 @@ def create_request(
         raise ValueError("title is required")
     requests_dir = config.state_dir(TaskState.REQUESTS)
     task_dir = requests_dir / _generate_task_key(config.kanban_root)
+    workspace_dir: Path | None = None
     task_dir.mkdir(parents=True, exist_ok=False)
     try:
         resolved_repo = resolve_safe_target_repo_root(target_repo_root)
+        if workspace_base is not None:
+            workspace_dir = _workspace_dir(config, task_dir.name)
         request_language = request_language or runtime_language_code_to_request_language(config.runtime.language)
         finalized_uploads: dict[str, dict[str, str]] = {}
         normalized_template = template.model_copy(
@@ -142,6 +150,14 @@ def create_request(
         metadata.created_by_user_id = created_by_user_id
         metadata.created_by_username = created_by_username
         metadata.runtime_pin = runtime_pin
+        metadata.parent_task_id = (parent_task_id or "").strip() or None
+        if workspace_base is not None:
+            metadata.implementation.workspace_base = _prepare_workspace_base_seed(
+                config,
+                task_id=metadata.task_id,
+                target_repo_root=resolved_repo,
+                workspace_base=workspace_base,
+            )
         metadata_store.save(task_dir, metadata)
         request_path = task_dir / "REQUEST.md"
         front_matter = yaml.safe_dump(
@@ -170,7 +186,90 @@ def create_request(
         return task_dir
     except Exception:
         shutil.rmtree(task_dir, ignore_errors=True)
+        if workspace_dir is not None:
+            shutil.rmtree(workspace_dir, ignore_errors=True)
         raise
+
+
+def build_source_workspace_base_from_draft(draft) -> WorkspaceBaseInfo | None:
+    source_task_id = draft.source_task_id.strip()
+    if not source_task_id:
+        return None
+    commit_sha = draft.source_commit_sha.strip()
+    if not commit_sha:
+        raise SourceWorkspaceBaseError("source task does not record a final commit SHA; create the follow-up after the source task has a final commit")
+    if not COMMIT_SHA_RE.fullmatch(commit_sha):
+        raise SourceWorkspaceBaseError("source task final commit SHA is invalid")
+    return WorkspaceBaseInfo(
+        commit_sha=commit_sha.lower(),
+        display_branch=draft.base_branch.strip() or commit_sha.lower(),
+        source_task_id=source_task_id,
+        final_remote_name=draft.source_final_remote_name.strip() or None,
+        final_remote_branch=draft.source_final_remote_branch.strip() or None,
+    )
+
+
+def _workspace_dir(config: AppConfig, task_id: str) -> Path:
+    workspace_root = config.workspace.root or (config.kanban_root / "_runtime/workspaces")
+    return workspace_root / task_id
+
+
+def _prepare_workspace_base_seed(
+    config: AppConfig,
+    *,
+    task_id: str,
+    target_repo_root: Path,
+    workspace_base: WorkspaceBaseInfo,
+) -> WorkspaceBaseInfo:
+    commit_sha = workspace_base.commit_sha.strip().lower()
+    if not COMMIT_SHA_RE.fullmatch(commit_sha):
+        raise SourceWorkspaceBaseError("source task final commit SHA is invalid")
+    if _git_commit_exists(target_repo_root, commit_sha):
+        return workspace_base.model_copy(update={"commit_sha": commit_sha, "managed_seed_path": None})
+    remote_name = (workspace_base.final_remote_name or "").strip()
+    remote_branch = (workspace_base.final_remote_branch or "").strip()
+    if not remote_name or not remote_branch:
+        raise SourceWorkspaceBaseError("source commit is not present locally and no final remote branch is recorded")
+    remote_url = _target_remote_url(target_repo_root, remote_name)
+    seed_path = _workspace_dir(config, task_id) / "source-base.git"
+    shutil.rmtree(seed_path, ignore_errors=True)
+    seed_path.parent.mkdir(parents=True, exist_ok=True)
+    init = subprocess.run(["git", "init", "--bare", str(seed_path)], capture_output=True, text=True, check=False)
+    if init.returncode != 0:
+        raise SourceWorkspaceBaseError("failed to initialize source base seed repository")
+    fetch = subprocess.run(
+        [
+            "git",
+            "--git-dir",
+            str(seed_path),
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            remote_url,
+            f"refs/heads/{remote_branch}:refs/heads/source-base",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if fetch.returncode != 0:
+        raise SourceWorkspaceBaseError("source final remote branch could not be fetched with available credentials")
+    (seed_path / "FETCH_HEAD").unlink(missing_ok=True)
+    if not _git_commit_exists(seed_path, commit_sha, bare=True):
+        raise SourceWorkspaceBaseError("source final remote branch does not contain the recorded commit SHA")
+    return workspace_base.model_copy(update={"commit_sha": commit_sha, "managed_seed_path": str(seed_path)})
+
+
+def _git_commit_exists(repo_path: Path, commit_sha: str, *, bare: bool = False) -> bool:
+    command = ["git", "--git-dir", str(repo_path), "rev-parse", "--verify", "--quiet", f"{commit_sha}^{{commit}}"] if bare else ["git", "-C", str(repo_path), "rev-parse", "--verify", "--quiet", f"{commit_sha}^{{commit}}"]
+    return subprocess.run(command, capture_output=True, text=True, check=False).returncode == 0
+
+
+def _target_remote_url(target_repo_root: Path, remote_name: str) -> str:
+    result = subprocess.run(["git", "-C", str(target_repo_root), "remote", "get-url", remote_name], capture_output=True, text=True, check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        raise SourceWorkspaceBaseError("source final remote is not configured in the local target repository")
+    return result.stdout.strip()
 
 
 def split_lines(value: str | None) -> list[str]:
