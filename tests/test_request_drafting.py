@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from assistant_agent_kanban.api.app import create_app
-from assistant_agent_kanban.request_drafting import RequestDraftPayload, build_request_drafting_prompt
+from assistant_agent_kanban.request_drafting import RequestDraftPayload, RequestDraftSourceContext, build_request_drafting_prompt
 
 from .conftest import FakeAdapter
 
@@ -27,6 +27,37 @@ def test_build_request_drafting_prompt_includes_discovered_baseline_references(c
 
     assert '"references": "docs/spec.md\\nAGENTS.md\\nCLAUDE.md"' in prompt
     assert 'Auto-discovered baseline references:\n[\n  "AGENTS.md",\n  "CLAUDE.md"\n]' in prompt
+
+
+def test_build_request_drafting_prompt_includes_read_only_source_context(configured_paths):
+    config, repo_root, _ = configured_paths
+
+    prompt = build_request_drafting_prompt(
+        config=config,
+        payload=RequestDraftPayload(
+            title="Follow-up draft",
+            target_repo=str(repo_root),
+            base_branch="main",
+            source_task_id="source-task",
+            source_context=RequestDraftSourceContext(
+                task_id="source-task",
+                title="Completed source",
+                state="done",
+                target_repo=str(repo_root),
+                base_branch="main",
+                request_markdown="# Completed source\nOriginal work",
+                commit_markdown="feat: completed source",
+                review_markdown="Verdict: PASS",
+            ),
+            message="Draft the follow-up.",
+        ),
+    )
+
+    assert "Source completed task context:" in prompt
+    assert "read-only completed-work context" in prompt
+    assert "Draft only the new follow-up request" in prompt
+    assert '"task_id": "source-task"' in prompt
+    assert "Original work" in prompt
 
 
 def test_api_request_draft_prompt_includes_discovered_baseline_references(configured_paths):

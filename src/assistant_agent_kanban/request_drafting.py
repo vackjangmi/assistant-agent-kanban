@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .assistant_adapter import AssistantAdapter
 from .config import AppConfig
@@ -40,6 +40,20 @@ class RequestDraftTranscriptEntry(BaseModel):
     content: str = ""
 
 
+class RequestDraftSourceContext(BaseModel):
+    task_id: str
+    title: str
+    state: str
+    target_repo: str
+    base_branch: str
+    commit_sha: str | None = None
+    final_remote_name: str | None = None
+    final_remote_branch: str | None = None
+    request_markdown: str = ""
+    commit_markdown: str = ""
+    review_markdown: str = ""
+
+
 class RequestDraftPayload(BaseModel):
     request_draft_id: str | None = None
     title: str | None = None
@@ -57,7 +71,16 @@ class RequestDraftPayload(BaseModel):
     active_tab: Literal["assistant", "fields"] | None = None
     request_draft_input: str | None = None
     transcript: list[RequestDraftTranscriptEntry] = Field(default_factory=list)
+    source_task_id: str | None = None
+    source_context: RequestDraftSourceContext | None = None
     message: str
+
+    @field_validator("source_context", mode="before")
+    @classmethod
+    def ignore_client_supplied_source_context(cls, value: object) -> object | None:
+        if isinstance(value, RequestDraftSourceContext):
+            return value
+        return None
 
 
 class RequestDraftResult(BaseModel):
@@ -133,6 +156,7 @@ def build_request_drafting_prompt(*, config: AppConfig, payload: RequestDraftPay
             "This assistant is read-only. Do not edit files, run write commands, create commits, or modify the target repository.",
             "Do not create or imply any task directory, state transition, or workflow artifact.",
             "The final REQUEST.md is created only later by the existing request creation flow, and REQUEST.md remains the authoritative planner input.",
+            *(_source_context_prompt_lines(payload.source_context)),
             "Use the conversation to improve the request fields non-destructively.",
             "If you suggest a field update, return the full replacement value for that field so the user can optionally apply it.",
             "Preserve any existing attachment or image URLs exactly as written, including /api/request-uploads/... and data:image/... URLs.",
@@ -189,6 +213,17 @@ def build_request_drafting_prompt(*, config: AppConfig, payload: RequestDraftPay
             json.dumps([entry.model_dump(mode="json") for entry in transcript], ensure_ascii=False, indent=2),
         ]
     )
+
+
+def _source_context_prompt_lines(source_context: RequestDraftSourceContext | None) -> list[str]:
+    if source_context is None:
+        return []
+    return [
+        "Source completed task context:",
+        "The source task below is read-only completed-work context. Do not propose edits to that completed task, do not transition it, and do not treat it as the new request.",
+        "Draft only the new follow-up request requested by the user.",
+        json.dumps(source_context.model_dump(mode="json"), ensure_ascii=False, indent=2),
+    ]
 
 
 def parse_request_drafting_response(raw_text: str) -> tuple[str, dict[str, str]]:
