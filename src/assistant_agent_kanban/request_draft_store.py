@@ -45,6 +45,11 @@ class StoredRequestDraft(BaseModel):
     slack_thread_ts: str = ""
     slack_reopen_message_ts: str = ""
     slack_reopen_message_text: str = ""
+    source_task_id: str = ""
+    source_title: str = ""
+    source_commit_sha: str = ""
+    source_final_remote_name: str = ""
+    source_final_remote_branch: str = ""
 
     def to_drafting_payload(self, *, message: str) -> RequestDraftPayload:
         return RequestDraftPayload(
@@ -59,6 +64,7 @@ class StoredRequestDraft(BaseModel):
             acceptance_criteria=self.acceptance_criteria,
             target_repo=self.target_repo,
             base_branch=self.base_branch,
+            source_task_id=self.source_task_id or None,
             transcript=[
                 RequestDraftTranscriptEntry(role=entry.role, content=entry.content)
                 for entry in self.transcript
@@ -74,7 +80,7 @@ class RequestDraftStore:
     def create(self, data: dict[str, object] | None = None) -> StoredRequestDraft:
         draft = StoredRequestDraft(draft_id=self._generate_draft_id())
         if data:
-            draft = _merge_draft(draft, data)
+            draft = _merge_draft(draft, data, allow_source_initialization=True)
         self.save(draft)
         return draft
 
@@ -184,13 +190,17 @@ class RequestDraftStore:
 
 def serialize_request_draft_transcript_markdown(draft: StoredRequestDraft, *, language_code: str) -> str:
     transcript = [entry for entry in draft.transcript if entry.role in {"user", "assistant"}]
+    source_relation = _source_relation_markdown(draft, language_code=language_code)
     if not transcript:
-        return ""
+        return source_relation
     user_label = "You" if language_code == "en" else "사용자"
     assistant_label = "Composer assistant" if language_code == "en" else "작성 도우미"
     suggested_updates_label = "Suggested updates" if language_code == "en" else "제안된 변경"
     clear_field_label = "(clear field)" if language_code == "en" else "(필드 비우기)"
     sections: list[str] = []
+    if source_relation:
+        sections.append(source_relation)
+        sections.append("")
     for index, entry in enumerate(transcript, start=1):
         sections.append(f"## {user_label if entry.role == 'user' else assistant_label} {index}")
         sections.append("")
@@ -221,11 +231,48 @@ def _normalize_update_data(data: dict[str, object]) -> dict[str, object]:
     return normalized
 
 
-def _merge_draft(draft: StoredRequestDraft, data: dict[str, object]) -> StoredRequestDraft:
+def _merge_draft(draft: StoredRequestDraft, data: dict[str, object], *, allow_source_initialization: bool = False) -> StoredRequestDraft:
+    normalized = _normalize_update_data(data)
+    existing_source = draft.source_task_id.strip()
+    incoming_source_value = normalized.get("source_task_id")
+    if incoming_source_value is not None:
+        incoming_source = str(incoming_source_value or "").strip()
+        normalized["source_task_id"] = incoming_source
+        if not existing_source and incoming_source and not allow_source_initialization:
+            raise ValueError("request draft source_task_id cannot be attached to an existing draft")
+        if existing_source and incoming_source and incoming_source != existing_source:
+            raise ValueError("request draft source_task_id cannot be changed once set")
+        if existing_source and not incoming_source:
+            raise ValueError("request draft source_task_id cannot be cleared once set")
     return StoredRequestDraft.model_validate({
         **draft.model_dump(mode="json"),
-        **_normalize_update_data(data),
+        **normalized,
     })
+
+
+def _source_relation_markdown(draft: StoredRequestDraft, *, language_code: str) -> str:
+    source_task_id = draft.source_task_id.strip()
+    if not source_task_id:
+        return ""
+    title = draft.source_title.strip() or source_task_id
+    source_commit_sha = draft.source_commit_sha.strip()
+    if language_code == "ko":
+        return "\n".join([
+            "## 원본 완료 작업",
+            "",
+            f"- 작업 ID: `{source_task_id}`",
+            f"- 제목: {title}",
+            *([f"- 기준 커밋: `{source_commit_sha}`"] if source_commit_sha else []),
+            "- 이 관계는 후속 요청 작성 중 캡처된 비권위 참고 정보입니다.",
+        ])
+    return "\n".join([
+        "## Source Completed Task",
+        "",
+        f"- Task ID: `{source_task_id}`",
+        f"- Title: {title}",
+        *([f"- Base commit: `{source_commit_sha}`"] if source_commit_sha else []),
+        "- This relation is non-authoritative drafting context captured while preparing a follow-up request.",
+    ])
 
 
 def _with_missing_transcript_field_updates(draft: StoredRequestDraft) -> StoredRequestDraft:
