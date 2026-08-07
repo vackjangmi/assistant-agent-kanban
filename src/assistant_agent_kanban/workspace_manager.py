@@ -46,7 +46,7 @@ class WorkspaceManager:
         clone = subprocess.run(["git", "clone", str(target_repo_root), str(repo_dir)], capture_output=True, text=True, check=False)
         if clone.returncode != 0:
             raise WorkspaceSyncError(clone.stderr.strip() or "git clone failed")
-        base_ref = self._resolve_base_ref(repo_dir, metadata.target.base_branch)
+        base_ref = self._resolve_base_ref(repo_dir, metadata)
         checkout = subprocess.run(
             ["git", "-C", str(repo_dir), "checkout", "-B", f"task/{metadata.task_id.lower()}", base_ref],
             capture_output=True,
@@ -136,7 +136,7 @@ class WorkspaceManager:
             patch_path.unlink(missing_ok=True)
 
     def _workspace_patch(self, repo_dir: Path, metadata: TaskMetadata) -> str:
-        base_ref = self._resolve_base_ref(repo_dir, metadata.target.base_branch)
+        base_ref = self._resolve_base_ref(repo_dir, metadata)
         local_commits = subprocess.run(
             ["git", "-C", str(repo_dir), "rev-list", "--count", f"{base_ref}..HEAD"],
             capture_output=True,
@@ -160,7 +160,32 @@ class WorkspaceManager:
             raise WorkspaceSyncError(diff.stderr.strip() or "failed to snapshot workspace changes")
         return diff.stdout
 
-    def _resolve_base_ref(self, repo_dir: Path, base_branch: str) -> str:
+    def _resolve_base_ref(self, repo_dir: Path, metadata: TaskMetadata) -> str:
+        workspace_base = metadata.implementation.workspace_base
+        if workspace_base is not None:
+            commit_sha = workspace_base.commit_sha.strip()
+            if self._commit_exists(repo_dir, commit_sha):
+                return commit_sha
+            seed_path = Path(workspace_base.managed_seed_path).expanduser() if workspace_base.managed_seed_path else None
+            if seed_path is not None and seed_path.exists():
+                fetch = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(repo_dir),
+                        "fetch",
+                        "--no-tags",
+                        str(seed_path),
+                        "refs/heads/source-base:refs/remotes/source-base/source-base",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if fetch.returncode == 0 and self._commit_exists(repo_dir, commit_sha):
+                    return commit_sha
+            raise WorkspaceSyncError("source workspace base commit is unavailable; recreate the follow-up request while the source final branch is fetchable")
+        base_branch = metadata.target.base_branch
         candidates = [base_branch, f"origin/{base_branch}"]
         for candidate in candidates:
             probe = subprocess.run(
@@ -172,6 +197,14 @@ class WorkspaceManager:
             if probe.returncode == 0:
                 return candidate
         raise WorkspaceSyncError(f"base ref '{base_branch}' does not exist in cloned workspace")
+
+    def _commit_exists(self, repo_dir: Path, commit_sha: str) -> bool:
+        return subprocess.run(
+            ["git", "-C", str(repo_dir), "rev-parse", "--verify", "--quiet", f"{commit_sha}^{{commit}}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).returncode == 0
 
     def _apply_overlays(self, repo_dir: Path, target_repo_root: Path) -> None:
         for relative in self.config.workspace.overlay_copy:
