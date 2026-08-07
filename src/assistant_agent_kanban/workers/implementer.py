@@ -125,7 +125,7 @@ class ImplementerWorker(WorkerBase):
                 changes = self.workspace_changes(workspace_repo)
                 has_changes = bool(changes)
                 has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, implementing.metadata, changes)
-                has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
+                has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata)
                 success = result.ok and has_changes and has_substantive_changes and not has_local_commits
                 implementing.metadata.implementation.iteration = implementing.metadata.cycle
                 implementing.metadata.implementation.last_result = "success" if success else "failure"
@@ -275,7 +275,7 @@ class ImplementerWorker(WorkerBase):
             changes = self.workspace_changes(workspace_repo)
             has_changes = bool(changes)
             has_substantive_changes = self._has_allowed_implementation_changes(implementing.task_dir, implementing.metadata, changes)
-            has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata.target.base_branch)
+            has_local_commits = self.workspace_has_local_commits(workspace_repo, implementing.metadata)
             success = live_result.ok and has_changes and has_substantive_changes and not has_local_commits
             implementing.metadata.implementation.iteration = implementing.metadata.cycle
             implementing.metadata.implementation.last_result = "success" if success else "failure"

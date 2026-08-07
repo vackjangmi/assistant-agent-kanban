@@ -70,7 +70,7 @@ class ReviewerWorker(WorkerBase):
                 await self.emit("task_moved", done.metadata.task_id, state=done.state.value)
                 return True
             workspace_path = Path(workspace_repo)
-            if self.workspace_has_local_commits(workspace_path, task.metadata.target.base_branch):
+            if self.workspace_has_local_commits(workspace_path, task.metadata):
                 apply_retry_gate(reviewing.metadata, reason="review-local-commits")
                 reviewing.metadata.errors.append(
                     TaskErrorInfo(code="review-local-commits", message="review skipped because workspace contains local commits")
@@ -191,9 +191,7 @@ class ReviewerWorker(WorkerBase):
                     note = self._handle_needs_changes(
                         reviewing.metadata,
                         primary_blocker=cast(str, artifact["primary_blocker"]),
-                        blocker_patch_fingerprint=self.workspace_patch_fingerprint(
-                            workspace_path, reviewing.metadata.target.base_branch
-                        ),
+                        blocker_patch_fingerprint=self.workspace_patch_fingerprint(workspace_path, reviewing.metadata),
                     )
                     self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                     done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)
@@ -356,9 +354,7 @@ class ReviewerWorker(WorkerBase):
                 note = self._handle_needs_changes(
                     reviewing.metadata,
                     primary_blocker=cast(str, artifact["primary_blocker"]),
-                    blocker_patch_fingerprint=self.workspace_patch_fingerprint(
-                        workspace_path, reviewing.metadata.target.base_branch
-                    ),
+                    blocker_patch_fingerprint=self.workspace_patch_fingerprint(workspace_path, reviewing.metadata),
                 )
                 self.metadata_store.save(reviewing.task_dir, reviewing.metadata)
                 done = self.transitions.move(reviewing, TaskState.TODOS, by=self.worker_name, note=note)

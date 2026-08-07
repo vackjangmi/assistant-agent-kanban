@@ -669,7 +669,7 @@ class HumanVerificationService:
         if patch.returncode != 0:
             raise IntegrationError(patch.stderr.strip() or "failed to capture review branch state")
         workspace_path = Path(workspace_repo).expanduser().resolve()
-        base_ref = self._resolve_workspace_base_ref(workspace_path, metadata.target.base_branch)
+        base_ref = self._resolve_workspace_base_ref(workspace_path, metadata)
         reset_branch = subprocess.run(
             ["git", "-C", str(workspace_path), "checkout", "-B", f"task/{metadata.task_id.lower()}", base_ref],
             capture_output=True,
@@ -711,7 +711,20 @@ class HumanVerificationService:
         except ValueError as exc:
             raise IntegrationError(str(exc)) from exc
 
-    def _resolve_workspace_base_ref(self, workspace_path: Path, base_branch: str) -> str:
+    def _resolve_workspace_base_ref(self, workspace_path: Path, metadata) -> str:
+        workspace_base = metadata.implementation.workspace_base
+        if workspace_base is not None:
+            commit_sha = workspace_base.commit_sha.strip()
+            probe = subprocess.run(
+                ["git", "-C", str(workspace_path), "rev-parse", "--verify", "--quiet", f"{commit_sha}^{{commit}}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                return commit_sha
+            raise IntegrationError("source workspace base commit does not exist in workspace")
+        base_branch = metadata.target.base_branch
         for candidate in (base_branch, f"origin/{base_branch}"):
             probe = subprocess.run(
                 ["git", "-C", str(workspace_path), "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],

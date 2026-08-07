@@ -175,9 +175,12 @@ class WorkerBase:
                 index += 1
         return changes
 
-    def workspace_has_local_commits(self, workspace_repo: Path, base_branch: str) -> bool:
+    def workspace_has_local_commits(self, workspace_repo: Path, metadata: TaskMetadata) -> bool:
+        base_ref = self._resolve_workspace_base_ref(workspace_repo, metadata)
+        if base_ref is None:
+            return False
         result = subprocess.run(
-            ["git", "-C", str(workspace_repo), "rev-list", "--count", f"{base_branch}..HEAD"],
+            ["git", "-C", str(workspace_repo), "rev-list", "--count", f"{base_ref}..HEAD"],
             capture_output=True,
             text=True,
             check=False,
@@ -189,8 +192,8 @@ class WorkerBase:
         except ValueError:
             return False
 
-    def workspace_patch_fingerprint(self, workspace_repo: Path, base_branch: str) -> str | None:
-        base_ref = self._resolve_workspace_base_ref(workspace_repo, base_branch)
+    def workspace_patch_fingerprint(self, workspace_repo: Path, metadata: TaskMetadata) -> str | None:
+        base_ref = self._resolve_workspace_base_ref(workspace_repo, metadata)
         if base_ref is None:
             return None
         diff = subprocess.run(
@@ -223,7 +226,18 @@ class WorkerBase:
                 digest.update(file_path.read_bytes())
         return digest.hexdigest()
 
-    def _resolve_workspace_base_ref(self, workspace_repo: Path, base_branch: str) -> str | None:
+    def _resolve_workspace_base_ref(self, workspace_repo: Path, metadata: TaskMetadata) -> str | None:
+        workspace_base = metadata.implementation.workspace_base
+        if workspace_base is not None:
+            commit_sha = workspace_base.commit_sha.strip()
+            probe = subprocess.run(
+                ["git", "-C", str(workspace_repo), "rev-parse", "--verify", "--quiet", f"{commit_sha}^{{commit}}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return commit_sha if probe.returncode == 0 else None
+        base_branch = metadata.target.base_branch
         candidates = [base_branch, f"origin/{base_branch}"]
         for candidate in candidates:
             probe = subprocess.run(
