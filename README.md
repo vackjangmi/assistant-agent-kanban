@@ -53,6 +53,7 @@ Full video: [Watch on YouTube](https://youtu.be/gpdcVGiLxaQ)
 - Isolated `clone-overlay` workspaces
 - Automatic plan approval stage with fallback to manual review
 - Assistant-first request drafting flow (in-app or from Slack)
+- Follow-up request drafting from completed tasks, preserving source lineage and the exact committed branch/commit
 - Human verification starts only after review passes
 - Target repo patch apply happens only during `completed-reviews -> human-verifying`
 - Final commit is created only during `human-verifying -> done`
@@ -575,6 +576,7 @@ Claude Code, Codex, OpenCode, Gemini CLI 같은 coding agent 도구들은 매우
 - `clone-overlay` 전략 기반의 격리 workspace 생성
 - 자동 plan approval 단계 + 실패 시 사람 검토로 fallback
 - Assistant 기반 request drafting 흐름 (웹 UI 또는 Slack에서)
+- 완료 작업의 lineage와 실제 커밋 브랜치·커밋을 보존하는 추가 작업 요청 초안 흐름
 - 리뷰 통과 후에만 human verification 시작 가능
 - `completed-reviews -> human-verifying` 시점에만 target repo patch 적용
 - 최종 commit은 `human-verifying -> done`에서만 생성
