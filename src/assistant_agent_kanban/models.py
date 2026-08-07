@@ -146,6 +146,7 @@ class ImplementationInfo(BaseModel):
     patch_sha256: str | None = None
     patch_cycle: int | None = None
     target_repo_baseline: "TargetRepoBaselineInfo | None" = None
+    workspace_base: "WorkspaceBaseInfo | None" = None
     last_result: str | None = None
     resolved_model: str | None = None
     session_id: str | None = None
@@ -154,6 +155,15 @@ class ImplementationInfo(BaseModel):
     resume_mode: Literal["pinned", "current-settings"] | None = None
     resume_backend_override: Literal["opencode", "codex", "gemini", "claude", "antigravity"] | None = None
     resume_model_override: str | None = None
+
+
+class WorkspaceBaseInfo(BaseModel):
+    commit_sha: str
+    display_branch: str
+    source_task_id: str
+    final_remote_name: str | None = None
+    final_remote_branch: str | None = None
+    managed_seed_path: str | None = None
 
 
 class ReviewInfo(BaseModel):

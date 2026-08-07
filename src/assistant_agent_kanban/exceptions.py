@@ -50,3 +50,7 @@ class CommitError(FsKanbanError):
 
 class WorkspaceSyncError(FsKanbanError):
     pass
+
+
+class SourceWorkspaceBaseError(FsKanbanError):
+    pass
