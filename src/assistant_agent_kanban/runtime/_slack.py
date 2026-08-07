@@ -11,7 +11,7 @@ from ..repo_branches import describe_target_repo_branches
 from ..assistant_adapter import AssistantAdapter
 from ..exceptions import AdapterRunError, CommitError, IntegrationError, TaskNotFoundError, TransitionError
 from ..language import runtime_language_code_to_request_language
-from ..request_creator import RequestTemplateData, build_default_scope_sections_for_language, create_request, split_lines
+from ..request_creator import RequestTemplateData, build_default_scope_sections_for_language, build_source_workspace_base_from_draft, create_request, split_lines
 from ..request_draft_store import RequestDraftStore, StoredRequestDraft, serialize_request_draft_transcript_markdown
 from ..request_drafting import RequestDraftResult, draft_request
 from ..slack_api import slack_api_call, slack_error_message, slack_upload_file_to_thread
@@ -1156,6 +1156,7 @@ class _SlackHandlersMixin(_RuntimeSupervisorLike):
         request_config=None,
         created_by_user_id: str | None = None,
         created_by_username: str | None = None,
+        parent_task_id: str | None = None,
     ) -> Path:
         active_config = request_config or self.config
         normalized_base_branch = base_branch.strip() if base_branch else active_config.base_branch
@@ -1167,6 +1168,8 @@ class _SlackHandlersMixin(_RuntimeSupervisorLike):
         draft_markdown = request_draft_markdown
         if stored_draft is not None:
             draft_markdown = serialize_request_draft_transcript_markdown(stored_draft, language_code=request_language)
+            parent_task_id = parent_task_id or stored_draft.source_task_id.strip() or None
+        workspace_base = build_source_workspace_base_from_draft(stored_draft) if stored_draft is not None else None
         default_scope, default_out_of_scope = build_default_scope_sections_for_language(
             target_repo,
             language_code=request_language,
@@ -1195,6 +1198,8 @@ class _SlackHandlersMixin(_RuntimeSupervisorLike):
             created_by_user_id=created_by_user_id,
             created_by_username=created_by_username,
             runtime_pin=active_config.capture_runtime_pin(captured_by=created_by_username or "human"),
+            parent_task_id=parent_task_id,
+            workspace_base=workspace_base,
         )
         self.scanner.scan()
         if stored_draft is not None:
