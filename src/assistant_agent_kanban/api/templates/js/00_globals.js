@@ -57,6 +57,8 @@
     const requestDraftInput = document.getElementById('request-draft-input');
     const requestDraftImageInput = document.getElementById('request-draft-image-input');
     const requestDraftAttachmentStatus = document.getElementById('request-draft-attachment-status');
+    const requestDraftSourcePanel = document.getElementById('request-draft-source-panel');
+    const requestDraftSourceSummary = document.getElementById('request-draft-source-summary');
     const attachRequestDraftImageButton = document.getElementById('attach-request-draft-image');
     const sendRequestDraftButton = document.getElementById('send-request-draft');
     const repoDiscoveryRootInput = document.getElementById('repo_discovery_root');
@@ -242,6 +244,7 @@
     const resumeReviewerChoiceCurrentButton = document.getElementById('resume-reviewer-choice-current-button');
     const resumeReviewerChoiceStatus = document.getElementById('resume-reviewer-choice-status');
     const resumeReviewLoopButton = document.getElementById('resume-review-loop');
+    const requestFollowUpWorkButton = document.getElementById('request-follow-up-work');
     const rerequestTaskButton = document.getElementById('rerequest-task');
     const cancelTaskButton = document.getElementById('cancel-task');
     const deleteTaskButton = document.getElementById('delete-task');
@@ -378,6 +381,8 @@
     let requestDraftAttachmentStatusMessage = '';
     let requestDraftAttachmentStatusTone = 'neutral';
     let requestDraftAttachmentStatusVars = {};
+    let requestDraftSourceTaskId = '';
+    let requestDraftSourceTitle = '';
     let requestDraftDropDepth = 0;
     let requestDraftLastRenderedSignature = '';
     let requestDraftTranscriptPinnedToBottom = true;

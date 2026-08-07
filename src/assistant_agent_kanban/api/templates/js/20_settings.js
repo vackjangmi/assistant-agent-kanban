@@ -138,6 +138,7 @@
       resumeReviewerChoiceCurrentButton.textContent = translateTask('resumeReviewerChoiceCurrentAction');
       closeResumeReviewerChoiceButton.textContent = translateTask('resumeReviewerChoiceClose');
       resumeReviewLoopButton.textContent = translateTask('resumeReviewLoop');
+      requestFollowUpWorkButton.textContent = translateTask('requestFollowUpWork');
       approvePlanButton.textContent = translateTask('approvePlan');
       splitPlanButton.textContent = translateTask('splitPlan');
       rerequestTaskButton.textContent = translateTask('rerequestTask');
@@ -443,6 +444,8 @@
       requestComposerTabs.setAttribute('aria-label', translateRequest('composerTabsLabel'));
       setRequestText('request-draft-heading', 'draftHeading');
       setRequestText('request-draft-description', 'draftDescription');
+      setRequestText('request-draft-source-heading', 'draftSourceHeading');
+      setRequestText('request-draft-source-description', 'draftSourceDescription');
       setRequestText('request-drafts-title', 'draftsTitle');
       setRequestText('request-drafts-description', 'draftsDescription');
       requestComposerTabFields.textContent = translateRequest('composerTabFields');
@@ -458,6 +461,7 @@
       }
       renderRequestDrafts();
       updateRequestDraftPanel();
+      updateRequestDraftSourcePanel();
     }
 
     function refreshRequestDerivedText() {

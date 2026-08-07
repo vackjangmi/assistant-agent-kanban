@@ -518,6 +518,8 @@
       resumeReviewerButton.disabled = !canResumeReviewer || taskDetailStale;
       resumeReviewLoopButton.hidden = !canResumeReviewLoop;
       resumeReviewLoopButton.disabled = !canResumeReviewLoop || taskDetailStale;
+      requestFollowUpWorkButton.hidden = !(canActOnTask && state === 'done');
+      requestFollowUpWorkButton.disabled = requestFollowUpWorkButton.hidden || taskDetailStale;
       startVerificationButton.hidden = !canStart;
       startVerificationButton.disabled = !canStart || taskDetailStale;
       retryVerificationApplyButton.hidden = !canRetryApply;

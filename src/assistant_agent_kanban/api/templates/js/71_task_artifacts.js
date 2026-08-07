@@ -481,6 +481,39 @@
       }
     }
 
+    async function openFollowUpRequestDraft() {
+      if (!activeTaskId || !activeTaskDetail || activeTaskDetail.metadata.state !== 'done') return;
+      const sourceTaskId = activeTaskId;
+      const metadata = activeTaskDetail.metadata || {};
+      const repoRoot = metadata.target?.repo_root || activeTaskDetail.target_repo_root || '';
+      const baseBranch = metadata.integration?.final_branch || metadata.target?.base_branch || activeTaskDetail.base_branch || defaultBaseBranch;
+      const sourceTitle = metadata.title || activeTaskDetail.title || '';
+      if (!repoRoot) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = translateRequest('validationTargetRepo');
+        return;
+      }
+      requestFollowUpWorkButton.disabled = true;
+      try {
+        await openComposerWithRepo(repoRoot, {
+          baseBranch,
+          sourceTaskId,
+          sourceTitle,
+          beforeOpen: () => {
+            setTaskModalOpen(false);
+            activeTaskId = null;
+            activeTaskDetail = null;
+            if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: true });
+          },
+        });
+      } catch (error) {
+        taskModalError.hidden = false;
+        taskModalError.textContent = error.message || translateTask('failedOpenFollowUpRequest');
+      } finally {
+        requestFollowUpWorkButton.disabled = false;
+      }
+    }
+
     async function cancelTask() {
       if (!activeTaskId || !activeTaskDetail) return;
       const state = activeTaskDetail.metadata.state;

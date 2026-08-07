@@ -225,6 +225,13 @@
                     <span id="request-draft-description">Ask for help refining the request before you create the final task.</span>
                   </div>
                   <div class="human-review-panel">
+                    <section id="request-draft-source-panel" class="request-draft-source-panel" aria-labelledby="request-draft-source-heading" aria-describedby="request-draft-source-description" hidden>
+                      <div class="request-draft-source-copy">
+                        <h3 id="request-draft-source-heading">Follow-up source</h3>
+                        <p id="request-draft-source-description">This draft uses a completed task as read-only context and starts from its completed branch. The completed task stays unchanged.</p>
+                      </div>
+                      <div id="request-draft-source-summary" class="request-draft-source-summary"></div>
+                    </section>
                     <div class="human-review-box">
                       <div class="editor-toolbar">
                         <div>
@@ -783,6 +790,7 @@
           <button type="button" id="resume-implementer" class="accent-button" hidden>Resume implementer</button>
           <button type="button" id="resume-reviewer" class="accent-button" hidden>Resume reviewer</button>
           <button type="button" id="resume-review-loop" class="accent-button" hidden>Resume review loop</button>
+          <button type="button" id="request-follow-up-work" class="accent-button" hidden>Request follow-up work</button>
           <button type="button" id="approve-plan" class="primary" hidden disabled>Approve plan</button>
           <button type="button" id="split-plan" class="accent-button" hidden disabled>Split request</button>
           <span id="request-changes-shell" class="header-action-shell" hidden><button type="button" id="request-changes-button">Request changes</button></span>

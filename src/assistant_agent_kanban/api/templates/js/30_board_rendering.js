@@ -1051,6 +1051,7 @@
         plan_auto_approve: document.getElementById('plan_auto_approve').checked,
         active_tab: activeRequestComposerTab,
         request_upload_token: requestUploadToken || '',
+        source_task_id: requestDraftSourceTaskId || null,
         request_draft_input: requestDraftInput.value || '',
         request_draft_entries: requestDraftEntries.filter((entry) => !entry.pending).map((entry) => ({ role: entry.role, text: entry.text || '', field_updates: entry.field_updates || {} })),
         saved_at: Date.now(),
@@ -1073,6 +1074,7 @@
         (state.scope || '').trim() ||
         (state.out_of_scope || '').trim() ||
         (state.references || '').trim() ||
+        (state.source_task_id || '').trim() ||
         (state.request_draft_input || '').trim() ||
         (state.request_draft_entries || []).length
       );
@@ -1098,7 +1100,7 @@
 
     async function ensureRequestComposerDraft(options = {}) {
       if (requestDraftId) return requestDraftId;
-      const { silent = false } = options;
+      const { silent = false, sessionToken = requestDraftSessionToken } = options;
       const state = currentRequestComposerDraftState();
       if (!requestComposerDraftHasContent(state)) return '';
       const response = await fetch('/api/request-drafts/state', {
@@ -1107,8 +1109,13 @@
         body: JSON.stringify(state),
       });
       const payload = await response.json();
+      if (sessionToken !== requestDraftSessionToken) return '';
       if (!response.ok) {
         if (!silent) throw new Error(payload.detail || 'Request draft creation failed.');
+        return '';
+      }
+      if (!payload.draft_id) {
+        if (!silent) throw new Error('Request draft creation failed.');
         return '';
       }
       requestDraftId = payload.draft_id || '';
@@ -1124,7 +1131,9 @@
         requestDraftSyncTimer = null;
       }
       const run = async () => {
+        const sessionToken = requestDraftSessionToken;
         const state = currentRequestComposerDraftState();
+        if (sessionToken !== requestDraftSessionToken) return;
         if (!requestComposerDraftHasContent(state)) {
           if (requestDraftId) {
             await deleteRequestComposerDraftState({ preserveFormState: true, silent: true });
@@ -1133,7 +1142,8 @@
           else clearRequestComposerDraftState();
           return;
         }
-        const draftId = await ensureRequestComposerDraft({ silent });
+        const draftId = await ensureRequestComposerDraft({ silent, sessionToken });
+        if (sessionToken !== requestDraftSessionToken) return;
         if (!draftId) return;
         const response = await fetch(`/api/request-drafts/${encodeURIComponent(draftId)}`, {
           method: 'PUT',
@@ -1141,10 +1151,12 @@
           body: JSON.stringify(currentRequestComposerDraftState()),
         });
         const payload = await response.json();
+        if (sessionToken !== requestDraftSessionToken) return;
         if (!response.ok) {
           if (!silent) throw new Error(payload.detail || 'Request draft save failed.');
           return;
         }
+        if (!payload.draft_id && !silent) throw new Error('Request draft save failed.');
         requestDraftId = payload.draft_id || requestDraftId;
         requestUploadToken = payload.request_upload_token || requestUploadToken;
         persistRequestComposerDraftPointer();
@@ -1159,6 +1171,7 @@
 
     async function deleteRequestComposerDraftState(options = {}) {
       const { preserveFormState = false, silent = false } = options;
+      requestDraftSessionToken += 1;
       if (requestDraftSyncTimer) {
         window.clearTimeout(requestDraftSyncTimer);
         requestDraftSyncTimer = null;
@@ -1176,6 +1189,11 @@
     }
 
     function applyRequestComposerDraftState(saved) {
+      requestDraftSessionToken += 1;
+      if (requestDraftSyncTimer) {
+        window.clearTimeout(requestDraftSyncTimer);
+        requestDraftSyncTimer = null;
+      }
       requestForm.reset();
       requestDraftId = saved.draft_id || saved.request_draft_id || '';
       requestTitleInput.value = saved.title || '';
@@ -1190,6 +1208,7 @@
       scopeField.value = saved.scope || '';
       outOfScopeField.value = saved.out_of_scope || '';
       referencesField.value = saved.references || '';
+      setRequestDraftSource(saved.source_task_id || '', saved.source_title || '');
       document.getElementById('plan_auto_approve').checked = Boolean(saved.plan_auto_approve);
       requestUploadToken = saved.request_upload_token || generateRequestUploadToken();
       requestDraftInput.value = saved.request_draft_input || '';
@@ -1269,6 +1288,7 @@
         if (!response.ok) throw new Error(payload.detail || translateRequest('draftsDeleteError'));
         setRequestDraftsStatus('');
         if (requestDraftId === draftId) {
+          requestDraftSessionToken += 1;
           requestDraftId = '';
           clearRequestComposerDraftState();
         }

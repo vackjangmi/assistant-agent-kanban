@@ -372,10 +372,21 @@
       payload.plan_auto_approve = document.getElementById('plan_auto_approve').checked;
       payload.request_upload_token = requestUploadToken;
       payload.request_draft_id = requestDraftId || null;
+      payload.source_task_id = requestDraftSourceTaskId || null;
       submitButton.disabled = true;
       submitButton.textContent = translateRequest('creating');
       try {
-        await syncRequestComposerDraftState({ immediate: true, silent: true });
+        const isSourceLinkedFollowUp = Boolean((requestDraftSourceTaskId || '').trim());
+        try {
+          await syncRequestComposerDraftState({ immediate: true, silent: !isSourceLinkedFollowUp });
+        } catch (error) {
+          if (!isSourceLinkedFollowUp) throw error;
+          const detail = error.message ? ` ${error.message}` : '';
+          throw new Error(`${translateRequest('followUpDraftSaveRequired')}${detail}`);
+        }
+        if (isSourceLinkedFollowUp && !requestDraftId) {
+          throw new Error(translateRequest('followUpDraftSaveRequired'));
+        }
         payload.request_draft_id = requestDraftId || null;
         const response = await fetch('/api/requests', {
           method: 'POST',

@@ -85,12 +85,13 @@
       const repoPath = normalizeRepoPath(targetRepoInput.value);
       const lookupToken = latestBranchLookupToken;
       replaceBaseBranchSuggestions([]);
+      const branchHelpLocked = Boolean((requestDraftSourceTaskId || '').trim());
       if (!repoPath) {
-        updateBaseBranchHelp(translateRequest('baseBranchHelp'));
+        if (!branchHelpLocked) updateBaseBranchHelp(translateRequest('baseBranchHelp'));
         maybeAutofillBaseBranch(defaultBaseBranch);
         return;
       }
-      updateBaseBranchHelp(translateRequest('baseBranchLoading'));
+      if (!branchHelpLocked) updateBaseBranchHelp(translateRequest('baseBranchLoading'));
       try {
         const response = await fetch(`/api/target-repo-branches?target_repo=${encodeURIComponent(repoPath)}`);
         const data = await response.json();
@@ -98,6 +99,7 @@
         if (!response.ok) throw new Error(data.detail || translateRequest('baseBranchLoadFailed'));
         replaceBaseBranchSuggestions(data.branches || []);
         maybeAutofillBaseBranch(data.suggested_base_branch || defaultBaseBranch);
+        if (branchHelpLocked) return;
         if (!data.git_repository) {
           updateBaseBranchHelp(translateRequest('baseBranchNotRepo'));
           return;
@@ -1020,7 +1022,10 @@
       }
     }
 
-    async function openComposerWithRepo(repoPath) {
+    async function openComposerWithRepo(repoPath, options = {}) {
+      const sourceTaskId = (options.sourceTaskId || '').trim();
+      const sourceTitle = options.sourceTitle || '';
+      const sourceBaseBranch = (options.baseBranch || '').trim();
       clearMessages();
       applyRequestTranslations();
 
@@ -1036,7 +1041,8 @@
               const draftData = await response.json();
               const hasContent = requestComposerDraftHasContent(draftData);
               const isDifferentRepo = draftData.target_repo && normalizeRepoPath(draftData.target_repo) !== normalizeRepoPath(repoPath);
-              if (hasContent || isDifferentRepo) {
+              const isDifferentSource = sourceTaskId && (draftData.source_task_id || '') !== sourceTaskId;
+              if (hasContent || isDifferentRepo || isDifferentSource) {
                 hasExistingDraftContent = true;
               }
             }
@@ -1047,19 +1053,33 @@
       }
 
       if (hasExistingDraftContent) {
-        const confirmMsg = currentUiLanguage() === 'KO'
-          ? '현재 작성 중인 임시 요청서가 존재합니다. 이를 지우고 선택한 저장소 기준으로 새 요청을 작성하시겠습니까?'
-          : 'There is an active draft in progress. Would you like to discard it and start a new request for this repository?';
+        const confirmMsg = sourceTaskId
+          ? translateRequest('discardActiveDraftForFollowUpConfirm')
+          : (currentUiLanguage() === 'KO'
+              ? '현재 작성 중인 임시 요청서가 존재합니다. 이를 지우고 선택한 저장소 기준으로 새 요청을 작성하시겠습니까?'
+              : 'There is an active draft in progress. Would you like to discard it and start a new request for this repository?');
         if (!window.confirm(confirmMsg)) return;
       }
 
+      if (typeof options.beforeOpen === 'function') options.beforeOpen();
       resetFormState({ clearSavedDraft: true });
       targetRepoInput.value = repoPath;
       targetRepoInput.dataset.autofilled = 'true';
+      if (sourceBaseBranch) {
+        baseBranchInput.value = sourceBaseBranch;
+        baseBranchInput.dataset.autofilled = 'false';
+        lastAutoBaseBranch = sourceBaseBranch;
+      }
+      setRequestDraftSource(sourceTaskId, sourceTitle);
       applyRepoDefaults();
+      setRequestComposerTab('assistant');
       setModalOpen(true);
       if (typeof syncCurrentUiRoute === 'function') syncCurrentUiRoute({ replace: false });
       await loadTargetRepoBranches();
+      if (sourceBaseBranch) {
+        baseBranchInput.value = sourceBaseBranch;
+        baseBranchInput.dataset.autofilled = 'false';
+      }
     }
 
     function escapeHtml(value) {
@@ -1163,6 +1183,8 @@
       resumeReviewerButton.disabled = !canResumeReviewerFromSnapshot || !canActOnTask;
       resumeReviewLoopButton.hidden = !canResumeReviewLoopFromSnapshot || !canActOnTask;
       resumeReviewLoopButton.disabled = !canResumeReviewLoopFromSnapshot || !canActOnTask;
+      requestFollowUpWorkButton.hidden = state !== 'done' || !canActOnTask;
+      requestFollowUpWorkButton.disabled = requestFollowUpWorkButton.hidden;
       if (!canResumePlannerFromSnapshot || !canActOnTask) setResumePlannerChoiceModalOpen(false, { force: true });
       if (!canResumeImplementerFromSnapshot || !canActOnTask) setResumeImplementerChoiceModalOpen(false, { force: true });
       if (!canResumeReviewerFromSnapshot || !canActOnTask) setResumeReviewerChoiceModalOpen(false, { force: true });

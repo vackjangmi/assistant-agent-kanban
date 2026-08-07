@@ -301,6 +301,31 @@
       persistRequestComposerDraftPointer();
     }
 
+    function updateRequestDraftSourcePanel() {
+      const hasSource = Boolean((requestDraftSourceTaskId || '').trim());
+      if (!requestDraftSourcePanel || !requestDraftSourceSummary) return;
+      requestDraftSourcePanel.hidden = !hasSource;
+      if (!hasSource) {
+        requestDraftSourceSummary.innerHTML = '';
+        return;
+      }
+      const sourceTitle = (requestDraftSourceTitle || '').trim() || translateRequest('draftSourceTitleFallback');
+      requestDraftSourceSummary.innerHTML = `
+        <div class="request-draft-source-item"><span>${escapeHtml(translateRequest('draftSourceTaskLabel'))}</span><code>${escapeHtml(requestDraftSourceTaskId)}</code></div>
+        <div class="request-draft-source-item"><span>${escapeHtml(translateRequest('draftSourceTitleLabel'))}</span><strong>${escapeHtml(sourceTitle)}</strong></div>
+      `;
+    }
+
+    function setRequestDraftSource(sourceTaskId = '', sourceTitle = '') {
+      requestDraftSourceTaskId = (sourceTaskId || '').trim();
+      requestDraftSourceTitle = sourceTitle || '';
+      const hasSource = Boolean(requestDraftSourceTaskId);
+      baseBranchInput.readOnly = hasSource;
+      baseBranchInput.setAttribute('aria-readonly', String(hasSource));
+      updateBaseBranchHelp(translateRequest(hasSource ? 'baseBranchSourceLockedHelp' : 'baseBranchHelp'));
+      updateRequestDraftSourcePanel();
+    }
+
     function seedRequestDraftInput(force = false) {
       if (!force && (requestDraftInput.value || '').trim()) return;
       requestDraftInput.value = '';
@@ -397,6 +422,7 @@
       payload.request_draft_input = requestDraftInput.value || '';
       payload.transcript = serializeRequestDraftTranscript();
       payload.message = message;
+      payload.source_task_id = requestDraftSourceTaskId || null;
       return payload;
     }
 
@@ -501,8 +527,9 @@
         notifyRequestDraftTargetRepoRequired();
         return;
       }
-      await ensureRequestComposerDraft();
       const sessionToken = requestDraftSessionToken;
+      const draftId = await ensureRequestComposerDraft({ sessionToken });
+      if (sessionToken !== requestDraftSessionToken || !draftId) return;
       formError.hidden = true;
       requestDraftPendingMessage = message;
       requestDraftMessageInFlight = true;
@@ -560,6 +587,10 @@
 
     function resetRequestDraftState() {
       requestDraftSessionToken += 1;
+      if (requestDraftSyncTimer) {
+        window.clearTimeout(requestDraftSyncTimer);
+        requestDraftSyncTimer = null;
+      }
       requestDraftId = '';
       requestDraftEntries = [];
       requestDraftPendingMessage = '';
@@ -569,6 +600,7 @@
       requestDraftAttachmentStatusMessage = '';
       requestDraftAttachmentStatusTone = 'neutral';
       requestDraftAttachmentStatusVars = {};
+      setRequestDraftSource('', '');
       requestDraftDropDepth = 0;
       requestDraftImageInput.value = '';
       updateRequestDraftDropTarget(false);

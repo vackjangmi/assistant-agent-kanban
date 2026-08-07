@@ -73,7 +73,15 @@
     async function closeNavigableViewsForRoute(target) {
       if (target !== 'request' && !modal.hidden) {
         clearMessages();
-        void syncRequestComposerDraftState({ immediate: true, silent: true });
+        try {
+          await syncRequestComposerDraftState({ immediate: true, silent: false });
+        } catch (error) {
+          const detail = error.message ? ` ${error.message}` : '';
+          formError.hidden = false;
+          formError.textContent = `${translateRequest('draftSaveBeforeNavigationFailed')}${detail}`;
+          syncCurrentUiRoute({ replace: true });
+          return false;
+        }
         setModalOpen(false);
       }
       if (target !== 'settings' && !settingsModal.hidden) {
